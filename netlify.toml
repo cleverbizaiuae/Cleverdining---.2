@@ -1,5 +1,4 @@
 [build]
-  base    = "frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main"
   command = "npm install && npm run build"
   publish = "dist"
 
