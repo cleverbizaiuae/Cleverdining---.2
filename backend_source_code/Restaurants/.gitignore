@@ -1,0 +1,7 @@
+.env
+item_videos
+*.pyc
+/media
+__pycache__
+env
+venv

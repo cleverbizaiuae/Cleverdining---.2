@@ -1,0 +1,38 @@
+/* Add this to your CSS file */
+.phone-input-container .PhoneInputInput {
+  background-color: #201c3f !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1) !important;
+  font-size: 0.875rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 0.375rem !important;
+  color: white !important;
+  border: 1px solid #374151 !important;
+  width: 100% !important;
+}
+
+.phone-input-container .PhoneInputInput:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px #0057e4 !important;
+}
+
+.phone-input-container .PhoneInputCountrySelect {
+  background-color: #383a41 !important;
+  color: white !important;
+  padding: 0.5rem 0.75rem !important;
+  border-top-left-radius: 0.375rem !important;
+  border-bottom-left-radius: 0.375rem !important;
+  border: 1px solid #374151 !important;
+}
+
+/* Fixed country flag - remove the problematic filter */
+.phone-input-container .PhoneInputCountryIcon {
+  /* Remove this line: filter: brightness(1.8) invert(6); */
+  /* This filter makes flags look weird - let them show naturally */
+}
+
+/* If you want to style the dropdown arrow */
+.phone-input-container .PhoneInputCountrySelectArrow {
+  color: white !important;
+  border-color: white transparent transparent transparent !important;
+}

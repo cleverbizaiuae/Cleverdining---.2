@@ -1,0 +1,261 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&family=David+Libre:wght@400;500;700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+@import url("https://fonts.cdnfonts.com/css/sf-pro-display");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(*));
+
+@theme {
+  --color-primary: #16183a;
+  --color-background: #ebf2ff;
+  --color-accent: #0d38ac;
+  --color-accent2: #3671e9;
+  --color-primary-light: #11286c;
+  --color-sidebar: #141527;
+  --color-dashboard: #0c0d1f;
+  --color-container-start: #0c0d1f;
+  --color-container-end: #262b79;
+  --color-chat-sender: #353165;
+  --color-chat-receiver: #110f26;
+  --color-chat-container: #1e1a3c;
+  --color-table-header: #1f1d38;
+  --color-primary-text: #e1e8ff;
+  --color-text-2: #101828;
+  --color-input-placeholder: #5f6175;
+  --color-input: #202c4e;
+  --color-footer: #e1e8ff;
+  --color-checkmark: #7732ff;
+  --font-sans: "Roboto", system-ui, sans-serif;
+  --font-poppins: "Poppins", system-ui, sans-serif;
+  --font-david: "David Libre", system-ui, sans-serif;
+  --font-inter: "Inter", "Poppins", system-ui, sans-serif;
+  --font-sf-pro: "SF Pro Display", "Poppins", system-ui, sans-serif;
+  --content-x-offset: calc(var(--spacing) * 8);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: #242424;
+    color: var(--color-primary-text);
+  }
+
+  @media (prefers-color-scheme: light) {
+    html {
+      background-color: white;
+      color: #213547;
+    }
+  }
+
+  html,
+  body,
+  #root {
+    @apply min-h-dvh;
+  }
+  a {
+    color: var(--color-primary);
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--color-primary);
+  }
+
+  button {
+    @apply rounded-md cursor-pointer;
+  }
+
+  button:hover {
+    border-color: var(--color-primary);
+  }
+
+  button:focus,
+  button:focus-visible {
+    outline: none;
+  }
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    @apply border-none;
+    -webkit-text-fill-color: white !important;
+    -webkit-box-shadow: 0 0 0px 1000px var(--color-input) inset !important;
+    box-shadow: 0 0 0px 1000px var(--color-input) inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    background-color: #253341 !important;
+  }
+
+  .unset-all {
+    list-style: outside;
+  }
+  .unset-all ol,
+  .unset-allul,
+  .unset-all menu {
+    list-style: outside;
+  }
+}
+
+@utility list-auto {
+  list-style: auto;
+}
+
+@utility h-inherit {
+  height: inherit;
+}
+
+@utility auth-bg {
+  background-image: url("./assets/bg-auth.webp");
+  background-repeat: repeat-x;
+  background-size: cover;
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgb(0 0 0 / 0.8);
+    z-index: 0;
+  }
+
+  > * {
+    position: relative;
+    z-index: 10;
+  }
+}
+
+@utility button-primary {
+  @apply font-medium rounded-md cursor-pointer bg-accent text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
+}
+@utility button-landing {
+  @apply font-medium rounded-full cursor-pointer bg-accent2 text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
+}
+@utility button-primary-outline {
+  @apply rounded-md cursor-pointer bg-transparent border border-primary-text/50 text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
+}
+@utility button-landing-text {
+  @apply rounded-full cursor-pointer bg-transparent text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
+}
+
+@utility button-text {
+  @apply bg-transparent text-primary text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
+}
+
+@utility content-gap-start {
+  @apply ps-2 md:ps-28;
+}
+@utility content-gap-end {
+  @apply pe-2 md:pe-28;
+}
+
+@utility container-content {
+  @apply w-full max-w-7xl content-gap-start content-gap-end xl:mx-2;
+}
+
+@utility container-header {
+  @apply w-full content-gap-start content-gap-end;
+}
+
+@utility container-header-gradient {
+  @apply relative overflow-hidden;
+  &::before {
+    @apply content-[''] absolute top-0 left-0 w-full h-[1025px] z-[48] bg-gradient-to-br from-container-start to-container-end;
+  }
+}
+
+/* Custom date picker ==================>>>>>>> */
+/* Customize container */
+.react-datepicker {
+  @apply bg-sidebar! text-primary-text! border-none! rounded-md! p-0! relative!;
+  font-family: inherit;
+}
+
+/* Header styling */
+.react-datepicker__header {
+  @apply flex flex-col bg-transparent! border-b! border-dashboard;
+}
+
+/* Current month label */
+.react-datepicker__current-month {
+  @apply text-primary-text! text-lg! font-medium!;
+}
+
+/* Day name labels (Sun, Mon...) */
+.react-datepicker__day-name {
+  @apply w-10! h-8! mt-4! text-primary-text! text-sm!;
+}
+
+/* Day cells */
+.react-datepicker__day {
+  @apply inline-flex items-center justify-center w-10 h-10 rounded-md text-primary-text!;
+  transition: background-color 0.2s ease;
+}
+
+/* Hover effect on day */
+.react-datepicker__day:hover {
+  @apply bg-dashboard! border-none!;
+}
+
+/* Selected day */
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  @apply bg-accent! text-primary-text!;
+}
+
+/* Today highlight */
+.react-datepicker__day--today {
+  @apply border! border-accent!;
+}
+
+/* Clear & navigation buttons */
+.react-datepicker__navigation {
+  top: 1rem;
+}
+
+.react-datepicker__navigation-icon::before {
+  @apply top-0!;
+}
+/* <<<<<===================== Custom date picker*/
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+.rsw-editor {
+  @apply border-0!;
+}
+@utility clever-table {
+  @apply border-separate border-spacing-0;
+}
+.clever-table .table-header {
+  @apply bg-gradient-to-r from-[#1E2050]/60 to-[#0E0F27]/60 text-primary-text text-sm font-normal;
+}
+
+.clever-table .table-header th:first-child {
+  @apply rounded-l-md border-l border-[#211E40];
+}
+
+.clever-table .table-header th {
+  @apply p-4 border-y border-[#211E40];
+}
+
+.clever-table .table-header th:last-child {
+  @apply rounded-r-md border-r border-[#211E40];
+}
+@utility subscription-button {
+  @apply relative bg-linear-to-b from-[#9F70FF] to-checkmark;
+  box-shadow: 0px 0.97px 1.94px rgba(16, 24, 40, 0.05),
+    /* Drop shadow 1 */ 1.94px 1.94px 2.9px rgba(198, 180, 238, 0.5) inset,
+    /* Inner shadow 1 */ -1.94px -1.94px 3.87px rgba(88, 42, 187, 0.49) inset,
+    /* Inner shadow 2 */ 0px 0px 11.61px rgba(119, 50, 255, 0.2); /* Drop shadow 2 */
+}
+

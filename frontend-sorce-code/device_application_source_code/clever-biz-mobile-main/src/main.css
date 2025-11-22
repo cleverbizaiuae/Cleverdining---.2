@@ -1,0 +1,58 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2e3d67;
+  --color-accent: #2962ff;
+  --color-sidebar: #fdfdff;
+  --color-primary-text: #f9f8f8;
+  --color-background: #f6f9ff;
+  --color-icon-active: #3e4f7e;
+  --color-icon-active-bg: #f1f5ff;
+  --color-icon-inactive: #b2b5be;
+  --font-sans: "Poppins", system-ui, sans-serif;
+  --font-poppins: "Roboto", system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+  #root {
+    @apply bg-background overflow-y-hidden;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+}
+@layer components {
+  .scrollbar-hide {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+
+    &::-webkit-scrollbar {
+      display: none; /* Chrome/Safari */
+    }
+  }
+}
+@utility button-primary {
+  @apply bg-accent px-4 py-3 text-primary-text rounded-md;
+}
+@utility login-bg {
+  background-image: url("./assets/login.webp");
+  background-repeat: none;
+  background-size: cover;
+  background-position: center;
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgb(0 0 0 / 0.4);
+    z-index: 0;
+  }
+}

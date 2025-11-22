@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Owner Call Interface (Raw WS Audio)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="container mx-auto p-4 max-w-md">
+  <h2 class="text-2xl font-bold mb-4">Owner Call Panel</h2>
+  <div class="mb-4">
+    <p class="text-gray-700">User: <span id="username">Loading...</span> | Role: owner</p>
+  </div>
+
+  <div class="bg-white p-4 rounded-lg shadow space-y-2">
+    <h3 class="text-xl font-semibold">Call Control</h3>
+    <div class="flex space-x-2">
+      <div class="flex-1">
+        <label class="text-gray-700">Device ID:</label>
+        <input id="deviceId" type="text" class="w-full p-2 border rounded" value="2">
+      </div>
+      <div class="flex-1">
+        <label class="text-gray-700">Device User ID:</label>
+        <input id="deviceUserId" type="text" class="w-full p-2 border rounded" value="5">
+      </div>
+    </div>
+
+    <div id="call-status" class="text-gray-700">Status: Not connected</div>
+
+    <div class="flex flex-wrap gap-2">
+      <button id="connect-btn" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Connect</button>
+      <button id="start-call" class="bg-green-500 text-white p-2 rounded hover:bg-green-600 hidden">Start Call</button>
+      <button id="receive-call" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 hidden">Receive Call</button>
+      <button id="end-call" class="bg-red-500 text-white p-2 rounded hover:bg-red-600 hidden">End Call</button>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button id="mic-start" class="bg-gray-700 text-white p-2 rounded hover:bg-gray-800 hidden">Start Mic</button>
+      <button id="mic-stop" class="bg-gray-500 text-white p-2 rounded hover:bg-gray-600 hidden">Stop Mic</button>
+      <button id="resume-audio" class="bg-amber-500 text-white p-2 rounded hover:bg-amber-600 hidden">Resume Audio Context</button>
+    </div>
+
+    <div id="call-notification" class="text-gray-700"></div>
+  </div>
+</div>
+
+<!-- Audio helpers -->
+<script>
+/** Float32 [-1,1] -> Int16 PCM */
+function floatTo16BitPCM(float32Array) {
+  const out = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32Array[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return out;
+}
+function int16ToFloat32(int16Array) {
+  const out = new Float32Array(int16Array.length);
+  for (let i = 0; i < int16Array.length; i++) out[i] = int16Array[i] / 0x8000;
+  return out;
+}
+function b64ToUint8(b64) {
+  const bin = atob(b64);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function uint8ToB64(u8) {
+  let s = "";
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  return btoa(s);
+}
+class PCMPlayer {
+  constructor(audioContext, sampleRate) {
+    this.ctx = audioContext;
+    this.sampleRate = sampleRate || this.ctx.sampleRate;
+    this.playTime = this.ctx.currentTime + 0.2;
+  }
+  enqueue(int16PCM, channels = 1) {
+    const f32 = int16ToFloat32(int16PCM);
+    const frameCount = f32.length / channels;
+    const buffer = this.ctx.createBuffer(channels, frameCount, this.sampleRate);
+    for (let ch = 0; ch < channels; ch++) {
+      const channelData = buffer.getChannelData(ch);
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = f32[i * channels + ch] || 0;
+      }
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.ctx.destination);
+    const now = this.ctx.currentTime;
+    if (this.playTime < now) this.playTime = now + 0.05;
+    src.start(this.playTime);
+    this.playTime += buffer.duration;
+  }
+}
+</script>
+
+<script>
+  // ====== CONFIG (replace with real values) ======
+  const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU3MDY3MjA3LCJpYXQiOjE3NTY0NjI0MDcsImp0aSI6IjljYTBkZmQ4ZjA5MDRhMTQ4ODQyYzNhNjYyOWZmY2ZlIiwidXNlcl9pZCI6NCwidXNlciI6eyJpZCI6NCwidXNlcm5hbWUiOiJTYW5qaWRhIEtoYW5hbSIsImVtYWlsIjoic2FuamlkYS5pY2UuNzc4QGdtYWlsLmNvbSIsInJvbGUiOiJvd25lciIsInJlc3RhdXJhbnRzX2lkIjoyLCJkZXZpY2VfaWQiOm51bGwsInN1YnNjcmlwdGlvbiI6eyJwYWNrYWdlX25hbWUiOiJtb250aCAxIiwic3RhdHVzIjoiQWN0aXZlIiwiY3VycmVudF9wZXJpb2RfZW5kIjoiMjAyNS0wOS0xOCAxMTo0MDozMCswMDowMCJ9LCJvd25lcl9pZCI6NH19.eUi0RMQYZyoMyE0p0CtQaVPpObbBz4LpfpmloaDVSyg";
+  const username = "Owner User";
+  const userId = 4;              // your owner user id
+  const restaurantId = 2;
+
+  // ====== State ======
+  let callSocket, currentCallId = null;
+  let audioCtx, micStream, mediaSource, procNode, player;
+  let seq = 0;
+  let inCall = false;
+
+  // ====== DOM ======
+  const deviceIdInput = document.getElementById("deviceId");
+  const deviceUserIdInput = document.getElementById("deviceUserId");
+  const callStatus = document.getElementById("call-status");
+  const callNotification = document.getElementById("call-notification");
+  const connectBtn = document.getElementById("connect-btn");
+  const startCallBtn = document.getElementById("start-call");
+  const receiveCallBtn = document.getElementById("receive-call");
+  const endCallBtn = document.getElementById("end-call");
+  const micStartBtn = document.getElementById("mic-start");
+  const micStopBtn = document.getElementById("mic-stop");
+  const resumeAudioBtn = document.getElementById("resume-audio");
+  const usernameSpan = document.getElementById("username");
+  usernameSpan.textContent = username;
+
+  function ensureAudioContext() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      player = new PCMPlayer(audioCtx, audioCtx.sampleRate);
+    }
+    if (audioCtx.state !== "running") {
+      resumeAudioBtn.classList.remove("hidden");
+    } else {
+      resumeAudioBtn.classList.add("hidden");
+    }
+  }
+
+  resumeAudioBtn.addEventListener("click", async () => {
+    if (audioCtx) {
+      await audioCtx.resume();
+      resumeAudioBtn.classList.add("hidden");
+    }
+  });
+
+  // ====== WebSocket ======
+  function connectSocket() {
+    const deviceId = deviceIdInput.value;
+    callSocket = new WebSocket(`wss://sacred-renewing-dove.ngrok-free.app/ws/call/${deviceId}/?token=${jwt}`);
+
+    callSocket.onopen = () => {
+      callStatus.textContent = "Status: Connected";
+      connectBtn.classList.add("hidden");
+      startCallBtn.classList.remove("hidden");
+      micStartBtn.classList.remove("hidden");
+      ensureAudioContext();
+    };
+    callSocket.onerror = (e) => {
+      console.error("WS error:", e);
+      callStatus.textContent = "Status: Connection error";
+    };
+    callSocket.onclose = () => {
+      callStatus.textContent = "Status: Disconnected";
+      connectBtn.classList.remove("hidden");
+      startCallBtn.classList.remove("hidden");
+      receiveCallBtn.classList.add("hidden");
+      endCallBtn.classList.add("hidden");
+      micStartBtn.classList.add("hidden");
+      micStopBtn.classList.add("hidden");
+      currentCallId = null;
+      inCall = false;
+      stopMic();
+    };
+    callSocket.onmessage = handleCallMessage;
+  }
+
+  function handleCallMessage(event) {
+    const data = JSON.parse(event.data);
+    if (data.error) {
+      callNotification.textContent = `Error: ${data.error}`;
+      console.error("Call error:", data.error);
+      return;
+    }
+
+    if (data.action === "incoming_call") {
+      currentCallId = data.call_id;
+      callNotification.textContent = `Incoming call from ${data.from}`;
+      callStatus.textContent = "Status: Incoming call";
+      startCallBtn.classList.add("hidden");
+      receiveCallBtn.classList.remove("hidden");
+      endCallBtn.classList.remove("hidden");
+    } else if (data.action === "call_accepted") {
+      callNotification.textContent = `Call accepted by ${data.from}`;
+      callStatus.textContent = `Status: Call active (Call ID: ${data.call_id})`;
+      startCallBtn.classList.add("hidden");
+      receiveCallBtn.classList.add("hidden");
+      endCallBtn.classList.remove("hidden");
+      inCall = true;
+      ensureAudioContext();
+    } else if (data.action === "call_ended") {
+      callNotification.textContent = `Call ended by ${data.by}`;
+      callStatus.textContent = "Status: Idle";
+      startCallBtn.classList.remove("hidden");
+      receiveCallBtn.classList.add("hidden");
+      endCallBtn.classList.add("hidden");
+      inCall = false;
+      currentCallId = null;
+    } else if (data.action === "audio_chunk") {
+      // Ignore own frames
+      if (data.from_user_id === userId) return;
+
+      ensureAudioContext();
+      const u8 = b64ToUint8(data.pcm_b64);
+      const int16 = new Int16Array(u8.buffer, u8.byteOffset, u8.length / 2);
+      player.enqueue(int16, data.channels || 1);
+    }
+  }
+
+  // ====== Mic capture (Float32 -> PCM16 -> base64) ======
+  async function startMic() {
+    ensureAudioContext();
+    if (audioCtx.state !== "running") await audioCtx.resume();
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        channelCount: 1
+      }
+    });
+    mediaSource = audioCtx.createMediaStreamSource(micStream);
+    const bufferSize = 2048; // 256–4096 works; smaller = more network overhead
+    procNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+    mediaSource.connect(procNode);
+    procNode.connect(audioCtx.destination); // or audioCtx.createGain()
+
+    procNode.onaudioprocess = (e) => {
+      if (!inCall || !callSocket || callSocket.readyState !== WebSocket.OPEN) return;
+
+      const input = e.inputBuffer.getChannelData(0); // Float32
+      const pcm16 = floatTo16BitPCM(input);
+      const u8 = new Uint8Array(pcm16.buffer);
+      const pcm_b64 = uint8ToB64(u8);
+
+      callSocket.send(JSON.stringify({
+        action: "audio_chunk",
+        call_id: currentCallId,
+        sample_rate: audioCtx.sampleRate,
+        channels: 1,
+        seq: seq++,
+        pcm_b64
+      }));
+    };
+
+    micStartBtn.classList.add("hidden");
+    micStopBtn.classList.remove("hidden");
+  }
+
+  function stopMic() {
+    try {
+      if (procNode) { procNode.disconnect(); procNode.onaudioprocess = null; }
+      if (mediaSource) mediaSource.disconnect();
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+      }
+    } catch (e) { /* ignore */ }
+    micStartBtn.classList.remove("hidden");
+    micStopBtn.classList.add("hidden");
+  }
+
+  // ====== Call actions ======
+  function startCall() {
+    const receiverId = deviceUserIdInput.value;
+    const deviceId = deviceIdInput.value;
+    if (!callSocket || callSocket.readyState !== WebSocket.OPEN) {
+      callNotification.textContent = "Please connect to WebSocket first";
+      return;
+    }
+    if (!receiverId) {
+      callNotification.textContent = "Please enter a Device User ID";
+      return;
+    }
+    callSocket.send(JSON.stringify({
+      action: "start_call",
+      receiver_id: parseInt(receiverId),
+      device_id: parseInt(deviceId)
+    }));
+    callStatus.textContent = "Status: Calling device...";
+    startCallBtn.classList.add("hidden");
+    endCallBtn.classList.remove("hidden");
+  }
+
+  function receiveCall() {
+    if (!currentCallId) {
+      callNotification.textContent = "No incoming call to accept";
+      return;
+    }
+    callSocket.send(JSON.stringify({
+      action: "accept_call",
+      call_id: currentCallId
+    }));
+    receiveCallBtn.classList.add("hidden");
+    endCallBtn.classList.remove("hidden");
+  }
+
+  function endCall() {
+    if (callSocket && callSocket.readyState === WebSocket.OPEN && currentCallId) {
+      callSocket.send(JSON.stringify({
+        action: "end_call",
+        call_id: currentCallId
+      }));
+    }
+    callStatus.textContent = "Status: Idle";
+    startCallBtn.classList.remove("hidden");
+    receiveCallBtn.classList.add("hidden");
+    endCallBtn.classList.add("hidden");
+    inCall = false;
+    currentCallId = null;
+  }
+
+  // ====== Events ======
+  connectBtn.addEventListener("click", connectSocket);
+  startCallBtn.addEventListener("click", startCall);
+  receiveCallBtn.addEventListener("click", receiveCall);
+  endCallBtn.addEventListener("click", endCall);
+  micStartBtn.addEventListener("click", startMic);
+  micStopBtn.addEventListener("click", stopMic);
+</script>
+</body>
+</html>
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Device Call Interface (Raw WS Audio)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+<div class="container mx-auto p-4 max-w-md">
+  <h2 class="text-2xl font-bold mb-4">Device Call Panel</h2>
+  <div class="mb-4">
+    <p class="text-gray-700">User: <span id="username">Loading...</span> | Role: customer</p>
+  </div>
+
+  <div class="bg-white p-4 rounded-lg shadow space-y-2">
+    <h3 class="text-xl font-semibold">Call Control</h3>
+    <div class="flex space-x-2">
+      <div class="flex-1">
+        <label class="text-gray-700">Device ID:</label>
+        <input id="deviceId" type="text" class="w-full p-2 border rounded" value="2">
+      </div>
+      <div class="flex-1">
+        <label class="text-gray-700">Owner User ID:</label>
+        <input id="ownerUserId" type="text" class="w-full p-2 border rounded" value="4">
+      </div>
+    </div>
+
+    <div id="call-status" class="text-gray-700">Status: Not connected</div>
+
+    <div class="flex flex-wrap gap-2">
+      <button id="connect-btn" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Connect</button>
+      <button id="start-call" class="bg-green-500 text-white p-2 rounded hover:bg-green-600 hidden">Start Call</button>
+      <button id="receive-call" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 hidden">Receive Call</button>
+      <button id="end-call" class="bg-red-500 text-white p-2 rounded hover:bg-red-600 hidden">End Call</button>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button id="mic-start" class="bg-gray-700 text-white p-2 rounded hover:bg-gray-800 hidden">Start Mic</button>
+      <button id="mic-stop" class="bg-gray-500 text-white p-2 rounded hover:bg-gray-600 hidden">Stop Mic</button>
+      <button id="resume-audio" class="bg-amber-500 text-white p-2 rounded hover:bg-amber-600 hidden">Resume Audio Context</button>
+    </div>
+
+    <div id="call-notification" class="text-gray-700"></div>
+  </div>
+</div>
+
+<!-- Audio helpers -->
+<script>
+function floatTo16BitPCM(float32Array) {
+  const out = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32Array[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return out;
+}
+function int16ToFloat32(int16Array) {
+  const out = new Float32Array(int16Array.length);
+  for (let i = 0; i < int16Array.length; i++) out[i] = int16Array[i] / 0x8000;
+  return out;
+}
+function b64ToUint8(b64) {
+  const bin = atob(b64);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function uint8ToB64(u8) {
+  let s = "";
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  return btoa(s);
+}
+class PCMPlayer {
+  constructor(audioContext, sampleRate) {
+    this.ctx = audioContext;
+    this.sampleRate = sampleRate || this.ctx.sampleRate;
+    this.playTime = this.ctx.currentTime + 0.2;
+  }
+  enqueue(int16PCM, channels = 1) {
+    const f32 = int16ToFloat32(int16PCM);
+    const frameCount = f32.length / channels;
+    const buffer = this.ctx.createBuffer(channels, frameCount, this.sampleRate);
+    for (let ch = 0; ch < channels; ch++) {
+      const channelData = buffer.getChannelData(ch);
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = f32[i * channels + ch] || 0;
+      }
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.ctx.destination);
+    const now = this.ctx.currentTime;
+    if (this.playTime < now) this.playTime = now + 0.05;
+    src.start(this.playTime);
+    this.playTime += buffer.duration;
+  }
+}
+</script>
+
+<script>
+  // ====== CONFIG ======
+  const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU3MDY3MzMyLCJpYXQiOjE3NTY0NjI1MzIsImp0aSI6ImNjYTJjMmY0ZmYwNjQ1NDA5NWVhMzMxM2I0YWVhMmVjIiwidXNlcl9pZCI6NSwidXNlciI6eyJpZCI6NSwidXNlcm5hbWUiOiJoeWF0dGJlbmphbWluNjE0OCIsImVtYWlsIjoiaHlhdHRiZW5qYW1pbjYxNDhAZXhhbXBsZS5jb20iLCJyb2xlIjoiY3VzdG9tZXIiLCJyZXN0YXVyYW50c19pZCI6MiwiZGV2aWNlX2lkIjoyLCJzdWJzY3JpcHRpb24iOnsicGFja2FnZV9uYW1lIjoibW9udGggMSIsInN0YXR1cyI6IkFjdGl2ZSIsImN1cnJlbnRfcGVyaW9kX2VuZCI6IjIwMjUtMDktMTggMTE6NDA6MzArMDA6MDAifSwib3duZXJfaWQiOjR9fQ.taRXzpHD2zGvbdjxj2VGtq3DHPigcBxAI6sIbR8a3x0";
+  const username = "Device User";
+  const userId = 5;            // device user's id
+  const restaurantId = 2;
+
+  // ====== State ======
+  let callSocket, currentCallId = null;
+  let audioCtx, micStream, mediaSource, procNode, player;
+  let seq = 0;
+  let inCall = false;
+
+  // ====== DOM ======
+  const deviceIdInput = document.getElementById("deviceId");
+  const ownerUserIdInput = document.getElementById("ownerUserId");
+  const callStatus = document.getElementById("call-status");
+  const callNotification = document.getElementById("call-notification");
+  const connectBtn = document.getElementById("connect-btn");
+  const startCallBtn = document.getElementById("start-call");
+  const receiveCallBtn = document.getElementById("receive-call");
+  const endCallBtn = document.getElementById("end-call");
+  const micStartBtn = document.getElementById("mic-start");
+  const micStopBtn = document.getElementById("mic-stop");
+  const resumeAudioBtn = document.getElementById("resume-audio");
+  const usernameSpan = document.getElementById("username");
+  usernameSpan.textContent = username;
+
+  function ensureAudioContext() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      player = new PCMPlayer(audioCtx, audioCtx.sampleRate);
+    }
+    if (audioCtx.state !== "running") {
+      resumeAudioBtn.classList.remove("hidden");
+    } else {
+      resumeAudioBtn.classList.add("hidden");
+    }
+  }
+
+  resumeAudioBtn.addEventListener("click", async () => {
+    if (audioCtx) {
+      await audioCtx.resume();
+      resumeAudioBtn.classList.add("hidden");
+    }
+  });
+
+  function connectSocket() {
+    const deviceId = deviceIdInput.value;
+    callSocket = new WebSocket(`wss://sacred-renewing-dove.ngrok-free.app/ws/call/${deviceId}/?token=${jwt}`);
+
+    callSocket.onopen = () => {
+      callStatus.textContent = "Status: Connected";
+      connectBtn.classList.add("hidden");
+      startCallBtn.classList.remove("hidden");
+      micStartBtn.classList.remove("hidden");
+      ensureAudioContext();
+    };
+    callSocket.onerror = (e) => {
+      console.error("WS error:", e);
+      callStatus.textContent = "Status: Connection error";
+    };
+    callSocket.onclose = () => {
+      callStatus.textContent = "Status: Disconnected";
+      connectBtn.classList.remove("hidden");
+      startCallBtn.classList.remove("hidden");
+      receiveCallBtn.classList.add("hidden");
+      endCallBtn.classList.add("hidden");
+      micStartBtn.classList.add("hidden");
+      micStopBtn.classList.add("hidden");
+      currentCallId = null;
+      inCall = false;
+      stopMic();
+    };
+    callSocket.onmessage = handleCallMessage;
+  }
+
+  function handleCallMessage(event) {
+    const data = JSON.parse(event.data);
+    if (data.error) {
+      callNotification.textContent = `Error: ${data.error}`;
+      console.error("Call error:", data.error);
+      return;
+    }
+
+    if (data.action === "incoming_call") {
+      currentCallId = data.call_id;
+      callNotification.textContent = `Incoming call from ${data.from}`;
+      callStatus.textContent = "Status: Incoming call";
+      startCallBtn.classList.add("hidden");
+      receiveCallBtn.classList.remove("hidden");
+      endCallBtn.classList.remove("hidden");
+    } else if (data.action === "call_accepted") {
+      callNotification.textContent = `Call active with ${data.from}`;
+      callStatus.textContent = `Status: Call active (Call ID: ${data.call_id})`;
+      startCallBtn.classList.add("hidden");
+      receiveCallBtn.classList.add("hidden");
+      endCallBtn.classList.remove("hidden");
+      inCall = true;
+      ensureAudioContext();
+    } else if (data.action === "call_ended") {
+      callNotification.textContent = `Call ended by ${data.by}`;
+      callStatus.textContent = "Status: Idle";
+      startCallBtn.classList.remove("hidden");
+      receiveCallBtn.classList.add("hidden");
+      endCallBtn.classList.add("hidden");
+      inCall = false;
+      currentCallId = null;
+    } else if (data.action === "audio_chunk") {
+      if (data.from_user_id === userId) return;
+      ensureAudioContext();
+      const u8 = b64ToUint8(data.pcm_b64);
+      const int16 = new Int16Array(u8.buffer, u8.byteOffset, u8.length / 2);
+      player.enqueue(int16, data.channels || 1);
+    }
+  }
+
+  async function startMic() {
+    ensureAudioContext();
+    if (audioCtx.state !== "running") await audioCtx.resume();
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        channelCount: 1
+      }
+    });
+    const bufferSize = 2048;
+    mediaSource = audioCtx.createMediaStreamSource(micStream);
+    procNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+    mediaSource.connect(procNode);
+    procNode.connect(audioCtx.destination);
+
+    procNode.onaudioprocess = (e) => {
+      if (!inCall || !callSocket || callSocket.readyState !== WebSocket.OPEN) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const pcm16 = floatTo16BitPCM(input);
+      const u8 = new Uint8Array(pcm16.buffer);
+      const pcm_b64 = uint8ToB64(u8);
+
+      callSocket.send(JSON.stringify({
+        action: "audio_chunk",
+        call_id: currentCallId,
+        sample_rate: audioCtx.sampleRate,
+        channels: 1,
+        seq: seq++,
+        pcm_b64
+      }));
+    };
+
+    micStartBtn.classList.add("hidden");
+    micStopBtn.classList.remove("hidden");
+  }
+
+  function stopMic() {
+    try {
+      if (procNode) { procNode.disconnect(); procNode.onaudioprocess = null; }
+      if (mediaSource) mediaSource.disconnect();
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+    } catch (e) { /* ignore */ }
+    micStartBtn.classList.remove("hidden");
+    micStopBtn.classList.add("hidden");
+  }
+
+  function startCall() {
+    const receiverId = ownerUserIdInput.value;
+    const deviceId = deviceIdInput.value;
+    if (!callSocket || callSocket.readyState !== WebSocket.OPEN) {
+      callNotification.textContent = "Please connect to WebSocket first";
+      return;
+    }
+    if (!receiverId) {
+      callNotification.textContent = "Please enter an Owner User ID";
+      return;
+    }
+    callSocket.send(JSON.stringify({
+      action: "start_call",
+      receiver_id: parseInt(receiverId),
+      device_id: parseInt(deviceId)
+    }));
+    callStatus.textContent = "Status: Calling owner...";
+    startCallBtn.classList.add("hidden");
+    endCallBtn.classList.remove("hidden");
+  }
+
+  function receiveCall() {
+    if (!currentCallId) {
+      callNotification.textContent = "No incoming call to accept";
+      return;
+    }
+    callSocket.send(JSON.stringify({
+      action: "accept_call",
+      call_id: currentCallId
+    }));
+    receiveCallBtn.classList.add("hidden");
+    endCallBtn.classList.remove("hidden");
+  }
+
+  function endCall() {
+    if (callSocket && callSocket.readyState === WebSocket.OPEN && currentCallId) {
+      callSocket.send(JSON.stringify({
+        action: "end_call",
+        call_id: currentCallId
+      }));
+    }
+    callStatus.textContent = "Status: Idle";
+    startCallBtn.classList.remove("hidden");
+    receiveCallBtn.classList.add("hidden");
+    endCallBtn.classList.add("hidden");
+    inCall = false;
+    currentCallId = null;
+  }
+
+  connectBtn.addEventListener("click", connectSocket);
+  startCallBtn.addEventListener("click", startCall);
+  receiveCallBtn.addEventListener("click", receiveCall);
+  endCallBtn.addEventListener("click", endCall);
+  micStartBtn.addEventListener("click", startMic);
+  micStopBtn.addEventListener("click", stopMic);
+</script>
+</body>
+</html>

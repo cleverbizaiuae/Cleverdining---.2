@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Device Call Interface</title>
+  </head>
+
+  <body>
+    <h2>Device Panel</h2>
+    <label>Device ID:</label
+    ><input type="text" id="deviceId" value="28" /><br />
+    <label>Owner User ID:</label
+    ><input type="text" id="ownerUserId" value="93" /><br /><br />
+    <button onclick="connectSocket()">Connect</button>
+    <button onclick="startCall()">Start Call</button>
+    <button onclick="receiveCall()" id="receiveBtn" disabled>
+      Receive Call
+    </button>
+    <button onclick="endCall()">End Call</button>
+    <p id="status">Status: Not connected</p>
+    <audio id="remoteAudio" autoplay></audio>
+    <audio id="localAudio" autoplay muted></audio>
+
+    <script>
+      let socket,
+        peer,
+        localStream,
+        incomingOffer = null;
+      const jwt =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUyNzAyNDAwLCJpYXQiOjE3NTI2NTkyMDAsImp0aSI6IjM2NzI1NTU4NjBjYzQzOWViZmY3NzE4NDBlMWJhOWRmIiwidXNlcl9pZCI6NCwidXNlciI6eyJpZCI6NCwidXNlcm5hbWUiOiJTYW5qaWRhIEtoYW5hbSIsImVtYWlsIjoic2FuamlkYS5pY2UuNzc4QGdtYWlsLmNvbSIsInJvbGUiOiJvd25lciIsInJlc3RhdXJhbnRzX2lkIjoyLCJkZXZpY2VfaWQiOm51bGwsInN1YnNjcmlwdGlvbiI6eyJwYWNrYWdlX25hbWUiOm51bGwsInN0YXR1cyI6bnVsbCwiY3VycmVudF9wZXJpb2RfZW5kIjpudWxsfSwib3duZXJfaWQiOjR9fQ.IBdsvjmGAIbSzAt0nwOlF8fxnBLQErn-Gosjoyh2c84";
+      //   const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+      const config = {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+          },
+        ],
+      };
+
+      function updateStatus(text) {
+        document.getElementById("status").innerText = `Status: ${text}`;
+      }
+
+      async function connectSocket() {
+        const deviceId = document.getElementById("deviceId").value;
+        socket = new WebSocket(
+          `wss://abc.winaclaim.com/ws/call/${deviceId}/?token=${jwt}`
+        );
+
+        socket.onopen = async () => {
+          updateStatus("Connected");
+          await setupMedia();
+        };
+
+        socket.onerror = (e) => console.error("Socket error", e);
+        socket.onclose = () => updateStatus("Disconnected");
+        socket.onmessage = handleSocketMessage;
+      }
+
+      async function handleSocketMessage(event) {
+        const data = JSON.parse(event.data);
+        console.log("Received:", data);
+
+        if (data.type === "offer") {
+          incomingOffer = data.offer;
+          document.getElementById("receiveBtn").disabled = false;
+          updateStatus("Incoming call...");
+        } else if (data.type === "candidate") {
+          await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } else if (data.action === "call_ended") {
+          updateStatus("Call ended");
+          closeCall();
+        } else if (data.type === "answer") {
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(data.answer)
+          );
+          updateStatus("Call connected");
+        }
+      }
+
+      async function receiveCall() {
+        if (!incomingOffer) return;
+        document.getElementById("receiveBtn").disabled = true;
+        updateStatus("Answering call...");
+
+        await setupPeerConnection();
+        await peer.setRemoteDescription(
+          new RTCSessionDescription(incomingOffer)
+        );
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.send(JSON.stringify({ type: "answer", answer }));
+
+        updateStatus("Call answered");
+      }
+
+      async function setupMedia() {
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          document.getElementById("localAudio").srcObject = localStream;
+        } catch (err) {
+          console.error("Media error:", err);
+          updateStatus("Microphone access error");
+        }
+      }
+
+      async function setupPeerConnection() {
+        peer = new RTCPeerConnection(config);
+        localStream
+          .getTracks()
+          .forEach((track) => peer.addTrack(track, localStream));
+
+        peer.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            socket.send(JSON.stringify({ type: "candidate", candidate }));
+          }
+        };
+
+        peer.ontrack = (event) => {
+          document.getElementById("remoteAudio").srcObject = event.streams[0];
+        };
+      }
+
+      async function startCall() {
+        const receiverId = document.getElementById("ownerUserId").value;
+        const deviceId = document.getElementById("deviceId").value;
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+        await setupPeerConnection();
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+
+        socket.send(
+          JSON.stringify({
+            action: "start_call",
+            receiver_id: receiverId,
+            device_id: deviceId,
+            type: "offer",
+            offer,
+          })
+        );
+
+        updateStatus("Calling device...");
+      }
+
+      function endCall() {
+        const deviceId = document.getElementById("deviceId").value;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({ action: "end_call", device_id: deviceId })
+          );
+        }
+        closeCall();
+      }
+
+      function closeCall() {
+        if (peer) {
+          peer.close();
+          peer = null;
+        }
+        updateStatus("Idle");
+        incomingOffer = null;
+        document.getElementById("receiveBtn").disabled = true;
+      }
+    </script>
+  </body>
+</html>
