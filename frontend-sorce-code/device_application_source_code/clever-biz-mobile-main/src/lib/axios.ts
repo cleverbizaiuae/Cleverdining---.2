@@ -7,7 +7,7 @@ const TOKENS = {
 };
 
 const axiosInstance = axios.create({
-  baseURL: "http://127.0.0.1:8000/",
+  baseURL: "http://193.160.119.200:8000/",
   headers: {
     "Content-Type": "application/json",
   },
@@ -34,7 +34,7 @@ axiosInstance.interceptors.response.use(
         const refreshToken = localStorage.getItem(TOKENS.REFRESH_TOKEN);
         if (refreshToken) {
           const response = await axios.post(
-            "http://127.0.0.1:8000/token/refresh/",
+            "http://193.160.119.200:8000/token/refresh/",
             {
               refresh: refreshToken,
             }

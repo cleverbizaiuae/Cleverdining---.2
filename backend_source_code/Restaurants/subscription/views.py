@@ -44,8 +44,8 @@ class CreateCheckoutSessionView(APIView):
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url='http://127.0.0.1:8000/?success=success',
-                cancel_url='http://127.0.0.1:8000/?cancel=cancel',
+                success_url='http://193.160.119.200:8000/?success=success',
+                cancel_url='http://193.160.119.200:8000/?cancel=cancel',
             )
 
             return Response({'url': checkout_session.url})
@@ -66,7 +66,7 @@ class StripePortalSessionView(APIView):
             checkout_session = stripe.checkout.Session.retrieve(session_id)
             portal_session = stripe.billing_portal.Session.create(
                 customer=checkout_session.customer,
-                return_url='http://127.0.0.1:8000/',
+                return_url='http://193.160.119.200:8000/',
             )
 
             return Response({'url': portal_session.url})
