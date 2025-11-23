@@ -8,6 +8,22 @@ class IsAdminRole(BasePermission):
     def has_permission(self, request, view):
         print("Role:", getattr(request.user, 'role', None))
         return request.user.is_authenticated and getattr(request.user, 'role', None) == 'admin'
+
+
+class IsSuperAdmin(BasePermission):
+    """
+    Restricts access to platform super admins (role=admin + Django superuser/staff).
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            hasattr(user, "is_authenticated")
+            and user.is_authenticated
+            and getattr(user, "role", None) == "admin"
+            and getattr(user, "is_staff", False)
+            and getattr(user, "is_superuser", False)
+        )
     
 
 

@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from .serializers import RestaurantSerializer
 from restaurant.models import Restaurant
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.filters import SearchFilter
 from rest_framework.decorators import action
@@ -14,6 +13,7 @@ from order.models import Order
 from django.db.models.functions import TruncMonth
 from datetime import datetime
 from rest_framework.pagination import PageNumberPagination
+from accounts.permissions import IsSuperAdmin
 
 class ChefAndStaffPagination(PageNumberPagination):
     page_size = 2
@@ -25,7 +25,7 @@ class RestaurantViewSet(ModelViewSet):
     queryset = Restaurant.objects.prefetch_related('subscriptions')
     serializer_class = RestaurantSerializer
     pagination_class = ChefAndStaffPagination
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperAdmin]
     filter_backends = [SearchFilter]  
     search_fields = ['resturent_name']
 

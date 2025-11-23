@@ -3,9 +3,10 @@ import { LabelInput, PickCompanyLogo } from "../../components/input";
 import { useNavigate } from "react-router";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ImSpinner6 } from "react-icons/im";
 import mobileLogo from "../../assets/mobile_logo.png";
+import { useRole, UserRole } from "../../hooks/useRole";
 
 const ScreenRegister = () => {
   const [loading, setLoading] = useState(false);
@@ -19,6 +20,20 @@ const ScreenRegister = () => {
     password: string;
   };
   const navigate = useNavigate();
+  const { updateUserData, userInfo, isLoading, getDashboardPath } = useRole();
+  const redirectToRoleDashboard = useCallback(
+    (role?: UserRole | null) => {
+      const destination = getDashboardPath(role);
+      navigate(destination, { replace: true });
+    },
+    [getDashboardPath, navigate]
+  );
+
+  useEffect(() => {
+    if (!isLoading && userInfo?.role) {
+      redirectToRoleDashboard(userInfo.role);
+    }
+  }, [isLoading, userInfo, redirectToRoleDashboard]);
   const { register, handleSubmit, watch, setValue } = useForm<Inputs>();
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     setLoading(true);
@@ -53,29 +68,8 @@ const ScreenRegister = () => {
 
       const { access, refresh, user } = response.data;
 
-      // Store tokens if needed
-      localStorage.setItem("accessToken", access);
-      localStorage.setItem("refreshToken", refresh);
-      localStorage.setItem("userInfo", JSON.stringify(user));
-
-      // Redirect based on role
-      switch (user.role) {
-        case "chef":
-          navigate("/chef");
-          break;
-        case "staff":
-          navigate("/staff");
-          break;
-        case "owner":
-          navigate("/restaurant");
-          break;
-        case "admin":
-          navigate("/admin");
-          break;
-        default:
-          navigate("/");
-          break;
-      }
+      updateUserData(user, access, refresh);
+      redirectToRoleDashboard(user.role);
       setLoading(false);
       toast.success("Registration successful!");
     } catch (error) {

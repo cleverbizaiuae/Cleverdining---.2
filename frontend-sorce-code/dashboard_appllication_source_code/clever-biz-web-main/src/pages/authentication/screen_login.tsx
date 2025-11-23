@@ -6,9 +6,9 @@ import { Link, useNavigate } from "react-router";
 import { LabelInput } from "../../components/input";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ImSpinner6 } from "react-icons/im";
-import { useRole } from "../../hooks/useRole";
+import { useRole, UserRole } from "../../hooks/useRole";
 
 const ScreenLogin = () => {
   type Inputs = {
@@ -18,7 +18,20 @@ const ScreenLogin = () => {
   };
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const { updateUserData } = useRole();
+  const { updateUserData, userInfo, isLoading, getDashboardPath } = useRole();
+  const redirectToRoleDashboard = useCallback(
+    (role?: UserRole | null) => {
+      const destination = getDashboardPath(role);
+      navigate(destination, { replace: true });
+    },
+    [getDashboardPath, navigate]
+  );
+
+  useEffect(() => {
+    if (!isLoading && userInfo?.role) {
+      redirectToRoleDashboard(userInfo.role);
+    }
+  }, [isLoading, userInfo, redirectToRoleDashboard]);
 
   const { register, handleSubmit, control } = useForm<Inputs>();
 
@@ -40,25 +53,7 @@ const ScreenLogin = () => {
       toast.success(`Welcome! You are logged in as ${user.role}`);
      
 
-      // Redirect based on role
-      switch (user.role) {
-        case "chef":
-          navigate("/chef");
-          break;
-        case "staff":
-          navigate("/staff");
-          break;
-        case "owner":
-          navigate("/restaurant");
-          break;
-        case "admin":
-          navigate("/admin");
-          break;
-        default:
-          navigate("/");
-          break;
-      }
-       window.location.reload();
+      redirectToRoleDashboard(user.role);
     } catch (error: any) {
       setLoading(false);
       console.error("Login failed:", error);

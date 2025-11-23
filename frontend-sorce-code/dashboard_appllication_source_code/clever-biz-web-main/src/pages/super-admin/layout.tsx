@@ -1,14 +1,38 @@
-import { Outlet } from "react-router";
+import { useEffect } from "react";
+import { Outlet, useNavigate } from "react-router";
 import { AdminSidebar } from "../../components/sidebar";
 import { Header } from "../../components/utilities";
 import useLocalStorage from "../../hooks/useLocalStorage";
+import { useRole } from "../../hooks/useRole";
 
 const AdminLayout = () => {
   const [sidebarOpen, setDrawerOpen] = useLocalStorage("staff_sidebar", false);
+  const navigate = useNavigate();
+  const { userRole, isLoading, getDashboardPath } = useRole();
 
   const toggleSidebar = () => {
     setDrawerOpen(!sidebarOpen);
   };
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (userRole === "admin") {
+      return;
+    }
+    if (userRole) {
+      navigate(getDashboardPath(userRole), { replace: true });
+    } else {
+      navigate("/login", { replace: true });
+    }
+  }, [getDashboardPath, isLoading, navigate, userRole]);
+
+  if (isLoading || userRole !== "admin") {
+    return (
+      <div className="flex h-screen items-center justify-center bg-dashboard text-primary-text">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen">

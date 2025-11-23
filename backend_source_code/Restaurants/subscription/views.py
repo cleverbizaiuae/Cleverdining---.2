@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from accounts.permissions import IsAllowedRole,IsAdminRole
+from accounts.permissions import IsAllowedRole,IsAdminRole,IsSuperAdmin
 from rest_framework import permissions
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from datetime import datetime, timezone as dt_timezone
@@ -282,7 +282,7 @@ class RenewSubscriptionView(APIView):
 
 
 class UpdateSubscriptionStatusAPIView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [IsSuperAdmin]
 
     def patch(self, request, restaurant_id):
         status_value = request.data.get('status')

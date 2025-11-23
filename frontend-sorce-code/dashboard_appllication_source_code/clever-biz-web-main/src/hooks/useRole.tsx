@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axiosInstance from "@/lib/axios";
+import type { NavigateFunction } from "react-router";
 
 export type UserRole = "chef" | "staff" | "owner" | "admin" | null;
 
@@ -26,6 +27,14 @@ const safeParse = <T,>(raw: string | null, fallback: T): T => {
   } catch {
     return fallback;
   }
+};
+
+const roleDashboardMap: Record<Exclude<UserRole, null>, string> = {
+  admin: "/admin",
+  owner: "/restaurant",
+  chef: "/chef",
+  staff: "/staff",
+  customer: "/",
 };
 
 export const useRole = () => {
@@ -147,6 +156,21 @@ export const useRole = () => {
   }, []);
 
 
+  const getDashboardPath = (roleOverride?: UserRole | null) => {
+    if (!roleOverride) return "/";
+    return roleDashboardMap[roleOverride] ?? "/";
+  };
+
+  const redirectToDashboard = (
+    navigateFn: NavigateFunction,
+    roleOverride?: UserRole | null,
+    options?: { replace?: boolean }
+  ) => {
+    const targetRole = roleOverride ?? userRole;
+    const targetPath = getDashboardPath(targetRole);
+    navigateFn(targetPath, { replace: options?.replace ?? false });
+  };
+
   return {
     userRole,
     userInfo,
@@ -158,6 +182,8 @@ export const useRole = () => {
     isAuthenticated,
     clearUserData,
     updateUserData,
+    getDashboardPath,
+    redirectToDashboard,
   };
 };
 
