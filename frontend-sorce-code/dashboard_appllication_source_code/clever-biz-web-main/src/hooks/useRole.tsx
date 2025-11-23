@@ -2,7 +2,13 @@ import { useState, useEffect } from "react";
 import axiosInstance from "@/lib/axios";
 import type { NavigateFunction } from "react-router";
 
-export type UserRole = "chef" | "staff" | "owner" | "admin" | null;
+export type UserRole =
+  | "chef"
+  | "staff"
+  | "owner"
+  | "admin"
+  | "customer"
+  | null;
 
 interface UserInfo {
   id: number;
