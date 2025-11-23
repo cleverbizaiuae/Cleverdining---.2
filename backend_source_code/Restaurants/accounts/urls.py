@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView
+from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView
 from device.views import CreateReservationAPIView
 
 router = DefaultRouter()
@@ -15,7 +15,8 @@ urlpatterns = [
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('reservations/create/', CreateReservationAPIView.as_view(), name='create-reservation'), 
-    path('user-info/<int:user_id>/', UserInfoAPIView.as_view(), name='user-info') 
+    path('user-info/<int:user_id>/', UserInfoAPIView.as_view(), name='user-info'),
+    path('profile/', ProfileView.as_view(), name='profile'),
 ]
 
 

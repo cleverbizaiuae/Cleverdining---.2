@@ -288,3 +288,14 @@ class UserInfoAPIView(APIView):
         # Serialize the user data
         user_serializer = UserSerializer(user)
         return Response(user_serializer.data)
+
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Return the authenticated user's profile with related restaurant data.
+        """
+        serializer = UserWithRestaurantSerializer(request.user)
+        return Response(serializer.data)

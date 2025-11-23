@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import axiosInstance from "@/lib/axios";
 
 export type UserRole = "chef" | "staff" | "owner" | "admin" | null;
 
@@ -8,6 +9,11 @@ interface UserInfo {
   role: UserRole;
   username?: string;
   restaurants?: any[];
+  owner_id?: number | null;
+  restaurants_id?: number | null;
+  device_id?: number | null;
+  subscription?: Record<string, unknown> | null;
+  image?: string | null;
   // Add other user properties as needed
 }
 
@@ -98,11 +104,46 @@ export const useRole = () => {
 
   // Initialize user data on component mount
   useEffect(() => {
-    const role = getUserRole();
-    const user = getUserInfo();
-    setUserRole(role);
-    setUserInfo(user);
-    setIsLoading(false);
+    let isMounted = true;
+
+    const bootstrapUser = async () => {
+      const role = getUserRole();
+      const user = getUserInfo();
+
+      if (isMounted) {
+        setUserRole(role);
+        setUserInfo(user);
+      }
+
+      const hasToken =
+        isBrowser && typeof localStorage !== "undefined"
+          ? localStorage.getItem("accessToken")
+          : null;
+
+      if (hasToken) {
+        try {
+          const response = await axiosInstance.get<UserInfo>("/profile/");
+          if (isMounted && response?.data) {
+            const profile = response.data;
+            localStorage.setItem("userInfo", JSON.stringify(profile));
+            setUserInfo(profile);
+            setUserRole(profile?.role || null);
+          }
+        } catch (error) {
+          console.error("Failed to load profile information:", error);
+        }
+      }
+
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    };
+
+    bootstrapUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
 

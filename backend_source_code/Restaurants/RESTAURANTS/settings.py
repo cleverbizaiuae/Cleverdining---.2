@@ -156,6 +156,8 @@ REST_FRAMEWORK = {
 ],
 }
 
+LOGIN_REDIRECT_URL = "/profile/"
+
 
 AUTHENTICATION_BACKENDS = [
     'accounts.auth_backends.EmailOrUsernameModelBackend',
