@@ -1,8 +1,17 @@
 // src/lib/axios.ts
 import axios from "axios";
 
+const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
+
+const API_BASE_URL = normalizeBaseUrl(
+  (import.meta.env.VITE_API_URL as string | undefined) ||
+    "http://193.160.119.200:8000"
+);
+
+const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -30,12 +39,9 @@ axiosInstance.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem("refreshToken");
         if (refreshToken) {
-          const response = await axios.post(
-            "http://10.10.13.26:9000/token/refresh/",
-            {
-              refresh: refreshToken,
-            }
-          );
+          const response = await axios.post(REFRESH_TOKEN_ENDPOINT, {
+            refresh: refreshToken,
+          });
 
           const { access } = response.data;
           localStorage.setItem("accessToken", access);

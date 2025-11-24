@@ -35,9 +35,25 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
-CSRF_TRUSTED_ORIGINS = ['https://abc.winaclaim.com', 'https://clever-biz.netlify.app/' , 'https://clever-biz2.netlify.app/']
-CORS_ALLOW_ALL_ORIGINS = True
+ALLOWED_HOSTS = [
+    "193.160.119.200",
+    "localhost",
+    "127.0.0.1",
+    "clever-biz.netlify.app",
+    "clever-biz2.netlify.app",
+    "abc.winaclaim.com",
+]
+CSRF_TRUSTED_ORIGINS = [
+    "https://abc.winaclaim.com",
+    "https://clever-biz.netlify.app",
+    "https://clever-biz2.netlify.app",
+]
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    "https://abc.winaclaim.com",
+    "https://clever-biz.netlify.app",
+    "https://clever-biz2.netlify.app",
+]
 
 
 # Application definition
