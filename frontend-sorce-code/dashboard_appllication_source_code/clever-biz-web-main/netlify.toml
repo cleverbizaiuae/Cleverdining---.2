@@ -1,0 +1,10 @@
+[build]
+  command = "npm install && npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/api/*"
+  to = "http://193.160.119.200:8000/:splat"
+  status = 200
+  force = true
+
