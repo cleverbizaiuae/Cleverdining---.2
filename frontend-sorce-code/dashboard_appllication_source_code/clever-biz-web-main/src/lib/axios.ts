@@ -2,11 +2,13 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-  baseURL: "http://193.160.119.200:8000",
+  baseURL: import.meta.env.VITE_API_URL || "/api",
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+export default axiosInstance;
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
