@@ -42,17 +42,20 @@ ALLOWED_HOSTS = [
     "clever-biz.netlify.app",
     "clever-biz2.netlify.app",
     "abc.winaclaim.com",
+    "officialcleverdining.netlify.app",
 ]
 CSRF_TRUSTED_ORIGINS = [
     "https://abc.winaclaim.com",
     "https://clever-biz.netlify.app",
     "https://clever-biz2.netlify.app",
+    "https://officialcleverdining.netlify.app",
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "https://abc.winaclaim.com",
     "https://clever-biz.netlify.app",
     "https://clever-biz2.netlify.app",
+    "https://officialcleverdining.netlify.app",
 ]
 
 

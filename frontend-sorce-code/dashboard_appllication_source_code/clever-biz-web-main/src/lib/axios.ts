@@ -4,8 +4,7 @@ import axios from "axios";
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
 
 const API_BASE_URL = normalizeBaseUrl(
-  (import.meta.env.VITE_API_URL as string | undefined) ||
-    "http://193.160.119.200:8000"
+  (import.meta.env.VITE_API_URL as string | undefined) || "/api"
 );
 
 const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
