@@ -9,9 +9,13 @@ from django.core.exceptions import ValidationError
 
 # Create your models here.
 
+# Get or generate FERNET_KEY for encryption
 SECRET_KEY = os.getenv('FERNET_KEY')
 if not SECRET_KEY:
-    raise ValueError("FERNET_KEY environment variable not set.")
+    # Generate a default key for development (should be set in production)
+    SECRET_KEY = Fernet.generate_key().decode()
+    import warnings
+    warnings.warn("FERNET_KEY not set. Using auto-generated key. Set FERNET_KEY in production!")
 fernet = Fernet(SECRET_KEY.encode())
 
 
@@ -33,7 +37,6 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for Order #{self.order.id} by Device #{self.device.id}"
-
 
 
 
