@@ -4,7 +4,7 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "http://193.160.119.200:8000/:splat"
+  to = "https://cleverdining-2.onrender.com/:splat"
   status = 200
   force = true
 
