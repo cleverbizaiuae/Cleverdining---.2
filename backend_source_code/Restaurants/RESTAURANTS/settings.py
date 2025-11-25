@@ -44,12 +44,21 @@ ALLOWED_HOSTS = [
     "abc.winaclaim.com",
     "officialcleverdining.netlify.app",
 ]
+
+# Add Render.com URL if available
+RENDER_EXTERNAL_HOSTNAME = env('RENDER_EXTERNAL_HOSTNAME', default=None)
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 CSRF_TRUSTED_ORIGINS = [
     "https://abc.winaclaim.com",
     "https://clever-biz.netlify.app",
     "https://clever-biz2.netlify.app",
     "https://officialcleverdining.netlify.app",
 ]
+
+# Add Render.com URL to CSRF trusted origins
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "https://abc.winaclaim.com",
