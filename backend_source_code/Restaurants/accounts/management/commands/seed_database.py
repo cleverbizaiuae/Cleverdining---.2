@@ -25,7 +25,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"✓ Owner: {owner.email}"))
 
         admin, created = User.objects.get_or_create(
-            email="admin@cb.demo",
+            email="solomon@cleverbiz.ai",
             defaults={
                 "username": "admin",
                 "role": "admin",
@@ -100,4 +100,4 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"✓ Created {len(items_data)} menu items"))
         self.stdout.write(self.style.SUCCESS("\n=== Seed Data Complete! ==="))
         self.stdout.write(f"Login: owner@cb.demo / password123")
-        self.stdout.write(f"Admin: admin@cb.demo / password123")
+        self.stdout.write(f"Admin: solomon@cleverbiz.ai / password123")
