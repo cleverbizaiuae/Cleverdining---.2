@@ -176,7 +176,7 @@ const LayoutDashboard = () => {
       return;
     }
     const newSoket = new WebSocket(
-      `wss://abc.winaclaim.com/ws/call/${JSON.parse(userInfo as string).user?.restaurants[0].device_id
+      `ws://127.0.0.1:8000/ws/call/${JSON.parse(userInfo as string).user?.restaurants[0].device_id
       }/?token=${jwt}`
     );
     newSoket.onopen = () => {

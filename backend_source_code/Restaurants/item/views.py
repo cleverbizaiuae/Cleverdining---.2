@@ -275,13 +275,19 @@ class ChefItemViewSet(viewsets.ModelViewSet):
 
 class CustomerItemViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ItemSerializer
-    permission_classes = [permissions.IsAuthenticated,IsCustomerRole]
+    permission_classes = [permissions.AllowAny]
     pagination_class = ItemPagination  
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = ItemFilter  
     search_fields = ['item_name', 'category__Category_name']
 
     def get_queryset(self):
+        if self.request.user.is_anonymous:
+             # Bypass for dev: return items for the first restaurant
+            first_restaurant = Restaurant.objects.first()
+            if first_restaurant:
+                return Item.objects.filter(restaurant=first_restaurant)
+            return Item.objects.none()
         
         restaurant_ids = self.request.user.devices.values_list('restaurant_id', flat=True)
         print("Customer's restaurant IDs:", list(restaurant_ids))

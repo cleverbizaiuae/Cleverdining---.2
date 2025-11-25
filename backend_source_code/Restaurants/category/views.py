@@ -113,11 +113,18 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
 
 class CustomerCategoryListView(generics.ListAPIView):
     serializer_class = CustomerCategorySerializer
-    permission_classes = [permissions.IsAuthenticated,IsCustomerRole]
+    permission_classes = [permissions.AllowAny]
     pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
+        
+        if user.is_anonymous:
+            # Bypass for dev: return categories for the first restaurant
+            first_restaurant = Restaurant.objects.first()
+            if first_restaurant:
+                return Category.objects.filter(restaurant=first_restaurant)
+            return Category.objects.none()
 
         # Only allow customers
         if user.role != 'customer':

@@ -70,7 +70,7 @@ const ScreenCart = () => {
               {/* Text & Price */}
               <div className="ml-4 flex-1">
                 <h2 className="text-primary">{item.item_name}</h2>
-                <p className="text-primary/40">${item.price}</p>
+                <p className="text-primary/40">AED {item.price}</p>
                 {/* Quantity Controller with +/- buttons */}
                 <div className="flex items-center space-x-2 mt-2">
                   <button
@@ -125,7 +125,7 @@ const ScreenCart = () => {
             </span>
             <span>
               Total Cost:{" "}
-              <span className="border px-2 py-1 rounded-md">${totalCost}</span>
+              <span className="border px-2 py-1 rounded-md">AED {totalCost}</span>
             </span>
           </div>
           <button

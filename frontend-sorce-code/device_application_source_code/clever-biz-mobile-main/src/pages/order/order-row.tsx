@@ -29,7 +29,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
           currency: "AED",
         }).format(n);
       } catch {
-        return `$${n}`;
+        return `AED ${n}`;
       }
     }
     return v ?? "—";

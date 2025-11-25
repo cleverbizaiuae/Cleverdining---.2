@@ -48,6 +48,25 @@ const ScreenLogin = () => {
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard");
+    } else {
+      // BYPASS LOGIN LOGIC
+      const dummyUserInfo = {
+        user: {
+          username: "guest_bypass",
+          restaurants: [
+            {
+              id: 1,
+              table_name: "Guest Table",
+              device_id: "guest_device_id"
+            }
+          ]
+        }
+      };
+      localStorage.setItem("accessToken", "bypass_token");
+      localStorage.setItem("refreshToken", "bypass_refresh_token");
+      localStorage.setItem("userInfo", JSON.stringify(dummyUserInfo));
+      toast.success("Bypassing login...");
+      navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
 
@@ -166,9 +185,9 @@ const ScreenLogin = () => {
 
 const InputField: React.FC<
   React.ComponentProps<"div"> &
-    React.ComponentProps<"input"> & {
-      icon: LucideIcon;
-    }
+  React.ComponentProps<"input"> & {
+    icon: LucideIcon;
+  }
 > = ({ className, placeholder, type, icon: LucidIcon, ...props }) => {
   return (
     <div className={cn(className, "relative")} {...props}>
