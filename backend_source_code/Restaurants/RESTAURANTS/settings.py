@@ -148,15 +148,26 @@ ASGI_APPLICATION = 'RESTAURANTS.asgi.application'
 WSGI_APPLICATION = 'RESTAURANTS.wsgi.application'
 
 
-# Channel layers using Redis
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [(env('REDIS_HOST', default='localhost'), 6379)],
+# Channel layers - use in-memory for now, add Redis later if needed
+REDIS_HOST = env('REDIS_HOST', default=None)
+
+if REDIS_HOST and REDIS_HOST != 'localhost':
+    # Use Redis if available
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [(REDIS_HOST, 6379)],
+            },
         },
-    },
-}
+    }
+else:
+    # Use in-memory channel layer (simpler, works without Redis)
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        },
+    }
 
 
 # Database
