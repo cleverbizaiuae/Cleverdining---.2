@@ -7,7 +7,7 @@ const TOKENS = {
 };
 
 const axiosInstance = axios.create({
-  baseURL: "http://193.160.119.200:8000/",
+  baseURL: "https://cleverdining-2.onrender.com/",
   headers: {
     "Content-Type": "application/json",
   },
@@ -34,7 +34,7 @@ axiosInstance.interceptors.response.use(
         const refreshToken = localStorage.getItem(TOKENS.REFRESH_TOKEN);
         if (refreshToken) {
           const response = await axios.post(
-            "http://193.160.119.200:8000/token/refresh/",
+            "https://cleverdining-2.onrender.com/token/refresh/",
             {
               refresh: refreshToken,
             }
