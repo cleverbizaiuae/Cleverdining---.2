@@ -119,8 +119,9 @@ class CustomerCategoryListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         
+        # Allow anonymous access for customer-facing endpoint
+        # Return categories from first restaurant for anonymous users
         if user.is_anonymous:
-            # Bypass for dev: return categories for the first restaurant
             first_restaurant = Restaurant.objects.first()
             if first_restaurant:
                 return Category.objects.filter(restaurant=first_restaurant)

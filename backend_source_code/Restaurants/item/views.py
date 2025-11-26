@@ -282,8 +282,9 @@ class CustomerItemViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['item_name', 'category__Category_name']
 
     def get_queryset(self):
+        # Allow anonymous access for customer-facing endpoint
+        # Return items from first restaurant for anonymous users
         if self.request.user.is_anonymous:
-             # Bypass for dev: return items for the first restaurant
             first_restaurant = Restaurant.objects.first()
             if first_restaurant:
                 return Item.objects.filter(restaurant=first_restaurant)

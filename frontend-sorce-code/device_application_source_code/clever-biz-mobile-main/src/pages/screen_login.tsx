@@ -48,26 +48,8 @@ const ScreenLogin = () => {
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard");
-    } else {
-      // BYPASS LOGIN LOGIC
-      const dummyUserInfo = {
-        user: {
-          username: "guest_bypass",
-          restaurants: [
-            {
-              id: 1,
-              table_name: "Guest Table",
-              device_id: "guest_device_id"
-            }
-          ]
-        }
-      };
-      localStorage.setItem("accessToken", "bypass_token");
-      localStorage.setItem("refreshToken", "bypass_refresh_token");
-      localStorage.setItem("userInfo", JSON.stringify(dummyUserInfo));
-      toast.success("Bypassing login...");
-      navigate("/dashboard");
     }
+    // Removed bypass logic for production security
   }, [isAuthenticated, navigate]);
 
   const handleLogin = async () => {

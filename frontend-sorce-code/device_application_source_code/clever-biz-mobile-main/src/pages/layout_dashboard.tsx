@@ -175,8 +175,10 @@ const LayoutDashboard = () => {
     if (!jwt || !userInfo) {
       return;
     }
+    // Use environment variable or fallback to production WebSocket URL
+    const WS_BASE_URL = import.meta.env.VITE_WS_URL || "wss://cleverdining-2.onrender.com";
     const newSoket = new WebSocket(
-      `wss://cleverdining-2.onrender.com/ws/call/${JSON.parse(userInfo as string).user?.restaurants[0].device_id
+      `${WS_BASE_URL}/ws/call/${JSON.parse(userInfo as string).user?.restaurants[0].device_id
       }/?token=${jwt}`
     );
     newSoket.onopen = () => {
