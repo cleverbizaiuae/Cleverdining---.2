@@ -130,6 +130,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON
 ]
 
 ROOT_URLCONF = 'RESTAURANTS.urls'
