@@ -34,53 +34,18 @@ const ScreenRegister = () => {
       redirectToRoleDashboard(userInfo.role);
     }
   }, [isLoading, userInfo, redirectToRoleDashboard]);
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<Inputs>({
-    mode: 'onSubmit', // Validate on submit
-    defaultValues: {
-      customer_name: '',
-      restaurant_name: '',
-      location: '',
-      phone_number: '',
-      email: '',
-      password: '',
-    }
-  });
+  const { register, handleSubmit, watch, setValue } = useForm<Inputs>();
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     console.log("FORM SUBMITTED - Raw data object:", data);
+    console.log("Data keys:", Object.keys(data || {}));
+    console.log("Data values:", data);
 
     setLoading(true);
 
-    // Check if data is empty or missing required fields
-    if (!data || Object.keys(data).length === 0) {
-      console.error("Form data is empty!");
-      toast.error("Please fill in all required fields.");
-      setLoading(false);
-      return;
-    }
-
-    // Validate required fields
-    if (!data.email?.trim()) {
-      toast.error("Email is required");
-      setLoading(false);
-      return;
-    }
-    if (!data.password || data.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      setLoading(false);
-      return;
-    }
-    if (!data.customer_name?.trim()) {
-      toast.error("Customer name is required");
-      setLoading(false);
-      return;
-    }
-    if (!data.restaurant_name?.trim()) {
-      toast.error("Restaurant name is required");
-      setLoading(false);
-      return;
-    }
-    if (!data.location?.trim()) {
-      toast.error("Location is required");
+    // Basic validation
+    if (!data) {
+      console.error("No data received");
+      toast.error("Please fill in the form");
       setLoading(false);
       return;
     }
@@ -88,38 +53,27 @@ const ScreenRegister = () => {
     console.log("Data validation passed. Creating FormData...");
 
     try {
+      // Create FormData
       const formData = new FormData();
 
-      // Append form data with proper field names for backend
-      formData.append("email", data.email.trim());
-      formData.append("password", data.password);
-      formData.append("username", data.customer_name.trim());
-      formData.append("resturent_name", data.restaurant_name.trim());
-      formData.append("location", data.location.trim());
-      if (data.phone_number?.trim()) {
-        formData.append("phone_number", data.phone_number.trim());
-      }
+      // Ensure we have the required fields
+      const email = data.email || '';
+      const password = data.password || '';
+      const customerName = data.customer_name || '';
+      const restaurantName = data.restaurant_name || '';
+      const location = data.location || '';
+
+      console.log("Extracted values:", { email, password: "***", customerName, restaurantName, location });
+
+      // Append to FormData
+      formData.append("email", email.trim());
+      formData.append("password", password);
+      formData.append("username", customerName.trim());
+      formData.append("resturent_name", restaurantName.trim());
+      formData.append("location", location.trim());
       formData.append("package", "Basic");
 
-      // Add image file if exists
-      if (data.company_logo && data.company_logo[0]) {
-        formData.append("image", data.company_logo[0]);
-        formData.append("logo", data.company_logo[0]);
-      }
-
-      console.log("FormData created successfully");
-
-      // Log FormData contents for debugging
-      console.log("FormData contents:");
-      for (let [key, value] of formData.entries()) {
-        if (key === 'password') {
-          console.log(`  ${key}: ***`);
-        } else if (value instanceof File) {
-          console.log(`  ${key}: File(${value.name}, ${value.size} bytes)`);
-        } else {
-          console.log(`  ${key}: ${value}`);
-        }
-      }
+      console.log("FormData created, sending request...");
 
       const res = await axiosInstance.post("/owners/register/", formData, {
         headers: {
@@ -127,44 +81,17 @@ const ScreenRegister = () => {
         },
       });
 
-      console.log("Registration successful:", res.data);
+      console.log("SUCCESS:", res.data);
       toast.success("Registration successful!");
-
-      // Auto-login after successful registration
-      try {
-        const loginResponse = await axiosInstance.post("/login/", {
-          email: data.email.trim(),
-          password: data.password,
-        });
-
-        const { access, refresh, user } = loginResponse.data;
-        updateUserData(user, access, refresh);
-        redirectToRoleDashboard(user.role);
-      } catch (loginError) {
-        console.error("Auto-login failed:", loginError);
-        toast.error("Registration successful, but login failed. Please try logging in manually.");
-        navigate("/login");
-      }
-
       setLoading(false);
+
+      // Simple redirect after success
+      navigate("/login");
+
     } catch (error: any) {
-      console.error("Registration failed:", error);
+      console.error("Registration failed:", error.response?.data || error.message);
       setLoading(false);
-
-      // Handle different error types
-      if (error.response?.status === 400) {
-        const errors = error.response.data;
-        if (typeof errors === 'object') {
-          const errorMessages = Object.values(errors).flat();
-          toast.error(errorMessages.join(", "));
-        } else {
-          toast.error("Please check your input fields");
-        }
-      } else if (error.response?.status === 500) {
-        toast.error("Server error. Please try again later.");
-      } else {
-        toast.error("Registration failed. Please try again.");
-      }
+      toast.error("Registration failed. Please try again.");
     }
 
     try {
@@ -269,45 +196,33 @@ const ScreenRegister = () => {
           inputProps={{
             id: "customer_name",
             placeholder: "Kawsar Hossain",
-            required: true,
-            ...register("customer_name", { required: "Customer name is required" }),
+            ...register("customer_name"),
           }}
         />
-        {errors.customer_name && (
-          <p className="text-red-500 text-sm">{errors.customer_name.message}</p>
-        )}
 
         <LabelInput
           label="Restaurant Name"
           inputProps={{
             id: "restaurant_name",
-            required: true,
-            ...register("restaurant_name", { required: "Restaurant name is required" }),
+            placeholder: "Restaurant Name",
+            ...register("restaurant_name"),
           }}
         />
-        {errors.restaurant_name && (
-          <p className="text-red-500 text-sm">{errors.restaurant_name.message}</p>
-        )}
 
         <LabelInput
           label="Location"
           inputProps={{
             id: "location",
-            required: true,
-            ...register("location", { required: "Location is required" }),
+            placeholder: "City, Country",
+            ...register("location"),
           }}
         />
-        {errors.location && (
-          <p className="text-red-500 text-sm">{errors.location.message}</p>
-        )}
 
         <LabelInput
           label="Phone Number"
           inputType="tel"
           inputProps={{
             id: "phone_number",
-            name: "phone_number",
-            autoComplete: "tel",
             placeholder: "+1234567890",
             ...register("phone_number"),
           }}
@@ -337,38 +252,20 @@ const ScreenRegister = () => {
           inputType="email"
           inputProps={{
             id: "email",
-            required: true,
-            ...register("email", {
-              required: "Email is required",
-              pattern: {
-                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                message: "Invalid email address"
-              }
-            }),
+            placeholder: "your@email.com",
+            ...register("email"),
           }}
         />
-        {errors.email && (
-          <p className="text-red-500 text-sm">{errors.email.message}</p>
-        )}
 
         <LabelInput
           label="Password"
           inputType="password"
           inputProps={{
             id: "password",
-            required: true,
-            ...register("password", {
-              required: "Password is required",
-              minLength: {
-                value: 6,
-                message: "Password must be at least 6 characters"
-              }
-            }),
+            placeholder: "Minimum 6 characters",
+            ...register("password"),
           }}
         />
-        {errors.password && (
-          <p className="text-red-500 text-sm">{errors.password.message}</p>
-        )}
         <div className="text-center mt-14 mb-6">
           <button type="submit" className="button-primary px-14">
             {loading ? (
