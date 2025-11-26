@@ -15,6 +15,7 @@ from .pagination import ChefAndStaffPagination
 from django.core.mail import send_mail
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+import logging
 # jwt
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -23,6 +24,8 @@ from rest_framework_simplejwt.tokens import OutstandingToken,BlacklistedToken,Re
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .utils import get_restaurant_owner_id
 from rest_framework.exceptions import NotFound
+
+logger = logging.getLogger(__name__)
 # Create your views here.
 
 class RegisterApiView(CreateAPIView):
@@ -79,11 +82,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        data = super().validate(attrs)
-        user = self.user
-        user_data = UserWithRestaurantSerializer(user).data
-        data['user'] = user_data
-        return data
+        try:
+            data = super().validate(attrs)
+            user = self.user
+            user_data = UserWithRestaurantSerializer(user).data
+            data['user'] = user_data
+            return data
+        except Exception as e:
+            logger.error(f"Error in CustomTokenObtainPairSerializer.validate: {str(e)}", exc_info=True)
+            # Re-raise to maintain original error behavior
+            raise
 
 
 

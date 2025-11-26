@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import User,ChefStaff
-from restaurant.admin import Restaurant
+from restaurant.models import Restaurant
 import secrets
 from django.core.mail import send_mail
 from django.conf import settings
@@ -114,6 +114,8 @@ class UserWithRestaurantSerializer(serializers.ModelSerializer):
         device_data = []
         for device in device_links:
             rest = device.restaurant
+            if rest is None:  # Skip devices without restaurants
+                continue
             rest_data = RestaurantSerializer(rest).data
             rest_data['source'] = 'device'
             rest_data['table_name'] = device.table_name
