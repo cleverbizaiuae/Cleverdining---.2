@@ -33,7 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG', default=False)
 
 ALLOWED_HOSTS = [
     "193.160.119.200",
@@ -43,6 +43,8 @@ ALLOWED_HOSTS = [
     "clever-biz2.netlify.app",
     "abc.winaclaim.com",
     "officialcleverdining.netlify.app",
+    "cleverdining-2.onrender.com",
+    "cleverdining-backend.onrender.com",
 ]
 
 # Add Render.com URL if available
@@ -54,6 +56,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://clever-biz.netlify.app",
     "https://clever-biz2.netlify.app",
     "https://officialcleverdining.netlify.app",
+    "https://cleverdining-2.onrender.com",
+    "https://cleverdining-backend.onrender.com",
 ]
 
 # Add Render.com URL to CSRF trusted origins
@@ -65,6 +69,22 @@ CORS_ALLOWED_ORIGINS = [
     "https://clever-biz.netlify.app",
     "https://clever-biz2.netlify.app",
     "https://officialcleverdining.netlify.app",
+]
+
+# Allow credentials for authenticated requests
+CORS_ALLOW_CREDENTIALS = True
+
+# Allow common headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 
 
@@ -193,6 +213,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
     'rest_framework.permissions.IsAuthenticated',
 ],
+    'EXCEPTION_HANDLER': 'restaurant.exceptions.custom_exception_handler',
 }
 
 LOGIN_REDIRECT_URL = "/profile/"

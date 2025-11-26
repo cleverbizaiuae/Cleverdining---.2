@@ -85,11 +85,14 @@ const ScreenRegister = () => {
       setLoading(false);
       console.error("Registration failed:", error);
       console.error("Error response:", error.response);
-      console.error("Error data:", error.response?.data);
+      console.error("Error response status:", error.response?.status);
+      console.error("Error response data:", error.response?.data);
+      console.error("Error response headers:", error.response?.headers);
+      console.error("Full error object:", JSON.stringify(error, null, 2));
       
       // Show specific error messages
       if (error.response?.status === 400) {
-        const errors = error.response.data;
+        const errors = error.response.data || {};
         const errorMessages = [];
         
         if (errors.email) {
@@ -107,9 +110,15 @@ const ScreenRegister = () => {
         
         toast.error(errorMessages.join(", ") || "Please check your input fields");
       } else if (error.response?.status === 500) {
-        toast.error("Server error. Please try again later.");
+        // Try to extract error message from response
+        const errorData = error.response?.data || {};
+        const errorMsg = errorData.detail || errorData.message || errorData.error || "Server error. Please try again later.";
+        console.error("500 Error details:", errorMsg);
+        toast.error(`Server error: ${errorMsg}`);
+      } else if (error.message) {
+        toast.error(`Error: ${error.message}`);
       } else {
-        toast.error(error.response?.data?.message || "Registration failed. Please try again.");
+        toast.error("Registration failed. Please try again.");
       }
     }
   };

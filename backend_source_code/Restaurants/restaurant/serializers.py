@@ -22,6 +22,26 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         fields = ['username', 'email', 'password', 'resturent_name', 'location', 'phone_number', 'package', 'image', 'logo']
         extra_kwargs = {'password': {'write_only': True}}
     
+    def validate(self, attrs):
+        """Validate all required fields are present"""
+        errors = {}
+        
+        # Check required fields
+        if not attrs.get('username'):
+            errors['username'] = ['Username is required.']
+        if not attrs.get('email'):
+            errors['email'] = ['Email is required.']
+        if not attrs.get('password'):
+            errors['password'] = ['Password is required.']
+        if not attrs.get('resturent_name'):
+            errors['resturent_name'] = ['Restaurant name is required.']
+        if not attrs.get('location'):
+            errors['location'] = ['Location is required.']
+        
+        if errors:
+            raise serializers.ValidationError(errors)
+        
+        return attrs
 
     def validate_phone_number(self, value):
         # Handle None, empty, or whitespace-only phone numbers
