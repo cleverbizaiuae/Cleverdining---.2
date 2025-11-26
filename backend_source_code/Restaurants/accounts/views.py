@@ -22,6 +22,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import OutstandingToken,BlacklistedToken,RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
 from .utils import get_restaurant_owner_id
 from rest_framework.exceptions import NotFound
 
@@ -37,7 +38,7 @@ class RegisterApiView(CreateAPIView):
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-
+    
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -83,6 +84,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         try:
+            # Map 'email' to 'username' if email is provided
+            if 'email' in attrs and 'username' not in attrs:
+                attrs['username'] = attrs.pop('email')
+            
             data = super().validate(attrs)
             user = self.user
             user_data = UserWithRestaurantSerializer(user).data

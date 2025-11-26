@@ -57,16 +57,24 @@ const ScreenLogin = () => {
     } catch (error: any) {
       setLoading(false);
       console.error("Login failed:", error);
+      console.error("Error response:", error.response);
+      console.error("Error response data:", error.response?.data);
+      console.error("Error response status:", error.response?.status);
+      console.error("Full error:", JSON.stringify(error, null, 2));
 
       // Show more specific error messages
       if (error.response?.status === 401) {
         toast.error("Invalid email or password");
       } else if (error.response?.status === 400) {
         toast.error("Please check your input fields");
+      } else if (error.response?.status === 500) {
+        const errorMsg = error.response?.data?.detail || error.response?.data?.message || "Server error. Please try again.";
+        console.error("500 Error details:", errorMsg);
+        toast.error(`Server error: ${errorMsg}`);
       } else if (error.response?.data?.message) {
         toast.error(error.response.data.message);
       } else {
-        toast.error("Login failed. Please try again.");
+        toast.error(`Login failed: ${error.message || "Unknown error"}`);
       }
     }
   };
