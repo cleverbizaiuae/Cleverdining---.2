@@ -1,10 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView
+from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet
 from device.views import CreateReservationAPIView
 
 router = DefaultRouter()
-
+router.register(r'chefstaff', ChefStaffViewSet, basename='chefstaff')
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -17,6 +17,7 @@ urlpatterns = [
     path('reservations/create/', CreateReservationAPIView.as_view(), name='create-reservation'), 
     path('user-info/<int:user_id>/', UserInfoAPIView.as_view(), name='user-info'),
     path('profile/', ProfileView.as_view(), name='profile'),
+    path('test-user/', TestUserView.as_view(), name='test-user'),  # Debug endpoint
 ]
 
 
