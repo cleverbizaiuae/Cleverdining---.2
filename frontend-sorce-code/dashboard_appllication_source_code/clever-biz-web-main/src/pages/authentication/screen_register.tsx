@@ -36,65 +36,24 @@ const ScreenRegister = () => {
   }, [isLoading, userInfo, redirectToRoleDashboard]);
   const { register, handleSubmit, watch, setValue } = useForm<Inputs>();
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
-    console.log("FORM SUBMITTED - Raw data object:", data);
-    console.log("Data keys:", Object.keys(data || {}));
-    console.log("Data values:", data);
-
-    setLoading(true);
-
-    // Basic validation
-    if (!data) {
-      console.error("No data received");
-      toast.error("Please fill in the form");
-      setLoading(false);
+    console.log("FORM SUBMITTED:", data);
+    
+    // Validation
+    if (!data.email || !data.password || !data.customer_name || 
+        !data.restaurant_name || !data.location) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
-    console.log("Data validation passed. Creating FormData...");
-
-    try {
-      // Create FormData
-      const formData = new FormData();
-
-      // Ensure we have the required fields
-      const email = data.email || '';
-      const password = data.password || '';
-      const customerName = data.customer_name || '';
-      const restaurantName = data.restaurant_name || '';
-      const location = data.location || '';
-
-      console.log("Extracted values:", { email, password: "***", customerName, restaurantName, location });
-
-      // Append to FormData
-      formData.append("email", email.trim());
-      formData.append("password", password);
-      formData.append("username", customerName.trim());
-      formData.append("resturent_name", restaurantName.trim());
-      formData.append("location", location.trim());
-      formData.append("package", "Basic");
-
-      console.log("FormData created, sending request...");
-
-      const res = await axiosInstance.post("/owners/register/", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      console.log("SUCCESS:", res.data);
-      toast.success("Registration successful!");
-      setLoading(false);
-
-      // Simple redirect after success
-      navigate("/login");
-
-    } catch (error: any) {
-      console.error("Registration failed:", error.response?.data || error.message);
-      setLoading(false);
-      toast.error("Registration failed. Please try again.");
+    if (data.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
     }
 
+    setLoading(true);
+
     try {
+      // Step 1: Register owner
       const formData = new FormData();
       formData.append("email", data.email.trim());
       formData.append("password", data.password);
@@ -102,85 +61,59 @@ const ScreenRegister = () => {
       formData.append("resturent_name", data.restaurant_name.trim());
       formData.append("location", data.location.trim());
       formData.append("phone_number", (data.phone_number || "").trim());
-      formData.append("package", "Basic"); // Default package
+      formData.append("package", "Basic");
 
-      // Add image file if exists (backend expects both 'image' and 'logo')
+      // Add logo if provided
       if (data.company_logo && data.company_logo[0]) {
         formData.append("image", data.company_logo[0]);
-        formData.append("logo", data.company_logo[0]); // Use same image for logo
+        formData.append("logo", data.company_logo[0]);
       }
 
-      // Debug FormData contents
-      console.log("FormData entries:");
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, typeof value === 'string' ? value : `${value.name} (${value.size} bytes)`);
-      }
-
-      console.log("Sending registration data:", {
-        email: data.email,
-        username: data.customer_name,
-        restaurant_name: data.restaurant_name,
+      console.log("Registering owner...");
+      await axiosInstance.post("/owners/register/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const res = await axiosInstance.post("/owners/register/", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      console.log("Registration successful, logging in...");
+      toast.success("Registration successful! Logging you in...");
 
-      console.log("Registration response:", res.data);
-
-      // Auto-login after registration
-      const response = await axiosInstance.post("/login/", {
+      // Step 2: Auto-login
+      const loginResponse = await axiosInstance.post("/login/", {
         email: data.email.trim(),
         password: data.password,
       });
 
-      const { access, refresh, user } = response.data;
+      const { access, refresh, user } = loginResponse.data;
 
+      // Step 3: Save tokens and redirect
       updateUserData(user, access, refresh);
+      toast.success(`Welcome! You are logged in as ${user.role}`);
       redirectToRoleDashboard(user.role);
-      setLoading(false);
-      toast.success("Registration successful!");
+
     } catch (error: any) {
-      setLoading(false);
-      console.error("Registration failed:", error);
+      console.error("Error:", error);
       console.error("Error response:", error.response);
-      console.error("Error response status:", error.response?.status);
-      console.error("Error response data:", error.response?.data);
-      console.error("Error response headers:", error.response?.headers);
-      console.error("Full error object:", JSON.stringify(error, null, 2));
       
-      // Show specific error messages
       if (error.response?.status === 400) {
         const errors = error.response.data || {};
-        const errorMessages = [];
+        const msgs = [];
         
-        if (errors.email) {
-          errorMessages.push(Array.isArray(errors.email) ? errors.email[0] : errors.email);
-        }
-        if (errors.phone_number) {
-          errorMessages.push(Array.isArray(errors.phone_number) ? errors.phone_number[0] : errors.phone_number);
-        }
-        if (errors.resturent_name) {
-          errorMessages.push(Array.isArray(errors.resturent_name) ? errors.resturent_name[0] : errors.resturent_name);
-        }
-        if (errors.non_field_errors) {
-          errorMessages.push(Array.isArray(errors.non_field_errors) ? errors.non_field_errors[0] : errors.non_field_errors);
-        }
+        if (errors.email) msgs.push(Array.isArray(errors.email) ? errors.email[0] : errors.email);
+        if (errors.phone_number) msgs.push(Array.isArray(errors.phone_number) ? errors.phone_number[0] : errors.phone_number);
+        if (errors.resturent_name) msgs.push(Array.isArray(errors.resturent_name) ? errors.resturent_name[0] : errors.resturent_name);
+        if (errors.detail) msgs.push(Array.isArray(errors.detail) ? errors.detail[0] : errors.detail);
         
-        toast.error(errorMessages.join(", ") || "Please check your input fields");
+        toast.error(msgs.join(", ") || "Please check your input");
+        
       } else if (error.response?.status === 500) {
-        // Try to extract error message from response
-        const errorData = error.response?.data || {};
-        const errorMsg = errorData.detail || errorData.message || errorData.error || "Server error. Please try again later.";
+        const errorMsg = error.response?.data?.detail || error.response?.data?.message || "Server error";
         console.error("500 Error details:", errorMsg);
         toast.error(`Server error: ${errorMsg}`);
-      } else if (error.message) {
-        toast.error(`Error: ${error.message}`);
       } else {
-        toast.error("Registration failed. Please try again.");
+        toast.error(error.message || "Registration failed. Please try again.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet,HealthCheckView
 from device.views import CreateReservationAPIView
 
@@ -11,6 +12,7 @@ urlpatterns = [
     path('health/', HealthCheckView.as_view(), name='health-check'),  # Health check endpoint
     path('register/', RegisterApiView.as_view(), name='register'),
     path('login/', CustomTokenObtainPairView.as_view(), name='login'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # JWT token refresh
     path('logout/', LogoutApiView.as_view(), name='logout'),
     path('send-otp/', SendOTPView.as_view(), name='send-otp'),
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),

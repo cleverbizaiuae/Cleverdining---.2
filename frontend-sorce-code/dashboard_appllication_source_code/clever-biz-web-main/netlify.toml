@@ -2,6 +2,10 @@
   command = "npm install && npm run build"
   publish = "dist"
 
+[build.environment]
+  # API URL defaults to /api which uses the proxy below
+  VITE_API_URL = "/api"
+
 # API proxy redirect (must come first)
 [[redirects]]
   from = "/api/*"
