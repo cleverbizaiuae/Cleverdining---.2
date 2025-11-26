@@ -38,6 +38,7 @@ const ScreenLogin = () => {
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     setLoading(true);
     try {
+      // Backend expects 'email' field (USERNAME_FIELD is 'email')
       const response = await axiosInstance.post("/login/", {
         email: data.email,
         password: data.password,
