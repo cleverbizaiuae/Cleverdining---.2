@@ -37,16 +37,44 @@ const ScreenRegister = () => {
   const { register, handleSubmit, watch, setValue } = useForm<Inputs>();
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     setLoading(true);
+    
+    // Validate required fields before sending
+    if (!data.email || !data.email.trim()) {
+      toast.error("Email is required");
+      setLoading(false);
+      return;
+    }
+    if (!data.password || data.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      setLoading(false);
+      return;
+    }
+    if (!data.customer_name || !data.customer_name.trim()) {
+      toast.error("Customer name is required");
+      setLoading(false);
+      return;
+    }
+    if (!data.restaurant_name || !data.restaurant_name.trim()) {
+      toast.error("Restaurant name is required");
+      setLoading(false);
+      return;
+    }
+    if (!data.location || !data.location.trim()) {
+      toast.error("Location is required");
+      setLoading(false);
+      return;
+    }
+
     console.log("Data sent :", data);
 
     try {
       const formData = new FormData();
       formData.append("email", data.email.trim());
       formData.append("password", data.password);
-      formData.append("username", data.customer_name);
-      formData.append("resturent_name", data.restaurant_name);
-      formData.append("location", data.location);
-      formData.append("phone_number", data.phone_number || "");
+      formData.append("username", data.customer_name.trim());
+      formData.append("resturent_name", data.restaurant_name.trim());
+      formData.append("location", data.location.trim());
+      formData.append("phone_number", (data.phone_number || "").trim());
       formData.append("package", "Basic"); // Default package
 
       // Add image file if exists (backend expects both 'image' and 'logo')

@@ -26,17 +26,39 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         """Validate all required fields are present"""
         errors = {}
         
-        # Check required fields
-        if not attrs.get('username'):
+        # Check required fields - handle None and empty strings
+        username = attrs.get('username')
+        if not username or (isinstance(username, str) and not username.strip()):
             errors['username'] = ['Username is required.']
-        if not attrs.get('email'):
+        
+        email = attrs.get('email')
+        if not email or (isinstance(email, str) and not email.strip()):
             errors['email'] = ['Email is required.']
-        if not attrs.get('password'):
+        elif email and isinstance(email, str):
+            # Normalize email
+            attrs['email'] = email.strip().lower()
+        
+        password = attrs.get('password')
+        if not password:
             errors['password'] = ['Password is required.']
-        if not attrs.get('resturent_name'):
+        elif isinstance(password, str) and len(password) < 6:
+            errors['password'] = ['Password must be at least 6 characters.']
+        
+        resturent_name = attrs.get('resturent_name')
+        if not resturent_name or (isinstance(resturent_name, str) and not resturent_name.strip()):
             errors['resturent_name'] = ['Restaurant name is required.']
-        if not attrs.get('location'):
+        elif resturent_name and isinstance(resturent_name, str):
+            attrs['resturent_name'] = resturent_name.strip()
+        
+        location = attrs.get('location')
+        if not location or (isinstance(location, str) and not location.strip()):
             errors['location'] = ['Location is required.']
+        elif location and isinstance(location, str):
+            attrs['location'] = location.strip()
+        
+        # Normalize username
+        if username and isinstance(username, str):
+            attrs['username'] = username.strip()
         
         if errors:
             raise serializers.ValidationError(errors)
@@ -86,9 +108,12 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                 }
                 
                 # Ensure phone_number is not empty (should be handled by validation, but double-check)
-                if not rest_data.get('phone_number') or rest_data['phone_number'].strip() == '':
+                phone_num = rest_data.get('phone_number', '')
+                if not phone_num or (isinstance(phone_num, str) and phone_num.strip() == ''):
                     import uuid
                     rest_data['phone_number'] = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
+                elif isinstance(phone_num, str):
+                    rest_data['phone_number'] = phone_num.strip()
 
                 # Create user (saves to database)
                 user = User.objects.create_user(

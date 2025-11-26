@@ -26,8 +26,24 @@ class OwnerRegisterView(APIView):
             
             if serializer.is_valid():
                 try:
-                    serializer.save()
-                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                    user = serializer.save()
+                    # Try to get serialized data, but handle errors gracefully
+                    try:
+                        response_data = serializer.data
+                    except Exception as repr_error:
+                        logger.error(f"Error serializing response: {str(repr_error)}", exc_info=True)
+                        # Return basic success response if serialization fails
+                        response_data = {
+                            "username": user.username,
+                            "email": user.email,
+                            "owner_id": user.id,
+                            "role": user.role,
+                            "message": "Registration successful"
+                        }
+                    return Response(response_data, status=status.HTTP_201_CREATED)
+                except serializers.ValidationError as val_error:
+                    # Re-raise validation errors to return 400
+                    return Response(val_error.detail, status=status.HTTP_400_BAD_REQUEST)
                 except Exception as save_error:
                     logger.error(f"Error saving registration: {str(save_error)}", exc_info=True)
                     return Response(
