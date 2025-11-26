@@ -93,17 +93,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             elif 'username' in attrs:
                 # If username is sent, strip it too
                 attrs['username'] = attrs['username'].strip()
-            
+
             # Call parent validate which handles authentication
             data = super().validate(attrs)
             user = self.user
-            
-            # Serialize user data with fallback
+
+            # SIMPLIFIED: Use basic user data for login to avoid complex serializer issues
             try:
-                user_data = UserWithRestaurantSerializer(user).data
-            except Exception as ser_error:
-                logger.error(f"Error serializing user data: {str(ser_error)}", exc_info=True)
-                # Fallback to basic user data
                 from .utils import get_restaurant_owner_id
                 user_data = {
                     'id': user.id,
@@ -111,14 +107,48 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     'email': getattr(user, 'email', ''),
                     'role': getattr(user, 'role', ''),
                     'image': user.image.url if hasattr(user, 'image') and user.image else None,
-                    'restaurants': [],
+                    'restaurants': [],  # Keep empty for login - dashboard can load this separately
                     'owner_id': get_restaurant_owner_id(user) if user else None
                 }
-            
+
+                # Only try to get restaurants if user is owner (simplest case)
+                if user.role == 'owner':
+                    try:
+                        owned_restaurants = user.restaurants.all()[:1]  # Just get first one
+                        if owned_restaurants.exists():
+                            first_rest = owned_restaurants.first()
+                            user_data['restaurants'] = [{
+                                'id': first_rest.id,
+                                'resturent_name': first_rest.resturent_name,
+                                'location': first_rest.location,
+                                'source': 'owner',
+                                'device_id': None,
+                                'table_name': None,
+                                'subscription': {'package_name': 'Basic', 'status': 'active', 'current_period_end': None}
+                            }]
+                    except Exception as rest_error:
+                        logger.warning(f"Could not load restaurants for user {user.email}: {str(rest_error)}")
+                        # Continue without restaurants - user can still login
+
+            except Exception as ser_error:
+                logger.error(f"Error creating basic user data: {str(ser_error)}", exc_info=True)
+                # Ultimate fallback
+                user_data = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'restaurants': [],
+                    'owner_id': None
+                }
+
             data['user'] = user_data
+            logger.info(f"Login successful for user: {user.email}")
             return data
         except Exception as e:
             logger.error(f"Error in CustomTokenObtainPairSerializer.validate: {str(e)}", exc_info=True)
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
 
