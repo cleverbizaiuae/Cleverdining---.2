@@ -41,28 +41,37 @@ const ScreenRegister = () => {
 
     try {
       const formData = new FormData();
-      formData.append("email", data.email);
+      formData.append("email", data.email.trim());
       formData.append("password", data.password);
       formData.append("username", data.customer_name);
       formData.append("resturent_name", data.restaurant_name);
       formData.append("location", data.location);
-      formData.append("phone_number", data.phone_number);
+      formData.append("phone_number", data.phone_number || "");
+      formData.append("package", "Basic"); // Default package
 
-      // Add image file if exists
+      // Add image file if exists (backend expects both 'image' and 'logo')
       if (data.company_logo && data.company_logo[0]) {
         formData.append("image", data.company_logo[0]);
+        formData.append("logo", data.company_logo[0]); // Use same image for logo
       }
-      console.log(formData);
+      
+      console.log("Sending registration data:", {
+        email: data.email,
+        username: data.customer_name,
+        restaurant_name: data.restaurant_name,
+      });
+
       const res = await axiosInstance.post("/owners/register/", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
 
-      console.log(res.data);
+      console.log("Registration response:", res.data);
 
+      // Auto-login after registration
       const response = await axiosInstance.post("/login/", {
-        email: data.email,
+        email: data.email.trim(),
         password: data.password,
       });
 
@@ -72,19 +81,36 @@ const ScreenRegister = () => {
       redirectToRoleDashboard(user.role);
       setLoading(false);
       toast.success("Registration successful!");
-    } catch (error) {
-      console.error("Registration failed:");
-      if (error.status === 400) {
-        console.log(error);
-        toast.error(error?.response?.data?.email[0]);
+    } catch (error: any) {
+      setLoading(false);
+      console.error("Registration failed:", error);
+      console.error("Error response:", error.response);
+      console.error("Error data:", error.response?.data);
+      
+      // Show specific error messages
+      if (error.response?.status === 400) {
+        const errors = error.response.data;
+        const errorMessages = [];
+        
+        if (errors.email) {
+          errorMessages.push(Array.isArray(errors.email) ? errors.email[0] : errors.email);
+        }
+        if (errors.phone_number) {
+          errorMessages.push(Array.isArray(errors.phone_number) ? errors.phone_number[0] : errors.phone_number);
+        }
+        if (errors.resturent_name) {
+          errorMessages.push(Array.isArray(errors.resturent_name) ? errors.resturent_name[0] : errors.resturent_name);
+        }
+        if (errors.non_field_errors) {
+          errorMessages.push(Array.isArray(errors.non_field_errors) ? errors.non_field_errors[0] : errors.non_field_errors);
+        }
+        
+        toast.error(errorMessages.join(", ") || "Please check your input fields");
+      } else if (error.response?.status === 500) {
+        toast.error("Server error. Please try again later.");
+      } else {
+        toast.error(error.response?.data?.message || "Registration failed. Please try again.");
       }
-      setLoading(false);
-      toast.error(
-        error.response?.data?.phone_number[0] ||
-        error.response?.data?.email[0] ||
-        "Registration failed. Please try again.",
-      );
-      setLoading(false);
     }
   };
 

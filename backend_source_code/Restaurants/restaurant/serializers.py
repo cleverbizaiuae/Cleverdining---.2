@@ -12,11 +12,10 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
     # restaurant fields
     resturent_name = serializers.CharField(max_length=255)
     location = serializers.CharField(max_length=255)
-    phone_number = serializers.CharField(max_length=15,required=False, allow_blank=True)
-    package = serializers.CharField(max_length=100)
+    phone_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    package = serializers.CharField(max_length=100, required=False, allow_blank=True, default="Basic")
     image = serializers.ImageField(required=False)
     logo = serializers.ImageField(required=False)
-    package = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -35,8 +34,8 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         rest_data = {
             'resturent_name': validated_data.pop('resturent_name'),
             'location': validated_data.pop('location'),
-            'phone_number': validated_data.pop('phone_number'),
-            # 'package': validated_data.pop('package'),
+            'phone_number': validated_data.pop('phone_number', ''),
+            'package': validated_data.pop('package', 'Basic'),
             'image': validated_data.pop('image', None),
             'logo': validated_data.pop('logo', None),
         }
