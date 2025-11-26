@@ -39,9 +39,8 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
 
   useEffect(() => {
     if (!id || !accessToken) {
-      console.error(
-        "Missing user ID or access token, WebSocket connection won't be established."
-      );
+      // User not logged in yet - WebSocket will connect after login
+      // This is normal behavior, not an error
       return; // Prevent connection if no data
     }
 
