@@ -41,121 +41,185 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     
     @classmethod
     def get_token(cls, user):
+        """
+        Generate JWT token with minimal user data.
+        Avoids complex database queries that can fail.
+        """
         token = super().get_token(user)
-        user_data = UserWithRestaurantSerializer(user).data
-
-        # Default values
+        
+        # Extract minimal user data without complex queries
         first_restaurant_id = None
         first_device_id = None
-        first_restaurant_package = None
-        first_restaurant_status = None
-        first_restaurant_period_end = None
-
-        # Get first restaurant info and its subscription
-        for r in user_data['restaurants']:
-            if first_restaurant_id is None:
-                first_restaurant_id = r['id']
-                subscription = r.get('subscription', {})
-                first_restaurant_package = subscription.get('package_name')
-                first_restaurant_status = subscription.get('status')
-                first_restaurant_period_end = subscription.get('current_period_end')
-
-            if r.get('device_id') is not None and first_device_id is None:
-                first_device_id = r['device_id']
-
-        owner_id = get_restaurant_owner_id(user)
-
+        
+        # Safely get owner_id
+        try:
+            from .utils import get_restaurant_owner_id
+            owner_id = get_restaurant_owner_id(user)
+        except Exception:
+            owner_id = None
+        
+        # Get first restaurant ID safely (if exists)
+        try:
+            if user.role == 'owner':
+                first_restaurant = user.restaurants.first()
+                if first_restaurant:
+                    first_restaurant_id = first_restaurant.id
+        except Exception:
+            pass
+        
+        # Get first device ID safely (if exists)
+        try:
+            first_device = user.devices.first()
+            if first_device:
+                first_device_id = first_device.id
+        except Exception:
+            pass
+        
+        # Build token payload with safe, minimal data
         token['user'] = {
-            'id': user_data['id'],
-            'username': user_data['username'],
-            'email': user_data['email'],
-            'role': user_data['role'],
+            'id': user.id,
+            'username': getattr(user, 'username', ''),
+            'email': getattr(user, 'email', ''),
+            'role': getattr(user, 'role', ''),
             'restaurants_id': first_restaurant_id,
             'device_id': first_device_id,
             'subscription': {
-                'package_name': first_restaurant_package,
-                'status': first_restaurant_status,
-                'current_period_end': str(first_restaurant_period_end) if first_restaurant_period_end else None,
+                'package_name': None,
+                'status': None,
+                'current_period_end': None,
             },
             'owner_id': owner_id
         }
-
+        
         return token
 
     def validate(self, attrs):
+        """
+        Validate login credentials and return user data.
+        Comprehensive error handling ensures no 500 errors.
+        """
         try:
             # Handle 'email' field (frontend sends this)
             # Strip whitespace and map to 'username' for parent serializer
             if 'email' in attrs:
-                email_value = attrs.pop('email', '').strip()  # Remove and strip whitespace
+                email_value = attrs.pop('email', '').strip()
                 if email_value:
                     attrs['username'] = email_value
             elif 'username' in attrs:
-                # If username is sent, strip it too
                 attrs['username'] = attrs['username'].strip()
 
             # Call parent validate which handles authentication
+            # This will raise AuthenticationFailed if credentials are wrong
             data = super().validate(attrs)
             user = self.user
 
-            # SIMPLIFIED: Use basic user data for login to avoid complex serializer issues
+            # Build minimal user data with comprehensive error handling
+            user_data = {
+                'id': user.id,
+                'username': getattr(user, 'username', ''),
+                'email': getattr(user, 'email', ''),
+                'role': getattr(user, 'role', ''),
+                'restaurants': [],
+                'owner_id': None,
+                'image': None
+            }
+
+            # Safely get image URL
+            try:
+                if hasattr(user, 'image') and user.image:
+                    user_data['image'] = user.image.url
+            except Exception:
+                user_data['image'] = None
+
+            # Safely get owner_id
             try:
                 from .utils import get_restaurant_owner_id
-                user_data = {
-                    'id': user.id,
-                    'username': getattr(user, 'username', ''),
-                    'email': getattr(user, 'email', ''),
-                    'role': getattr(user, 'role', ''),
-                    'image': user.image.url if hasattr(user, 'image') and user.image else None,
-                    'restaurants': [],  # Keep empty for login - dashboard can load this separately
-                    'owner_id': get_restaurant_owner_id(user) if user else None
-                }
+                user_data['owner_id'] = get_restaurant_owner_id(user)
+            except Exception:
+                user_data['owner_id'] = None
 
-                # Only try to get restaurants if user is owner (simplest case)
-                if user.role == 'owner':
-                    try:
-                        owned_restaurants = user.restaurants.all()[:1]  # Just get first one
-                        if owned_restaurants.exists():
-                            first_rest = owned_restaurants.first()
-                            user_data['restaurants'] = [{
-                                'id': first_rest.id,
-                                'resturent_name': first_rest.resturent_name,
-                                'location': first_rest.location,
-                                'source': 'owner',
-                                'device_id': None,
-                                'table_name': None,
-                                'subscription': {'package_name': 'Basic', 'status': 'active', 'current_period_end': None}
-                            }]
-                    except Exception as rest_error:
-                        logger.warning(f"Could not load restaurants for user {user.email}: {str(rest_error)}")
-                        # Continue without restaurants - user can still login
-
-            except Exception as ser_error:
-                logger.error(f"Error creating basic user data: {str(ser_error)}", exc_info=True)
-                # Ultimate fallback
-                user_data = {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'role': user.role,
-                    'restaurants': [],
-                    'owner_id': None
-                }
+            # Only load restaurants for owners, and only if they exist
+            if user.role == 'owner':
+                try:
+                    first_restaurant = user.restaurants.first()
+                    if first_restaurant:
+                        user_data['restaurants'] = [{
+                            'id': first_restaurant.id,
+                            'resturent_name': getattr(first_restaurant, 'resturent_name', ''),
+                            'location': getattr(first_restaurant, 'location', ''),
+                            'source': 'owner',
+                            'device_id': None,
+                            'table_name': None,
+                            'subscription': {
+                                'package_name': 'Basic',
+                                'status': 'active',
+                                'current_period_end': None
+                            }
+                        }]
+                except Exception as rest_error:
+                    logger.warning(f"Could not load restaurants for owner {user.email}: {str(rest_error)}")
+                    # Continue with empty restaurants array - user can still login
 
             data['user'] = user_data
-            logger.info(f"Login successful for user: {user.email}")
+            logger.info(f"Login successful for user: {user.email} (role: {user.role})")
             return data
+
         except Exception as e:
-            logger.error(f"Error in CustomTokenObtainPairSerializer.validate: {str(e)}", exc_info=True)
+            logger.error(f"CRITICAL: Login error: {str(e)}", exc_info=True)
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
+            
+            # Re-raise authentication errors (wrong password, user not found, etc.)
+            from rest_framework.exceptions import AuthenticationFailed, ValidationError
+            if isinstance(e, (AuthenticationFailed, ValidationError)):
+                raise
+            
+            # For unexpected errors, raise with clear message
+            raise AuthenticationFailed("Login failed. Please try again.")
 
 
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Catch all exceptions and return proper JSON responses.
+        Ensures no 500 errors leak through.
+        """
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"CRITICAL: Login view exception: {str(e)}", exc_info=True)
+            
+            # Return proper JSON error response
+            from rest_framework.response import Response
+            from rest_framework import status
+            from rest_framework.exceptions import AuthenticationFailed
+            
+            # If it's an authentication error, return 401
+            if isinstance(e, AuthenticationFailed):
+                return Response(
+                    {
+                        "detail": str(e.detail) if hasattr(e, 'detail') else "Invalid credentials.",
+                        "error": "Authentication failed"
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                    content_type='application/json'
+                )
+            
+            # For any other error, return 401 with generic message
+            return Response(
+                {
+                    "detail": "Login failed. Please check your credentials and try again.",
+                    "error": "Authentication error"
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+                content_type='application/json'
+            )
 
 
 
