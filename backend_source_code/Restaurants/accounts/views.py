@@ -100,18 +100,51 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         """
         try:
             # Handle 'email' field (frontend sends this)
-            # Strip whitespace and map to 'username' for parent serializer
+            # Since USERNAME_FIELD = 'email', we need to map email to username field
+            # that TokenObtainPairSerializer expects, but it will use email for auth
             if 'email' in attrs:
                 email_value = attrs.pop('email', '').strip()
                 if email_value:
+                    # Map email to username field (TokenObtainPairSerializer expects 'username')
+                    # But since USERNAME_FIELD='email', Django will use this as email for auth
                     attrs['username'] = email_value
+                    logger.info(f"Login attempt with email: {email_value}")
             elif 'username' in attrs:
                 attrs['username'] = attrs['username'].strip()
+                logger.info(f"Login attempt with username: {attrs['username']}")
+            
+            # Ensure password is present
+            if 'password' not in attrs or not attrs.get('password'):
+                logger.error("Login attempt without password")
+                raise ValidationError({"password": "Password is required."})
 
             # Call parent validate which handles authentication
-            # This will raise AuthenticationFailed if credentials are wrong
-            data = super().validate(attrs)
-            user = self.user
+            # Wrap in try-except to catch ANY exception from parent
+            try:
+                # Log what we're trying to authenticate
+                logger.info(f"Attempting login with username/email: {attrs.get('username', 'N/A')}")
+                
+                data = super().validate(attrs)
+                user = self.user
+                
+                logger.info(f"Authentication successful for user: {user.email}")
+            except Exception as auth_error:
+                # Log the actual error details
+                logger.error(f"Authentication failed: {str(auth_error)}", exc_info=True)
+                logger.error(f"Error type: {type(auth_error).__name__}")
+                logger.error(f"Attempted username/email: {attrs.get('username', 'N/A')}")
+                
+                # If parent validate fails, check if it's an auth error
+                from rest_framework.exceptions import AuthenticationFailed, ValidationError
+                if isinstance(auth_error, (AuthenticationFailed, ValidationError)):
+                    # Log the actual error detail
+                    error_detail = str(auth_error.detail) if hasattr(auth_error, 'detail') else str(auth_error)
+                    logger.error(f"Auth error detail: {error_detail}")
+                    raise  # Re-raise auth errors as-is
+                
+                # If it's any other error, log and convert to auth error
+                logger.error(f"Parent validate() failed with unexpected error: {str(auth_error)}", exc_info=True)
+                raise AuthenticationFailed("Invalid credentials.")
 
             # Build minimal user data with comprehensive error handling
             user_data = {
