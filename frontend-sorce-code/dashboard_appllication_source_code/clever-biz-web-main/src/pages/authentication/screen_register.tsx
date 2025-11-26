@@ -146,11 +146,12 @@ const ScreenRegister = () => {
 
         <LabelInput
           label="Phone Number"
-          inputType="number"
+          inputType="tel"
           inputProps={{
             id: "phone_number",
-            className:
-              "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]",
+            name: "phone_number",
+            autoComplete: "tel",
+            placeholder: "+1234567890",
             ...register("phone_number"),
           }}
         />
