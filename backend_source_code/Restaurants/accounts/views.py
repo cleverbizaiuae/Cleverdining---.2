@@ -83,37 +83,35 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        # Map 'email' to 'username' if needed (parent serializer expects 'username')
+        # But since we override the field in __init__, this should already be handled
+        # However, keep this as a safety net
+        if 'email' in attrs:
+            attrs['username'] = attrs.pop('email')
+        
+        # Call parent validate which handles authentication
+        data = super().validate(attrs)
+        user = self.user
+        
+        # Serialize user data with fallback
         try:
-            # TokenObtainPairSerializer expects 'username' field in request
-            # but frontend sends 'email', so map it
-            if 'email' in attrs and 'username' not in attrs:
-                attrs['username'] = attrs['email']  # Copy, don't pop
-            
-            data = super().validate(attrs)
-            user = self.user
-            
-            # Try to serialize user data, with error handling
-            try:
-                user_data = UserWithRestaurantSerializer(user).data
-            except Exception as ser_error:
-                logger.error(f"Error serializing user data: {str(ser_error)}", exc_info=True)
-                # Fallback to basic user data if serialization fails
-                user_data = {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'role': user.role,
-                    'image': user.image.url if user.image else None,
-                    'restaurants': [],
-                    'owner_id': None
-                }
-            
-            data['user'] = user_data
-            return data
-        except Exception as e:
-            logger.error(f"Error in CustomTokenObtainPairSerializer.validate: {str(e)}", exc_info=True)
-            # Re-raise to maintain original error behavior
-            raise
+            user_data = UserWithRestaurantSerializer(user).data
+        except Exception as ser_error:
+            logger.error(f"Error serializing user data: {str(ser_error)}", exc_info=True)
+            # Fallback to basic user data
+            from .utils import get_restaurant_owner_id
+            user_data = {
+                'id': user.id,
+                'username': getattr(user, 'username', ''),
+                'email': getattr(user, 'email', ''),
+                'role': getattr(user, 'role', ''),
+                'image': user.image.url if hasattr(user, 'image') and user.image else None,
+                'restaurants': [],
+                'owner_id': get_restaurant_owner_id(user) if user else None
+            }
+        
+        data['user'] = user_data
+        return data
 
 
 
