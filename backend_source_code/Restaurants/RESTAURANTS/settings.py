@@ -272,7 +272,11 @@ STATICFILES_DIRS = [
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # WhiteNoise configuration for serving static files in production
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Use basic storage for ASGI compatibility
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+# Ensure WhiteNoise serves files correctly
+WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 
 # Default primary key field type
