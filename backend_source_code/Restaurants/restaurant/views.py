@@ -59,20 +59,29 @@ class OwnerRegisterView(APIView):
             
             # Log incoming request
             try:
+                logger.info(f"Registration attempt - Content-Type: {request.META.get('CONTENT_TYPE', 'N/A')}")
+                logger.info(f"Registration attempt - Method: {request.method}")
+                logger.info(f"Registration attempt - Request type: {type(request_data)}")
+
                 if hasattr(request_data, 'keys'):
                     data_keys = list(request_data.keys())
                     logger.info(f"Registration attempt - Data keys: {data_keys}")
-                    # Log actual values (excluding password)
+                    # Log actual values (excluding password and files)
                     for key in data_keys:
                         if key != 'password':
                             try:
-                                logger.info(f"  {key}: {request_data.get(key, 'N/A')}")
-                            except:
-                                pass
+                                value = request_data.get(key, 'N/A')
+                                if hasattr(value, 'name'):  # File object
+                                    logger.info(f"  {key}: File({value.name}, {value.size} bytes)")
+                                else:
+                                    logger.info(f"  {key}: {value}")
+                            except Exception as val_error:
+                                logger.error(f"Error logging {key}: {str(val_error)}")
                 else:
                     logger.info(f"Registration attempt - request.data type: {type(request_data)}")
+                    logger.info(f"Registration attempt - request.data content: {request_data}")
             except Exception as log_error:
-                logger.error(f"Error logging request: {str(log_error)}")
+                logger.error(f"Error logging request: {str(log_error)}", exc_info=True)
             
             # Check if data is empty
             try:

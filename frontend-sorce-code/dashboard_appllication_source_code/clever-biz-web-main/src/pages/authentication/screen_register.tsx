@@ -66,6 +66,28 @@ const ScreenRegister = () => {
     }
 
     console.log("Data sent :", data);
+    console.log("Data keys:", Object.keys(data));
+    console.log("Data values:", {
+      email: data.email,
+      password: data.password ? "***" : undefined,
+      customer_name: data.customer_name,
+      restaurant_name: data.restaurant_name,
+      location: data.location,
+      phone_number: data.phone_number,
+      company_logo: data.company_logo,
+    });
+
+    // Additional validation - check if required fields are actually present
+    const requiredFields = ['email', 'password', 'customer_name', 'restaurant_name', 'location'];
+    const missingFields = requiredFields.filter(field => !data[field] || (typeof data[field] === 'string' && !data[field].trim()));
+
+    if (missingFields.length > 0) {
+      const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
+      console.error(errorMsg);
+      toast.error(errorMsg);
+      setLoading(false);
+      return;
+    }
 
     try {
       const formData = new FormData();
@@ -82,7 +104,13 @@ const ScreenRegister = () => {
         formData.append("image", data.company_logo[0]);
         formData.append("logo", data.company_logo[0]); // Use same image for logo
       }
-      
+
+      // Debug FormData contents
+      console.log("FormData entries:");
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, typeof value === 'string' ? value : `${value.name} (${value.size} bytes)`);
+      }
+
       console.log("Sending registration data:", {
         email: data.email,
         username: data.customer_name,
