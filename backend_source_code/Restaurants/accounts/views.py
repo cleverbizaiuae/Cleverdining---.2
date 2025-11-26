@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import viewsets, permissions
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError, AuthenticationFailed
 from rest_framework import filters
 from .permissions import IsOwnerRole
 from .pagination import ChefAndStaffPagination
@@ -135,7 +135,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 logger.error(f"Attempted username/email: {attrs.get('username', 'N/A')}")
                 
                 # If parent validate fails, check if it's an auth error
-                from rest_framework.exceptions import AuthenticationFailed, ValidationError
                 if isinstance(auth_error, (AuthenticationFailed, ValidationError)):
                     # Log the actual error detail
                     error_detail = str(auth_error.detail) if hasattr(auth_error, 'detail') else str(auth_error)
@@ -203,7 +202,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             logger.error(f"Traceback: {traceback.format_exc()}")
             
             # Re-raise authentication errors (wrong password, user not found, etc.)
-            from rest_framework.exceptions import AuthenticationFailed, ValidationError
             if isinstance(e, (AuthenticationFailed, ValidationError)):
                 raise
             
