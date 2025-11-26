@@ -90,78 +90,101 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         from django.db import transaction
         import logging
+        import uuid
         
         logger = logging.getLogger(__name__)
         
         # Use transaction to ensure both user and restaurant are created together
-        # If restaurant creation fails, user creation is rolled back
         try:
             with transaction.atomic():
                 # Extract restaurant-related data
-                rest_data = {
-                    'resturent_name': validated_data.pop('resturent_name'),
-                    'location': validated_data.pop('location'),
-                    'phone_number': validated_data.pop('phone_number', ''),
-                    'package': validated_data.pop('package', 'Basic'),
-                    'image': validated_data.pop('image', None),
-                    'logo': validated_data.pop('logo', None),
-                }
+                rest_name = validated_data.pop('resturent_name', '').strip()
+                location = validated_data.pop('location', '').strip()
+                phone_num = validated_data.pop('phone_number', '').strip() if validated_data.get('phone_number') else ''
+                package = validated_data.pop('package', 'Basic')
+                image = validated_data.pop('image', None)
+                logo = validated_data.pop('logo', None)
                 
-                # Ensure phone_number is not empty (should be handled by validation, but double-check)
-                phone_num = rest_data.get('phone_number', '')
-                if not phone_num or (isinstance(phone_num, str) and phone_num.strip() == ''):
-                    import uuid
-                    rest_data['phone_number'] = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
-                elif isinstance(phone_num, str):
-                    rest_data['phone_number'] = phone_num.strip()
-
-                # Create user (saves to database)
+                # Generate placeholder phone if empty
+                if not phone_num:
+                    phone_num = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
+                    # Ensure uniqueness
+                    while Restaurant.objects.filter(phone_number=phone_num).exists():
+                        phone_num = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
+                
+                # Create user first
+                username = validated_data['username'].strip()
+                email = validated_data['email'].strip().lower()
+                password = validated_data['password']
+                
                 user = User.objects.create_user(
-                    username=validated_data['username'],
-                    email=validated_data['email'],
-                    password=validated_data['password'],
+                    username=username,
+                    email=email,
+                    password=password,
                     role='owner',
                 )
+                logger.info(f"User created: {user.email}")
 
-                # Create restaurant (saves to database)
-                restaurant = Restaurant.objects.create(owner=user, **rest_data)
+                # Create restaurant
+                restaurant = Restaurant.objects.create(
+                    owner=user,
+                    resturent_name=rest_name,
+                    location=location,
+                    phone_number=phone_num,
+                    package=package,
+                    image=image,
+                    logo=logo,
+                )
+                logger.info(f"Restaurant created: {restaurant.resturent_name}")
 
-                # Attach created instances to serializer for response
+                # Store for response
                 self.user = user
                 self.restaurant = restaurant
                 return user
+                
         except serializers.ValidationError:
-            # Re-raise validation errors as-is
             raise
         except Exception as e:
-            logger.error(f"Error creating user/restaurant: {str(e)}", exc_info=True)
-            # Provide a user-friendly error message
-            error_msg = str(e)
-            if "UNIQUE constraint" in error_msg or "duplicate key" in error_msg.lower():
-                if "email" in error_msg.lower():
-                    raise serializers.ValidationError({"email": ["A user with this email already exists."]})
-                elif "phone_number" in error_msg.lower():
+            logger.error(f"Registration error: {str(e)}", exc_info=True)
+            error_msg = str(e).lower()
+            if "unique" in error_msg or "duplicate" in error_msg:
+                if "email" in error_msg:
+                    raise serializers.ValidationError({"email": ["This email is already registered."]})
+                elif "phone" in error_msg:
                     raise serializers.ValidationError({"phone_number": ["This phone number is already registered."]})
-            raise serializers.ValidationError({"non_field_errors": [f"Registration failed: {error_msg}"]})
+            raise serializers.ValidationError({"detail": [f"Registration failed. Please try again."]})
 
     def to_representation(self, instance):
-        user_data = {
-            "username": instance.username,
-            "email": instance.email,
-            "owner_id": instance.id,
-            "role": instance.role,
-        }
-        # Safely get restaurant data if it exists
-        if hasattr(self, 'restaurant') and self.restaurant:
-            try:
-                restaurant_data = RestaurantSerializer(self.restaurant).data
-                return {**user_data, **restaurant_data}
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Error serializing restaurant: {str(e)}", exc_info=True)
-                # Return user data only if restaurant serialization fails
-                return {**user_data, "restaurant": None}
-        else:
-            # Restaurant not created yet, return user data only
+        """Return simple, safe response"""
+        try:
+            user_data = {
+                "username": getattr(instance, 'username', ''),
+                "email": getattr(instance, 'email', ''),
+                "owner_id": getattr(instance, 'id', None),
+                "role": getattr(instance, 'role', 'owner'),
+            }
+            
+            # Add restaurant data if available
+            if hasattr(self, 'restaurant') and self.restaurant:
+                try:
+                    user_data.update({
+                        "resturent_name": getattr(self.restaurant, 'resturent_name', ''),
+                        "location": getattr(self.restaurant, 'location', ''),
+                        "phone_number": getattr(self.restaurant, 'phone_number', ''),
+                        "package": getattr(self.restaurant, 'package', 'Basic'),
+                    })
+                except:
+                    pass  # If restaurant data fails, just return user data
+            
             return user_data
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in to_representation: {str(e)}", exc_info=True)
+            # Return minimal safe response
+            return {
+                "username": getattr(instance, 'username', ''),
+                "email": getattr(instance, 'email', ''),
+                "owner_id": getattr(instance, 'id', None),
+                "role": "owner",
+            }
