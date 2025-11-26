@@ -106,10 +106,16 @@ class OwnerRegisterView(APIView):
         except Exception as e:
             logger.error(f"Unexpected registration error: {str(e)}", exc_info=True)
             logger.error(f"Traceback: {traceback.format_exc()}")
+            # Always return JSON, never let HTML error pages through
+            try:
+                error_detail = str(e)
+            except:
+                error_detail = "Unknown error"
+            
             return Response(
                 {
                     "error": "Registration failed",
-                    "detail": str(e),
+                    "detail": error_detail,
                     "message": "An unexpected error occurred. Please try again."
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -23,7 +23,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         extra_kwargs = {'password': {'write_only': True}}
     
     def validate(self, attrs):
-        """Validate all required fields are present"""
+        """Validate all required fields and check uniqueness BEFORE database operations"""
         errors = {}
         
         # Check required fields - handle None and empty strings
@@ -36,7 +36,11 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
             errors['email'] = ['Email is required.']
         elif email and isinstance(email, str):
             # Normalize email
-            attrs['email'] = email.strip().lower()
+            email = email.strip().lower()
+            attrs['email'] = email
+            # CHECK EMAIL UNIQUENESS BEFORE CREATING USER
+            if User.objects.filter(email=email).exists():
+                errors['email'] = ['A user with this email already exists.']
         
         password = attrs.get('password')
         if not password:
@@ -88,7 +92,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         
 
     def create(self, validated_data):
-        from django.db import transaction
+        from django.db import transaction, IntegrityError, DatabaseError, OperationalError
         import logging
         import uuid
         
@@ -109,33 +113,71 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                 if not phone_num:
                     phone_num = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
                     # Ensure uniqueness
-                    while Restaurant.objects.filter(phone_number=phone_num).exists():
+                    max_attempts = 10
+                    attempts = 0
+                    while Restaurant.objects.filter(phone_number=phone_num).exists() and attempts < max_attempts:
                         phone_num = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
+                        attempts += 1
+                    if attempts >= max_attempts:
+                        raise serializers.ValidationError({"phone_number": ["Could not generate unique phone number. Please try again."]})
+                
+                # Double-check phone uniqueness (race condition protection)
+                if Restaurant.objects.filter(phone_number=phone_num).exists():
+                    raise serializers.ValidationError({"phone_number": ["This phone number is already registered."]})
                 
                 # Create user first
                 username = validated_data['username'].strip()
                 email = validated_data['email'].strip().lower()
                 password = validated_data['password']
                 
-                user = User.objects.create_user(
-                    username=username,
-                    email=email,
-                    password=password,
-                    role='owner',
-                )
-                logger.info(f"User created: {user.email}")
+                # Double-check email uniqueness (race condition protection)
+                if User.objects.filter(email=email).exists():
+                    raise serializers.ValidationError({"email": ["A user with this email already exists."]})
+                
+                try:
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email,
+                        password=password,
+                        role='owner',
+                    )
+                    logger.info(f"User created: {user.email}")
+                except IntegrityError as e:
+                    error_str = str(e).lower()
+                    if "email" in error_str or "unique" in error_str:
+                        raise serializers.ValidationError({"email": ["A user with this email already exists."]})
+                    raise serializers.ValidationError({"detail": ["Failed to create user. Please try again."]})
+                except Exception as e:
+                    logger.error(f"Error creating user: {str(e)}", exc_info=True)
+                    raise serializers.ValidationError({"detail": ["Failed to create user account. Please try again."]})
 
                 # Create restaurant
-                restaurant = Restaurant.objects.create(
-                    owner=user,
-                    resturent_name=rest_name,
-                    location=location,
-                    phone_number=phone_num,
-                    package=package,
-                    image=image,
-                    logo=logo,
-                )
-                logger.info(f"Restaurant created: {restaurant.resturent_name}")
+                try:
+                    restaurant = Restaurant.objects.create(
+                        owner=user,
+                        resturent_name=rest_name,
+                        location=location,
+                        phone_number=phone_num,
+                        package=package,
+                        image=image,
+                        logo=logo,
+                    )
+                    logger.info(f"Restaurant created: {restaurant.resturent_name}")
+                except IntegrityError as e:
+                    error_str = str(e).lower()
+                    if "phone" in error_str or "unique" in error_str:
+                        # Rollback user creation
+                        user.delete()
+                        raise serializers.ValidationError({"phone_number": ["This phone number is already registered."]})
+                    raise serializers.ValidationError({"detail": ["Failed to create restaurant. Please try again."]})
+                except Exception as e:
+                    logger.error(f"Error creating restaurant: {str(e)}", exc_info=True)
+                    # Rollback user creation
+                    try:
+                        user.delete()
+                    except:
+                        pass
+                    raise serializers.ValidationError({"detail": ["Failed to create restaurant. Please try again."]})
 
                 # Store for response
                 self.user = user
@@ -143,16 +185,25 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                 return user
                 
         except serializers.ValidationError:
+            # Re-raise validation errors as-is
             raise
+        except (IntegrityError, DatabaseError, OperationalError) as db_error:
+            logger.error(f"Database error during registration: {str(db_error)}", exc_info=True)
+            error_str = str(db_error).lower()
+            if "email" in error_str or ("unique" in error_str and "email" in error_str):
+                raise serializers.ValidationError({"email": ["A user with this email already exists."]})
+            elif "phone" in error_str or ("unique" in error_str and "phone" in error_str):
+                raise serializers.ValidationError({"phone_number": ["This phone number is already registered."]})
+            raise serializers.ValidationError({"detail": ["Database error. Please try again."]})
         except Exception as e:
-            logger.error(f"Registration error: {str(e)}", exc_info=True)
-            error_msg = str(e).lower()
-            if "unique" in error_msg or "duplicate" in error_msg:
-                if "email" in error_msg:
+            logger.error(f"Unexpected registration error: {str(e)}", exc_info=True)
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str:
+                if "email" in error_str:
                     raise serializers.ValidationError({"email": ["This email is already registered."]})
-                elif "phone" in error_msg:
+                elif "phone" in error_str:
                     raise serializers.ValidationError({"phone_number": ["This phone number is already registered."]})
-            raise serializers.ValidationError({"detail": [f"Registration failed. Please try again."]})
+            raise serializers.ValidationError({"detail": ["Registration failed. Please try again."]})
 
     def to_representation(self, instance):
         """Return simple, safe response"""
