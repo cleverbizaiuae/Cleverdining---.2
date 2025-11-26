@@ -84,13 +84,30 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         try:
-            # Map 'email' to 'username' if email is provided
+            # TokenObtainPairSerializer expects 'username' field in request
+            # but frontend sends 'email', so map it
             if 'email' in attrs and 'username' not in attrs:
-                attrs['username'] = attrs.pop('email')
+                attrs['username'] = attrs['email']  # Copy, don't pop
             
             data = super().validate(attrs)
             user = self.user
-            user_data = UserWithRestaurantSerializer(user).data
+            
+            # Try to serialize user data, with error handling
+            try:
+                user_data = UserWithRestaurantSerializer(user).data
+            except Exception as ser_error:
+                logger.error(f"Error serializing user data: {str(ser_error)}", exc_info=True)
+                # Fallback to basic user data if serialization fails
+                user_data = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'image': user.image.url if user.image else None,
+                    'restaurants': [],
+                    'owner_id': None
+                }
+            
             data['user'] = user_data
             return data
         except Exception as e:
