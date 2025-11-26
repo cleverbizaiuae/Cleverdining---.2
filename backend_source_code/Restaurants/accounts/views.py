@@ -38,12 +38,6 @@ class RegisterApiView(CreateAPIView):
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    # Override to accept 'email' field instead of 'username'
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Replace 'username' field with 'email' field
-        if 'username' in self.fields:
-            self.fields['email'] = self.fields.pop('username')
     
     @classmethod
     def get_token(cls, user):
@@ -90,10 +84,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         try:
-            # Map 'email' field to 'username' for parent serializer
-            # Parent serializer internally uses 'username' even though USERNAME_FIELD is 'email'
-            if 'email' in attrs and 'username' not in attrs:
-                attrs['username'] = attrs['email']  # Copy, don't pop
+            # Handle 'email' field (frontend sends this)
+            # Strip whitespace and map to 'username' for parent serializer
+            if 'email' in attrs:
+                email_value = attrs.pop('email', '').strip()  # Remove and strip whitespace
+                if email_value:
+                    attrs['username'] = email_value
+            elif 'username' in attrs:
+                # If username is sent, strip it too
+                attrs['username'] = attrs['username'].strip()
             
             # Call parent validate which handles authentication
             data = super().validate(attrs)

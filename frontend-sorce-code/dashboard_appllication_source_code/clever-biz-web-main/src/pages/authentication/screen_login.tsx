@@ -39,8 +39,9 @@ const ScreenLogin = () => {
     setLoading(true);
     try {
       // Backend expects 'email' field (USERNAME_FIELD is 'email')
+      // Trim email to remove any whitespace
       const response = await axiosInstance.post("/login/", {
-        email: data.email,
+        email: data.email.trim(),
         password: data.password,
       });
 
