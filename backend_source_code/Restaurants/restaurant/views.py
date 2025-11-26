@@ -17,42 +17,84 @@ from rest_framework.permissions import AllowAny
 class OwnerRegisterView(APIView):
     permission_classes = [AllowAny]
     
+    def dispatch(self, request, *args, **kwargs):
+        """Override dispatch to catch ALL exceptions"""
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Exception as e:
+            import logging
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Unhandled exception in dispatch: {str(e)}", exc_info=True)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return Response(
+                {
+                    "error": "Registration failed",
+                    "detail": str(e),
+                    "message": "An unexpected error occurred. Please try again."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     def post(self, request):
         import logging
         import traceback
         logger = logging.getLogger(__name__)
         
+        # ABSOLUTE SAFETY: Wrap everything in try-except
         try:
-            # Log incoming request
+            # Safely get request data
             try:
-                if hasattr(request.data, 'keys'):
-                    data_keys = list(request.data.keys())
-                    logger.info(f"Registration attempt - Data keys: {data_keys}")
-                    # Log actual values (excluding password)
-                    for key in data_keys:
-                        if key != 'password':
-                            logger.info(f"  {key}: {request.data.get(key, 'N/A')}")
-                else:
-                    logger.info(f"Registration attempt - request.data type: {type(request.data)}")
-            except Exception as log_error:
-                logger.error(f"Error logging request: {str(log_error)}")
-            
-            # Check if data is empty
-            if not request.data:
-                logger.error("Registration attempt with empty data")
+                request_data = request.data
+            except Exception as data_error:
+                logger.error(f"Error accessing request.data: {str(data_error)}", exc_info=True)
                 return Response(
                     {
-                        "error": "No data provided",
-                        "message": "Please fill in all required fields."
+                        "error": "Invalid request format",
+                        "detail": "Could not parse request data",
+                        "message": "Please check your request and try again."
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            # Log incoming request
+            try:
+                if hasattr(request_data, 'keys'):
+                    data_keys = list(request_data.keys())
+                    logger.info(f"Registration attempt - Data keys: {data_keys}")
+                    # Log actual values (excluding password)
+                    for key in data_keys:
+                        if key != 'password':
+                            try:
+                                logger.info(f"  {key}: {request_data.get(key, 'N/A')}")
+                            except:
+                                pass
+                else:
+                    logger.info(f"Registration attempt - request.data type: {type(request_data)}")
+            except Exception as log_error:
+                logger.error(f"Error logging request: {str(log_error)}")
+            
+            # Check if data is empty
+            try:
+                if not request_data:
+                    logger.error("Registration attempt with empty data")
+                    return Response(
+                        {
+                            "error": "No data provided",
+                            "message": "Please fill in all required fields."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as check_error:
+                logger.error(f"Error checking request data: {str(check_error)}")
+                # Continue anyway, let serializer handle it
+            
             # Create serializer
             try:
-                serializer = OwnerRegisterSerializer(data=request.data)
+                serializer = OwnerRegisterSerializer(data=request_data)
             except Exception as ser_error:
                 logger.error(f"Error creating serializer: {str(ser_error)}", exc_info=True)
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 return Response(
                     {
                         "error": "Invalid request data",

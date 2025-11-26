@@ -39,8 +39,15 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
             email = email.strip().lower()
             attrs['email'] = email
             # CHECK EMAIL UNIQUENESS BEFORE CREATING USER
-            if User.objects.filter(email=email).exists():
-                errors['email'] = ['A user with this email already exists.']
+            try:
+                if User.objects.filter(email=email).exists():
+                    errors['email'] = ['A user with this email already exists.']
+            except Exception as db_error:
+                # If database query fails, log but don't block (will fail on create anyway)
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error checking email uniqueness: {str(db_error)}")
+                # Continue - will be caught during create
         
         password = attrs.get('password')
         if not password:
