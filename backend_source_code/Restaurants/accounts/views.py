@@ -304,3 +304,171 @@ class LogoutApiView(APIView):
             return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": "Error logging out."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChefStaffViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+    serializer_class = ChefStaffCreateSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__username']
+    pagination_class = ChefAndStaffPagination
+
+    def get_queryset(self):
+        return ChefStaff.objects.filter(restaurant__owner=self.request.user)
+
+    def get_serializer_class(self):
+        if self.action in ['list', 'retrieve', 'update', 'partial_update']:
+            return ChefStaffDetailSerializer
+        return ChefStaffCreateSerializer
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{instance.restaurant.id}",
+            {
+                "type": "chefstaff_created",
+                "chefstaff": {
+                    "id": instance.id,
+                    "username": instance.user.username,
+                    "restaurant_id": instance.restaurant.id
+                }
+            }
+        )
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        if instance.restaurant.owner != self.request.user:
+            raise PermissionDenied("You do not have permission to update this record.")
+        serializer.save()
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{instance.restaurant.id}",
+            {
+                "type": "chefstaff_updated",
+                "chefstaff": {
+                    "id": instance.id,
+                    "username": instance.user.username,
+                    "restaurant_id": instance.restaurant.id
+                }
+            }
+        )
+
+    def perform_destroy(self, instance):
+        if instance.restaurant.owner != self.request.user:
+            raise PermissionDenied("You do not have permission to delete this record.")
+
+        restaurant_id = instance.restaurant.id
+        instance_id = instance.id
+        instance.delete()
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{restaurant_id}",
+            {
+                "type": "chefstaff_deleted",
+                "chefstaff_id": instance_id
+            }
+        )
+
+
+class SendOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SendOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        otp_record = PasswordResetOTP.objects.create(user=user)
+
+        send_mail(
+            subject='Password Reset OTP',
+            message=f'Your OTP is: {otp_record.otp}',
+            from_email=None,
+            recipient_list=[email],
+        )
+
+        return Response({"detail": "OTP sent successfully."}, status=status.HTTP_200_OK)
+
+
+class VerifyOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = VerifyOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+
+        try:
+            user = User.objects.get(email=email)
+            otp_obj = PasswordResetOTP.objects.filter(user=user, otp=otp, is_used=False).latest('created_at')
+        except (User.DoesNotExist, PasswordResetOTP.DoesNotExist):
+            return Response({"detail": "Invalid email or OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp_obj.is_used = True
+        otp_obj.save()
+        return Response({"detail": "OTP verified successfully."}, status=status.HTTP_200_OK)
+
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        new_password = serializer.validated_data['new_password']
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        otp_exists = PasswordResetOTP.objects.filter(user=user, is_used=True).exists()
+        if not otp_exists:
+            return Response({"detail": "OTP not verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+        PasswordResetOTP.objects.filter(user=user).delete()
+
+        return Response({"detail": "Password reset successfully."}, status=status.HTTP_200_OK)
+
+
+class UserInfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise NotFound(detail="User not found")
+
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserWithRestaurantSerializer(request.user)
+        return Response(serializer.data)
+
+    def put(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
