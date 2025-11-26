@@ -36,6 +36,7 @@ class PasswordResetOTP(models.Model):
     otp = models.CharField(max_length=4)
     created_at = models.DateTimeField(auto_now_add=True)
     is_verified = models.BooleanField(default=False)
+    is_used = models.BooleanField(default=False)  # Added to match views.py usage
 
     def save(self, *args, **kwargs):
         if not self.otp:

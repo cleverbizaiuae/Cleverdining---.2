@@ -265,6 +265,47 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             )
 
 
+# Health check endpoint
+class HealthCheckView(APIView):
+    """Health check endpoint to verify backend is running"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        from django.db import connection
+        import sys
+        
+        health_data = {
+            "status": "healthy",
+            "service": "Cleverdining Backend API",
+            "version": "1.0.0",
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        }
+        
+        # Test database connectivity
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                result = cursor.fetchone()
+                if result[0] == 1:
+                    health_data["database"] = "connected"
+                else:
+                    health_data["database"] = "error"
+                    health_data["status"] = "unhealthy"
+        except Exception as e:
+            health_data["database"] = f"error: {str(e)}"
+            health_data["status"] = "unhealthy"
+        
+        # Count users (basic query test)
+        try:
+            user_count = User.objects.count()
+            health_data["total_users"] = user_count
+        except Exception as e:
+            health_data["total_users"] = f"error: {str(e)}"
+        
+        status_code = 200 if health_data["status"] == "healthy" else 500
+        return Response(health_data, status=status_code)
+
+
 # Test endpoint to verify user exists
 class TestUserView(APIView):
     """Test endpoint to check if a user exists (for debugging)"""

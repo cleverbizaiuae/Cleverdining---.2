@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet
+from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet,HealthCheckView
 from device.views import CreateReservationAPIView
 
 router = DefaultRouter()
@@ -8,6 +8,7 @@ router.register(r'chefstaff', ChefStaffViewSet, basename='chefstaff')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('health/', HealthCheckView.as_view(), name='health-check'),  # Health check endpoint
     path('register/', RegisterApiView.as_view(), name='register'),
     path('login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('logout/', LogoutApiView.as_view(), name='logout'),
