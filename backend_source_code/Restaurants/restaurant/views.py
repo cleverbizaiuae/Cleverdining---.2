@@ -17,18 +17,38 @@ class OwnerRegisterView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
+            logger.info(f"Registration attempt - Data keys: {list(request.data.keys())}")
             serializer = OwnerRegisterSerializer(data=request.data)
+            
             if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    serializer.save()
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                except Exception as save_error:
+                    logger.error(f"Error saving registration: {str(save_error)}", exc_info=True)
+                    return Response(
+                        {
+                            "error": "Registration failed",
+                            "detail": str(save_error),
+                            "message": "Failed to create user or restaurant. Please try again."
+                        },
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+            else:
+                logger.warning(f"Validation errors: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Registration error: {str(e)}", exc_info=True)
             return Response(
-                {"error": "Registration failed", "detail": str(e)},
+                {
+                    "error": "Registration failed",
+                    "detail": str(e),
+                    "message": "An unexpected error occurred. Please try again."
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     

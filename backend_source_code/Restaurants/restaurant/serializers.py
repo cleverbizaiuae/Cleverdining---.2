@@ -24,8 +24,13 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
     
 
     def validate_phone_number(self, value):
-        # Handle empty phone numbers by generating a unique placeholder
-        if not value or value.strip() == "":
+        # Handle None, empty, or whitespace-only phone numbers
+        if value is None:
+            value = ""
+        if isinstance(value, str):
+            value = value.strip()
+        
+        if not value or value == "":
             import uuid
             # Generate a unique placeholder phone number
             placeholder = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
@@ -33,6 +38,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
             while Restaurant.objects.filter(phone_number=placeholder).exists():
                 placeholder = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
             return placeholder
+        
         # Check uniqueness for non-empty phone numbers
         if Restaurant.objects.filter(phone_number=value).exists():
             raise serializers.ValidationError("Phone number already exists. Use another number.")
@@ -79,16 +85,38 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                 self.user = user
                 self.restaurant = restaurant
                 return user
+        except serializers.ValidationError:
+            # Re-raise validation errors as-is
+            raise
         except Exception as e:
             logger.error(f"Error creating user/restaurant: {str(e)}", exc_info=True)
-            raise serializers.ValidationError(f"Registration failed: {str(e)}")
+            # Provide a user-friendly error message
+            error_msg = str(e)
+            if "UNIQUE constraint" in error_msg or "duplicate key" in error_msg.lower():
+                if "email" in error_msg.lower():
+                    raise serializers.ValidationError({"email": ["A user with this email already exists."]})
+                elif "phone_number" in error_msg.lower():
+                    raise serializers.ValidationError({"phone_number": ["This phone number is already registered."]})
+            raise serializers.ValidationError({"non_field_errors": [f"Registration failed: {error_msg}"]})
 
     def to_representation(self, instance):
         user_data = {
             "username": instance.username,
             "email": instance.email,
-            "owner_id":instance.id,
-            "role":instance.role,
+            "owner_id": instance.id,
+            "role": instance.role,
         }
-        restaurant_data = RestaurantSerializer(self.restaurant).data
-        return {**user_data, **restaurant_data}
+        # Safely get restaurant data if it exists
+        if hasattr(self, 'restaurant') and self.restaurant:
+            try:
+                restaurant_data = RestaurantSerializer(self.restaurant).data
+                return {**user_data, **restaurant_data}
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error serializing restaurant: {str(e)}", exc_info=True)
+                # Return user data only if restaurant serialization fails
+                return {**user_data, "restaurant": None}
+        else:
+            # Restaurant not created yet, return user data only
+            return user_data
