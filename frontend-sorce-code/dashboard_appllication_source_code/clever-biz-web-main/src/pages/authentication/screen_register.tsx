@@ -36,55 +36,50 @@ const ScreenRegister = () => {
   }, [isLoading, userInfo, redirectToRoleDashboard]);
   const { register, handleSubmit, watch, setValue } = useForm<Inputs>();
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
-    setLoading(true);
-    
-    // Validate required fields before sending
-    if (!data.email || !data.email.trim()) {
-      toast.error("Email is required");
-      setLoading(false);
-      return;
-    }
-    if (!data.password || data.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      setLoading(false);
-      return;
-    }
-    if (!data.customer_name || !data.customer_name.trim()) {
-      toast.error("Customer name is required");
-      setLoading(false);
-      return;
-    }
-    if (!data.restaurant_name || !data.restaurant_name.trim()) {
-      toast.error("Restaurant name is required");
-      setLoading(false);
-      return;
-    }
-    if (!data.location || !data.location.trim()) {
-      toast.error("Location is required");
-      setLoading(false);
-      return;
-    }
-
-    console.log("Data sent :", data);
+    console.log("FORM SUBMITTED - Raw data object:", data);
+    console.log("Data type:", typeof data);
     console.log("Data keys:", Object.keys(data));
-    console.log("Data values:", {
-      email: data.email,
-      password: data.password ? "***" : undefined,
-      customer_name: data.customer_name,
-      restaurant_name: data.restaurant_name,
-      location: data.location,
-      phone_number: data.phone_number,
-      company_logo: data.company_logo,
-    });
+    console.log("Data is empty?", !data || Object.keys(data).length === 0);
 
-    // Additional validation - check if required fields are actually present
-    const requiredFields = ['email', 'password', 'customer_name', 'restaurant_name', 'location'];
-    const missingFields = requiredFields.filter(field => !data[field] || (typeof data[field] === 'string' && !data[field].trim()));
+    setLoading(true);
 
-    if (missingFields.length > 0) {
-      const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
-      console.error(errorMsg);
-      toast.error(errorMsg);
+    // TEMPORARY: Test with hardcoded data to verify backend works
+    const testData = {
+      email: "test@example.com",
+      password: "testpass123",
+      customer_name: "Test User",
+      restaurant_name: "Test Restaurant",
+      location: "Test Location",
+      phone_number: "+1234567890"
+    };
+
+    console.log("Using test data:", testData);
+
+    try {
+      const formData = new FormData();
+      formData.append("email", testData.email);
+      formData.append("password", testData.password);
+      formData.append("username", testData.customer_name);
+      formData.append("resturent_name", testData.restaurant_name);
+      formData.append("location", testData.location);
+      formData.append("phone_number", testData.phone_number);
+      formData.append("package", "Basic");
+
+      console.log("TEST FormData created with hardcoded data");
+
+      const res = await axiosInstance.post("/owners/register/", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      console.log("TEST SUCCESS:", res.data);
+      toast.success("Test registration successful!");
+      setLoading(false);
+      return;
+    } catch (error) {
+      console.error("TEST FAILED:", error);
+      toast.error("Test failed - backend issue");
       setLoading(false);
       return;
     }
