@@ -25,6 +25,10 @@ class SimpleLoginView(APIView):
     """
     permission_classes = [AllowAny]
     
+    def options(self, request, *args, **kwargs):
+        """Handle CORS preflight requests"""
+        return Response(status=status.HTTP_200_OK)
+    
     def post(self, request):
         """
         Login endpoint that ALWAYS returns JSON, never crashes
@@ -182,6 +186,10 @@ class SimpleOwnerRegisterView(APIView):
     - Cannot crash or return 500
     """
     permission_classes = [AllowAny]
+    
+    def options(self, request, *args, **kwargs):
+        """Handle CORS preflight requests"""
+        return Response(status=status.HTTP_200_OK)
     
     def post(self, request):
         """
