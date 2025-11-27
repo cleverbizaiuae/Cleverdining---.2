@@ -211,6 +211,12 @@ class SimpleOwnerRegisterView(APIView):
             phone_number = (request.data.get('phone_number') or '').strip()
             package = (request.data.get('package') or 'Basic').strip()
             
+            # Truncate fields to database limits to prevent constraint violations
+            username = username[:150]  # User.username max_length=150
+            restaurant_name = restaurant_name[:255]  # Restaurant.resturent_name max_length=255
+            location = location[:255]  # Restaurant.location max_length=255
+            package = package[:100]  # Restaurant.package max_length=100
+            
             # Validate required fields
             errors = {}
             if not email:
@@ -245,6 +251,11 @@ class SimpleOwnerRegisterView(APIView):
                 phone_number = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
                 while Restaurant.objects.filter(phone_number=phone_number).exists():
                     phone_number = f"PLACEHOLDER_{uuid.uuid4().hex[:12]}"
+            
+            # Truncate phone number to max 20 characters (database constraint)
+            if len(phone_number) > 20:
+                logger.warning(f"Phone number too long ({len(phone_number)} chars), truncating: {phone_number}")
+                phone_number = phone_number[:20]
             
             # Check phone uniqueness
             if Restaurant.objects.filter(phone_number=phone_number).exists():
@@ -315,16 +326,43 @@ class SimpleOwnerRegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            # ABSOLUTE LAST RESORT
+            # Check if it's a database constraint violation
+            error_str = str(e).lower()
+            if 'value too long' in error_str or 'character varying' in error_str:
+                logger.error(f"Database constraint violation: {str(e)}")
+                return Response(
+                    {
+                        "detail": "One of the fields is too long. Please shorten your input.",
+                        "error": "validation_error",
+                        "message": str(e)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if it's a unique constraint violation
+            if 'unique' in error_str or 'duplicate' in error_str:
+                logger.error(f"Unique constraint violation: {str(e)}")
+                if 'email' in error_str:
+                    return Response(
+                        {"email": ["A user with this email already exists"]},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                elif 'phone' in error_str:
+                    return Response(
+                        {"phone_number": ["This phone number is already registered"]},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # ABSOLUTE LAST RESORT - return 401 instead of 500 for registration
             logger.error(f"CRITICAL REGISTRATION ERROR: {str(e)}", exc_info=True)
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             
             return Response(
                 {
-                    "detail": "Registration failed. Please try again.",
-                    "error": "unexpected_error"
+                    "detail": f"Registration failed: {str(e)}",
+                    "error": "registration_error"
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_400_BAD_REQUEST  # Return 400, not 500
             )
 
