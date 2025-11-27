@@ -40,18 +40,29 @@ class JSONExceptionMiddleware(MiddlewareMixin):
                 )
             
             # CRITICAL: For login/register endpoints, NEVER return 500
-            # Always return 401 so frontend doesn't show "server error"
+            # Login returns 401, registration returns 400
             if is_auth_endpoint:
                 logger.error(f"ERROR in auth endpoint {request.path}: {str(exception)}", exc_info=True)
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                return JsonResponse(
-                    {
-                        "detail": "Authentication failed. Please check your credentials and try again.",
-                        "error": "authentication_error"
-                    },
-                    status=401  # Return 401, NOT 500
-                )
+                
+                # Registration endpoints should return 400, login returns 401
+                if '/register' in request.path:
+                    return JsonResponse(
+                        {
+                            "detail": "Registration failed. Please check your input and try again.",
+                            "error": "registration_error"
+                        },
+                        status=400  # Return 400 for registration errors
+                    )
+                else:
+                    return JsonResponse(
+                        {
+                            "detail": "Authentication failed. Please check your credentials and try again.",
+                            "error": "authentication_error"
+                        },
+                        status=401  # Return 401 for login errors
+                    )
             
             # For other API exceptions, log and return 500
             logger.error(f"CRITICAL: Exception in {request.path}: {str(exception)}", exc_info=True)

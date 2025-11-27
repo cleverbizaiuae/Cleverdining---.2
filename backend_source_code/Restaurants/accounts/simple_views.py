@@ -326,43 +326,76 @@ class SimpleOwnerRegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            # Check if it's a database constraint violation
-            error_str = str(e).lower()
-            if 'value too long' in error_str or 'character varying' in error_str:
-                logger.error(f"Database constraint violation: {str(e)}")
+            # ABSOLUTE CATCH-ALL: Never return 500, always return 400
+            try:
+                error_str = str(e).lower()
+                
+                # Check if it's a database constraint violation
+                if 'value too long' in error_str or 'character varying' in error_str:
+                    logger.error(f"Database constraint violation: {str(e)}")
+                    return Response(
+                        {
+                            "detail": "One of the fields is too long. Please shorten your input.",
+                            "error": "validation_error",
+                            "message": str(e)
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Check if it's a unique constraint violation
+                if 'unique' in error_str or 'duplicate' in error_str or 'already exists' in error_str:
+                    logger.error(f"Unique constraint violation: {str(e)}")
+                    if 'email' in error_str or 'user' in error_str:
+                        return Response(
+                            {"email": ["A user with this email already exists"]},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    elif 'phone' in error_str:
+                        return Response(
+                            {"phone_number": ["This phone number is already registered"]},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                # Check for IntegrityError (database constraint)
+                from django.db import IntegrityError
+                if isinstance(e, IntegrityError):
+                    logger.error(f"Database integrity error: {str(e)}")
+                    if 'email' in str(e).lower():
+                        return Response(
+                            {"email": ["A user with this email already exists"]},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    elif 'phone' in str(e).lower():
+                        return Response(
+                            {"phone_number": ["This phone number is already registered"]},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    else:
+                        return Response(
+                            {"detail": "Registration failed due to database constraint. Please check your input."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                # Generic error - return 400, not 500
+                logger.error(f"REGISTRATION ERROR: {str(e)}", exc_info=True)
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
                 return Response(
                     {
-                        "detail": "One of the fields is too long. Please shorten your input.",
-                        "error": "validation_error",
-                        "message": str(e)
+                        "detail": f"Registration failed: {str(e)}",
+                        "error": "registration_error"
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Check if it's a unique constraint violation
-            if 'unique' in error_str or 'duplicate' in error_str:
-                logger.error(f"Unique constraint violation: {str(e)}")
-                if 'email' in error_str:
-                    return Response(
-                        {"email": ["A user with this email already exists"]},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                elif 'phone' in error_str:
-                    return Response(
-                        {"phone_number": ["This phone number is already registered"]},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            
-            # ABSOLUTE LAST RESORT - return 401 instead of 500 for registration
-            logger.error(f"CRITICAL REGISTRATION ERROR: {str(e)}", exc_info=True)
-            import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            
-            return Response(
-                {
-                    "detail": f"Registration failed: {str(e)}",
-                    "error": "registration_error"
-                },
-                status=status.HTTP_400_BAD_REQUEST  # Return 400, not 500
-            )
+            except Exception as inner_error:
+                # Even the error handler failed - return safe 400
+                logger.error(f"CRITICAL: Error handler failed: {str(inner_error)}")
+                return Response(
+                    {
+                        "detail": "Registration failed. Please try again.",
+                        "error": "registration_error"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
