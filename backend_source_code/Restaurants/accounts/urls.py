@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet,HealthCheckView
+from .simple_views import SimpleLoginView
 from device.views import CreateReservationAPIView
 
 router = DefaultRouter()
@@ -11,7 +12,8 @@ urlpatterns = [
     path('', include(router.urls)),
     path('health/', HealthCheckView.as_view(), name='health-check'),  # Health check endpoint
     path('register/', RegisterApiView.as_view(), name='register'),
-    path('login/', CustomTokenObtainPairView.as_view(), name='login'),
+    path('login/', SimpleLoginView.as_view(), name='login'),  # Bulletproof simple login
+    path('login-old/', CustomTokenObtainPairView.as_view(), name='login-old'),  # Backup complex login
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # JWT token refresh
     path('logout/', LogoutApiView.as_view(), name='logout'),
     path('send-otp/', SendOTPView.as_view(), name='send-otp'),

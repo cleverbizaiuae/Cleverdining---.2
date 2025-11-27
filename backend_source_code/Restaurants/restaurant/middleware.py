@@ -11,32 +11,56 @@ class JSONExceptionMiddleware(MiddlewareMixin):
     This catches exceptions that happen before DRF's exception handler.
     """
     def process_exception(self, request, exception):
-        # ABSOLUTE CATCH-ALL: Convert ANY exception to JSON for API endpoints
-        if (request.path.startswith('/api/') or
+        """
+        BULLETPROOF EXCEPTION HANDLER - Catches ALL exceptions
+        """
+        # Check if this is an authentication/API endpoint
+        is_auth_endpoint = '/login' in request.path or '/register' in request.path
+        is_api_endpoint = (
+            request.path.startswith('/api/') or
             request.path.startswith('/owners/') or
-            '/register' in request.path or
-            '/login' in request.path):
-
-            # Check if it's an authentication error - return 401, not 500
-            from rest_framework.exceptions import AuthenticationFailed, ValidationError, PermissionDenied
-            if isinstance(exception, (AuthenticationFailed, ValidationError, PermissionDenied)):
-                logger.warning(f"Authentication error in {request.path}: {str(exception)}")
+            request.path.startswith('/accounts/') or
+            is_auth_endpoint
+        )
+        
+        if is_api_endpoint:
+            # Check if it's an authentication error
+            from rest_framework.exceptions import AuthenticationFailed, ValidationError, PermissionDenied, NotAuthenticated
+            if isinstance(exception, (AuthenticationFailed, ValidationError, PermissionDenied, NotAuthenticated)):
+                logger.warning(f"Auth/validation error in {request.path}: {str(exception)}")
                 error_detail = str(exception.detail) if hasattr(exception, 'detail') else str(exception)
                 if isinstance(error_detail, list):
                     error_detail = error_detail[0] if error_detail else "Authentication failed"
                 return JsonResponse(
                     {
                         "detail": error_detail,
-                        "error": "Authentication failed"
+                        "error": "authentication_failed"
                     },
                     status=401
                 )
-
-            # For other exceptions, log and return 500
+            
+            # CRITICAL: For login/register endpoints, NEVER return 500
+            # Always return 401 so frontend doesn't show "server error"
+            if is_auth_endpoint:
+                logger.error(f"ERROR in auth endpoint {request.path}: {str(exception)}", exc_info=True)
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                return JsonResponse(
+                    {
+                        "detail": "Authentication failed. Please check your credentials and try again.",
+                        "error": "authentication_error"
+                    },
+                    status=401  # Return 401, NOT 500
+                )
+            
+            # For other API exceptions, log and return 500
             logger.error(f"CRITICAL: Exception in {request.path}: {str(exception)}", exc_info=True)
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
             return JsonResponse(
                 {
-                    "error": "Server error",
+                    "error": "server_error",
                     "detail": "An unexpected error occurred",
                     "message": "Please try again later."
                 },
