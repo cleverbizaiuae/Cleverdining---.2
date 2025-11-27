@@ -1,17 +1,14 @@
 import os
-import django
 from django.core.asgi import get_asgi_application
 
-# Set Django settings module FIRST
+# Set Django settings module FIRST - before ANY imports
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'RESTAURANTS.settings')
 
-# Initialize Django BEFORE any other imports
-django.setup()
-
-# Initialize Django ASGI application early to ensure apps are loaded
+# Initialize Django ASGI application FIRST - this loads all Django apps
 django_asgi_app = get_asgi_application()
 
-# NOW import everything that depends on Django apps (AFTER django.setup())
+# NOW import Django-dependent modules AFTER get_asgi_application()
+# get_asgi_application() already calls django.setup() internally
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from message import routing
