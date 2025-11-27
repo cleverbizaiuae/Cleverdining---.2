@@ -82,6 +82,7 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'POST',
     'PUT',
+    'POST',
 ]
 
 # Allow common headers
@@ -377,7 +378,3 @@ else:
             'PORT': env('DB_PORT', default='5432'),
         }
     }
-
-
-
-

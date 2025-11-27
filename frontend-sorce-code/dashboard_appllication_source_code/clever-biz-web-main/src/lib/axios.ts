@@ -4,7 +4,7 @@ import axios from "axios";
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
 
 const API_BASE_URL = normalizeBaseUrl(
-  (import.meta.env.VITE_API_URL as string | undefined) || "/api"
+  (import.meta.env.VITE_API_URL as string | undefined) || "http://127.0.0.1:8000"
 );
 
 const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
@@ -15,8 +15,6 @@ const axiosInstance = axios.create({
     "Content-Type": "application/json",
   },
 });
-
-
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
