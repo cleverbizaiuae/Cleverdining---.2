@@ -195,16 +195,21 @@ class SimpleOwnerRegisterView(APIView):
     def post(self, request):
         """
         Owner registration that ALWAYS returns JSON, never crashes
+        Handles both JSON and FormData (multipart/form-data)
         """
         try:
-            # Step 1: Extract and validate input
-            email = request.data.get('email', '').strip().lower()
-            password = request.data.get('password', '').strip()
-            username = request.data.get('username', '').strip()
-            restaurant_name = request.data.get('resturent_name', '').strip()
-            location = request.data.get('location', '').strip()
-            phone_number = request.data.get('phone_number', '').strip()
-            package = request.data.get('package', 'Basic').strip()
+            logger.info(f"Registration request received. Method: {request.method}, Content-Type: {request.content_type}")
+            logger.info(f"Request data keys: {list(request.data.keys())}")
+            logger.info(f"Request FILES keys: {list(request.FILES.keys())}")
+            
+            # Step 1: Extract and validate input (works for both JSON and FormData)
+            email = (request.data.get('email') or '').strip().lower()
+            password = (request.data.get('password') or '').strip()
+            username = (request.data.get('username') or '').strip()
+            restaurant_name = (request.data.get('resturent_name') or '').strip()
+            location = (request.data.get('location') or '').strip()
+            phone_number = (request.data.get('phone_number') or '').strip()
+            package = (request.data.get('package') or 'Basic').strip()
             
             # Validate required fields
             errors = {}
@@ -261,10 +266,12 @@ class SimpleOwnerRegisterView(APIView):
                     )
                     logger.info(f"User created: {email}")
                     
-                    # Handle image upload
-                    if 'image' in request.FILES:
-                        user.image = request.FILES['image']
+                    # Handle image upload (check both 'image' and 'company_logo')
+                    image_file = request.FILES.get('image') or request.FILES.get('company_logo')
+                    if image_file:
+                        user.image = image_file
                         user.save()
+                        logger.info(f"User image uploaded: {image_file.name}")
                     
                     # Create restaurant
                     restaurant = Restaurant.objects.create(
@@ -274,11 +281,14 @@ class SimpleOwnerRegisterView(APIView):
                         phone_number=phone_number,
                         package=package
                     )
+                    logger.info(f"Restaurant created: {restaurant_name}")
                     
-                    # Handle logo upload
-                    if 'logo' in request.FILES:
-                        restaurant.logo = request.FILES['logo']
+                    # Handle logo upload (check both 'logo' and 'company_logo')
+                    logo_file = request.FILES.get('logo') or request.FILES.get('company_logo')
+                    if logo_file:
+                        restaurant.logo = logo_file
                         restaurant.save()
+                        logger.info(f"Restaurant logo uploaded: {logo_file.name}")
                     
                     logger.info(f"Restaurant created: {restaurant_name}")
                     
