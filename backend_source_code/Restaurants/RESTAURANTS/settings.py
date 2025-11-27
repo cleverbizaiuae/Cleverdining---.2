@@ -369,12 +369,5 @@ if USE_SQLITE:
     }
 else:
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': env('DB_NAME', default='mydb'),
-            'USER': env('DB_USER', default='myuser'),
-            'PASSWORD': env('DB_PASSWORD', default='mypassword'),
-            'HOST': env('DB_HOST', default='db'),
-            'PORT': env('DB_PORT', default='5432'),
-        }
+        'default': env.db('DATABASE_URL', default='postgres://myuser:mypassword@db:5432/mydb')
     }
