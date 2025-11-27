@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0013_alter_user_image'),
+        ('accounts', '0012_alter_chefstaff_action'),
     ]
 
     operations = [
@@ -15,4 +15,5 @@ class Migration(migrations.Migration):
             field=models.BooleanField(default=False),
         ),
     ]
+
 
