@@ -74,6 +74,16 @@ CORS_ALLOWED_ORIGINS = [
 # Allow credentials for authenticated requests
 CORS_ALLOW_CREDENTIALS = True
 
+# Explicitly allow OPTIONS method for CORS preflight
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
 # Allow common headers
 CORS_ALLOW_HEADERS = [
     'accept',

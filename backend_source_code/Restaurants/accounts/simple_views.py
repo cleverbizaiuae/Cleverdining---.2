@@ -26,8 +26,9 @@ class SimpleLoginView(APIView):
     permission_classes = [AllowAny]
     
     def options(self, request, *args, **kwargs):
-        """Handle CORS preflight requests"""
-        return Response(status=status.HTTP_200_OK)
+        """Handle CORS preflight requests - CORS middleware will add headers"""
+        response = Response(status=status.HTTP_200_OK)
+        return response
     
     def post(self, request):
         """
