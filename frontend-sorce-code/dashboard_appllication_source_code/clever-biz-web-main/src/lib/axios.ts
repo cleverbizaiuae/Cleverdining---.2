@@ -1,8 +1,6 @@
 // src/lib/axios.ts
 import axios from "axios";
 
-<<<<<<< HEAD
-=======
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
 
 // FIX: Use direct backend URL to bypass Netlify proxy issues
@@ -17,22 +15,16 @@ const API_BASE_URL = normalizeBaseUrl(
 
 const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
 
->>>>>>> b6850c7 (FIX: Use direct backend URL to bypass Netlify proxy 500 errors)
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
-    Accept: "application/json",
   },
 });
 
-<<<<<<< HEAD
-const REFRESH_TOKEN_ENDPOINT = `${axiosInstance.defaults.baseURL}/token/refresh/`;
-=======
 console.log("🔥 Axios baseURL at runtime:", axiosInstance.defaults.baseURL);
 console.log("🔥 VITE_API_URL from env:", import.meta.env.VITE_API_URL);
 console.log("🔥 API_BASE_URL calculated:", API_BASE_URL);
->>>>>>> b6850c7 (FIX: Use direct backend URL to bypass Netlify proxy 500 errors)
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
