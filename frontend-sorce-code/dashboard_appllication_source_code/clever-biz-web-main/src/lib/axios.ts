@@ -1,15 +1,30 @@
 // src/lib/axios.ts
 import axios from "axios";
 
+const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
+
+// FIX: Use direct backend URL to bypass Netlify proxy issues
+// If VITE_API_URL is "/api" or not set, use direct backend URL
+// This ensures requests go directly to Render, avoiding Netlify proxy 500 errors
+const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const API_BASE_URL = normalizeBaseUrl(
+  envApiUrl && envApiUrl !== "/api" 
+    ? envApiUrl 
+    : "https://cleverdining-2.onrender.com"
+);
+
+const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
-    Accept: "application/json",
   },
 });
 
-const REFRESH_TOKEN_ENDPOINT = `${axiosInstance.defaults.baseURL}/token/refresh/`;
+console.log("🔥 Axios baseURL at runtime:", axiosInstance.defaults.baseURL);
+console.log("🔥 VITE_API_URL from env:", import.meta.env.VITE_API_URL);
+console.log("🔥 API_BASE_URL calculated:", API_BASE_URL);
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
