@@ -15,7 +15,8 @@ import { useStaff } from "@/context/staffContext";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 import { Member, ReservationItem, DeviceItem, ReviewItem } from "@/types";
-import { Eye, Pointer, Trash, Trash2 } from "lucide-react";
+import { Eye, Trash2, QrCode } from "lucide-react";
+import { QRCodeModal } from "./modals/QRCodeModal";
 import {
   Dialog,
   DialogBackdrop,
@@ -24,7 +25,7 @@ import {
 } from "@headlessui/react";
 import { ImSpinner6 } from "react-icons/im";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
-import { userInfo } from "os";
+
 import OrderDetailsModal from "./ui/order-datials-modal";
 
 /* Reservation Table Data ===========================================================>>>>> */
@@ -78,7 +79,7 @@ export const TableReservationList: React.FC<TableReservationListProps> = ({
         };
     }
   };
- console.log(data)
+  console.log(data)
   return (
     <table className="w-full table-auto text-left clever-table">
       <thead className="table-header">
@@ -244,6 +245,93 @@ export const ButtonStatus: React.FC<ButtonStatusProps> = ({
   );
 };
 
+const DeleteFoodItemModal = ({ isOpen, close, id }) => {
+  const parseUser = JSON.parse(localStorage.getItem("userInfo"));
+  const role = parseUser?.role;
+  console.log(role);
+  const [loading, setLoading] = useState(false);
+
+  const handleDelete = async () => {
+    if (!id) {
+      toast.error("No item selected for deletion.");
+      return;
+    }
+
+    setLoading(true);
+
+    // Log the constructed URL to ensure it's correct
+    const url = `/owners/chef-staff/${id}/`;
+    console.log("Delete URL:", url);
+
+    try {
+      const response = await axiosInstance.delete(url);
+      toast.success("Item deleted successfully!");
+      // setCategories((prevCategories) =>
+      //   prevCategories.filter((category) => category.id !== id)
+      // );
+      close();
+    } catch (err) {
+      console.error(
+        "Failed to delete item",
+        err.response ? err.response.data : err
+      );
+      toast.error("An error occurred while deleting the item.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={isOpen}
+      as="div"
+      className="relative z-10 focus:outline-none"
+      onClose={close}
+    >
+      <DialogBackdrop className="fixed inset-0 bg-black/20" />
+      <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <DialogPanel
+            transition
+            className="w-full max-w-md rounded-xl bg-sidebar/80 p-6 backdrop-blur-2xl duration-300 ease-out data-[closed]:transform-[scale(95%)] data-[closed]:opacity-0"
+          >
+            <DialogTitle as="h3" className="text-base/7 font-medium text-white">
+              Delete Member
+            </DialogTitle>
+            <p className="mt-2 text-sm/6 text-white/50">
+              Are you sure you want to delete this food member? This action
+              cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                onClick={close}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                className="button-primary inline-flex items-center gap-2 rounded-md py-2 px-4 text-sm/6 font-semibold text-white shadow-inner shadow-white/5 focus:outline-none data-[hover]:bg-red-600 data-[focus]:outline-1 data-[focus]:outline-white data-[open]:bg-red-700 bg-red-500 hover:bg-red-600"
+                onClick={handleDelete}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <ImSpinner6 className="animate-spin w-4 h-4" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </div>
+    </Dialog>
+  );
+};
+
 interface TableTeamManagementProps {
   data: Member[];
 }
@@ -346,8 +434,8 @@ export const TableTeamManagement: React.FC<TableTeamManagementProps> = ({
                         ? "Active"
                         : "Hold"
                       : item.action === "active"
-                      ? "Active"
-                      : "Hold"
+                        ? "Active"
+                        : "Hold"
                   }
                   availableStatuses={["Active", "Hold"]}
                   properties={{
@@ -369,7 +457,7 @@ export const TableTeamManagement: React.FC<TableTeamManagementProps> = ({
                   className="text-red-500 hover:text-red-700 transition-colors duration-200 ml-4"
                   onClick={() => openModal(item)} // Define this function to handle delete logic
                 >
-                  <Trash size={20} />
+                  <Trash2 size={20} />
                 </button>
               </div>
             </td>
@@ -381,7 +469,7 @@ export const TableTeamManagement: React.FC<TableTeamManagementProps> = ({
           isOpen={isModalOpen} // Open the modal
           close={closeModal} // Function to close the modal
           id={categoryToDelete?.id}
-          // setCategories={setCategories} // Pass the category ID to the modal
+        // setCategories={setCategories} // Pass the category ID to the modal
         />
       )}
     </table>
@@ -389,214 +477,9 @@ export const TableTeamManagement: React.FC<TableTeamManagementProps> = ({
 };
 /* <<<<<<<<===================================================== Team management table */
 
-const DeleteFoodItemModal = ({ isOpen, close, id }) => {
-  const parseUser = JSON.parse(localStorage.getItem("userInfo"));
-  const role = parseUser?.role;
-  console.log(role);
-  const [loading, setLoading] = useState(false);
 
-  const handleDelete = async () => {
-    if (!id) {
-      toast.error("No item selected for deletion.");
-      return;
-    }
-
-    setLoading(true);
-
-    // Log the constructed URL to ensure it's correct
-    const url = `/owners/chef-staff/${id}/`;
-    console.log("Delete URL:", url);
-
-    try {
-      const response = await axiosInstance.delete(url);
-      toast.success("Item deleted successfully!");
-      // setCategories((prevCategories) =>
-      //   prevCategories.filter((category) => category.id !== id)
-      // );
-      close();
-    } catch (err) {
-      console.error(
-        "Failed to delete item",
-        err.response ? err.response.data : err
-      );
-      toast.error("An error occurred while deleting the item.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={isOpen}
-      as="div"
-      className="relative z-10 focus:outline-none"
-      onClose={close}
-    >
-      <DialogBackdrop className="fixed inset-0 bg-black/20" />
-      <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4">
-          <DialogPanel
-            transition
-            className="w-full max-w-md rounded-xl bg-sidebar/80 p-6 backdrop-blur-2xl duration-300 ease-out data-[closed]:transform-[scale(95%)] data-[closed]:opacity-0"
-          >
-            <DialogTitle as="h3" className="text-base/7 font-medium text-white">
-              Delete Member
-            </DialogTitle>
-            <p className="mt-2 text-sm/6 text-white/50">
-              Are you sure you want to delete this food member? This action
-              cannot be undone.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
-                onClick={close}
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                className="button-primary inline-flex items-center gap-2 rounded-md py-2 px-4 text-sm/6 font-semibold text-white shadow-inner shadow-white/5 focus:outline-none data-[hover]:bg-red-600 data-[focus]:outline-1 data-[focus]:outline-white data-[open]:bg-red-700 bg-red-500 hover:bg-red-600"
-                onClick={handleDelete}
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <ImSpinner6 className="animate-spin w-4 h-4" />
-                    Deleting...
-                  </>
-                ) : (
-                  "Delete"
-                )}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </div>
-    </Dialog>
-  );
-};
 
 /* Device List table ===========================================================>>>>> */
-interface TableDeviceListProps {
-  data: DeviceItem[];
-}
-export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
-  const { updateDeviceStatus } = useOwner();
-  const [isModalOpen, setIsModalOpen] = useState(false); // Modal open/close state
-  const [categoryToDelete, setCategoryToDelete] = useState(null); // Selected category to delete
-  const [isDeleting, setIsDeleting] = useState(false);
-  const openModal = (category) => {
-    setCategoryToDelete(category); // Set the selected category
-    setIsModalOpen(true); // Open the modal
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false); // Close the modal
-    setCategoryToDelete(null); // Clear the selected category
-  };
-  // Local state to track device status changes immediately
-  const [localDeviceStatus, setLocalDeviceStatus] = useState<
-    Record<number, string>
-  >({});
-
-  // Initialize local device status state when data changes
-  useEffect(() => {
-    const initialStatus: Record<number, string> = {};
-    data?.forEach((item) => {
-      initialStatus[item.id] = item.action;
-    });
-    setLocalDeviceStatus(initialStatus);
-  }, [data]);
-
-  const handleStatusChange = async (deviceId: number, newStatus: string) => {
-    const previousStatus =
-      localDeviceStatus[deviceId] ||
-      data.find((item) => item.id === deviceId)?.action ||
-      "active";
-
-    // Immediately update local state for instant UI feedback
-    setLocalDeviceStatus((prev) => ({
-      ...prev,
-      [deviceId]: newStatus.toLowerCase(),
-    }));
-
-    try {
-      await updateDeviceStatus(deviceId, newStatus.toLowerCase());
-    } catch (error) {
-      console.error("Failed to update device status:", error);
-      // Revert local state if API call fails
-      setLocalDeviceStatus((prev) => ({
-        ...prev,
-        [deviceId]: previousStatus,
-      }));
-    }
-  };
-
-  return (
-    <table className="w-full table-auto text-left clever-table">
-      <thead className="table-header">
-        <tr>
-          <th>ID</th>
-          <th className="text-center">Username</th>
-          <th className="text-center">Table Name</th>
-          <th className="text-center">Action</th>
-        </tr>
-      </thead>
-      <tbody className="bg-sidebar text-sm">
-        {data.map((item, index) => (
-          <tr key={index} className="border-b border-[#1C1E3C]">
-            <td className="p-4 text-primary-text">{item.id}</td>
-            <td className="p-4 text-primary-text text-center">{item.username}</td>
-            <td className="p-4 text-primary-text text-center ">
-              {item.table_name}
-            </td>
-            <td className="p-4 text-primary-text flex flex-col items-center">
-              <div className="flex  items-center gap-3">
-                <ButtonStatus
-                  status={
-                    localDeviceStatus[item.id] !== undefined
-                      ? localDeviceStatus[item.id] === "active"
-                        ? "Active"
-                        : "Hold"
-                      : item.action === "active"
-                      ? "Active"
-                      : "Hold"
-                  }
-                  availableStatuses={["Active", "Hold"]}
-                  properties={{
-                    Active: {
-                      bg: "bg-green-800",
-                      text: "text-green-300",
-                    },
-                    Hold: {
-                      bg: "bg-yellow-800",
-                      text: "text-yellow-300",
-                    },
-                  }}
-                  onChange={(newStatus) =>
-                    handleStatusChange(item.id, newStatus)
-                  }
-                />
-                <div onClick={() => openModal(item)}>
-                  <Trash2 color="red" cursor={"pointer"} />
-                </div>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-      {isModalOpen && (
-        <DeleteDevice
-          isOpen={isModalOpen} // Open the modal
-          close={closeModal} // Function to close the modal
-          id={categoryToDelete?.id}
-          // setCategories={setCategories} // Pass the category ID to the modal
-        />
-      )}
-    </table>
-  );
-};
-/* <<<<<<<<===================================================== Device List table */
 const DeleteDevice = ({ isOpen, close, id }) => {
   const parseUser = JSON.parse(localStorage.getItem("userInfo"));
   const role = parseUser?.role;
@@ -685,6 +568,170 @@ const DeleteDevice = ({ isOpen, close, id }) => {
     </Dialog>
   );
 };
+
+interface TableDeviceListProps {
+  data: DeviceItem[];
+}
+export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
+  const { updateDeviceStatus } = useOwner();
+  const [isModalOpen, setIsModalOpen] = useState(false); // Modal open/close state
+  const [categoryToDelete, setCategoryToDelete] = useState(null); // Selected category to delete
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [selectedQrData, setSelectedQrData] = useState(null);
+
+  const openQrModal = (item) => {
+    setSelectedQrData(item);
+    setQrModalOpen(true);
+  };
+
+  const closeQrModal = () => {
+    setQrModalOpen(false);
+    setSelectedQrData(null);
+  };
+  const openModal = (category) => {
+    setCategoryToDelete(category); // Set the selected category
+    setIsModalOpen(true); // Open the modal
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false); // Close the modal
+    setCategoryToDelete(null); // Clear the selected category
+  };
+  // Local state to track device status changes immediately
+  const [localDeviceStatus, setLocalDeviceStatus] = useState<
+    Record<number, string>
+  >({});
+
+  // Initialize local device status state when data changes
+  useEffect(() => {
+    const initialStatus: Record<number, string> = {};
+    data?.forEach((item) => {
+      initialStatus[item.id] = item.action;
+    });
+    setLocalDeviceStatus(initialStatus);
+  }, [data]);
+
+  const handleStatusChange = async (deviceId: number, newStatus: string) => {
+    const previousStatus =
+      localDeviceStatus[deviceId] ||
+      data.find((item) => item.id === deviceId)?.action ||
+      "active";
+
+    // Immediately update local state for instant UI feedback
+    setLocalDeviceStatus((prev) => ({
+      ...prev,
+      [deviceId]: newStatus.toLowerCase(),
+    }));
+
+    try {
+      await updateDeviceStatus(deviceId, newStatus.toLowerCase());
+    } catch (error) {
+      console.error("Failed to update device status:", error);
+      // Revert local state if API call fails
+      setLocalDeviceStatus((prev) => ({
+        ...prev,
+        [deviceId]: previousStatus,
+      }));
+    }
+  };
+
+  const handleCopyLink = (tableId: number, tableName: string) => {
+    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    const restaurantId = userInfo?.restaurants?.[0]?.id;
+    if (!restaurantId) {
+      toast.error("Restaurant ID not found");
+      return;
+    }
+    // Construct URL with query params
+    const url = `http://localhost:5176/?table_id=${tableId}&table_name=${encodeURIComponent(tableName)}&restaurant_id=${restaurantId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Link copied to clipboard!");
+  };
+
+  return (
+    <>
+      <table className="w-full table-auto text-left clever-table">
+        <thead className="table-header">
+          <tr>
+            <th className="text-center">Table Name</th>
+            <th className="text-center">Region</th>
+            <th className="text-center">URL</th>
+            <th className="text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody className="bg-sidebar text-sm">
+          {data.map((item, index) => {
+            const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+            const restaurantId = userInfo?.restaurants?.[0]?.id;
+            const url = `http://localhost:5176/?table_id=${item.id}&table_name=${encodeURIComponent(item.table_name)}&restaurant_id=${restaurantId}`;
+
+            return (
+              <tr key={index} className="border-b border-[#1C1E3C]">
+                <td className="p-4 text-primary-text text-center">{item.table_name}</td>
+                <td className="p-4 text-primary-text text-center">{item.region || "Primary"}</td>
+                <td className="p-4 text-primary-text text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-xs text-gray-400 truncate max-w-[150px]">{url} (Rest ID: {item.restaurant})</span>
+                    <button
+                      onClick={() => handleCopyLink(item.id, item.table_name)}
+                      className="p-1 hover:bg-white/10 rounded-full transition-colors text-xs text-blue-300 border border-blue-300 px-2"
+                      title="Copy Link"
+                    >
+                      Copy Link
+                    </button>
+                  </div>
+                </td>
+                <td className="p-4 text-primary-text flex flex-col items-center">
+                  <div className="flex  items-center gap-3">
+                    <ButtonStatus
+                      status={
+                        localDeviceStatus[item.id] !== undefined
+                          ? localDeviceStatus[item.id] === "active"
+                            ? "Active"
+                            : "Hold"
+                          : item.action === "active"
+                            ? "Active"
+                            : "Hold"
+                      }
+                      availableStatuses={["Active", "Hold"]}
+                      properties={{
+                        Active: {
+                          bg: "bg-green-800",
+                          text: "text-green-300",
+                        },
+                        Hold: {
+                          bg: "bg-yellow-800",
+                          text: "text-yellow-300",
+                        },
+                      }}
+                      onChange={(newStatus) =>
+                        handleStatusChange(item.id, newStatus)
+                      }
+                    />
+                    <div onClick={() => openModal(item)}>
+                      <Trash2 color="red" cursor={"pointer"} />
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+        {isModalOpen && (
+          <DeleteDevice
+            isOpen={isModalOpen} // Open the modal
+            close={closeModal} // Function to close the modal
+            id={categoryToDelete?.id}
+          // setCategories={setCategories} // Pass the category ID to the modal
+          />
+        )}
+      </table>
+    </>
+  );
+};
+/* Device List table ===========================================================>>>>> */
+
 /* Review List table ===========================================================>>>>> */
 interface TableReviewListProps {
   data: ReviewItem[];
@@ -724,7 +771,7 @@ export const TableReviewList: React.FC<TableReviewListProps> = ({ data }) => {
     </table>
   );
 };
-/* <<<<<<<<===================================================== Review List table */
+/* Review List table ===========================================================>>>>> */
 
 /* Food Order List ===========================================================>>>>> */
 interface TableFoodOrderListProps {
@@ -735,27 +782,39 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
   data,
   updateOrderStatus: propUpdateOrderStatus,
 }) => {
-  const { response } = useContext(WebSocketContext);
+  const { response } = useContext(WebSocketContext) || {};
   const { fetchOrders } = useStaff();
   const { fetchOrders: fetchOwnerOrders } = useOwner();
   const statuses = ["Pending", "Preparing", "Served", "Completed", "Cancelled"];
-  const { updateOrderStatus: contextUpdateOrderStatus } = useOwner();
-  const [oderViewData, setOderViewData] = useState(null);
-  const updateOrderStatus = propUpdateOrderStatus || contextUpdateOrderStatus;
-  const [viewOpen, setViewOpen] = useState(false);
-  const ordersData = Array.isArray(data) ? data : data?.orders || [];
 
-  const handleStatusChange = useCallback(
-    async (orderId: number, newStatus: string) => {
-      try {
-        await updateOrderStatus(orderId, newStatus);
-        fetchOrders();
-        fetchOwnerOrders();
-      } catch (error) {
-        console.error("Failed to update order status:", error);
-      }
-    },
-    [updateOrderStatus, fetchOrders, fetchOwnerOrders]
+  const {
+    orders,
+    ordersCount,
+    ordersCurrentPage,
+    setOrdersCurrentPage,
+    updateOrderStatus,
+    ordersSearchQuery,
+  } = useOwner();
+
+  const [viewOpen, setViewOpen] = useState(false);
+  // Using any for order data to avoid type issues if OrderItem is not imported
+  const [oderViewData, setOrderViewData] = useState<any | null>(null);
+
+  const handleStatusChange = async (id: number, newStatus: string) => {
+    await updateOrderStatus(id, newStatus);
+  };
+
+  const handleViewOrders = (id: number) => {
+    const order = orders.find((o) => o.id === id);
+    if (order) {
+      setOrderViewData(order);
+      setViewOpen(true);
+    }
+  };
+
+  // Filter out 'served' orders as requested by user
+  const ordersData: any[] = orders.filter(
+    (item) => item.status.toLowerCase() !== "served"
   );
 
   useEffect(() => {
@@ -764,30 +823,7 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
       fetchOwnerOrders();
     }
   }, [response, fetchOrders, fetchOwnerOrders]);
-  const handleViewOrders = async (orderId) => {
-    try {
-      const userInfo = localStorage.getItem("userInfo");
-      const { role } = JSON.parse(userInfo);
-      let endpoint = "";
 
-      if (role === "staff" || role === "chef") {
-        endpoint = `/chef/orders/${orderId}/`;
-      } else if (role === "owner") {
-        endpoint = `/owners/orders/${orderId}/`;
-      } else {
-        toast.error("Invalid user role");
-        return;
-      }
-      const res = await axiosInstance.get(endpoint);
-      console.log(res);
-      setOderViewData(res?.data);
-      setViewOpen(true);
-    } catch (err) {
-      console.error("Error fetching order:", err);
-    }
-  };
-
-  console.log("ordersData", ordersData);
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto text-left clever-table">
@@ -801,7 +837,8 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
             <th className="p-2 sm:p-4 text-center">Order Id</th>
             <th className="p-2 sm:p-4 text-center">Status</th>
             <th className="p-2 sm:p-4 text-center">Payment Status</th>
-            <th className="p-2 sm:p-4 text-start">view</th>
+            <th className="p-2 sm:p-4 text-center">Delivered</th>
+            <th className="p-2 sm:p-4 text-center">Cancel</th>
           </tr>
         </thead>
         <tbody className="bg-sidebar text-sm">
@@ -882,12 +919,22 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
                 </span>
               </td>
               <td className="p-2 sm:p-4 text-primary-text text-center">
-                <span
-                  className="font-medium text-center"
-                  onClick={() => handleViewOrders(item.id)}
+                <button
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleStatusChange(item.id, "Served")}
+                  disabled={["served", "completed", "cancelled", "paid"].includes(item.status.toLowerCase())}
                 >
-                  <Eye />
-                </span>
+                  Delivered
+                </button>
+              </td>
+              <td className="p-2 sm:p-4 text-primary-text text-center">
+                <button
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleStatusChange(item.id, "Cancelled")}
+                  disabled={["completed", "cancelled", "paid"].includes(item.status.toLowerCase())}
+                >
+                  Cancel
+                </button>
               </td>
               {viewOpen && (
                 <OrderDetailsModal

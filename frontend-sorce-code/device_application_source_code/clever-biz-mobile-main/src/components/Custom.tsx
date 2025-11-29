@@ -1,34 +1,37 @@
-export const setNewMessage = (hasNewMessage: boolean) => {
+import { useState, useEffect } from "react";
+
+export const useNewMessage = (hasNewMessage: boolean) => {
   localStorage.setItem("newMessage", hasNewMessage.toString());
-  // Dispatch a custom event to notify other components
-  window.dispatchEvent(
-    new CustomEvent("newMessageUpdate", {
-      detail: { hasNewMessage },
-    })
-  );
 };
 
-export const getNewMessage = (): boolean => {
-  const newMessage = localStorage.getItem("newMessage");
-  return newMessage === "true";
+export const useGetNewMessage = () => {
+  const [newMessage, setNewMessage] = useState(false);
+
+  useEffect(() => {
+    const checkNewMessage = () => {
+      const newMessage = localStorage.getItem("newMessage");
+      if (newMessage === "true") {
+        setNewMessage(true);
+      } else {
+        setNewMessage(false);
+      }
+    };
+    checkNewMessage();
+    window.addEventListener("storage", checkNewMessage);
+    return () => {
+      window.removeEventListener("storage", checkNewMessage);
+    };
+  }, []);
+
+  return newMessage;
 };
 
-export const clearNotification = () => {
+export const clearNewMessage = () => {
   localStorage.setItem("newMessage", "false");
-  // Dispatch a custom event to notify other components
-  window.dispatchEvent(
-    new CustomEvent("newMessageUpdate", {
-      detail: { hasNewMessage: false },
-    })
-  );
 };
 
-export const markAsRead = () => {
-  localStorage.setItem("newMessage", "false");
-  // Dispatch a custom event to notify other components
-  window.dispatchEvent(
-    new CustomEvent("newMessageUpdate", {
-      detail: { hasNewMessage: false },
-    })
-  );
+export const useClearNewMessage = () => {
+  useEffect(() => {
+    localStorage.setItem("newMessage", "false");
+  }, []);
 };

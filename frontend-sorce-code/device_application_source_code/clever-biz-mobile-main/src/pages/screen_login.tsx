@@ -52,17 +52,22 @@ const ScreenLogin = () => {
     // Removed bypass logic for production security
   }, [isAuthenticated, navigate]);
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     try {
-      const response = await axiosInstance.post("/login/", {
+      const response = await axiosInstance.post("token/", {
         email: tableNo,
         password: password,
       });
-      // Assuming response.data contains access and refresh tokens
 
-      const { access, refresh, ...userInfo } = response.data;
-      if (access && refresh) {
+      const { access, refresh, user } = response.data;
+      const userInfo = {
+        user: user,
+        role: user.role,
+      };
+
+      if (user.role === "owner" || user.role === "staff") {
         localStorage.setItem("accessToken", access);
         localStorage.setItem("refreshToken", refresh);
         localStorage.setItem("userInfo", JSON.stringify(userInfo));

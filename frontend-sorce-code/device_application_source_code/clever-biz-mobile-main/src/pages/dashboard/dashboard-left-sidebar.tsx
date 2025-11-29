@@ -2,7 +2,7 @@
 
 import { useMediaQuery } from "@uidotdev/usehooks";
 import { cn } from "clsx-for-tailwind";
-import { NavLink } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router";
 import {
   IconCall,
   IconCart,
@@ -30,11 +30,13 @@ export const DashboardLeftSidebar = ({
   setIsMobileMenuOpen,
 }: Props) => {
   const isLargeDevice = useMediaQuery("only screen and (min-width : 993px)");
+  const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <nav
       className={cn(
-        " fixed bg-sidebar rounded-r-xl shadow-lg flex flex-col items-center justify-center  py-4 md:pt-16 xl:pt-0 pt-0 text-xs font-light",
+        " fixed bg-sidebar rounded-r-xl shadow-lg flex flex-col items-center justify-center  py-4 md:pt-16 xl:pt-0 pt-0 text-xs font-light z-50",
         isLargeDevice
           ? " top-1/2 transform -translate-y-1/2 left-0 w-22"
           : "fixed bottom-3 right-0 left-0  w-96 sm:w-fit    mx-auto rounded-xl   py-2 px-4 flex gap-2 flex-row h-fit transform-none"
@@ -155,32 +157,28 @@ export const DashboardLeftSidebar = ({
         )}
       </NavLink>
       {/* Orders */}
-      <NavLink
+      <button
         onClick={() => {
           if (!isLargeDevice) setIsMobileMenuOpen(true);
+          navigate("/dashboard/orders");
         }}
-        to="/dashboard/orders"
         className={cn("w-16 h-16 flex flex-col items-center justify-center", {
-          "bg-icon-active-bg rounded-full": false,
+          "bg-icon-active-bg rounded-full": location.pathname.includes("/dashboard/orders"),
         })}
       >
-        {({ isActive }) => (
-          <>
-            <IconOrders
-              selected={isActive}
-              activeColor="#3E4F7E"
-              inActiveColor="#B2B5BE"
-            />
-            <p
-              className={cn("text-icon-inactive", {
-                "text-icon-active": false,
-              })}
-            >
-              Orders
-            </p>
-          </>
-        )}
-      </NavLink>
+        <IconOrders
+          selected={location.pathname.includes("/dashboard/orders")}
+          activeColor="#3E4F7E"
+          inActiveColor="#B2B5BE"
+        />
+        <p
+          className={cn("text-icon-inactive", {
+            "text-icon-active": location.pathname.includes("/dashboard/orders"),
+          })}
+        >
+          Orders
+        </p>
+      </button>
       {/* Logout */}
       <button
         type="button"

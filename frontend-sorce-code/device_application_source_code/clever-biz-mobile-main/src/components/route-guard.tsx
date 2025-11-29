@@ -1,19 +1,11 @@
 import { Navigate } from "react-router";
 
-export const PublicRouteGuard = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+export const PrivateRouteGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = localStorage.getItem("accessToken");
-  return !isAuthenticated ? children : <Navigate to="/dashboard" />;
+  return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
 };
 
-export const PrivateRouteGuard = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+export const PublicRouteGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = localStorage.getItem("accessToken");
-  return isAuthenticated ? children : <Navigate to="/" />;
+  return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
 };

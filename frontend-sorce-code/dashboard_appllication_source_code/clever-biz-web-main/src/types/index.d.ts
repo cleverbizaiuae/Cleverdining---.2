@@ -39,14 +39,17 @@ export type Member = {
   image: string | null;
 };
 
-export type DeviceItem = {
+export interface DeviceItem {
   id: number;
   table_name: string;
+  region: string;
+  table_number: string;
   restaurant: number;
   action: string;
   restaurant_name: string;
   username: string;
-};
+  user_id: number;
+}
 
 export type ReviewItem = {
   name: string;

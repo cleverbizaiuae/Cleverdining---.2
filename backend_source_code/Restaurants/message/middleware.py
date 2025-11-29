@@ -7,7 +7,10 @@ from urllib.parse import parse_qs
 
 class JWTAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
+        import sys
+        print(f"DEBUG: JWTAuthMiddleware called. Query: {scope.get('query_string')}", file=sys.stderr)
         headers = dict(scope["headers"])
+        # print(f"DEBUG: Headers: {headers}", file=sys.stderr) # Be careful with sensitive info
         token = None
         selected_protocol = None
 
@@ -31,14 +34,38 @@ class JWTAuthMiddleware(BaseMiddleware):
 
 
         if token:
-            try:
-                access_token = AccessToken(token)
-                user = await sync_to_async(User.objects.get)(id=access_token["user_id"])
-                scope["user"] = user
-                scope["user_info"] = access_token["user"]
-            except Exception as e:
-                scope["user"] = None
+            if token == "guest_token":
+                print("DEBUG: Guest token detected. Assigning AnonymousUser.", file=sys.stderr)
+                from django.contrib.auth.models import AnonymousUser
+                scope["user"] = AnonymousUser()
+            else:
+                try:
+                    print(f"DEBUG: Attempting to authenticate with token: {token[:10]}...", file=sys.stderr)
+                    access_token = AccessToken(token)
+                    print(f"DEBUG: Token valid. User ID: {access_token['user_id']}", file=sys.stderr)
+                    user = await sync_to_async(User.objects.get)(id=access_token["user_id"])
+                    print(f"DEBUG: User found: {user.username}", file=sys.stderr)
+                    scope["user"] = user
+                    
+                    @sync_to_async
+                    def get_user_info(user):
+                        info = {
+                            "id": user.id,
+                            "username": user.username,
+                            "email": user.email,
+                            "role": getattr(user, "role", "unknown"),
+                            "restaurants_id": None
+                        }
+                        if hasattr(user, "restaurants") and user.restaurants.exists():
+                            info["restaurants_id"] = user.restaurants.first().id
+                        return info
+
+                    scope["user_info"] = await get_user_info(user)
+                except Exception as e:
+                    print(f"DEBUG: Authentication failed: {e}", file=sys.stderr)
+                    scope["user"] = None
         else:
+            print("DEBUG: No token found in request")
             scope["user"] = None
 
         # Inject selected protocol into scope for returning in handshake

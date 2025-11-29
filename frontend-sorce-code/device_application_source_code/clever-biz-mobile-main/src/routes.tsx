@@ -1,4 +1,5 @@
-import { Route, Routes } from "react-router";
+import { useEffect } from "react";
+import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router";
 
 import CancelPage from "./pages/CancelPage";
 import CheckoutPage from "./pages/CheckoutPage";
@@ -13,11 +14,80 @@ import SuccessPage from "./pages/SuccessPage";
 import { NotFoundPage } from "./pages/not-found";
 
 function App() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Only run auto-login/redirect logic if we are at the root path
+    if (location.pathname !== "/") {
+      return;
+    }
+
+    const tableIdParam = searchParams.get("table_id");
+    const tableNameParam = searchParams.get("table_name");
+    const restaurantIdParam = searchParams.get("restaurant_id");
+    const storedUserInfo = localStorage.getItem("userInfo");
+
+    if (tableIdParam && restaurantIdParam) {
+      // Case 1: URL params present - use them to set session
+      const mockUserInfo = {
+        user: {
+          username: tableNameParam || `Table ${tableIdParam} `,
+          email: `${tableIdParam} @guest.com`,
+          restaurants: [
+            {
+              id: parseInt(restaurantIdParam),
+              table_name: tableNameParam || `Table ${tableIdParam} `,
+              device_id: tableIdParam,
+              resturent_name: "Restaurant",
+            },
+          ],
+        },
+        role: "guest",
+      };
+
+      localStorage.setItem("userInfo", JSON.stringify(mockUserInfo));
+      localStorage.setItem("accessToken", "guest_token");
+      localStorage.setItem("refreshToken", "guest_refresh");
+
+      setTimeout(() => navigate("/dashboard"), 100);
+
+    } else if (storedUserInfo) {
+      // Case 2: Session already exists - redirect to dashboard
+      navigate("/dashboard");
+
+    } else {
+      // Case 3: No params and no session - Create default guest session (Bypass Login)
+      // Defaulting to Restaurant 7 as observed in user context
+      const defaultUserInfo = {
+        user: {
+          username: "Guest Table",
+          email: "guest@example.com",
+          restaurants: [
+            {
+              id: 1,
+              table_name: "y",
+              device_id: "14",
+              resturent_name: "CleverBiz Restaurant",
+            },
+          ],
+        },
+        role: "guest",
+      };
+
+      localStorage.setItem("userInfo", JSON.stringify(defaultUserInfo));
+      localStorage.setItem("accessToken", "guest_token");
+      localStorage.setItem("refreshToken", "guest_refresh");
+
+      setTimeout(() => navigate("/dashboard"), 100);
+    }
+  }, [searchParams, navigate, location.pathname]);
+
   return (
     <Routes>
-      <Route path="/" element={<ScreenLogin />} />
+      <Route path="/" element={<div className="flex items-center justify-center h-screen">Loading...</div>} />
       <Route path="/dashboard" element={<LayoutDashboard />}>
-        {/* <Route index={true} element={<ScreenLogin />} /> */}
         <Route index={true} element={<ScreenHome />} />
         <Route path="message" element={<ScreenMessage />} />
         <Route path="cart" element={<ScreenCart />} />

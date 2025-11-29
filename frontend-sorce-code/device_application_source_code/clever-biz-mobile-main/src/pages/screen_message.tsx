@@ -35,7 +35,7 @@ function MessagingUI() {
     const accessToken = localStorage.getItem("accessToken");
     if (!userInfo || !accessToken) return;
 
-    const wsUrl = `wss://abc.winaclaim.com/ws/chat/${device_id}/?token=${accessToken}`;
+    const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/chat/${device_id}/?token=${accessToken}&restaurant_id=${restaurant_id}`;
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
@@ -106,7 +106,7 @@ function MessagingUI() {
         toast.error("Failed to load previous messages.");
         setMessages([]);
       }
-  
+
     };
     if (device_id && restaurant_id) fetchMessages();
   }, [device_id, restaurant_id, userInfo]);
@@ -172,17 +172,16 @@ function MessagingUI() {
         <div className="flex flex-col space-y-4">
           {messages.length > 0 && (
             <>
-            
+
               {messages
                 .filter((message) => message.text && message.text.trim() !== "")
                 .map((message) => (
                   <div
                     key={message.id}
-                    className={`flex items-end ${
-                      message.is_from_device === false
-                        ? "justify-start"
-                        : "justify-end"
-                    }`}
+                    className={`flex items-end ${message.is_from_device === false
+                      ? "justify-start"
+                      : "justify-end"
+                      }`}
                   >
                     {/* Avatar for assistant (left) */}
                     {message.is_from_device === false && (
@@ -191,11 +190,10 @@ function MessagingUI() {
                       </div>
                     )}
                     <div
-                      className={`max-w-xs md:max-w-md p-3 rounded-xl ${
-                        message.is_from_device === false
-                          ? "bg-gray-200 text-gray-800 rounded-bl-none"
-                          : "bg-blue-500 text-white rounded-br-none"
-                      }`}
+                      className={`max-w-xs md:max-w-md p-3 rounded-xl ${message.is_from_device === false
+                        ? "bg-gray-200 text-gray-800 rounded-bl-none"
+                        : "bg-blue-500 text-white rounded-br-none"
+                        }`}
                     >
                       <p className="text-sm">{message.text}</p>
                     </div>

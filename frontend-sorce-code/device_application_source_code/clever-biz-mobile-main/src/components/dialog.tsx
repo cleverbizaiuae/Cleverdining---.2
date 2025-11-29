@@ -12,12 +12,14 @@ interface ModalFoodDetailProps extends ModalProps {
   isOpen: boolean;
   close: () => void;
   itemId?: number;
+  onAddToCart?: () => void;
 }
 
 export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   isOpen,
   close,
   itemId,
+  onAddToCart,
 }) => {
   const [item, setItem] = useState<any>(null);
   const [showVideo, setShowVideo] = useState(false);
@@ -88,9 +90,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
           <p className="text-xl text-icon-active text-wrap font-medium mt-4">
             {truncatedName ? (
-              <p className="text-xl md:text-2xl font-semibold truncate">
+              <span className="text-xl md:text-2xl font-semibold truncate">
                 {truncatedName}
-              </p>
+              </span>
             ) : (
               "Loading..."
             )}
@@ -113,6 +115,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                   addToCart(item);
                   toast.success("Added to cart!");
                   close();
+                  if (onAddToCart) onAddToCart();
                 }
               }}
             >
@@ -175,7 +178,11 @@ export const ModalCallConfirm: React.FC<ModalConfirm> = ({
   );
 };
 
-export const ModalCall: React.FC<ModalProps> = ({ isOpen, close }) => {
+interface ModalCallProps extends ModalProps {
+  onHangUp?: () => void;
+}
+
+export const ModalCall: React.FC<ModalCallProps> = ({ isOpen, close, onHangUp }) => {
   return (
     <Dialog
       open={isOpen}
@@ -210,7 +217,7 @@ export const ModalCall: React.FC<ModalProps> = ({ isOpen, close }) => {
                   />
                 </svg>
               </button>
-              <button onClick={close}>
+              <button onClick={onHangUp || close}>
                 <svg
                   width="51"
                   height="51"

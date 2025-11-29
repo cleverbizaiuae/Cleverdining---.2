@@ -8,8 +8,8 @@ import React, {
 
 type WebSocketContextType = {
   ws: WebSocket | null;
+  hasNewMessage: boolean;
   sendMessage: (message: string) => void;
-  closeConnection: () => void;
   setNewMessageFlag: (value: boolean) => void;
 };
 
@@ -25,23 +25,26 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children,
 }) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
+  const [hasNewMessage, setHasNewMessageState] = useState<boolean>(() => {
+    return localStorage.getItem("newMessage") === "true";
+  });
 
   // Function to set the newMessage flag
   const setNewMessageFlag = (value: boolean) => {
     localStorage.setItem("newMessage", value ? "true" : "false");
-    window.dispatchEvent(new Event("storage")); // Dispatch storage event for instant UI update
+    setHasNewMessageState(value);
   };
 
   const connect = () => {
-    const accessToken = localStorage.getItem("accessToken");
+    const accessToken = localStorage.getItem("accessToken") || "guest_token";
     const userInfo = localStorage.getItem("userInfo");
-    const device_id = userInfo
-      ? JSON.parse(userInfo).user?.restaurants[0].device_id
-      : null;
+    const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
+    const device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
+    const restaurant_id = parsedUserInfo?.user?.restaurants?.[0]?.id;
 
-    if (!device_id || !accessToken) return;
+    if (!device_id) return;
 
-    const wsUrl = `wss://abc.winaclaim.com/ws/chat/${device_id}/?token=${accessToken}`;
+    const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/chat/${device_id}/?token=${accessToken}&restaurant_id=${restaurant_id}`;
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -53,12 +56,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       if (data.message && typeof data.message === "string") {
         // Set the newMessage flag when a new message arrives
         setNewMessageFlag(true);
-        console.log("New message received, notification set to true");
       }
     };
 
     socket.onclose = () => {
-      console.log("WebSocket closed");
+      console.log("WebSocket disconnected");
     };
 
     setWs(socket);
@@ -66,26 +68,22 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
   const sendMessage = (message: string) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "message", message }));
-    }
-  };
-
-  const closeConnection = () => {
-    if (ws) {
-      ws.close();
+      ws.send(JSON.stringify({ message }));
     }
   };
 
   useEffect(() => {
     connect();
     return () => {
-      closeConnection();
+      if (ws) {
+        ws.close();
+      }
     };
   }, []);
 
   return (
     <WebSocketContext.Provider
-      value={{ ws, sendMessage, closeConnection, setNewMessageFlag }}
+      value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage }}
     >
       {children}
     </WebSocketContext.Provider>

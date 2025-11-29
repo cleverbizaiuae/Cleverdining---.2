@@ -35,22 +35,13 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-change-in-p
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG', default=False)
 
-ALLOWED_HOSTS = [
-    "193.160.119.200",
-    "localhost",
-    "127.0.0.1",
-    "clever-biz.netlify.app",
-    "clever-biz2.netlify.app",
-    "abc.winaclaim.com",
-    "officialcleverdining.netlify.app",
-    "cleverdining-2.onrender.com",
-    "cleverdining-backend.onrender.com",
-]
+ALLOWED_HOSTS = ["*"]
 
 # Add Render.com URL if available
 RENDER_EXTERNAL_HOSTNAME = env('RENDER_EXTERNAL_HOSTNAME', default=None)
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
 CSRF_TRUSTED_ORIGINS = [
     "https://abc.winaclaim.com",
     "https://clever-biz.netlify.app",
@@ -58,18 +49,31 @@ CSRF_TRUSTED_ORIGINS = [
     "https://officialcleverdining.netlify.app",
     "https://cleverdining-2.onrender.com",
     "https://cleverdining-backend.onrender.com",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:5177",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:5176",
+    "http://127.0.0.1:5177",
 ]
 
 # Add Render.com URL to CSRF trusted origins
 if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [
-    "https://abc.winaclaim.com",
-    "https://clever-biz.netlify.app",
-    "https://clever-biz2.netlify.app",
-    "https://officialcleverdining.netlify.app",
-]
+
+CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOWED_ORIGINS = [
+#     "https://abc.winaclaim.com",
+#     "https://clever-biz.netlify.app",
+#     "https://clever-biz2.netlify.app",
+#     "https://officialcleverdining.netlify.app",
+#     "http://localhost:5175",
+#     "http://localhost:5176",
+#     "http://localhost:5177",
+#     "http://127.0.0.1:5175",
+#     "http://127.0.0.1:5176",
+#     "http://127.0.0.1:5177",
+# ]
 
 # Allow credentials for authenticated requests
 CORS_ALLOW_CREDENTIALS = True
@@ -293,12 +297,15 @@ WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_USE_TLS = True
-EMAIL_PORT = 587
-EMAIL_HOST_USER = env("EMAIL", default='')
-EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default='')
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_USE_TLS = True
+# EMAIL_PORT = 587
+# EMAIL_HOST_USER = env("EMAIL", default='')
+# EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default='')
+
+# Use console backend for development to avoid SMTP errors
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

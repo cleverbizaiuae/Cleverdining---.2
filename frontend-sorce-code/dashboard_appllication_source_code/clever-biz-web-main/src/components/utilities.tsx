@@ -217,68 +217,55 @@ export const Header = () => {
   // console.log(newsocket, "new socket in header");
 
   useEffect(() => {
-    // Loop over chatData and create a WebSocket for each chat
-    chatData.forEach((chat) => {
-      if (!socketsRef.current[chat.id]) {
-        const ws = new WebSocket(
-          `wss://abc.winaclaim.com/ws/call/${chat.id}/?token=${jwt}`
-        );
-        setNewSocket(ws);
-        ws.onopen = () => {
-          console.log(`WebSocket connected for chat ${chat.id}`);
-        };
+    const restaurantId = userInfo?.restaurants?.[0]?.id;
+    if (restaurantId && jwt) {
+      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
+      const wsUrl = `${wsBaseUrl}/ws/calls/${restaurantId}/?token=${jwt}`;
 
-        ws.onmessage = (event) => {
-          console.log(`Message from chat ${chat.id}:`, event.data);
-          const data = JSON.parse(event.data);
-          if (data.action === "incoming_call") {
-            setIsCallingModal(true);
-            setResponse(data);
-          }
-          if (data.action === "call_ended") {
-            setIsCallingModal(false);
-          }
-          if (data.action === "call_accepted") {
+      const ws = new WebSocket(wsUrl);
+      setNewSocket(ws);
+
+      ws.onopen = () => {
+        console.log(`WebSocket connected for restaurant ${restaurantId}`);
+      };
+
+      ws.onmessage = (event) => {
+        console.log(`Message from restaurant ${restaurantId}:`, event.data);
+        const data = JSON.parse(event.data);
+        if (data.action === "incoming_call") {
+          setIsCallingModal(true);
+          setResponse(data);
+        }
+        if (data.action === "call_ended") {
+          setIsCallingModal(false);
+        }
+        if (data.action === "call_accepted") {
+          if (data.device_id) {
             window.location.href = `https://clever-biz.vercel.app?device=${encodeURIComponent(
               data?.device_id
             )}&user=${encodeURIComponent(
               userInfo?.restaurants[0]?.resturent_name
             )}&deviceId=${data.device_id}&receiver=${encodeURIComponent(
-              chat?.table_name
+              data?.table_id || ""
             )}&token=${encodeURIComponent(jwt)}`;
           }
-          if (data.action === "call_accepted") {
-            setTimeout(() => {
-              const endCallPayload = {
-                action: "end_call",
-                call_id: data?.call_id,
-                device_id: data?.device_id,
-              };
-              ws.send(JSON.stringify(endCallPayload));
-            }, 5000);
-          }
-        };
+        }
+      };
 
-        ws.onclose = () => {
-          console.log(`WebSocket closed for chat ${chat.id}`);
-        };
+      ws.onclose = () => {
+        console.log(`WebSocket closed for restaurant ${restaurantId}`);
+      };
 
-        ws.onerror = (error) => {
-          console.error(`WebSocket error for chat ${chat.id}:`, error);
-        };
+      ws.onerror = (error) => {
+        console.error(`WebSocket error for restaurant ${restaurantId}:`, error);
+      };
 
-        socketsRef.current[chat.id] = ws;
-      }
-    });
-
-    // Cleanup on unmount or chatData change
-    return () => {
-      Object.values(socketsRef.current).forEach((ws) => {
+      return () => {
         ws.close();
-      });
-      socketsRef.current = {};
-    };
-  }, [chatData, jwt, userInfo]);
+      };
+    }
+  }, [jwt, userInfo]);
 
   const handleEndCall = (callerId, deviceId) => {
     const data = {
@@ -286,7 +273,9 @@ export const Header = () => {
       call_id: callerId,
       device_id: deviceId,
     };
-    socketsRef.current[deviceId].send(JSON.stringify(data));
+    if (newsocket && newsocket.readyState === WebSocket.OPEN) {
+      newsocket.send(JSON.stringify(data));
+    }
     setIsCallingModal(false);
   };
 
@@ -296,7 +285,9 @@ export const Header = () => {
       call_id: callerId,
       device_id: deviceId,
     };
-    socketsRef.current[deviceId].send(JSON.stringify(data));
+    if (newsocket && newsocket.readyState === WebSocket.OPEN) {
+      newsocket.send(JSON.stringify(data));
+    }
     setIsCallingModal(false);
   };
   return (
@@ -585,9 +576,8 @@ export const Pagination: React.FC<PaginationProps> = ({
     <div className={`inline-flex gap-x-2 mt-2 xs:mt-0 ${className}`}>
       {/* Prev */}
       <button
-        className={`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${
-          !canGoPrev ? "opacity-50 cursor-not-allowed" : ""
-        }`}
+        className={`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${!canGoPrev ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         onClick={() => canGoPrev && onPageChange(page - 1)}
         disabled={!canGoPrev}
       >
@@ -620,9 +610,8 @@ export const Pagination: React.FC<PaginationProps> = ({
 
       {/* Next */}
       <button
-        className={`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${
-          !canGoNext ? "opacity-50 cursor-not-allowed" : ""
-        }`}
+        className={`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${!canGoNext ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         onClick={() => canGoNext && onPageChange(page + 1)}
         disabled={!canGoNext}
       >
@@ -877,7 +866,7 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
                     className="bg-dashboard/50 w-12 h-12 rounded-md"
                   />
                 </td>
-                <td className="p-4 text-primary-text truncate text-start">{item.name.substring(0,30) + '...'}</td>
+                <td className="p-4 text-primary-text truncate text-start">{item.name.substring(0, 30) + '...'}</td>
                 <td className="p-4 text-primary-text text-center">{item.category}</td>
                 <td className="p-4 text-primary-text text-center">{item.price}</td>
                 <td className="h-20 p-4 flex gap-x-4 items-center">
@@ -902,8 +891,8 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
                           ? "Available"
                           : "Unavailable"
                         : item.available
-                        ? "Available"
-                        : "Unavailable"
+                          ? "Available"
+                          : "Unavailable"
                     }
                     properties={contextProperties}
                     availableStatuses={contextStatuses}
@@ -1029,13 +1018,18 @@ export const ChatSection: React.FC = () => {
     const device_id = selectedChat.id;
     const restaurant_id = userInfo?.restaurants?.[0]?.id;
     const fetchMessages = async () => {
+      console.log("DEBUG: fetchMessages", { device_id, restaurant_id, userInfo });
       try {
         const response = await axiosInstance.get(
           `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`
         );
         setMessages(response.data || []);
-      } catch (error) {
-        toast.error("Failed to load previous messages.");
+      } catch (error: any) {
+        console.error("DEBUG: fetchMessages failed", error);
+        if (error.response) {
+          console.error("DEBUG: Error response", error.response.status, error.response.data);
+        }
+        toast.error(`Failed to load previous messages: ${error.message}`);
         setMessages([]);
       }
     };
@@ -1053,8 +1047,10 @@ export const ChatSection: React.FC = () => {
     if (socket.current) {
       socket.current.close();
     }
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     const ws = new WebSocket(
-      `wss://abc.winaclaim.com/ws/chat/${selectedChat.id}/?token=${accessToken}`
+      `${wsBaseUrl}/ws/chat/${selectedChat.id}/?token=${accessToken}`
     );
     socket.current = ws;
 
@@ -1104,8 +1100,10 @@ export const ChatSection: React.FC = () => {
       if (selectedChat?.id === id) return; // active has its own socket
       if (bgSocketsRef.current[id]) return; // already open
 
+      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
       const ws = new WebSocket(
-        `wss://abc.winaclaim.com/ws/chat/${id}/?token=${accessToken}`
+        `${wsBaseUrl}/ws/chat/${id}/?token=${accessToken}`
       );
       bgSocketsRef.current[id] = ws;
 
@@ -1169,8 +1167,10 @@ export const ChatSection: React.FC = () => {
     const user_id = selectedChat?.user_id;
     if (!selectedChat) return;
     const accessToken = localStorage.getItem("accessToken");
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     const socket = new WebSocket(
-      `wss://abc.winaclaim.com/ws/call/${device_id}/?token=${accessToken}`
+      `${wsBaseUrl}/ws/call/${device_id}/?token=${accessToken}`
     );
 
     socket.onopen = async () => {
@@ -1293,8 +1293,10 @@ export const ChatSection: React.FC = () => {
     if (!jwt && userInfo.role !== "owner") {
       return;
     }
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     const newSoket = new WebSocket(
-      `wss://abc.winaclaim.com/ws/call/${selectedChat?.id}/?token=${jwt}`
+      `${wsBaseUrl}/ws/call/${selectedChat?.id}/?token=${jwt}`
     );
     newSoket.onopen = () => {
       console.log("Socket Opened");

@@ -19,7 +19,7 @@ const ScreenOrders = () => {
         setLoading(true);
         setErr(null);
         // Try without the search filter if unsure it’s correct:
-        const res = await axiosInstance.get("/customer/uncomplete/orders/");
+        const res = await axiosInstance.get(`/customer/uncomplete/orders/?device_id=${device_id}`);
         const d = res?.data;
 
         // Handle multiple response shapes: array vs paginated object
@@ -42,11 +42,10 @@ const ScreenOrders = () => {
     };
     fetchOrders();
 
-    if (!accessToken) {
-      return;
-    }
+    const token = accessToken || "guest_token";
+    const WS_BASE_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
     const newSoket = new WebSocket(
-      `wss://abc.winaclaim.com/ws/order/${device_id}/?token=${accessToken}`
+      `${WS_BASE_URL}/ws/order/${device_id}/?token=${token}`
     );
 
     newSoket.onopen = () => {

@@ -105,21 +105,21 @@ export const ScreenRestaurantDevices = () => {
         {/* Stats Cards */}
         <div className="flex flex-col lg:flex-row gap-y-3 lg:gap-y-0 lg:gap-x-3">
           <DashboardCard
-            label="Total devices"
+            label="Total tables"
             data={deviceStats?.total_devices?.toString() || "0"}
             accentColor="#31BB24"
             gradientStart="#48E03A"
             gradientEnd="#161F42"
           />
           <DashboardCard
-            label="Active devices"
+            label="Active tables"
             data={deviceStats?.active_devices?.toString() || "0"}
             accentColor="#4F46E5"
             gradientStart="#4F46E5"
             gradientEnd="#161F42"
           />
           <DashboardCard
-            label="Hold devices"
+            label="Hold tables"
             data={deviceStats?.hold_devices?.toString() || "0"}
             accentColor="#FFB056"
             gradientStart="#FFB056"
@@ -130,10 +130,10 @@ export const ScreenRestaurantDevices = () => {
         {/* Header and search */}
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-y-2 md:gap-y-0 my-4">
           <h2 className="flex-1 text-2xl text-primary-text">
-            Registered Device List
+            Registered Table List
           </h2>
           <div className="flex-1 flex gap-x-4 justify-end">
-            <ButtonAdd label="Add Device" onClick={() => showDeviceModal()} />
+            <ButtonAdd label="Add Table" onClick={() => showDeviceModal()} />
             <TextSearchBox
               placeholder="Search by table name"
               value={devicesSearchQuery}

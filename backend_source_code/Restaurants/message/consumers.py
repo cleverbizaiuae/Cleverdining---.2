@@ -24,11 +24,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.device_id = self.scope['url_route']['kwargs']['device_id']
         self.user = self.scope['user']
         self.user_info = self.scope.get('user_info', {})
+        
+        # Get restaurant_id from user_info or query params
+        self.restaurant_id = self.user_info.get('restaurants_id')
+        if not self.restaurant_id:
+            from urllib.parse import parse_qs
+            query_string = self.scope['query_string'].decode()
+            query_params = parse_qs(query_string)
+            self.restaurant_id = query_params.get('restaurant_id', [None])[0]
 
-        self.restaurant_group_name = f"room_{self.device_id}_{self.user_info.get('restaurants_id')}"
+        self.restaurant_group_name = f"room_{self.device_id}_{self.restaurant_id}"
         print("jjdjdjdjjdjdjjd",self.restaurant_group_name)
 
-        if self.user and self.user.is_authenticated and (self.user.role in ["customer", "owner", "staff","chef"]):
+        if self.user and (self.user.is_authenticated or self.user.is_anonymous):
+            # For anonymous users (guests), we might want to restrict them to their device room only
+            # But for now, let's allow them to join the group to enable messaging
             await self.channel_layer.group_add(self.restaurant_group_name, self.channel_name)
             await self.accept()
         else:
@@ -48,8 +58,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         # Determine sender and receiver
-        if self.user.role == "customer":
-            receiver = await self._get_restaurant_owner(self.user_info.get('restaurants_id'))
+        if self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
+            receiver = await self._get_restaurant_owner(self.restaurant_id)
             is_from_device = True
         else:  # owner or staff
             receiver = await self._get_device_user(self.device_id)
@@ -62,7 +72,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             receiver=receiver,
             message=message,
             device_id=self.device_id,
-            restaurant_id=self.user_info.get('restaurants_id'),
+            restaurant_id=self.restaurant_id,
             is_from_device=is_from_device,
             room_name=self.restaurant_group_name
         )
@@ -71,9 +81,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({"error": "Message could not be saved. Device or Restaurant may not exist."}))
             return
 
-        # Broadcast the message
+        # Broadcast the message to the specific chat room
         await self.channel_layer.group_send(
             self.restaurant_group_name,
+            {
+                'type': 'chat_message',
+                'message': message,
+                'sender': sender.username,
+                'device_id' : self.device_id,
+                'is_from_device': is_from_device,
+                'timestamp': str(chat_message.timestamp),
+            }
+        )
+
+        # Broadcast the message to the general restaurant group (for notifications)
+        await self.channel_layer.group_send(
+            f"restaurant_{self.restaurant_id}",
             {
                 'type': 'chat_message',
                 'message': message,
@@ -100,6 +123,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Device.DoesNotExist:
             logger.warning(f"Device with ID {device_id} does not exist.")
             return None
+
+        # If sender is anonymous (guest), use the device's user
+        if sender.is_anonymous:
+            sender = device.user
 
         try:
             restaurant = Restaurant.objects.get(id=restaurant_id)
@@ -136,7 +163,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -158,7 +184,10 @@ class CallSignalConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        await self.end_existing_calls(self.user.id)
+        
+        # End existing calls if user is present
+        if self.user:
+            await self.end_existing_calls(self.user.id)
 
 
     async def receive(self, text_data=None, bytes_data=None):
@@ -490,6 +519,17 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
             "chefstaff_id": event["chefstaff_id"]
         }))
 
+    # --- Chat events (NEW) ---
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'chat_message',
+            'message': event['message'],
+            'sender': event['sender'],
+            'device_id': event['device_id'],
+            'is_from_device': event['is_from_device'],
+            'timestamp': event['timestamp'],
+        }))
+
 
 
 
@@ -499,7 +539,8 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
         self.user = self.scope["user"]
         self.restaurant_id = self.scope["url_route"]["kwargs"]["restaurant_id"]
 
-        if not self.user or not self.user.is_authenticated:
+        if not self.user or (not self.user.is_authenticated and not self.user.is_anonymous):
+            print(f"DEBUG: Connection rejected. User: {self.user}, Authenticated: {self.user.is_authenticated if self.user else 'N/A'}")
             await self.close()
             return
 
@@ -508,18 +549,20 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.restaurant_group, self.channel_name)
 
         # User-specific group for private messages
-        self.user_group = f"user_{self.user.id}"
-        await self.channel_layer.group_add(self.user_group, self.channel_name)
-
-        # End any stale calls for this user
-        await self.end_existing_calls(self.user.id)
+        if self.user and self.user.is_authenticated:
+            self.user_group = f"user_{self.user.id}"
+            await self.channel_layer.group_add(self.user_group, self.channel_name)
+            # End any stale calls for this user
+            await self.end_existing_calls(self.user.id)
 
         await self.accept()
 
     async def disconnect(self, close_code):
         # Leave groups
-        await self.channel_layer.group_discard(self.restaurant_group, self.channel_name)
-        await self.channel_layer.group_discard(self.user_group, self.channel_name)
+        if hasattr(self, "restaurant_group"):
+            await self.channel_layer.group_discard(self.restaurant_group, self.channel_name)
+        if hasattr(self, "user_group"):
+            await self.channel_layer.group_discard(self.user_group, self.channel_name)
         if hasattr(self, "call_group"):
             await self.channel_layer.group_discard(self.call_group, self.channel_name)
 
@@ -547,24 +590,35 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
             await self.send(json.dumps({"error": "Missing receiver_id"}))
             return
 
+        # Resolve caller_id (handle anonymous guests)
+        caller_id = self.user.id
+        if self.user.is_anonymous:
+            device_id = data.get("device_id")
+            device_user = await self._get_device_user(device_id)
+            if device_user:
+                caller_id = device_user.id
+            else:
+                await self.send(json.dumps({"error": "Device user not found for guest"}))
+                return
+
         # Busy checks
         if await self.is_user_busy(receiver_id):
             await self.send(json.dumps({"action": "receiver_busy", "receiver_id": receiver_id}))
             return
-        if await self.is_user_busy(self.user.id):
-            await self.send(json.dumps({"action": "caller_busy", "user_id": self.user.id}))
+        if await self.is_user_busy(caller_id):
+            await self.send(json.dumps({"action": "caller_busy", "user_id": caller_id}))
             return
 
         # Check if both users belong to the same restaurant
-        if not await self.check_same_restaurant(self.user.id, receiver_id):
+        if not await self.check_same_restaurant(caller_id, receiver_id):
             await self.send(json.dumps({"error": "Users must belong to the same restaurant"}))
             return
 
         # End existing calls for caller
-        await self.end_existing_calls(self.user.id)
+        await self.end_existing_calls(caller_id)
 
         # Create new call session
-        call_session = await self.create_call_session(self.user.id, receiver_id)
+        call_session = await self.create_call_session(caller_id, receiver_id, device_id)
         if not call_session:
             await self.send(json.dumps({"error": "Failed to create call session"}))
             return
@@ -581,7 +635,9 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
                 "message": json.dumps({
                     "action": "incoming_call",
                     "from": self.user.username,
-                    "call_id": call_session.id
+                    "call_id": call_session.id,
+                    "device_id": data.get("device_id"),
+                    "table_id": data.get("table_id")
                 })
             }
         )
@@ -591,6 +647,41 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
             "action": "call_started",
             "call_id": call_session.id
         }))
+
+        # --- NEW: Send "Incoming call" message to Chat ---
+        try:
+            # Get table name for the message
+            device = await database_sync_to_async(Device.objects.get)(id=data.get("device_id"))
+            table_name = device.table_name
+            
+            message_content = f"Incoming call from {table_name}"
+            
+            # Save message to DB
+            chat_message = await self._save_message(
+                sender=self.user,
+                receiver=await database_sync_to_async(User.objects.get)(id=receiver_id),
+                message=message_content,
+                device_id=data.get("device_id"),
+                restaurant_id=self.restaurant_id,
+                is_from_device=True,
+                room_name=f"room_{data.get('device_id')}_{self.restaurant_id}"
+            )
+
+            # Broadcast to Chat Group (so dashboard sees it)
+            chat_group_name = f"room_{data.get('device_id')}_{self.restaurant_id}"
+            await self.channel_layer.group_send(
+                chat_group_name,
+                {
+                    'type': 'chat_message',
+                    'message': message_content,
+                    'sender': self.user.username,
+                    'device_id': data.get("device_id"),
+                    'is_from_device': True,
+                    'timestamp': str(chat_message.timestamp) if chat_message else str(timezone.now()),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to send call alert message: {e}")
 
     # -------------------------------
     # Accept Call
@@ -621,8 +712,12 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
     async def handle_end_call(self, data):
         call_id = data.get("call_id")
         call_session = await self.get_call_session(call_id)
+        
         if call_session and call_session.is_active:
+            receiver_id = await database_sync_to_async(lambda: call_session.receiver.id)()
             await self.end_call_session(call_session)
+            
+            # Broadcast to call group (if established)
             await self.channel_layer.group_send(
                 f"call_{call_id}",
                 {
@@ -633,16 +728,41 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
                     })
                 }
             )
+            
+            # Also broadcast to receiver's user group (in case they haven't answered yet)
+            if receiver_id:
+                await self.channel_layer.group_send(
+                    f"user_{receiver_id}",
+                    {
+                        "type": "call_message",
+                        "message": json.dumps({
+                            "action": "call_ended",
+                            "by": self.user.username,
+                            "call_id": call_id
+                        })
+                    }
+                )
 
     # -------------------------------
     # Database Helpers
     # -------------------------------
     @database_sync_to_async
-    def create_call_session(self, caller_id, receiver_id):
+    def _get_device_user(self, device_id):
+        try:
+            device = Device.objects.get(id=device_id)
+            return device.user
+        except Device.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def create_call_session(self, caller_id, receiver_id, device_id=None):
         try:
             caller = User.objects.get(id=caller_id)
             receiver = User.objects.get(id=receiver_id)
-            return CallSession.objects.create(caller=caller, receiver=receiver, is_active=True)
+            device = None
+            if device_id:
+                device = Device.objects.get(id=device_id)
+            return CallSession.objects.create(caller=caller, receiver=receiver, device=device, is_active=True)
         except Exception:
             return None
 
@@ -695,6 +815,28 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
     # -------------------------------
     async def call_message(self, event):
         await self.send(text_data=event["message"])
+
+    # -------------------------------
+    # Helper Methods
+    # -------------------------------
+    @database_sync_to_async
+    def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device, room_name):
+        try:
+            device = Device.objects.get(id=device_id)
+            restaurant = Restaurant.objects.get(id=restaurant_id)
+            return ChatMessage.objects.create(
+                sender=sender,
+                receiver=receiver,
+                message=message,
+                device=device,
+                restaurant=restaurant,
+                is_from_device=is_from_device,
+                room_name=room_name,
+                new_message=True
+            )
+        except Exception as e:
+            logger.error(f"Error saving message: {e}")
+            return None
 
 
 

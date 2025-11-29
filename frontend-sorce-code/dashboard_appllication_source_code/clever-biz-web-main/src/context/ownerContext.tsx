@@ -386,8 +386,13 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (response.type == "reservation_created") {
       fetchReservations();
+    } else if (
+      response.type === "order_created" ||
+      response.type === "order_updated"
+    ) {
+      fetchOrders();
     }
-  }, [fetchReservations, response]);
+  }, [fetchReservations, fetchOrders, response]);
 
   const fetchReservationStatusReport = useCallback(async () => {
     // Don't fetch if still loading or if userRole is null

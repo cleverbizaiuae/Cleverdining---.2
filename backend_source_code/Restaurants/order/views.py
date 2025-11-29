@@ -1,6 +1,7 @@
 from rest_framework import generics, status,filters
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import generics, status,filters, permissions
 from rest_framework.views import APIView
 from .pagination import TenPerPagePagination
 from .models import Order
@@ -26,10 +27,21 @@ from calendar import monthrange
 
 class OrderCreateAPIView(generics.CreateAPIView):
     serializer_class = OrderCreateSerializer
-    permission_classes = [IsAuthenticated,IsCustomerRole]
+    permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
-        device = self.request.user.devices.first()  # Assuming 1 device per user
+        if self.request.user.is_authenticated:
+            device = self.request.user.devices.first()
+        else:
+            # For guest users, get device_id from request data
+            from device.models import Device
+            device_id = self.request.data.get('device')
+            try:
+                device = Device.objects.get(id=device_id)
+            except Device.DoesNotExist:
+                # Fallback or error handling
+                raise ValidationError("Device not found for guest order.")
+
         order = serializer.save(device=device, restaurant=device.restaurant) 
         data = OrderDetailSerializer(order).data
         async_to_sync(channel_layer.group_send)(
@@ -72,17 +84,26 @@ class OrderCancelAPIView(APIView):
 
 class MyOrdersAPIView(generics.ListAPIView):
     serializer_class = OrderDetailSerializer
-    permission_classes = [IsAuthenticated,IsCustomerRole]
+    permission_classes = [permissions.AllowAny]
     pagination_class = TenPerPagePagination
     filter_backends = [filters.SearchFilter]
     search_fields = ['id']
 
     def get_queryset(self):
         user = self.request.user
-        return Order.objects.filter(
-            device__user=user,
-            status__in=['pending', 'preparing', 'served' , 'paid']
-        ).order_by('-created_time')
+        if user.is_authenticated:
+            return Order.objects.filter(
+                device__user=user,
+                status__in=['pending', 'preparing', 'served' , 'paid']
+            ).order_by('-created_time')
+        else:
+            device_id = self.request.query_params.get('device_id')
+            if device_id:
+                return Order.objects.filter(
+                    device_id=device_id,
+                    status__in=['pending', 'preparing', 'served' , 'paid']
+                ).order_by('-created_time')
+            return Order.objects.none()
 
 
 

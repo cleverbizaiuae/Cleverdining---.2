@@ -1249,7 +1249,8 @@ export const AddSubCategoryModal: React.FC<ModalProps> = ({
 export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
   const [loading, setLoading] = useState(false);
   const [tableName, setTableName] = useState("");
-  const { fetchAllDevices, devicesSearchQuery, devicesCurrentPage } =
+  const [region, setRegion] = useState("");
+  const { fetchAllDevices, fetchDeviceStats, devicesSearchQuery, devicesCurrentPage } =
     useOwner();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1259,20 +1260,26 @@ export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
     try {
       const response = await axiosInstance.post("/owners/devices/", {
         table_name: tableName,
+        region: region || "Primary", // Default to "Primary" if empty
       });
 
       console.log("Response:", response.data);
-      toast.success("Device added successfully!");
+      toast.success("Table added successfully!");
 
       // Refresh the devices list with current page and search query
-      await fetchAllDevices(devicesCurrentPage, devicesSearchQuery);
+      // Refresh the devices list with current page and search query
+      await Promise.all([
+        fetchAllDevices(devicesCurrentPage, devicesSearchQuery),
+        fetchDeviceStats(),
+      ]);
 
       // Reset form and close modal
       setTableName("");
+      setRegion("");
       close();
     } catch (error) {
-      console.error("Error adding device:", error);
-      toast.error("Failed to add device.");
+      console.error("Error adding table:", error);
+      toast.error("Failed to add table.");
     } finally {
       setLoading(false);
     }
@@ -1296,7 +1303,7 @@ export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
               as="h3"
               className="text-base/7 font-medium text-white mb-8"
             >
-              Add Device
+              Add Table
             </DialogTitle>
             <form onSubmit={handleSubmit} className="flex flex-col gap-y-4">
               <LabelInput
@@ -1309,6 +1316,19 @@ export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
                   value: tableName,
                   onChange: (e) => setTableName(e.target.value),
                   required: true,
+                  placeholder: "e.g. Table 1",
+                }}
+              />
+              <LabelInput
+                label="Region (Optional)"
+                labelProps={{
+                  className: "text-sm",
+                }}
+                inputProps={{
+                  className: "bg-[#201C3F] shadow-md text-sm text-white",
+                  value: region,
+                  onChange: (e) => setRegion(e.target.value),
+                  placeholder: "e.g. Patio (Default: Primary)",
                 }}
               />
 

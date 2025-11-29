@@ -43,12 +43,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
     queryset = Device.objects.all()
     filter_backends = [filters.SearchFilter]
     search_fields = ['table_name'] 
+    ordering = ['-id']
     pagination_class = DevicePagination
 
     def get_queryset(self):
         # Return devices belonging to the requesting owner's restaurant
         user = self.request.user
-        return Device.objects.filter(restaurant__owner=user)
+        return Device.objects.filter(restaurant__owner=user).order_by('-id')
 
     def perform_create(self, serializer):
         owner = self.request.user

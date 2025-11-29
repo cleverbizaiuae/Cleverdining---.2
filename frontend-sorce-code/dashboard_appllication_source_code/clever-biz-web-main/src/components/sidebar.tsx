@@ -28,6 +28,8 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
+  const { unreadCount } = useContext(WebSocketContext) || {};
+
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/staff" },
     {
@@ -60,7 +62,7 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
                   end={true}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-4 px-6 py-3 rounded-lg text-gray-300 hover:bg-chat-sender/30 hover:text-white transition-colors",
+                      "flex items-center gap-4 px-6 py-3 rounded-lg text-gray-300 hover:bg-chat-sender/30 hover:text-white transition-colors relative",
                       {
                         "bg-dashboard": isActive,
                       }
@@ -69,6 +71,11 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.title === "Messages" && unreadCount > 0 && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}
@@ -101,17 +108,15 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile sidebar with overlay */}
       <div
-        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${
-          isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
         onClick={toggleSidebar}
       />
 
       {/* Sidebar container */}
       <div
-        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          isDrawerOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:relative lg:z-10`}
+        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isDrawerOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:relative lg:z-10`}
       >
         <SidebarContent />
       </div>
@@ -196,17 +201,15 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile sidebar with overlay */}
       <div
-        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${
-          isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
         onClick={toggleSidebar}
       />
 
       {/* Sidebar container */}
       <div
-        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          isDrawerOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:relative lg:z-10`}
+        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isDrawerOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:relative lg:z-10`}
       >
         <SidebarContent />
       </div>
@@ -296,17 +299,15 @@ export const AdminSidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile sidebar with overlay */}
       <div
-        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${
-          isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
         onClick={toggleSidebar}
       />
 
       {/* Sidebar container */}
       <div
-        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          isDrawerOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:relative lg:z-10`}
+        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isDrawerOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:relative lg:z-10`}
       >
         <SidebarContent />
       </div>
@@ -321,6 +322,8 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
+  const { unreadCount } = useContext(WebSocketContext) || {};
+
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/restaurant" },
     {
@@ -339,7 +342,7 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
       icon: <IconManagement />,
       path: "/restaurant/management",
     },
-    { title: "Devices", icon: <IconDevice />, path: "/restaurant/devices" },
+    { title: "Tables", icon: <IconDevice />, path: "/restaurant/devices" },
     { title: "Reviews", icon: <IconReviews />, path: "/restaurant/reviews" },
   ];
   const navigate = useNavigate();
@@ -368,7 +371,7 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
                   end={true}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-4 px-6 py-3 rounded-lg text-gray-300 hover:bg-chat-sender/30 hover:text-white transition-colors",
+                      "flex items-center gap-4 px-6 py-3 rounded-lg text-gray-300 hover:bg-chat-sender/30 hover:text-white transition-colors relative",
                       {
                         "bg-dashboard": isActive,
                       }
@@ -377,6 +380,11 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.title === "Messages" && unreadCount > 0 && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}
@@ -409,17 +417,15 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile sidebar with overlay */}
       <div
-        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${
-          isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={`fixed inset-0 bg-black/20 bg-opacity-50 z-20 transition-opacity duration-300 lg:hidden ${isDrawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
         onClick={toggleSidebar}
       />
 
       {/* Sidebar container */}
       <div
-        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          isDrawerOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:relative lg:z-10`}
+        className={`fixed top-0 left-0 h-full bg-gray-900 text-white z-20 w-64 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isDrawerOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:relative lg:z-10`}
       >
         <SidebarContent />
       </div>

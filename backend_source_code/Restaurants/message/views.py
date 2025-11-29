@@ -12,7 +12,7 @@ from accounts.permissions import IsAllowedRole
 class ChatMessageViewSet(ModelViewSet):
     queryset = ChatMessage.objects.all()
     serializer_class = ChatMessageSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAllowedRole]
+    permission_classes = [permissions.AllowAny]
     pagination_class = None
 
     def get_queryset(self):
@@ -20,9 +20,13 @@ class ChatMessageViewSet(ModelViewSet):
         device_id = self.request.query_params.get('device_id')
         restaurant_id = self.request.query_params.get('restaurant_id')
 
-        if self.action == 'list' and device_id and restaurant_id:
-            room_name = f"room_{device_id}_{restaurant_id}"
-            queryset = queryset.filter(room_name=room_name, new_message=True)
+        if self.action == 'list':
+            if device_id and restaurant_id:
+                room_name = f"room_{device_id}_{restaurant_id}"
+                return queryset.filter(room_name=room_name)
+            else:
+                return queryset.none()
+        
         return queryset
     def perform_update(self, serializer):
         if self.get_object().sender != self.request.user:
@@ -57,13 +61,13 @@ class ChatMessageViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         user = request.user
-        try:
-            unread_obj = UnreadCount.objects.get(user=user)
-            count = unread_obj.unread_count
-        except UnreadCount.DoesNotExist:
-            # Calculate from messages if not found
-            count = ChatMessage.objects.filter(receiver=user, is_read=False).count()
-            # Create record
-            UnreadCount.objects.create(user=user, user_role=user.role, unread_count=count)
+        # Calculate directly from messages to ensure accuracy
+        count = ChatMessage.objects.filter(receiver=user, is_read=False).count()
+        
+        # Update or create the UnreadCount record for consistency if needed elsewhere
+        UnreadCount.objects.update_or_create(
+            user=user,
+            defaults={'unread_count': count, 'user_role': user.role}
+        )
             
         return Response({'unread_count': count})

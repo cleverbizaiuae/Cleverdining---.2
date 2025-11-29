@@ -283,15 +283,22 @@ class CustomerItemViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         # Allow anonymous access for customer-facing endpoint
+        if self.action == 'retrieve':
+            return Item.objects.all()
+
         # Return items from first restaurant for anonymous users
         if self.request.user.is_anonymous:
+            restaurant_id = self.request.query_params.get('restaurant_id')
+            if restaurant_id:
+                return Item.objects.filter(restaurant_id=restaurant_id)
+            
             first_restaurant = Restaurant.objects.first()
             if first_restaurant:
                 return Item.objects.filter(restaurant=first_restaurant)
             return Item.objects.none()
         
         restaurant_ids = self.request.user.devices.values_list('restaurant_id', flat=True)
-        print("Customer's restaurant IDs:", list(restaurant_ids))
+        # print("Customer's restaurant IDs:", list(restaurant_ids))
         val=list(restaurant_ids)
         return Item.objects.filter(restaurant_id__in=val)
 

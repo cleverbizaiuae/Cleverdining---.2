@@ -18,8 +18,8 @@ from message.middleware import JWTAuthMiddleware, ProtocolAcceptMiddleware
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
     "websocket": ProtocolAcceptMiddleware(
-        JWTAuthMiddleware(
-            AuthMiddlewareStack(
+        AuthMiddlewareStack(
+            JWTAuthMiddleware(
                 URLRouter(routing.websocket_urlpatterns)
             )
         )

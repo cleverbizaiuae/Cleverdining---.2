@@ -122,6 +122,10 @@ class CustomerCategoryListView(generics.ListAPIView):
         # Allow anonymous access for customer-facing endpoint
         # Return categories from first restaurant for anonymous users
         if user.is_anonymous:
+            restaurant_id = self.request.query_params.get('restaurant_id')
+            if restaurant_id:
+                return Category.objects.filter(restaurant_id=restaurant_id)
+
             first_restaurant = Restaurant.objects.first()
             if first_restaurant:
                 return Category.objects.filter(restaurant=first_restaurant)

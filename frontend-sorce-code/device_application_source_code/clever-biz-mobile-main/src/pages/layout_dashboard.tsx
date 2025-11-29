@@ -11,7 +11,7 @@ import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { UtensilsCrossed } from "lucide-react";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useNavigate } from "react-router";
+import { Outlet, useNavigate, useLocation } from "react-router";
 import { CartProvider } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
@@ -20,6 +20,8 @@ import { DashboardLeftSidebar } from "./dashboard/dashboard-left-sidebar";
 import { FoodItemTypes, FoodItems } from "./dashboard/food-items";
 
 const LayoutDashboard = () => {
+  const location = useLocation();
+  const isSubRoute = location.pathname !== "/dashboard";
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -43,28 +45,29 @@ const LayoutDashboard = () => {
   // Check localStorage for newMessage flag when component mounts
   useEffect(() => {
     const newMessage = localStorage.getItem("newMessage");
-    setHasNewMessage(newMessage === "true"); // Show the green dot if newMessage is "true"
-  }, []); // Run only once when component mounts
-
-  // Listen for changes to the newMessage flag in localStorage
-  useEffect(() => {
+    if (newMessage === "true") {
+      setHasNewMessage(true);
+    }
+    // Listen for changes to the newMessage flag in localStorage
     const handleStorageChange = () => {
       const newMessage = localStorage.getItem("newMessage");
-      setHasNewMessage(newMessage === "true");
+      if (newMessage === "true") {
+        setHasNewMessage(true);
+      } else {
+        setHasNewMessage(false);
+      }
     };
-
     window.addEventListener("storage", handleStorageChange);
-
     return () => {
       window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
   const handleMessageClick = () => {
+    setHasNewMessage(false);
     // When clicked, clear the newMessage flag from localStorage
     localStorage.setItem("newMessage", "false");
-    setHasNewMessage(false); // Immediately update the state to hide the green dot
-    setNewMessageFlag(false); // Update the global WebSocket context as well
+    navigate("/dashboard/message");
   };
 
   const [items, setItems] = useState<FoodItemTypes[]>([]);
@@ -72,9 +75,47 @@ const LayoutDashboard = () => {
   const searchTimeout = useRef<any>(null);
   const [tableName, setTableName] = useState("");
 
+  const [userInfo, setUserInfo] = useState<any>(null);
+  const [restaurantId, setRestaurantId] = useState<number | null>(null); // Added missing state variable
+
+  useEffect(() => {
+    const fetchUserInfo = () => {
+      try {
+        const storedUserInfo = localStorage.getItem("userInfo");
+        if (storedUserInfo) {
+          setUserInfo(JSON.parse(storedUserInfo));
+        }
+      } catch (error) {
+        console.error("Failed to parse user info:", error);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  useEffect(() => {
+    const fetchRestaurantId = () => {
+      const userInfo = localStorage.getItem("userInfo");
+      if (userInfo) {
+        const parsedUserInfo = JSON.parse(userInfo);
+        if (
+          parsedUserInfo.user &&
+          parsedUserInfo.user.restaurants &&
+          parsedUserInfo.user.restaurants.length > 0
+        ) {
+          setRestaurantId(parsedUserInfo.user.restaurants[0].id);
+        }
+      }
+    };
+    fetchRestaurantId();
+  }, []);
+
   const fetchCategories = async () => {
     try {
-      const response = await axiosInstance.get("/customer/categories/");
+      const userInfo = localStorage.getItem("userInfo");
+      const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      const url = restaurantId ? `/customer/categories/?restaurant_id=${restaurantId}` : "/customer/categories/";
+      const response = await axiosInstance.get(url);
       setCategories(response.data || []);
     } catch (error) {
       console.error("Failed to fetch categories", error);
@@ -96,11 +137,17 @@ const LayoutDashboard = () => {
       let url = "/customer/items/";
       const params = [];
 
+      const userInfo = localStorage.getItem("userInfo");
+      const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      if (restaurantId) {
+        params.push(`restaurant_id=${restaurantId}`);
+      }
+
       // If subcategory is selected, filter by subcategory
       if (selectedSubCategory !== null) {
         const subCat = categories.find(c => c.id === selectedSubCategory);
         if (subCat) {
-          params.push(`category=${subCat.id}`);
+          params.push(`sub_category=${subCat.id}`);
         }
       } else if (selectedCategory !== null && categories[selectedCategory]) {
         // Otherwise filter by main category
@@ -141,12 +188,22 @@ const LayoutDashboard = () => {
   }, [search, selectedCategory, selectedSubCategory, categories, NewUpdate]);
 
   useEffect(() => {
-    // Log userInfo from localStorage
-    const userInfo = localStorage.getItem("userInfo");
-    if (userInfo) {
-      setTableName(JSON.parse(userInfo)?.user?.restaurants[0]?.table_name);
+    const params = new URLSearchParams(location.search);
+    const urlTableName = params.get("table_name");
+
+    if (urlTableName) {
+      setTableName(urlTableName);
+    } else {
+      const userInfo = localStorage.getItem("userInfo");
+      if (userInfo) {
+        try {
+          setTableName(JSON.parse(userInfo)?.user?.restaurants[0]?.table_name);
+        } catch (e) {
+          console.error("Error parsing userInfo", e);
+        }
+      }
     }
-  }, []);
+  }, [location.search]);
 
   const showFood = (id: number) => {
     setSelectedItemId(id);
@@ -169,17 +226,17 @@ const LayoutDashboard = () => {
   const [response, setResponse] = useState<any>(null);
   const jwt = localStorage.getItem("accessToken");
   const [idCallingModal, setIsCallingModal] = useState(false);
-  const userInfo = localStorage.getItem("userInfo");
+  const storedUserInfo = localStorage.getItem("userInfo");
 
   useEffect(() => {
-    if (!jwt || !userInfo) {
+    if (!jwt || !storedUserInfo) {
       return;
     }
     // Use environment variable or fallback to production WebSocket URL
-    const WS_BASE_URL = import.meta.env.VITE_WS_URL || "wss://cleverdining-2.onrender.com";
+    const WS_BASE_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
+    const restaurantId = JSON.parse(storedUserInfo as string).user?.restaurants[0]?.id;
     const newSoket = new WebSocket(
-      `${WS_BASE_URL}/ws/call/${JSON.parse(userInfo as string).user?.restaurants[0].device_id
-      }/?token=${jwt}`
+      `${WS_BASE_URL}/ws/calls/${restaurantId}/?token=${jwt}`
     );
     newSoket.onopen = () => {
       console.log("Socket Opened");
@@ -198,7 +255,7 @@ const LayoutDashboard = () => {
         window.location.href = `https://clever-biz.vercel.app?device=${encodeURIComponent(
           data?.device_id
         )}&user=${encodeURIComponent(
-          userInfo ? JSON.parse(userInfo).user?.restaurants[0]?.table_name : ""
+          storedUserInfo ? JSON.parse(storedUserInfo).user?.restaurants[0]?.table_name : ""
         )}&deviceId=${encodeURIComponent("A1")}&receiver=${encodeURIComponent(
           "Hyatt Benjamin"
         )}&token=${encodeURIComponent(jwt)}`;
@@ -212,6 +269,10 @@ const LayoutDashboard = () => {
           };
           newSoket.send(JSON.stringify(data));
         }, 5000);
+      }
+      if (data.action === "call_started") {
+        // Store call_id when call starts
+        setResponse((prev: any) => ({ ...prev, call_id: data.call_id }));
       }
     };
 
@@ -228,7 +289,7 @@ const LayoutDashboard = () => {
     return () => {
       newSoket.close();
     };
-  }, [jwt, userInfo]);
+  }, [jwt, storedUserInfo]);
 
   const handleEndCall = (callerId: string, deviceId: string) => {
     const data = {
@@ -238,6 +299,21 @@ const LayoutDashboard = () => {
     };
     newsocket!.send(JSON.stringify(data));
     setIsCallingModal(false);
+  };
+
+  const handleHangUp = () => {
+    if (response?.call_id) {
+      const userObj = storedUserInfo ? JSON.parse(storedUserInfo) : null;
+      const deviceId = userObj?.user?.restaurants[0]?.device_id;
+
+      const data = {
+        action: "end_call",
+        call_id: response.call_id,
+        device_id: deviceId,
+      };
+      newsocket!.send(JSON.stringify(data));
+    }
+    setCallOpen(false);
   };
 
   const handleAnswerCall = (callerId: string, deviceId: string) => {
@@ -251,12 +327,12 @@ const LayoutDashboard = () => {
   };
 
   const confirmToCall = (receiver_id: any) => {
+    const userObj = storedUserInfo ? JSON.parse(storedUserInfo) : null;
     const data = {
       action: "start_call",
       receiver_id: receiver_id,
-      device_id: userInfo
-        ? JSON.parse(userInfo).user?.restaurants[0]?.device_id
-        : undefined,
+      device_id: userObj?.user?.restaurants[0]?.device_id,
+      table_id: userObj?.user?.restaurants[0]?.table_name, // Passing table_name as table_id for display
     };
     newsocket!.send(JSON.stringify(data));
     setIsCallingModal(true);
@@ -285,7 +361,7 @@ const LayoutDashboard = () => {
           />
 
           {/* Food item content */}
-          <main className="flex flex-row mt-28 ">
+          <main className={cn("flex flex-row mt-28", isSubRoute && "hidden lg:flex")}>
             <div className="basis-[10%]">{/* VOID */}</div>
             {/* Main Content section */}
             <div className="basis-[90%] lg:basis-[60%] flex flex-col overflow-x-hidden">
@@ -394,7 +470,7 @@ const LayoutDashboard = () => {
               </div>
             </div>
           </main>
-          <div className="fixed top-0 right-0 w-[30%] h-full rounded-l-xl bg-sidebar shadow-md p-4 z-20 hidden lg:block">
+          <div className={cn("fixed top-0 right-0 h-full rounded-l-xl bg-sidebar shadow-md p-4 z-20", isSubRoute ? "w-full lg:w-[30%] block" : "w-[30%] hidden lg:block")}>
             <Outlet />
           </div>
         </div>
@@ -410,6 +486,10 @@ const LayoutDashboard = () => {
         isOpen={isDetailOpen}
         close={() => setDetailOpen(false)}
         itemId={selectedItemId ?? undefined}
+        onAddToCart={() => {
+          setIsMobileMenuOpen(true);
+          navigate("/dashboard/cart");
+        }}
       />
       {/* Call modal */}
       <ModalCallConfirm
@@ -424,7 +504,7 @@ const LayoutDashboard = () => {
       />
       {idCallingModal && (
         <CallerModal
-          email={JSON.parse(userInfo as string).user.username}
+          email={JSON.parse(storedUserInfo as string).user.username}
           handleEndCall={handleEndCall}
           handleAnswerCall={handleAnswerCall}
           response={response}
@@ -436,6 +516,7 @@ const LayoutDashboard = () => {
         close={() => {
           setCallOpen(false);
         }}
+        onHangUp={handleHangUp}
       />
     </CartProvider>
   );

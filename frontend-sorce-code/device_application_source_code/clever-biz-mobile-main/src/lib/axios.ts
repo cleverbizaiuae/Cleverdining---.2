@@ -7,7 +7,9 @@ const TOKENS = {
 };
 
 // Use environment variable or fallback to production URL
+// Use environment variable or fallback to production URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || "https://cleverdining-2.onrender.com/";
+// const API_BASE_URL = "http://localhost:8000";
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -18,7 +20,7 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKENS.ACCESS_TOKEN);
-  if (token) {
+  if (token && token !== "guest_token") {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -33,15 +35,15 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-        try {
-          const refreshToken = localStorage.getItem(TOKENS.REFRESH_TOKEN);
-          if (refreshToken) {
-            const response = await axios.post(
-              `${API_BASE_URL}token/refresh/`,
-              {
-                refresh: refreshToken,
-              }
-            );
+      try {
+        const refreshToken = localStorage.getItem(TOKENS.REFRESH_TOKEN);
+        if (refreshToken) {
+          const response = await axios.post(
+            `${API_BASE_URL}token/refresh/`,
+            {
+              refresh: refreshToken,
+            }
+          );
 
           const { access } = response.data;
           localStorage.setItem("accessToken", access);

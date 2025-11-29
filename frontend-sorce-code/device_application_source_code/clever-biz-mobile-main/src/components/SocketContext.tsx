@@ -31,9 +31,9 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
 
   const [ws, setWs] = useState<WebSocket | null>(null); // Type WebSocket
   const [messages, setMessages] = useState<Message[]>([]); // Type messages as an array of Message objects
-  
+
   // Use environment variable or fallback to production WebSocket URL
-  const WS_BASE_URL = import.meta.env.VITE_WS_URL || "wss://cleverdining-2.onrender.com";
+  const WS_BASE_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
   const wsUrl = `${WS_BASE_URL}/ws/alldatalive/${id}/?token=${accessToken}`;
   const [response, setResponse] = useState<Message | {}>({}); // Type response as Message or an empty object
 
