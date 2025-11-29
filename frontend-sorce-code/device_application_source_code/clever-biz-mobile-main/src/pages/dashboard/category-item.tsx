@@ -35,7 +35,17 @@ export const CategoryItem = ({
     >
       <div className="h-16 w-16 rounded-xl overflow-hidden">
         <img
-          src={cat.image || "https://placehold.co/100x100?text=No+Image"}
+          src={(() => {
+            if (!cat.image) return "https://placehold.co/100x100?text=No+Image";
+            let url = cat.image;
+            // Fix double media path
+            url = url.replace("/media/media/", "/media/");
+            // Force HTTPS
+            if (url.startsWith("http://")) {
+              url = url.replace("http://", "https://");
+            }
+            return url;
+          })()}
           alt={cat.Category_name}
           className="object-cover w-full h-full"
           onError={(e) => {

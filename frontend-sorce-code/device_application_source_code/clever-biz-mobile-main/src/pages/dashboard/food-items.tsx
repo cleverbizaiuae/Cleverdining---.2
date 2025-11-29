@@ -32,7 +32,17 @@ export const FoodItems = ({ item, showFood }: Props) => {
         >
           <div className="w-full h-[200px] rounded-lg overflow-hidden flex justify-center items-center bg-[#f9f9f9]">
             <img
-              src={item.image1 || "https://placehold.co/200x200?text=No+Image"}
+              src={(() => {
+                if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
+                let url = item.image1;
+                // Fix double media path
+                url = url.replace("/media/media/", "/media/");
+                // Force HTTPS
+                if (url.startsWith("http://")) {
+                  url = url.replace("http://", "https://");
+                }
+                return url;
+              })()}
               alt={item.item_name}
               className="object-cover w-full h-full transition-transform duration-500 hover:scale-110"
               onError={(e) => {
