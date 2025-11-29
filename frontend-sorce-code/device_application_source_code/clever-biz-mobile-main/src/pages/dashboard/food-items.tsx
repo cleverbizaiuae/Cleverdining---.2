@@ -12,6 +12,7 @@ export type FoodItemTypes = {
   availability: boolean;
   video: string;
   restaurant_name: string;
+  sub_category?: number;
 };
 
 type Props = {

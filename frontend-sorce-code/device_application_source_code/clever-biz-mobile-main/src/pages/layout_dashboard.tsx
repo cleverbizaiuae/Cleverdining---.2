@@ -23,7 +23,7 @@ const LayoutDashboard = () => {
   const location = useLocation();
   const isSubRoute = location.pathname !== "/dashboard";
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null);
+  // const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null); // Removed
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [categories, setCategories] = useState<CategoryItemType[]>([]);
@@ -194,13 +194,9 @@ const LayoutDashboard = () => {
       }
 
       // If subcategory is selected, filter by subcategory
-      if (selectedSubCategory !== null) {
-        const subCat = categories.find(c => c.id === selectedSubCategory);
-        if (subCat) {
-          params.push(`sub_category=${subCat.id}`);
-        }
-      } else if (selectedCategory !== null && categories[selectedCategory]) {
-        // Otherwise filter by main category
+      // REMOVED: We now fetch all items for the category and filter on the frontend for display
+      if (selectedCategory !== null && categories[selectedCategory]) {
+        // Filter by main category
         params.push(`category=${categories[selectedCategory].id}`);
       }
 
@@ -237,7 +233,7 @@ const LayoutDashboard = () => {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [search, selectedCategory, selectedSubCategory, categories, NewUpdate]);
+  }, [search, selectedCategory, categories, NewUpdate]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -423,7 +419,7 @@ const LayoutDashboard = () => {
                 <div
                   onClick={() => {
                     setSelectedCategory(null);
-                    setSelectedSubCategory(null);
+                    // setSelectedSubCategory(null); // Removed
                   }}
                   className={cn(
                     "flex-shrink-0 truncate h-40 w-38 bg-sidebar flex flex-col gap-y-4 items-center justify-center rounded-lg shadow-sm py-4 select-none cursor-pointer border",
@@ -447,68 +443,70 @@ const LayoutDashboard = () => {
                     selectedCategory={selectedCategory}
                     setSelectedCategory={(idx) => {
                       setSelectedCategory(idx);
-                      setSelectedSubCategory(null);
+                      // setSelectedSubCategory(null); // Removed
                     }}
                   />
                 ))}
               </div>
 
-              {/* Subcategory Row - Show when main category is selected */}
-              {selectedCategory !== null && categories[selectedCategory] && (() => {
-                const mainCat = categories[selectedCategory];
-                const subCats = categories?.filter(c => c.parent_category === mainCat.id);
+              {/* Subcategory Row - REMOVED per redesign */}
+              {/* Items Display Logic */}
+              {selectedCategory === null || !categories[selectedCategory] || categories.filter(c => c.parent_category === categories[selectedCategory].id).length === 0 ? (
+                /* GRID VIEW for "All Category" or Categories with NO Subcategories */
+                <>
+                  <h2 className="text-xl font-medium text-icon-active text-start mt-4 px-4">
+                    Choose Your Items
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 px-4 py-4 pb-32">
+                    {items?.map((item) => (
+                      <FoodItems key={item.id} item={item} showFood={showFood} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                /* HORIZONTAL SCROLLING ROWS for Categories WITH Subcategories */
+                <div className="flex flex-col gap-y-6 pb-32 mt-4">
+                  {(() => {
+                    const mainCat = categories[selectedCategory];
+                    const subCats = categories.filter(c => c.parent_category === mainCat.id);
 
-                if (subCats.length > 0) {
-                  return (
-                    <>
-                      <h2 className="text-lg font-medium text-icon-active text-start mt-2 px-4">
-                        Sub Categories
-                      </h2>
-                      <div className="w-full flex flex-row gap-3 overflow-x-auto py-4 scrollbar-hide px-4">
-                        <div
-                          onClick={() => setSelectedSubCategory(null)}
-                          className={cn(
-                            "flex-shrink-0 h-10 px-6 bg-sidebar flex items-center justify-center rounded-full shadow-sm select-none cursor-pointer border transition-all",
-                            {
-                              "bg-primary text-white border-primary": selectedSubCategory === null,
-                              "bg-white text-primary border-gray-200": selectedSubCategory !== null,
-                            }
-                          )}
-                        >
-                          <p className="font-medium text-sm">All</p>
-                        </div>
-                        {subCats.map((subCat) => (
-                          <div
-                            key={subCat.id}
-                            onClick={() => setSelectedSubCategory(subCat.id)}
-                            className={cn(
-                              "flex-shrink-0 h-10 px-6 bg-sidebar flex items-center justify-center rounded-full shadow-sm select-none cursor-pointer border transition-all",
-                              {
-                                "bg-primary text-white border-primary": selectedSubCategory === subCat.id,
-                                "bg-white text-primary border-gray-200": selectedSubCategory !== subCat.id,
-                              }
-                            )}
-                          >
-                            <p className="font-medium text-sm whitespace-nowrap">
-                              {subCat.Category_name}
-                            </p>
+                    // Helper to render a row
+                    const renderRow = (title: string, rowItems: FoodItemTypes[]) => {
+                      if (rowItems.length === 0) return null;
+                      return (
+                        <div key={title} className="flex flex-col gap-y-2">
+                          <h2 className="text-lg font-medium text-icon-active text-start px-4">
+                            {title}
+                          </h2>
+                          <div className="w-full flex flex-row gap-4 overflow-x-auto px-4 py-2 scrollbar-hide">
+                            {rowItems.map((item) => (
+                              <div key={item.id} className="flex-shrink-0 w-40">
+                                <FoodItems item={item} showFood={showFood} />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </>
-                  );
-                }
-                return null;
-              })()}
-              <h2 className="text-xl font-medium text-icon-active text-start mt-4 px-4">
-                Choose Your Items
-              </h2>
+                        </div>
+                      );
+                    };
 
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 px-4 py-4 pb-32">
-                {items?.map((item) => (
-                  <FoodItems key={item.id} item={item} showFood={showFood} />
-                ))}
-              </div>
+                    return (
+                      <>
+                        {/* Render each subcategory row */}
+                        {subCats.map(sub => {
+                          const subItems = items.filter(i => i.sub_category === sub.id);
+                          return renderRow(sub.Category_name, subItems);
+                        })}
+
+                        {/* Render items with NO subcategory under "Other" or similar */}
+                        {(() => {
+                          const otherItems = items.filter(i => !i.sub_category && i.category === mainCat.id);
+                          return renderRow("Other", otherItems);
+                        })()}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </main>
           <div className={cn("fixed top-0 right-0 h-full rounded-l-xl bg-sidebar shadow-md p-4 z-20", isSubRoute ? "w-full lg:w-[30%] block" : "w-[30%] hidden lg:block")}>
