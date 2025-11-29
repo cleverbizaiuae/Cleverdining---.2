@@ -32,9 +32,12 @@ export const FoodItems = ({ item, showFood }: Props) => {
         >
           <div className="w-full h-[200px] rounded-lg overflow-hidden flex justify-center items-center bg-[#f9f9f9]">
             <img
-              src={item.image1}
+              src={item.image1 || "https://placehold.co/200x200?text=No+Image"}
               alt={item.item_name}
               className="object-cover w-full h-full transition-transform duration-500 hover:scale-110"
+              onError={(e) => {
+                e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
+              }}
             />
           </div>
 

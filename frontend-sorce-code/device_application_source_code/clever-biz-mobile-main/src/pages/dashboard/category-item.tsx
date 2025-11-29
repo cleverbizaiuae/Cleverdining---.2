@@ -35,9 +35,12 @@ export const CategoryItem = ({
     >
       <div className="h-16 w-16 rounded-xl overflow-hidden">
         <img
-          src={cat.image}
+          src={cat.image || "https://placehold.co/100x100?text=No+Image"}
           alt={cat.Category_name}
           className="object-cover w-full h-full"
+          onError={(e) => {
+            e.currentTarget.src = "https://placehold.co/100x100?text=No+Image";
+          }}
         />
       </div>
       <p className="text-primary font-medium">{`${cat.Category_name.substring(

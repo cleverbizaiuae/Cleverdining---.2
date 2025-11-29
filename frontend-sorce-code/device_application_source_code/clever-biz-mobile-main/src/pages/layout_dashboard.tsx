@@ -417,9 +417,14 @@ const LayoutDashboard = () => {
             <div className="basis-[10%]">{/* VOID */}</div>
             {/* Main Content section */}
             <div className="basis-[90%] lg:basis-[60%] flex flex-col overflow-x-hidden">
-              <h2 className="text-xl font-medium text-icon-active text-start">
-                Choose Category
-              </h2>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col">
+                  <h2 className="text-xl font-medium text-icon-active text-start">
+                    Choose Category
+                  </h2>
+                  <p className="text-xs text-gray-400">v2.0</p>
+                </div>
+              </div>
               {/* Horizontal scrollable category list - Main Categories Only */}
               <div className="w-full flex flex- flex-row gap-4 overflow-x-auto flex-wrap  py-4 scrollbar-hide">
                 <div
