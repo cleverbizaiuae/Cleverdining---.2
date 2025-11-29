@@ -42,6 +42,10 @@ export const FoodItems = ({ item, showFood }: Props) => {
                 if (url.startsWith("http://")) {
                   url = url.replace("http://", "https://");
                 }
+                // Handle relative paths
+                if (url.startsWith("/")) {
+                  url = `https://cleverdining-2.onrender.com${url}`;
+                }
                 return url;
               })()}
               alt={item.item_name}
