@@ -8,8 +8,8 @@ const TOKENS = {
 
 // Use environment variable or fallback to production URL
 // Use environment variable or fallback to production URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || "https://cleverdining-2.onrender.com/";
-// const API_BASE_URL = "http://localhost:8000";
+// Hardcoded for production stability
+const API_BASE_URL = "https://cleverdining-2.onrender.com";
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
