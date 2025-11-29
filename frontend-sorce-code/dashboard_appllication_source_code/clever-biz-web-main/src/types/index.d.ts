@@ -42,13 +42,13 @@ export type Member = {
 export interface DeviceItem {
   id: number;
   table_name: string;
-  region: string;
-  table_number: string;
+  region?: string;
+  table_number?: string;
   restaurant: number;
   action: string;
   restaurant_name: string;
   username: string;
-  user_id: number;
+  user_id?: number;
 }
 
 export type ReviewItem = {
