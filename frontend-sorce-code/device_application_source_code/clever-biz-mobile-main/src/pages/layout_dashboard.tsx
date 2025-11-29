@@ -187,6 +187,8 @@ const LayoutDashboard = () => {
 
       const userInfo = localStorage.getItem("userInfo");
       const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      console.log("Current UserInfo:", userInfo);
+      console.log("Derived RestaurantID:", restaurantId);
       if (restaurantId) {
         params.push(`restaurant_id=${restaurantId}`);
       }
@@ -208,7 +210,9 @@ const LayoutDashboard = () => {
       if (params.length > 0) {
         url += `?${params.join("&")}`;
       }
+      console.log("Fetching items with URL:", url, "Params:", params);
       const response = await axiosInstance.get(url);
+      console.log("Items Response:", response.data);
       setItems(response.data.results || []);
     } catch (error) {
       console.error("Failed to fetch items", error);
