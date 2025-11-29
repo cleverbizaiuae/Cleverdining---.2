@@ -191,10 +191,25 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
             if (url.startsWith("http://")) {
               url = url.replace("http://", "https://");
             }
+            // Handle relative paths
+            if (url.startsWith("/")) {
+              url = `https://cleverdining-2.onrender.com${url}`;
+            }
             setExistingImage(url);
           }
           if (item.video) {
-            setExistingVideo(item.video);
+            let url = item.video;
+            // Fix double media path
+            url = url.replace("/media/media/", "/media/");
+            // Force HTTPS
+            if (url.startsWith("http://")) {
+              url = url.replace("http://", "https://");
+            }
+            // Handle relative paths
+            if (url.startsWith("/")) {
+              url = `https://cleverdining-2.onrender.com${url}`;
+            }
+            setExistingVideo(url);
           }
         } catch (err) {
           console.error("Failed to load item for edit", err);

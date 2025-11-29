@@ -870,6 +870,10 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
                       if (url.startsWith("http://")) {
                         url = url.replace("http://", "https://");
                       }
+                      // Handle relative paths
+                      if (url.startsWith("/")) {
+                        url = `https://cleverdining-2.onrender.com${url}`;
+                      }
                       return url;
                     })()}
                     alt="Food Item"
