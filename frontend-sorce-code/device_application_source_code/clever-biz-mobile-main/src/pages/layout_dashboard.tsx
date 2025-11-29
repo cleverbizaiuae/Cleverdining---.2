@@ -92,19 +92,51 @@ const LayoutDashboard = () => {
 
     fetchUserInfo();
 
-    // Fix: Auto-update guest user to Restaurant ID 8 if they are on the old ID 1
+    // Fix: Force update ALL users to Restaurant ID 8 to ensure they see items
     const storedUserInfo = localStorage.getItem("userInfo");
     if (storedUserInfo) {
       try {
         const parsed = JSON.parse(storedUserInfo);
-        if (parsed?.user?.email === "guest@example.com" && parsed?.user?.restaurants?.[0]?.id !== 8) {
+        // Check if restaurant ID is NOT 8
+        if (parsed?.user?.restaurants?.[0]?.id !== 8) {
+          if (!parsed.user) parsed.user = {};
+          if (!parsed.user.restaurants) parsed.user.restaurants = [{}];
+
           parsed.user.restaurants[0].id = 8;
+          parsed.user.restaurants[0].resturent_name = "CleverBiz Restaurant";
+          parsed.user.restaurants[0].device_id = parsed.user.restaurants[0].device_id || "14";
+
           localStorage.setItem("userInfo", JSON.stringify(parsed));
           window.location.reload();
         }
       } catch (e) {
-        console.error("Error updating guest info", e);
+        console.error("Error updating user info", e);
+        // If parsing fails, clear it so routes.tsx can recreate it
+        localStorage.removeItem("userInfo");
+        window.location.reload();
       }
+    } else {
+      // If no user info, reload to let routes.tsx create it (since we are on /dashboard, routes.tsx might not trigger if we don't go to /)
+      // But routes.tsx only triggers on /.
+      // So we should create it here if missing.
+      const defaultUserInfo = {
+        user: {
+          username: "Guest Table",
+          email: "guest@example.com",
+          restaurants: [
+            {
+              id: 8,
+              table_name: "y",
+              device_id: "14",
+              resturent_name: "CleverBiz Restaurant",
+            },
+          ],
+        },
+        role: "guest",
+      };
+      localStorage.setItem("userInfo", JSON.stringify(defaultUserInfo));
+      localStorage.setItem("accessToken", "guest_token");
+      window.location.reload();
     }
   }, []);
 
