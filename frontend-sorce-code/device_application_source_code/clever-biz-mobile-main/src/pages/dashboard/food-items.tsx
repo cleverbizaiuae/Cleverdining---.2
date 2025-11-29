@@ -26,11 +26,11 @@ export const FoodItems = ({ item, showFood }: Props) => {
         <div
           onClick={() => showFood(item.id)}
           className={cn(
-            "bg-sidebar flex flex-col items-start justify-between rounded-xl shadow-md p-4 select-none cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02]",
-            "w-[300px] sm:w-[220px] md:w-[220px] lg:w-[200px] xl:w-[250px] h-[330px]"
+            "bg-sidebar flex flex-col items-start justify-between rounded-xl shadow-md p-3 select-none cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02]",
+            "w-full h-[280px]"
           )}
         >
-          <div className="w-full h-[200px] rounded-lg overflow-hidden flex justify-center items-center bg-[#f9f9f9]">
+          <div className="w-full h-[140px] rounded-lg overflow-hidden flex justify-center items-center bg-[#f9f9f9]">
             <img
               src={(() => {
                 if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
@@ -51,17 +51,14 @@ export const FoodItems = ({ item, showFood }: Props) => {
             />
           </div>
 
-          <p className="text-icon-active/80 font-medium mt-1 text-base truncate w-full ">
+          <p className="text-icon-active/80 font-medium mt-2 text-sm truncate w-full ">
             {item?.item_name.substring(0, 29)}
           </p>
 
-          <p className="text-icon-active text-start font-bold text-lg mt-1 truncate">
+          <p className="text-icon-active text-start font-bold text-base mt-1 truncate w-full">
             AED {item.price}
-            <span className="text-sm font-normal text-gray-400 ml-1 truncate">
-              / {`${item.category_name.substring(0, 6)}`}
-            </span>
           </p>
-        </div>
+        </div >
       )}
     </>
   );

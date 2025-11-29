@@ -419,14 +419,14 @@ const LayoutDashboard = () => {
                 </div>
               </div>
               {/* Horizontal scrollable category list - Main Categories Only */}
-              <div className="w-full flex flex- flex-row gap-4 overflow-x-auto flex-wrap  py-4 scrollbar-hide">
+              <div className="w-full flex flex-row gap-4 overflow-x-auto py-4 scrollbar-hide px-4">
                 <div
                   onClick={() => {
                     setSelectedCategory(null);
                     setSelectedSubCategory(null);
                   }}
                   className={cn(
-                    "flex-shrink-0 truncate h-40 w-38 bg-sidebar flex flex-col gap-y-4 items-center justify-center rounded-lg shadow-sm py-4 last:mr-4 select-none cursor-pointer border",
+                    "flex-shrink-0 truncate h-40 w-38 bg-sidebar flex flex-col gap-y-4 items-center justify-center rounded-lg shadow-sm py-4 select-none cursor-pointer border",
                     {
                       "bg-[#F1F5FF] border-[#ABC1FF]": selectedCategory === null,
                       "border-transparent": selectedCategory !== null,
@@ -461,45 +461,36 @@ const LayoutDashboard = () => {
                 if (subCats.length > 0) {
                   return (
                     <>
-                      <h2 className="text-lg font-medium text-icon-active text-start mt-2">
+                      <h2 className="text-lg font-medium text-icon-active text-start mt-2 px-4">
                         Sub Categories
                       </h2>
-                      <div className="w-full flex flex-row gap-4 overflow-x-auto flex-wrap py-4 scrollbar-hide pl-4">
+                      <div className="w-full flex flex-row gap-3 overflow-x-auto py-4 scrollbar-hide px-4">
                         <div
                           onClick={() => setSelectedSubCategory(null)}
                           className={cn(
-                            "flex-shrink-0 truncate h-32 w-32 bg-sidebar/80 flex flex-col gap-y-2 items-center justify-center rounded-lg shadow-sm py-3 select-none cursor-pointer border",
+                            "flex-shrink-0 h-10 px-6 bg-sidebar flex items-center justify-center rounded-full shadow-sm select-none cursor-pointer border transition-all",
                             {
-                              "bg-[#F1F5FF] border-[#ABC1FF]": selectedSubCategory === null,
-                              "border-transparent": selectedSubCategory !== null,
+                              "bg-primary text-white border-primary": selectedSubCategory === null,
+                              "bg-white text-primary border-gray-200": selectedSubCategory !== null,
                             }
                           )}
                         >
-                          <p className="text-primary font-medium text-sm">All</p>
+                          <p className="font-medium text-sm">All</p>
                         </div>
                         {subCats.map((subCat) => (
                           <div
                             key={subCat.id}
                             onClick={() => setSelectedSubCategory(subCat.id)}
                             className={cn(
-                              "flex-shrink-0 h-32 w-32 truncate bg-sidebar/80 flex flex-col gap-y-2 items-center justify-center rounded-lg shadow-sm py-3 last:mr-4 select-none cursor-pointer border",
+                              "flex-shrink-0 h-10 px-6 bg-sidebar flex items-center justify-center rounded-full shadow-sm select-none cursor-pointer border transition-all",
                               {
-                                "bg-[#F1F5FF] border-[#ABC1FF]": selectedSubCategory === subCat.id,
-                                "border-transparent": selectedSubCategory !== subCat.id,
+                                "bg-primary text-white border-primary": selectedSubCategory === subCat.id,
+                                "bg-white text-primary border-gray-200": selectedSubCategory !== subCat.id,
                               }
                             )}
                           >
-                            {subCat.image && (
-                              <div className="h-12 w-12 rounded-lg overflow-hidden">
-                                <img
-                                  src={subCat.image}
-                                  alt={subCat.Category_name}
-                                  className="object-cover w-full h-full"
-                                />
-                              </div>
-                            )}
-                            <p className="text-primary font-medium text-sm text-center px-2">
-                              {subCat.Category_name.substring(0, 15)}
+                            <p className="font-medium text-sm whitespace-nowrap">
+                              {subCat.Category_name}
                             </p>
                           </div>
                         ))}
@@ -509,11 +500,11 @@ const LayoutDashboard = () => {
                 }
                 return null;
               })()}
-              <h2 className="text-xl font-medium text-icon-active text-start mt-4">
+              <h2 className="text-xl font-medium text-icon-active text-start mt-4 px-4">
                 Choose Your Items
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-5 me-4 py-4">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 px-4 py-4 pb-32">
                 {items?.map((item) => (
                   <FoodItems key={item.id} item={item} showFood={showFood} />
                 ))}
