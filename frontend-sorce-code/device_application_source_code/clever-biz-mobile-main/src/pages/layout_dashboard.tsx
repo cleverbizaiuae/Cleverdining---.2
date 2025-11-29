@@ -407,7 +407,7 @@ const LayoutDashboard = () => {
               {/* Subcategory Row - Show when main category is selected */}
               {selectedCategory !== null && categories[selectedCategory] && (() => {
                 const mainCat = categories[selectedCategory];
-                const subCats = categories.filter(c => c.parent_category === mainCat.id);
+                const subCats = categories?.filter(c => c.parent_category === mainCat.id);
 
                 if (subCats.length > 0) {
                   return (
