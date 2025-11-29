@@ -264,13 +264,7 @@ const LayoutDashboard = () => {
 
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("userInfo");
-    // Optional: redirect to home or login
-    navigate("/");
-  };
+
 
   ////////////////////// caller api /////////////////////////////////////////
 
@@ -397,7 +391,6 @@ const LayoutDashboard = () => {
         userInfo={userInfo}
         handleMessageClick={handleMessageClick}
         hasNewMessage={hasNewMessage}
-        handleLogout={handleLogout}
         setIsMobileMenuOpen={setIsMobileMenuOpen}
       />
       <div className="h-full flex flex-col">

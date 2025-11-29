@@ -7,7 +7,7 @@ import {
   IconCall,
   IconCart,
   IconHome,
-  IconLogout,
+
   IconMessage,
   IconOrders,
 } from "../../components/icons/logo";
@@ -17,7 +17,7 @@ type Props = {
   userInfo: any;
   handleMessageClick: () => void;
   hasNewMessage: boolean;
-  handleLogout: () => void;
+
   setIsMobileMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
@@ -26,7 +26,6 @@ export const DashboardLeftSidebar = ({
   userInfo,
   handleMessageClick,
   hasNewMessage,
-  handleLogout,
   setIsMobileMenuOpen,
 }: Props) => {
   const isLargeDevice = useMediaQuery("only screen and (min-width : 993px)");
@@ -179,27 +178,7 @@ export const DashboardLeftSidebar = ({
           Orders
         </p>
       </button>
-      {/* Logout */}
-      <button
-        type="button"
-        className={cn("w-16 h-16 flex flex-col items-center justify-center", {
-          "bg-icon-active-bg rounded-full": false,
-        })}
-        onClick={handleLogout}
-      >
-        <IconLogout
-          selected={false}
-          activeColor="#3E4F7E"
-          inActiveColor="#B2B5BE"
-        />
-        <p
-          className={cn("text-icon-inactive", {
-            "text-icon-active": false,
-          })}
-        >
-          Logout
-        </p>
-      </button>
+
     </nav>
   );
 };
