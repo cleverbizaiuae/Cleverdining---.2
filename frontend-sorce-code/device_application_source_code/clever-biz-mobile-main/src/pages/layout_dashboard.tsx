@@ -91,6 +91,21 @@ const LayoutDashboard = () => {
     };
 
     fetchUserInfo();
+
+    // Fix: Auto-update guest user to Restaurant ID 8 if they are on the old ID 1
+    const storedUserInfo = localStorage.getItem("userInfo");
+    if (storedUserInfo) {
+      try {
+        const parsed = JSON.parse(storedUserInfo);
+        if (parsed?.user?.email === "guest@example.com" && parsed?.user?.restaurants?.[0]?.id !== 8) {
+          parsed.user.restaurants[0].id = 8;
+          localStorage.setItem("userInfo", JSON.stringify(parsed));
+          window.location.reload();
+        }
+      } catch (e) {
+        console.error("Error updating guest info", e);
+      }
+    }
   }, []);
 
   useEffect(() => {
