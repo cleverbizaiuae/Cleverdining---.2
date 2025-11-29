@@ -184,7 +184,14 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
           });
           // Set existing media files
           if (item.image1) {
-            setExistingImage(item.image1);
+            let url = item.image1;
+            // Fix double media path
+            url = url.replace("/media/media/", "/media/");
+            // Force HTTPS
+            if (url.startsWith("http://")) {
+              url = url.replace("http://", "https://");
+            }
+            setExistingImage(url);
           }
           if (item.video) {
             setExistingVideo(item.video);

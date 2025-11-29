@@ -52,6 +52,26 @@ const SubCategoryTable = ({ categories, setCategories }) => {
                                         key={category.id}
                                         className="border-b border-gray-700 hover:bg-[#2a3a4a] transition duration-300"
                                     >
+                                        <td className="p-2">
+                                            <img
+                                                src={(() => {
+                                                    if (!category.image) return "https://placehold.co/100x100?text=No+Image";
+                                                    let url = category.image;
+                                                    // Fix double media path
+                                                    url = url.replace("/media/media/", "/media/");
+                                                    // Force HTTPS
+                                                    if (url.startsWith("http://")) {
+                                                        url = url.replace("http://", "https://");
+                                                    }
+                                                    return url;
+                                                })()}
+                                                alt={category.Category_name}
+                                                className="w-10 h-10 rounded-full object-cover"
+                                                onError={(e) => {
+                                                    e.currentTarget.src = "https://placehold.co/100x100?text=No+Image";
+                                                }}
+                                            />
+                                        </td>
                                         <td className="p-2">{category.Category_name}</td>
                                         <td className="p-2 text-gray-400">{parent?.Category_name || "Unknown"}</td>
                                         <td className="p-2 text-right">
