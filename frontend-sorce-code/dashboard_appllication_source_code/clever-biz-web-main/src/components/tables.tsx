@@ -644,7 +644,7 @@ export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
       return;
     }
     // Construct URL with query params
-    const url = `http://localhost:5176/?table_id=${tableId}&table_name=${encodeURIComponent(tableName)}&restaurant_id=${restaurantId}`;
+    const url = `https://officialcleverdiningcustomer.netlify.app/?table_id=${tableId}&table_name=${encodeURIComponent(tableName)}&restaurant_id=${restaurantId}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copied to clipboard!");
   };
@@ -664,7 +664,7 @@ export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
           {data.map((item, index) => {
             const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
             const restaurantId = userInfo?.restaurants?.[0]?.id;
-            const url = `http://localhost:5176/?table_id=${item.id}&table_name=${encodeURIComponent(item.table_name)}&restaurant_id=${restaurantId}`;
+            const url = `https://officialcleverdiningcustomer.netlify.app/?table_id=${item.id}&table_name=${encodeURIComponent(item.table_name)}&restaurant_id=${restaurantId}`;
 
             return (
               <tr key={index} className="border-b border-[#1C1E3C]">
