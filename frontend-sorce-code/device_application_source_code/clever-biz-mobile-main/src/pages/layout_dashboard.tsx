@@ -116,7 +116,8 @@ const LayoutDashboard = () => {
       const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
       const url = restaurantId ? `/customer/categories/?restaurant_id=${restaurantId}` : "/customer/categories/";
       const response = await axiosInstance.get(url);
-      setCategories(response.data || []);
+      const data = response.data;
+      setCategories(Array.isArray(data) ? data : data?.results || []);
     } catch (error) {
       console.error("Failed to fetch categories", error);
     }
