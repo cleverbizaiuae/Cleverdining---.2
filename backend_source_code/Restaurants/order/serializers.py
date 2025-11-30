@@ -44,12 +44,15 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return order
 
     def update(self, instance, validated_data):
-        # We don't support updating orders via this serializer, but to prevent the error:
-        # Just return the instance without changes or implement minimal update logic if needed.
-        # For now, we'll just ignore nested writes during update to satisfy DRF.
+        # Manually update the instance to avoid DRF's "writable nested fields" error
+        # which happens even if we pop the field when calling super().update()
         if 'order_items' in validated_data:
             validated_data.pop('order_items')
-        return super().update(instance, validated_data)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
 
 
 
