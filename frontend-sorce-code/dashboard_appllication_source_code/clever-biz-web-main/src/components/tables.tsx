@@ -812,9 +812,9 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
     }
   };
 
-  // Filter out 'served' orders as requested by user
+  // Filter out 'served' and 'cancelled' orders as requested by user
   const ordersData: any[] = orders.filter(
-    (item) => item.status.toLowerCase() !== "served"
+    (item) => item.status.toLowerCase() !== "served" && item.status.toLowerCase() !== "cancelled"
   );
 
   useEffect(() => {
@@ -929,12 +929,12 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
               </td>
               <td className="p-2 sm:p-4 text-primary-text text-center">
                 <button
-                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                  className="text-red-600 hover:text-red-700 p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                   onClick={() => handleStatusChange(item.id, "Cancelled")}
                   disabled={["completed", "cancelled", "paid"].includes(item.status.toLowerCase())}
                   title="Cancel Order"
                 >
-                  <IconClose className="w-4 h-4" />
+                  <IconClose className="w-5 h-5" />
                 </button>
               </td>
               {viewOpen && (
