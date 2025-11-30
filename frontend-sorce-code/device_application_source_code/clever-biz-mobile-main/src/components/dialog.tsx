@@ -163,7 +163,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 onClick={handleAddToCart}
                 className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-between transition-all active:scale-[0.98] shadow-lg shadow-primary/20"
               >
-                <span>Add to Order</span>
+                <span>Add to Cart</span>
                 <span className="bg-white/20 px-2 py-0.5 rounded text-sm">
                   AED {(Number(item?.price || 0) * quantity).toFixed(2)}
                 </span>
