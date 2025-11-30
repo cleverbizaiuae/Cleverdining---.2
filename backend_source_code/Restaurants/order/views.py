@@ -30,17 +30,34 @@ class OrderCreateAPIView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
-        if self.request.user.is_authenticated:
-            device = self.request.user.devices.first()
-        else:
-            # For guest users, get device_id from request data
+        # Prioritize device from request data (common for mobile/kiosk apps)
+        device_id = self.request.data.get('device')
+        device = None
+
+        if device_id:
             from device.models import Device
-            device_id = self.request.data.get('device')
             try:
                 device = Device.objects.get(id=device_id)
             except Device.DoesNotExist:
-                # Fallback or error handling
-                raise ValidationError("Device not found for guest order.")
+                pass
+        
+        # Fallback to user's linked device if not provided in request
+        if not device and self.request.user.is_authenticated:
+            device = self.request.user.devices.first()
+
+        if not device:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Device not found. Please scan the QR code again.")
+
+        order = serializer.save(device=device, restaurant=device.restaurant) 
+        data = OrderDetailSerializer(order).data
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{order.restaurant.id}",
+            {
+                "type": "order_created",
+                "order": data
+            }
+        )
 
         order = serializer.save(device=device, restaurant=device.restaurant) 
         data = OrderDetailSerializer(order).data

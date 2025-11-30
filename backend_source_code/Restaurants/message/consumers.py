@@ -147,7 +147,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _get_restaurant_owner(self, restaurant_id):
-        return User.objects.filter(role='owner', restaurants__id=restaurant_id).first()
+        try:
+            restaurant = Restaurant.objects.get(id=restaurant_id)
+            return restaurant.owner
+        except Restaurant.DoesNotExist:
+            return None
 
 
     @database_sync_to_async
