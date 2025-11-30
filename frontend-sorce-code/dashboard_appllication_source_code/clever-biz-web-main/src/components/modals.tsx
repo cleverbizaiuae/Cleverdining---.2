@@ -1342,7 +1342,7 @@ export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
                 }}
               />
               <LabelInput
-                label="Region (Optional)"
+                label="Area (Optional)"
                 labelProps={{
                   className: "text-sm",
                 }}

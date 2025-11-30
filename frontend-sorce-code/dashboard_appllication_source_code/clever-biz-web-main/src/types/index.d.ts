@@ -1,6 +1,7 @@
 export type FoodItem = {
   id: number;
-  image: string;
+  image1: string;
+  image?: string;
   name: string;
   category: string;
   price: number;

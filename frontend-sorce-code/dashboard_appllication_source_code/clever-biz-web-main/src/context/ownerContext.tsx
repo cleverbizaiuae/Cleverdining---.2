@@ -9,9 +9,9 @@ import {
   useEffect,
 } from "react";
 import toast from "react-hot-toast";
-import { useRole } from "@/hooks/useRole";
-import { Member } from "@/types";
+import { Member, FoodItem } from "@/types";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
+import { useRole } from "@/hooks/useRole";
 
 // Define the type of each category (adjust fields based on actual API)
 interface Category {
@@ -29,18 +29,6 @@ interface DeviceItem {
   restaurant_name: string;
   username: string;
 }
-
-// Define food item type
-interface FoodItem {
-  id: number;
-  image: string;
-  name: string;
-  price: number;
-  category: string;
-  available: boolean;
-}
-
-// Define order item type
 interface OrderItem {
   id: number;
   userName: string;
@@ -259,6 +247,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         const { results, count } = response.data;
         const formattedItems = results.map((item: any) => ({
           id: item.id,
+          image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
           image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
           name: item.item_name,
           price: parseFloat(item.price),

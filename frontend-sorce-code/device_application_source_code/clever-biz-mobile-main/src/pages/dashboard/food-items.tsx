@@ -20,6 +20,8 @@ type Props = {
   showFood: (id: number) => void;
 };
 
+import { Plus } from "lucide-react";
+
 export const FoodItems = ({ item, showFood }: Props) => {
   return (
     <>
@@ -27,11 +29,12 @@ export const FoodItems = ({ item, showFood }: Props) => {
         <div
           onClick={() => showFood(item.id)}
           className={cn(
-            "bg-sidebar flex flex-col items-start justify-between rounded-xl shadow-md p-3 select-none cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02]",
-            "w-full h-[280px]"
+            "bg-white flex flex-row items-start justify-start rounded-2xl shadow-sm p-3 select-none cursor-pointer transition-all duration-300 hover:shadow-md border border-gray-100",
+            "w-full h-auto min-h-[110px] gap-x-4"
           )}
         >
-          <div className="w-full h-[140px] rounded-lg overflow-hidden flex justify-center items-center bg-[#f9f9f9]">
+          {/* Left Side: Image */}
+          <div className="w-[100px] h-[100px] flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
             <img
               src={(() => {
                 if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
@@ -49,21 +52,42 @@ export const FoodItems = ({ item, showFood }: Props) => {
                 return url;
               })()}
               alt={item.item_name}
-              className="object-cover w-full h-full transition-transform duration-500 hover:scale-110"
+              className="object-cover w-full h-full"
               onError={(e) => {
                 e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
               }}
             />
           </div>
 
-          <p className="text-icon-active/80 font-medium mt-2 text-sm truncate w-full ">
-            {item?.item_name.substring(0, 29)}
-          </p>
+          {/* Right Side: Details */}
+          <div className="flex-1 flex flex-col justify-between h-[100px] py-1">
+            <div className="flex flex-col gap-y-1">
+              <h3 className="text-gray-900 font-semibold text-base leading-tight line-clamp-1">
+                {item.item_name}
+              </h3>
+              <p className="text-gray-500 text-xs leading-relaxed line-clamp-2">
+                {item.description || "Prepared with fresh ingredients."}
+              </p>
+            </div>
 
-          <p className="text-icon-active text-start font-bold text-base mt-1 truncate w-full">
-            AED {item.price}
-          </p>
-        </div >
+            <div className="flex justify-between items-end w-full">
+              <span className="text-blue-600 font-bold text-base">
+                AED {item.price}
+              </span>
+
+              {/* Floating Add Button */}
+              <button
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  showFood(item.id);
+                }}
+              >
+                <Plus size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

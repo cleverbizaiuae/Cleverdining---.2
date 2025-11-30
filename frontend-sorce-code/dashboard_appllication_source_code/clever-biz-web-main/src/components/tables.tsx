@@ -655,7 +655,7 @@ export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
         <thead className="table-header">
           <tr>
             <th className="text-center">Table Name</th>
-            <th className="text-center">Region</th>
+            <th className="text-center">Area</th>
             <th className="text-center">URL</th>
             <th className="text-center">Action</th>
           </tr>

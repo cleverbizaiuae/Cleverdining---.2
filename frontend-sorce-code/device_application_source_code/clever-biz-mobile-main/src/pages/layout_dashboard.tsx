@@ -23,7 +23,7 @@ const LayoutDashboard = () => {
   const location = useLocation();
   const isSubRoute = location.pathname !== "/dashboard";
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  // const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null); // Removed
+  const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [categories, setCategories] = useState<CategoryItemType[]>([]);
@@ -415,98 +415,116 @@ const LayoutDashboard = () => {
                 </div>
               </div>
               {/* Horizontal scrollable category list - Main Categories Only */}
-              <div className="w-full flex flex-row gap-4 overflow-x-auto py-4 scrollbar-hide px-4">
+              <div className="w-full flex flex-row gap-3 overflow-x-auto py-2 scrollbar-hide px-4">
                 <div
                   onClick={() => {
                     setSelectedCategory(null);
-                    // setSelectedSubCategory(null); // Removed
+                    setSelectedSubCategory(null);
                   }}
                   className={cn(
-                    "flex-shrink-0 truncate h-40 w-38 bg-sidebar flex flex-col gap-y-4 items-center justify-center rounded-lg shadow-sm py-4 select-none cursor-pointer border",
+                    "flex-shrink-0 h-12 px-4 flex items-center justify-center rounded-full shadow-sm select-none cursor-pointer border transition-all duration-200",
                     {
-                      "bg-[#F1F5FF] border-[#ABC1FF]": selectedCategory === null,
-                      "border-transparent": selectedCategory !== null,
+                      "bg-primary border-primary text-white": selectedCategory === null,
+                      "bg-white border-gray-200 text-gray-600 hover:bg-gray-50": selectedCategory !== null,
                     }
                   )}
                 >
-                  <div className="h-16 w-16 rounded-xl overflow-hidden flex items-center justify-center bg-gray-100">
-                    {/* Food icon SVG */}
-                    <UtensilsCrossed />
-                  </div>
-                  <p className="text-primary font-medium">All Category</p>
+                  <span className="font-medium text-sm whitespace-nowrap">All</span>
                 </div>
-                {categories?.filter(c => !c.parent_category).map((cat, i) => (
-                  <CategoryItem
+                {categories?.filter(c => !c.parent_category).map((cat) => (
+                  <div
                     key={cat.id}
-                    cat={cat}
-                    i={i}
-                    selectedCategory={selectedCategory}
-                    setSelectedCategory={(idx) => {
-                      setSelectedCategory(idx);
-                      // setSelectedSubCategory(null); // Removed
+                    onClick={() => {
+                      setSelectedCategory(categories.indexOf(cat));
+                      setSelectedSubCategory(null);
                     }}
-                  />
+                    className={cn(
+                      "flex-shrink-0 h-12 px-4 flex items-center justify-center gap-x-2 rounded-full shadow-sm select-none cursor-pointer border transition-all duration-200",
+                      {
+                        "bg-primary border-primary text-white": selectedCategory !== null && categories[selectedCategory]?.id === cat.id,
+                        "bg-white border-gray-200 text-gray-600 hover:bg-gray-50": selectedCategory === null || categories[selectedCategory]?.id !== cat.id,
+                      }
+                    )}
+                  >
+                    {/* We can add icons here if available in cat object, else just text */}
+                    <span className="font-medium text-sm whitespace-nowrap">{cat.Category_name}</span>
+                  </div>
                 ))}
               </div>
 
-              {/* Subcategory Row - REMOVED per redesign */}
-              {/* Items Display Logic */}
-              {selectedCategory === null || !categories[selectedCategory] || categories.filter(c => c.parent_category === categories[selectedCategory].id).length === 0 ? (
-                /* GRID VIEW for "All Category" or Categories with NO Subcategories */
-                <>
-                  <h2 className="text-xl font-medium text-icon-active text-start mt-4 px-4">
-                    Choose Your Items
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 px-4 py-4 pb-32">
-                    {items?.map((item) => (
-                      <FoodItems key={item.id} item={item} showFood={showFood} />
-                    ))}
+              {/* Subcategory Row - Filter Pills */}
+              {selectedCategory !== null && categories[selectedCategory] && (
+                <div className="w-full flex flex-row gap-2 overflow-x-auto py-2 scrollbar-hide px-4 mt-1">
+                  <div
+                    onClick={() => setSelectedSubCategory(null)}
+                    className={cn(
+                      "flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-colors border",
+                      {
+                        "bg-blue-50 text-blue-600 border-blue-100": selectedSubCategory === null,
+                        "bg-gray-100 text-gray-500 border-transparent hover:bg-gray-200": selectedSubCategory !== null,
+                      }
+                    )}
+                  >
+                    All
                   </div>
-                </>
-              ) : (
-                /* HORIZONTAL SCROLLING ROWS for Categories WITH Subcategories */
-                <div className="flex flex-col gap-y-6 pb-32 mt-4">
-                  {(() => {
-                    const mainCat = categories[selectedCategory];
-                    const subCats = categories.filter(c => c.parent_category === mainCat.id);
-
-                    // Helper to render a row
-                    const renderRow = (title: string, rowItems: FoodItemTypes[]) => {
-                      if (rowItems.length === 0) return null;
-                      return (
-                        <div key={title} className="flex flex-col gap-y-2">
-                          <h2 className="text-lg font-medium text-icon-active text-start px-4">
-                            {title}
-                          </h2>
-                          <div className="w-full flex flex-row gap-4 overflow-x-auto px-4 py-2 scrollbar-hide">
-                            {rowItems.map((item) => (
-                              <div key={item.id} className="flex-shrink-0 w-40">
-                                <FoodItems item={item} showFood={showFood} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {/* Render each subcategory row */}
-                        {subCats.map(sub => {
-                          const subItems = items.filter(i => i.sub_category === sub.id);
-                          return renderRow(sub.Category_name, subItems);
-                        })}
-
-                        {/* Render items with NO subcategory under "Other" or similar */}
-                        {(() => {
-                          const otherItems = items.filter(i => !i.sub_category && i.category === mainCat.id);
-                          return renderRow("Other", otherItems);
-                        })()}
-                      </>
-                    );
-                  })()}
+                  {categories
+                    .filter(c => c.parent_category === categories[selectedCategory].id)
+                    .map((sub) => (
+                      <div
+                        key={sub.id}
+                        onClick={() => setSelectedSubCategory(sub.id)}
+                        className={cn(
+                          "flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-colors border",
+                          {
+                            "bg-blue-50 text-blue-600 border-blue-100": selectedSubCategory === sub.id,
+                            "bg-gray-100 text-gray-500 border-transparent hover:bg-gray-200": selectedSubCategory !== sub.id,
+                          }
+                        )}
+                      >
+                        {sub.Category_name}
+                      </div>
+                    ))}
                 </div>
               )}
+
+              {/* Subcategory Row - REMOVED per redesign */}
+              {/* Items Display Logic */}
+              {/* Items Display Logic - Vertical List */}
+              <div className="flex flex-col gap-y-4 px-4 py-4 pb-32">
+                {(() => {
+                  let filteredItems = items;
+
+                  // 1. Filter by Main Category
+                  if (selectedCategory !== null && categories[selectedCategory]) {
+                    const mainCatId = categories[selectedCategory].id;
+                    // Get all subcategory IDs for this main category
+                    const subCatIds = categories
+                      .filter(c => c.parent_category === mainCatId)
+                      .map(c => c.id);
+
+                    filteredItems = filteredItems.filter(item =>
+                      item.category === mainCatId || subCatIds.includes(item.category) || (item.sub_category && subCatIds.includes(item.sub_category))
+                    );
+                  }
+
+                  // 2. Filter by Subcategory
+                  if (selectedSubCategory !== null) {
+                    filteredItems = filteredItems.filter(item => item.sub_category === selectedSubCategory);
+                  }
+
+                  if (filteredItems.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                        <p>No items found.</p>
+                      </div>
+                    );
+                  }
+
+                  return filteredItems.map((item) => (
+                    <FoodItems key={item.id} item={item} showFood={showFood} />
+                  ));
+                })()}
+              </div>
             </div>
           </main>
           <div className={cn("fixed top-0 right-0 h-full rounded-l-xl bg-sidebar shadow-md p-4 z-20", isSubRoute ? "w-full lg:w-[30%] block" : "w-[30%] hidden lg:block")}>

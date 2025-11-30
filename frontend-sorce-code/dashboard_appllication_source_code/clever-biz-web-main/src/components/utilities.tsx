@@ -862,8 +862,8 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
                 <td className="p-4 items-center">
                   <img
                     src={(() => {
-                      if (!item.image) return "https://placehold.co/100x100?text=No+Image";
-                      let url = item.image;
+                      if (!item.image1) return "https://placehold.co/100x100?text=No+Image";
+                      let url = item.image1;
                       // Fix double media path
                       url = url.replace("/media/media/", "/media/");
                       // Force HTTPS
