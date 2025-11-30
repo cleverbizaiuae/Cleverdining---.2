@@ -929,11 +929,12 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
               </td>
               <td className="p-2 sm:p-4 text-primary-text text-center">
                 <button
-                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                   onClick={() => handleStatusChange(item.id, "Cancelled")}
                   disabled={["completed", "cancelled", "paid"].includes(item.status.toLowerCase())}
+                  title="Cancel Order"
                 >
-                  Cancel
+                  <IconClose className="w-4 h-4" />
                 </button>
               </td>
               {viewOpen && (
