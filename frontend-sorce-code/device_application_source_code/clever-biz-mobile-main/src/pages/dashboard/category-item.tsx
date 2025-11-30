@@ -57,38 +57,10 @@ export const CategoryItem = ({
 
       {/* Content Container */}
       <div className="relative z-10 flex flex-col items-center justify-center h-full gap-3 p-2">
-        {/* Icon Badge */}
-        <div
-          className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors duration-300",
-            isActive ? "bg-white text-blue-600" : "bg-white text-gray-800"
-          )}
-        >
-          {cat.icon_image ? (
-            <img
-              src={(() => {
-                let url = cat.icon_image;
-                if (url.startsWith("http://")) url = url.replace("http://", "https://");
-                if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-                return url;
-              })()}
-              alt="icon"
-              className="w-6 h-6 object-contain"
-            />
-          ) : cat.icon && (LucideIcons as any)[cat.icon] ? (
-            React.createElement((LucideIcons as any)[cat.icon], {
-              size: 20,
-              className: "stroke-[2px]"
-            })
-          ) : (
-            <LucideIcons.UtensilsCrossed size={20} className="stroke-[2px]" />
-          )}
-        </div>
-
         {/* Category Label */}
         <span
           className={cn(
-            "text-white text-xs text-center leading-tight drop-shadow-md px-1 w-full truncate",
+            "text-white text-sm text-center leading-tight drop-shadow-md px-1 w-full truncate",
             isActive ? "font-bold" : "font-semibold"
           )}
         >

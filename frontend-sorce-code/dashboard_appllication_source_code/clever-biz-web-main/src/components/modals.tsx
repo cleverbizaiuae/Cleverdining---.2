@@ -1087,11 +1087,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
   const { fetchCategories } = useOwner();
   const { handleSubmit, register, reset, setValue } = useForm<CategoryInputs>();
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [iconImageFile, setIconImageFile] = useState<File | null>(null);
-  const [selectedIcon, setSelectedIcon] = useState<string>("");
-  const [showIconPicker, setShowIconPicker] = useState(false);
   const [existingImage, setExistingImage] = useState<string | null>(null);
-  const [existingIconImage, setExistingIconImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && id) {
@@ -1100,19 +1096,12 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
           const res = await axiosInstance.get(`/owners/categories/${id}/`);
           const cat = res.data;
           setValue("name", cat.Category_name);
-          if (cat.icon) setSelectedIcon(cat.icon);
 
           if (cat.image) {
             let url = cat.image;
             if (url.startsWith("http://")) url = url.replace("http://", "https://");
             if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
             setExistingImage(url);
-          }
-          if (cat.icon_image) {
-            let url = cat.icon_image;
-            if (url.startsWith("http://")) url = url.replace("http://", "https://");
-            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-            setExistingIconImage(url);
           }
         } catch (e) {
           console.error(e);
@@ -1123,10 +1112,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
     } else if (isOpen && !id) {
       reset();
       setImageFile(null);
-      setIconImageFile(null);
-      setSelectedIcon("");
       setExistingImage(null);
-      setExistingIconImage(null);
     }
   }, [isOpen, id, setValue, reset]);
 
@@ -1135,8 +1121,6 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
       const formData = new FormData();
       formData.append("Category_name", data.name);
       if (imageFile) formData.append("image", imageFile);
-      if (iconImageFile) formData.append("icon_image", iconImageFile);
-      if (selectedIcon) formData.append("icon", selectedIcon);
 
       if (id) {
         await axiosInstance.patch(`/owners/categories/${id}/`, formData, {
@@ -1153,10 +1137,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
       fetchCategories();
       reset();
       setImageFile(null);
-      setIconImageFile(null);
-      setSelectedIcon("");
       setExistingImage(null);
-      setExistingIconImage(null);
       if (onSuccess) onSuccess();
       close();
       window.location.reload();
@@ -1198,81 +1179,6 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
                   className: "bg-[#201C3F] shadow-md text-sm",
                   ...register("name"),
                 }}
-              />
-
-              <div className="space-y-2">
-                <label className="text-sm text-white">Category Icon (Optional)</label>
-                <div className="flex gap-2 items-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowIconPicker(!showIconPicker)}
-                    className="flex items-center gap-2 px-3 py-2 bg-[#201C3F] text-white rounded-md shadow-md text-sm border border-gray-600 hover:border-gray-400 transition-colors"
-                  >
-                    {selectedIcon ? (
-                      <>
-                        {React.createElement((LucideIcons as any)[selectedIcon], { size: 18 })}
-                        <span>{selectedIcon}</span>
-                      </>
-                    ) : (
-                      <span>Select Icon</span>
-                    )}
-                  </button>
-                  {selectedIcon && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedIcon("")}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-
-                {showIconPicker && (
-                  <div className="mt-2 p-3 bg-[#201C3F] rounded-md border border-gray-600 max-h-48 overflow-y-auto grid grid-cols-6 gap-2">
-                    {FOOD_ICONS.map((iconName) => {
-                      const Icon = (LucideIcons as any)[iconName];
-                      if (!Icon) return null;
-                      return (
-                        <button
-                          key={iconName}
-                          type="button"
-                          onClick={() => {
-                            setSelectedIcon(iconName);
-                            setShowIconPicker(false);
-                          }}
-                          className={`p-2 rounded hover:bg-white/10 flex justify-center items-center ${selectedIcon === iconName ? "bg-blue-600 text-white" : "text-gray-300"
-                            }`}
-                          title={iconName}
-                        >
-                          <Icon size={20} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {existingIconImage && !iconImageFile && (
-                <div className="space-y-2">
-                  <label className="block text-white text-sm">Current Icon Image</label>
-                  <div className="relative inline-block">
-                    <img src={existingIconImage} alt="Current Icon" className="h-10 w-10 object-contain rounded bg-white/10 p-1" />
-                    <button
-                      type="button"
-                      onClick={() => setExistingIconImage(null)}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
-                    >
-                      <FiX size={12} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <InputImageUploadBox
-                file={iconImageFile}
-                setFile={setIconImageFile}
-                label="Category Icon Image (Optional - Overrides Icon)"
               />
 
               {existingImage && !imageFile && (
