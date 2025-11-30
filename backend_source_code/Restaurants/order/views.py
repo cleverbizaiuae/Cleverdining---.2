@@ -59,15 +59,7 @@ class OrderCreateAPIView(generics.CreateAPIView):
             }
         )
 
-        order = serializer.save(device=device, restaurant=device.restaurant) 
-        data = OrderDetailSerializer(order).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "order_created",
-                "order": data
-            }
-        )
+
 
 
         
