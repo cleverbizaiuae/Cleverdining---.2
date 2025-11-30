@@ -1,14 +1,11 @@
-import React from "react";
 import { cn } from "clsx-for-tailwind";
-import * as LucideIcons from "lucide-react";
+import { motion } from "motion/react";
 
 export type CategoryItemType = {
   id: number;
   Category_name: string;
   image?: string;
   parent_category?: number | null;
-  icon?: string;
-  icon_image?: string;
 };
 
 interface CategoryItemProps {
@@ -17,56 +14,57 @@ interface CategoryItemProps {
   onClick: () => void;
 }
 
-export const CategoryItem: React.FC<CategoryItemProps> = ({
-  cat,
-  isActive,
-  onClick,
-}) => {
+export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
   return (
-    <div
+    <button
       onClick={onClick}
       className={cn(
-        "relative flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 ease-out group",
+        "relative w-28 h-28 rounded-2xl overflow-hidden transition-all duration-300 group snap-start shrink-0",
         isActive
-          ? "border-2 border-primary shadow-lg scale-105"
-          : "border-2 border-transparent opacity-90 hover:opacity-100"
+          ? "scale-105 shadow-lg ring-2 ring-primary ring-offset-2"
+          : "scale-100 opacity-90 hover:opacity-100"
       )}
     >
       {/* Background Image */}
-      <div className="absolute inset-0">
-        <img
-          src={(() => {
-            if (!cat.image) return "https://placehold.co/100x100?text=No+Image";
-            let url = cat.image;
-            if (url.startsWith("http://")) url = url.replace("http://", "https://");
-            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-            return url;
-          })()}
-          alt={cat.Category_name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-        />
-        {/* Overlay */}
-        <div
-          className={cn(
-            "absolute inset-0 transition-colors duration-300",
-            isActive ? "bg-primary/20" : "bg-black/10"
-          )}
-        />
+      <img
+        src={(() => {
+          if (!cat.image) return "https://placehold.co/100x100?text=No+Image";
+          let url = cat.image;
+          if (url.startsWith("http://")) url = url.replace("http://", "https://");
+          if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+          return url;
+        })()}
+        alt={cat.Category_name}
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+      />
+
+      {/* Overlay */}
+      <div className={cn(
+        "absolute inset-0 transition-colors duration-300",
+        isActive
+          ? "bg-primary/20 backdrop-blur-[1px]"
+          : "bg-black/40 group-hover:bg-black/30"
+      )} />
+
+      {/* Label */}
+      <div className="absolute bottom-2 left-2 right-2">
+        <div className={cn(
+          "px-2 py-1 rounded-full text-[10px] font-bold text-center truncate transition-colors duration-300",
+          isActive
+            ? "bg-white text-primary shadow-sm"
+            : "bg-black/50 text-white backdrop-blur-sm"
+        )}>
+          {cat.Category_name}
+        </div>
       </div>
 
-      {/* Centered Label */}
-      <div className="absolute inset-0 flex items-center justify-center p-1">
-        <span
-          className={cn(
-            "px-2 py-1 rounded-full text-xs font-bold text-center truncate max-w-full shadow-sm transition-colors duration-300",
-            isActive
-              ? "bg-primary text-white"
-              : "bg-white/90 text-gray-800 backdrop-blur-sm"
-          )}
-        >
-          {cat.Category_name}
-        </span>
-      </div>
-    </div>
+      {/* Active Indicator Dot */}
+      {isActive && (
+        <motion.div
+          layoutId="active-cat-dot"
+          className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border border-white"
+        />
+      )}
+    </button>
   );
 };

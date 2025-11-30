@@ -15,10 +15,10 @@ import { Outlet, useNavigate, useLocation } from "react-router";
 import { CartProvider } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
-import { DashboardHeader } from "./dashboard/dashboard-header";
-import { DashboardLeftSidebar } from "./dashboard/dashboard-left-sidebar";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
+import { BottomNav } from "@/components/BottomNav";
+import { Search, MapPin } from "lucide-react";
 
 const LayoutDashboard = () => {
   const location = useLocation();
@@ -91,7 +91,7 @@ const LayoutDashboard = () => {
   const [tableName, setTableName] = useState("");
 
   const [userInfo, setUserInfo] = useState<any>(null);
-  const [restaurantId, setRestaurantId] = useState<number | null>(null); // Added missing state variable
+  const [restaurantId, setRestaurantId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchUserInfo = () => {
@@ -208,14 +208,12 @@ const LayoutDashboard = () => {
 
       const userInfo = localStorage.getItem("userInfo");
       const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
-      console.log("Current UserInfo:", userInfo);
-      console.log("Derived RestaurantID:", restaurantId);
+
       if (restaurantId) {
         params.push(`restaurant_id=${restaurantId}`);
       }
 
       // If subcategory is selected, filter by subcategory
-      // REMOVED: We now fetch all items for the category and filter on the frontend for display
       if (selectedCategory !== null && categories[selectedCategory]) {
         // Filter by main category
         params.push(`category=${categories[selectedCategory].id}`);
@@ -227,9 +225,8 @@ const LayoutDashboard = () => {
       if (params.length > 0) {
         url += `?${params.join("&")}`;
       }
-      console.log("Fetching items with URL:", url, "Params:", params);
+
       const response = await axiosInstance.get(url);
-      console.log("Items Response:", response.data);
       setItems(response.data.results || []);
     } catch (error) {
       console.error("Failed to fetch items", error);
@@ -280,8 +277,6 @@ const LayoutDashboard = () => {
   };
 
   const navigate = useNavigate();
-
-
 
   ////////////////////// caller api /////////////////////////////////////////
 
@@ -395,48 +390,65 @@ const LayoutDashboard = () => {
       action: "start_call",
       receiver_id: receiver_id,
       device_id: userObj?.user?.restaurants[0]?.device_id,
-      table_id: userObj?.user?.restaurants[0]?.table_name, // Passing table_name as table_id for display
+      table_id: userObj?.user?.restaurants[0]?.table_name,
     };
     newsocket!.send(JSON.stringify(data));
     setIsCallingModal(true);
   };
 
+  // Listen for custom event from BottomNav to trigger call
+  useEffect(() => {
+    const handleTriggerCall = () => {
+      setCallConfirmOpen(true);
+    };
+    window.addEventListener("trigger-call-staff", handleTriggerCall);
+    return () => {
+      window.removeEventListener("trigger-call-staff", handleTriggerCall);
+    };
+  }, []);
+
   return (
     <CartProvider>
-      <DashboardLeftSidebar
-        confirmToCall={confirmToCall}
-        userInfo={userInfo}
-        handleMessageClick={handleMessageClick}
-        hasNewMessage={hasNewMessage}
-        setIsMobileMenuOpen={setIsMobileMenuOpen}
-      />
-      <div className="h-full flex flex-col">
-        <div className="flex-1 w-full overflow-y-auto">
-          {/* Left Sidebar  */}
-          {/* Header */}
-          <DashboardHeader
-            tableName={tableName}
-            isMobileMenuOpen={isMobileMenuOpen}
-            setIsMobileMenuOpen={setIsMobileMenuOpen}
-            search={search}
-            setSearch={setSearch}
-          />
+      <div className="h-[100dvh] flex flex-col bg-gray-50 overflow-hidden">
 
-          {/* Food item content */}
-          <main className={cn("flex flex-row mt-4", isSubRoute && "hidden lg:flex")}>
-            <div className="hidden lg:block lg:basis-[10%]">{/* VOID */}</div>
-            {/* Main Content section */}
-            <div className="w-full lg:basis-[60%] flex flex-col overflow-x-hidden">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex flex-col">
-                  <h2 className="text-xl font-medium text-icon-active text-start">
-                    Choose Category
-                  </h2>
-                </div>
+        {/* 1. Header Section (Sticky Top) */}
+        {!isSubRoute && (
+          <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 pb-4 pt-safe-top">
+            <div className="px-4 py-3 flex items-center justify-between">
+              {/* Logo */}
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" onError={(e) => e.currentTarget.src = "https://placehold.co/40x40?text=Logo"} />
               </div>
 
-              {/* Horizontal scrollable category list - Main Categories Only */}
-              <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
+              {/* Table Info */}
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Table</span>
+                <span className="text-lg font-bold text-gray-900 leading-none">{tableName || "05"}</span>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="px-4 mt-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search for food..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-gray-100 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto pb-24">
+          {!isSubRoute ? (
+            <div className="flex flex-col">
+              {/* 2. Category Navigation (Layer 1) */}
+              <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory py-4">
                 <div className="flex gap-3 px-4 min-w-max">
                   {categories.filter(c => !c.parent_category).map((category) => (
                     <CategoryItem
@@ -452,19 +464,19 @@ const LayoutDashboard = () => {
                 </div>
               </div>
 
-              {/* Sub-category Filter Row (Pill/Chip style) */}
+              {/* Sub-category Filter Row (Layer 2) */}
               {subCategories.length > 0 && (
-                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 mb-2 bg-gray-50/50">
-                  <div className="flex gap-2 px-4 py-2 min-w-max">
+                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
+                  <div className="flex gap-2 px-4 min-w-max">
                     {subCategories.map((sub, idx) => (
                       <button
                         key={sub.id}
                         onClick={() => setSelectedSubCategory(sub.id)}
                         className={cn(
-                          "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200",
+                          "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all duration-200",
                           selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                            ? "bg-black text-white shadow-md"
-                            : "bg-gray-200/50 text-gray-500 hover:bg-gray-300/50"
+                            ? "bg-gray-900 text-white shadow-md"
+                            : "bg-white text-gray-500 border border-gray-100"
                         )}
                       >
                         {sub.Category_name}
@@ -474,8 +486,8 @@ const LayoutDashboard = () => {
                 </div>
               )}
 
-              {/* Items Display Logic - Vertical Grid */}
-              <div className="grid grid-cols-1 gap-4 px-4 py-4 pb-32">
+              {/* 3. Main Content (Menu Feed) */}
+              <div className="px-4 pb-4 flex flex-col gap-4">
                 {(() => {
                   let filteredItems = items;
 
@@ -513,7 +525,7 @@ const LayoutDashboard = () => {
 
                   if (filteredItems.length === 0) {
                     return (
-                      <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                         <p>No items found.</p>
                       </div>
                     );
@@ -541,16 +553,15 @@ const LayoutDashboard = () => {
                 })()}
               </div>
             </div>
-          </main>
-          <div className={cn("fixed top-0 right-0 h-full rounded-l-xl bg-sidebar shadow-md p-4 z-20", isSubRoute ? "w-full lg:w-[30%] block" : "w-[30%] hidden lg:block")}>
-            <Outlet />
-          </div>
+          ) : (
+            <div className="h-full">
+              <Outlet />
+            </div>
+          )}
         </div>
 
-        {/* Footer - always visible at bottom */}
-        <footer className="flex-shrink-0 w-full text-center py-3 text-gray-500 text-xs bg-white border-t border-gray-200">
-          Powered By CleverBiz AI
-        </footer>
+        {/* 6. Bottom Navigation */}
+        <BottomNav />
       </div>
 
       {/* Detail modal */}
@@ -559,8 +570,8 @@ const LayoutDashboard = () => {
         close={() => setDetailOpen(false)}
         itemId={selectedItemId ?? undefined}
         onAddToCart={() => {
-          setIsMobileMenuOpen(true);
-          navigate("/dashboard/cart");
+          // setIsMobileMenuOpen(true); // No longer needed with bottom nav
+          // navigate("/dashboard/cart"); // Stay on page or navigate? User requested "shows toast and closes modal", didn't say navigate.
         }}
       />
       {/* Call modal */}
@@ -572,6 +583,7 @@ const LayoutDashboard = () => {
         confirm={() => {
           setCallConfirmOpen(false);
           setCallOpen(true);
+          confirmToCall(null); // Pass null or appropriate receiver ID
         }}
       />
       {
