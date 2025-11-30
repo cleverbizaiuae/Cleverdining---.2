@@ -44,7 +44,28 @@ const ScreenCart = () => {
       navigate("/dashboard/orders");
     } catch (error: any) {
       console.error("Failed to place order:", error);
-      const errorMessage = error.response?.data?.detail || error.response?.data?.non_field_errors?.[0] || "Failed to place order. Please try again.";
+      let errorMessage = "Failed to place order. Please try again.";
+
+      if (error.response?.data) {
+        if (Array.isArray(error.response.data)) {
+          errorMessage = error.response.data.map((e: any) => typeof e === 'string' ? e : JSON.stringify(e)).join(", ");
+        } else if (typeof error.response.data === 'object') {
+          errorMessage = error.response.data.detail || error.response.data.non_field_errors?.[0] || JSON.stringify(error.response.data);
+        } else {
+          errorMessage = String(error.response.data);
+        }
+      }
+
+      // Check for specific "Device not found" error
+      if (errorMessage.includes("Device not found")) {
+        toast.error("Session expired. Refreshing...");
+        localStorage.removeItem("userInfo");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+        return;
+      }
+
       toast.error(errorMessage);
     }
   };
