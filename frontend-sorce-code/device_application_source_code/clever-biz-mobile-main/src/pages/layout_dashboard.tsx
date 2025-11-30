@@ -19,6 +19,7 @@ import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
 import { Search, MapPin } from "lucide-react";
+import { Logo } from "@/components/icons/logo";
 
 const LayoutDashboard = () => {
   const location = useLocation();
@@ -416,8 +417,8 @@ const LayoutDashboard = () => {
           <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 pb-4 pt-safe-top">
             <div className="px-4 py-3 flex items-center justify-between">
               {/* Logo */}
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" onError={(e) => e.currentTarget.src = "https://placehold.co/40x40?text=Logo"} />
+              <div className="block shrink-0">
+                <Logo />
               </div>
 
               {/* Table Info */}
