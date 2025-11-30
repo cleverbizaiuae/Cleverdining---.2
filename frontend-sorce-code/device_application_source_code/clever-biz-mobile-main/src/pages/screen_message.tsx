@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { FormEvent, useState, useEffect, useRef } from "react";
-import { Send } from "lucide-react";
+import { Send, User, Phone } from "lucide-react";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
@@ -9,6 +9,7 @@ type Message = {
   id: number;
   is_from_device: boolean;
   text: string;
+  timestamp?: string; // Added timestamp support if available
 };
 
 const ScreenMessage = () => {
@@ -53,9 +54,9 @@ function MessagingUI() {
               id: prev.length + 1,
               is_from_device: data.is_from_device,
               text: data.message,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             },
           ]);
-          // Set the newMessage flag to "true" whenever a new message arrives
           localStorage.setItem("newMessage", "true");
           setHasNewMessage(true);
         }
@@ -74,11 +75,9 @@ function MessagingUI() {
   }, [device_id, userInfo]);
 
   useEffect(() => {
-    // Check if the user is navigating to the message page
     if (window.location.pathname === "/dashboard/message") {
-      // Clear the newMessage flag in localStorage
       localStorage.setItem("newMessage", "false");
-      window.dispatchEvent(new Event("storage")); // Trigger UI update via storage event
+      window.dispatchEvent(new Event("storage"));
     }
   }, []);
 
@@ -90,16 +89,17 @@ function MessagingUI() {
         const response = await axiosInstance.get(
           `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`
         );
-        // Map the response to your Message type
         type ApiMessage = {
           id: number;
           is_from_device: boolean;
           message: string;
+          created_at?: string;
         };
         const mapped = (response.data || []).map((msg: ApiMessage) => ({
           id: msg.id,
           is_from_device: msg.is_from_device,
-          text: msg.message, // or msg.text if that's the field
+          text: msg.message,
+          timestamp: msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined
         }));
 
         setMessages(mapped);
@@ -107,7 +107,6 @@ function MessagingUI() {
         toast.error("Failed to load previous messages.");
         setMessages([]);
       }
-
     };
     if (device_id && restaurant_id) fetchMessages();
   }, [device_id, restaurant_id, userInfo]);
@@ -130,115 +129,126 @@ function MessagingUI() {
         JSON.stringify({
           type: "message",
           message: inputValue,
-          // add any other fields your backend expects, e.g. device_id, user_id, etc.
         })
       );
-      setInputValue(""); // Clear input
-      // Optionally, add to local state for instant feedback:
-      // setMessages([...messages, { id: ..., is_from_device: false, text: inputValue }]);
+      setInputValue("");
     } catch {
       toast.error("Failed to send message");
     }
   };
 
   return (
-    <div className={`flex flex-col bg-slate-50 h-[100dvh] relative ${isLargeDevice ? "" : ""}`}>
-      {/* Header */}
-      <div className="flex items-center p-4 bg-white shadow-sm shrink-0 z-10">
-        <div className="flex items-center space-x-3">
-          <div className="relative">
-            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <svg
-                className="h-6 w-6 text-indigo-700"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <circle cx="12" cy="8" r="4" />
-                <path d="M20 21v-2a8 8 0 0 0-16 0v2" />
-              </svg>
+    <div className="flex flex-col h-[100dvh] bg-slate-50 relative overflow-hidden">
+      {/* 1. Header Section */}
+      <div className={`
+        fixed top-0 left-0 right-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm
+        ${isLargeDevice ? 'absolute' : 'fixed'}
+      `}>
+        <div className="flex items-center justify-between px-4 py-3 max-w-3xl mx-auto w-full">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center border-2 border-white shadow-sm">
+                <User size={20} className="text-blue-600" />
+              </div>
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
             </div>
-            <div className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-gray-900 text-sm leading-tight">Restaurant Support</span>
+              <span className="text-xs text-green-600 font-medium">Online</span>
+            </div>
           </div>
-          <div>
-            <div className="font-medium text-gray-800">Assistant</div>
-            <div className="text-xs text-green-600">Online</div>
-          </div>
+          {/* Optional: Call button or other actions */}
+          {/* <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <Phone size={20} className="text-gray-500" />
+          </button> */}
         </div>
       </div>
 
-      {/* Message area */}
-      <div className={`flex-1 p-4 overflow-y-auto ${isLargeDevice ? "pb-4" : "pb-40"}`}>
-        <div className="flex flex-col space-y-4">
-          {messages.length > 0 && (
-            <>
-              {messages
-                .filter((message) => message.text && message.text.trim() !== "")
-                .map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex items-end ${message.is_from_device === false
-                      ? "justify-start"
-                      : "justify-end"
-                      }`}
-                  >
-                    {/* Avatar for assistant (left) */}
-                    {message.is_from_device === false && (
-                      <div className="w-8 h-8 rounded-full bg-indigo-200 flex items-center justify-center mr-2 flex-shrink-0">
-                        <span className="text-indigo-700 font-bold">A</span>
-                      </div>
-                    )}
+      {/* 2. Chat Area */}
+      <div className={`
+        flex-1 overflow-y-auto w-full mx-auto
+        ${isLargeDevice ? 'pt-20 pb-20 px-4' : 'pt-20 pb-32 px-3'}
+      `}>
+        <div className="flex flex-col space-y-3 max-w-3xl mx-auto">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-center opacity-50 mt-10">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Send size={24} className="text-gray-400" />
+              </div>
+              <p className="text-gray-500 text-sm">No messages yet.<br />Start the conversation!</p>
+            </div>
+          ) : (
+            messages
+              .filter((message) => message.text && message.text.trim() !== "")
+              .map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex w-full ${message.is_from_device ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`
+                    flex flex-col max-w-[80%] 
+                    ${message.is_from_device ? 'items-end' : 'items-start'}
+                  `}>
                     <div
-                      className={`max-w-[80%] p-3 rounded-xl ${message.is_from_device === false
-                        ? "bg-white text-gray-800 rounded-bl-none shadow-sm"
-                        : "bg-blue-600 text-white rounded-br-none shadow-md"
-                        }`}
+                      className={`
+                        px-4 py-2.5 text-sm shadow-sm relative
+                        ${message.is_from_device
+                          ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm'
+                          : 'bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm'
+                        }
+                      `}
                     >
-                      <p className="text-sm leading-relaxed">{message.text}</p>
+                      {message.text}
                     </div>
-                    {/* Avatar for user (right) */}
-                    {message.is_from_device === true && (
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center ml-2 flex-shrink-0">
-                        <span className="text-blue-600 font-bold">U</span>
-                      </div>
-                    )}
+                    {/* Timestamp (Optional) */}
+                    {/* <span className="text-[10px] text-gray-400 mt-1 px-1">
+                      {message.timestamp || 'Just now'}
+                    </span> */}
                   </div>
-                ))}
-            </>
+                </div>
+              ))
           )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Input area */}
-      <div
-        className={
-          isLargeDevice
-            ? "p-3 bg-white border-t border-gray-200 shrink-0"
-            : "fixed bottom-[88px] left-4 right-4 z-20"
+      {/* 3. Input Section */}
+      <div className={`
+        z-40 w-full
+        ${isLargeDevice
+          ? 'absolute bottom-0 bg-white border-t border-gray-100 p-4'
+          : 'fixed bottom-[80px] left-0 right-0 px-4 pointer-events-none' // Floating above nav bar
         }
-      >
+      `}>
         <form
           onSubmit={handleSubmit}
-          className={`flex items-center justify-center gap-2 w-full ${!isLargeDevice ? "bg-white p-2 rounded-full shadow-lg border border-gray-100" : ""
-            }`}
+          className={`
+            flex items-center gap-2 max-w-3xl mx-auto w-full pointer-events-auto
+            ${!isLargeDevice && 'bg-white p-2 rounded-full shadow-lg border border-gray-100'}
+          `}
         >
           <input
             type="text"
-            placeholder="Type here..."
-            className={`text-sm flex-1 min-w-0 p-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${!isLargeDevice ? "bg-transparent border-none focus:ring-0" : ""
-              }`}
+            placeholder="Type a message..."
+            className={`
+              flex-1 text-sm bg-transparent border-none focus:ring-0 px-4 py-2
+              ${isLargeDevice && 'bg-gray-100 rounded-full'}
+            `}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
           />
           <button
             type="submit"
-            className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex-shrink-0 transition-colors shadow-md disabled:opacity-50"
-            aria-label="Send message"
             disabled={!inputValue.trim()}
+            className={`
+              p-2.5 rounded-full flex-shrink-0 transition-all duration-200
+              ${inputValue.trim()
+                ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700 transform hover:scale-105'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }
+            `}
           >
-            <Send size={18} />
+            <Send size={18} className={inputValue.trim() ? 'ml-0.5' : ''} />
           </button>
         </form>
       </div>
