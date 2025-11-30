@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { FormEvent, useState, useEffect, useRef } from "react";
-import { Send, User, Phone, ChevronLeft } from "lucide-react";
+import { Send, User, Phone, ChevronLeft, Wifi, Instagram, Star, Mic } from "lucide-react";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
 import { useNavigate } from "react-router";
+import { cn } from "clsx-for-tailwind";
 
 type Message = {
   id: number;
@@ -158,16 +159,26 @@ function MessagingUI() {
     }
   };
 
+  const presetMessages = [
+    "I need assistance",
+    "Where is my order?",
+    "Call waiter",
+    "Water please"
+  ];
+
+  const handlePresetClick = (msg: string) => {
+    setInputValue(msg);
+  };
+
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-50 relative overflow-hidden">
-      {/* 1. Header Section */}
-      <div className={`
-        fixed top-0 left-0 right-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm
-        ${isLargeDevice ? 'absolute' : 'fixed'}
-      `}>
-        <div className="flex items-center justify-between px-4 py-3 max-w-3xl mx-auto w-full">
+    <div className="flex flex-col h-[100dvh] bg-gray-50 relative overflow-hidden">
+      {/* 1. Header Section (Sticky Top) */}
+      <div className={cn(
+        "fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-200 h-[80px] flex items-center",
+        isLargeDevice ? 'absolute' : 'fixed'
+      )}>
+        <div className="flex items-center justify-between px-4 w-full max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
-            {/* Back Button */}
             <button
               onClick={() => navigate(-1)}
               className="p-1 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
@@ -176,29 +187,25 @@ function MessagingUI() {
             </button>
 
             <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center border-2 border-white shadow-sm">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                 <User size={20} className="text-blue-600" />
               </div>
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-gray-900 text-sm leading-tight">Restaurant Support</span>
-              <span className="text-xs text-green-600 font-medium">Online</span>
+              <span className="text-lg font-bold text-gray-900 leading-tight">Assistant</span>
+              <span className="text-xs font-medium text-green-600">Online</span>
             </div>
           </div>
-          {/* Optional: Call button or other actions */}
-          {/* <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <Phone size={20} className="text-gray-500" />
-          </button> */}
         </div>
       </div>
 
-      {/* 2. Chat Area */}
-      <div className={`
-        flex-1 overflow-y-auto w-full mx-auto
-        ${isLargeDevice ? 'pt-20 pb-20 px-4' : 'pt-20 pb-32 px-3'}
-      `}>
-        <div className="flex flex-col space-y-3 max-w-3xl mx-auto">
+      {/* 2. Message Area (Main Content) */}
+      <div className={cn(
+        "flex-1 overflow-y-auto w-full mx-auto bg-gray-50",
+        isLargeDevice ? 'pt-[80px] pb-[140px] px-4' : 'pt-[80px] pb-[160px] px-4'
+      )}>
+        <div className="flex flex-col space-y-4 max-w-3xl mx-auto py-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center opacity-50 mt-10">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -209,31 +216,64 @@ function MessagingUI() {
           ) : (
             messages
               .filter((message) => message.text && message.text.trim() !== "")
-              .map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex w-full ${message.is_from_device ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div className={`
-                    flex flex-col max-w-[80%] 
-                    ${message.is_from_device ? 'items-end' : 'items-start'}
-                  `}>
-                    <div
-                      className={`
-                        px-4 py-2.5 text-sm shadow-sm relative
-                        ${message.is_from_device
-                          ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm'
-                          : 'bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm'
-                        }
-                      `}
-                    >
+              .map((message, index) => (
+                <div key={message.id} className="flex flex-col w-full gap-2">
+                  <div
+                    className={cn(
+                      "flex w-full gap-3",
+                      message.is_from_device ? "flex-row-reverse" : "flex-row"
+                    )}
+                  >
+                    {/* Avatar */}
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                      message.is_from_device ? "bg-gray-200" : "bg-blue-100"
+                    )}>
+                      {message.is_from_device ? (
+                        <User size={16} className="text-gray-600" />
+                      ) : (
+                        <User size={16} className="text-blue-600" />
+                      )}
+                    </div>
+
+                    {/* Bubble */}
+                    <div className={cn(
+                      "max-w-[85%] px-4 py-3 text-sm shadow-sm",
+                      message.is_from_device
+                        ? "bg-blue-600 text-white rounded-2xl rounded-tr-none"
+                        : "bg-white text-gray-800 rounded-2xl rounded-tl-none"
+                    )}>
                       {message.text}
                     </div>
-                    {/* Timestamp (Optional) */}
-                    {/* <span className="text-[10px] text-gray-400 mt-1 px-1">
-                      {message.timestamp || 'Just now'}
-                    </span> */}
                   </div>
+
+                  {/* Welcome Message Actions - Only for first bot message */}
+                  {!message.is_from_device && index === 0 && (
+                    <div className="ml-11 flex flex-col gap-2 max-w-[85%]">
+                      {/* WiFi Card */}
+                      <div className="bg-blue-50 rounded-xl p-3 flex items-center gap-3 border border-blue-100">
+                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600 shadow-sm">
+                          <Wifi size={16} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-blue-600 font-medium">WiFi Password</span>
+                          <span className="text-sm font-mono font-bold text-gray-800">Guest123</span>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        <button className="flex-1 bg-white rounded-xl p-2 flex items-center justify-center gap-2 border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors">
+                          <Instagram size={16} className="text-pink-600" />
+                          <span className="text-xs font-medium text-gray-700">Instagram</span>
+                        </button>
+                        <button className="flex-1 bg-white rounded-xl p-2 flex items-center justify-center gap-2 border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors">
+                          <Star size={16} className="text-yellow-500 fill-yellow-500" />
+                          <span className="text-xs font-medium text-gray-700">Rate Us</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
           )}
@@ -241,45 +281,72 @@ function MessagingUI() {
         </div>
       </div>
 
-      {/* 3. Input Section */}
-      <div className={`
-        z-40 w-full
-        ${isLargeDevice
-          ? 'absolute bottom-0 bg-white border-t border-gray-100 p-4'
-          : 'fixed bottom-[80px] left-0 right-0 px-4 pointer-events-none' // Floating above nav bar
-        }
-      `}>
-        <form
-          onSubmit={handleSubmit}
-          className={`
-            flex items-center gap-2 max-w-3xl mx-auto w-full pointer-events-auto
-            ${!isLargeDevice && 'bg-white p-2 rounded-full shadow-lg border border-gray-100'}
-          `}
-        >
-          <input
-            type="text"
-            placeholder="Type a message..."
-            className={`
-              flex-1 text-sm bg-transparent border-none focus:ring-0 px-4 py-2
-              ${isLargeDevice && 'bg-gray-100 rounded-full'}
-            `}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={!inputValue.trim()}
-            className={`
-              p-2.5 rounded-full flex-shrink-0 transition-all duration-200
-              ${inputValue.trim()
-                ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700 transform hover:scale-105'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }
-            `}
-          >
-            <Send size={18} className={inputValue.trim() ? 'ml-0.5' : ''} />
-          </button>
-        </form>
+      {/* 3. Footer / Input Area (Fixed Bottom) */}
+      <div className={cn(
+        "z-40 w-full bg-white border-t border-gray-200",
+        isLargeDevice
+          ? 'absolute bottom-0'
+          : 'fixed bottom-0 left-0 right-0'
+      )}>
+        <div className="max-w-3xl mx-auto w-full flex flex-col">
+          {/* Preset Messages */}
+          <div className="w-full overflow-x-auto no-scrollbar py-3 px-4 border-b border-gray-50">
+            <div className="flex gap-2 min-w-max">
+              {presetMessages.map((msg, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handlePresetClick(msg)}
+                  className="px-4 py-2 rounded-full bg-gray-50 text-gray-600 text-xs font-medium hover:bg-blue-50 hover:text-blue-600 transition-colors whitespace-nowrap border border-gray-100"
+                >
+                  {msg}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Input Field Group */}
+          <div className="p-4 pt-2 pb-6">
+            <form
+              onSubmit={handleSubmit}
+              className="flex items-center gap-2 w-full bg-gray-50 rounded-full border border-gray-200 p-1 pr-2"
+            >
+              <button
+                type="button"
+                className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <Mic size={20} />
+              </button>
+
+              <input
+                type="text"
+                placeholder="Type a message..."
+                className="flex-1 bg-transparent border-none focus:ring-0 text-sm px-2 py-2 placeholder:text-gray-400"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+              />
+
+              <button
+                type="submit"
+                disabled={!inputValue.trim()}
+                className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200",
+                  inputValue.trim()
+                    ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                )}
+              >
+                <Send size={14} className={inputValue.trim() ? "ml-0.5" : ""} />
+              </button>
+            </form>
+
+            {/* Branding */}
+            <div className="text-center mt-3">
+              <span className="text-[10px] uppercase text-gray-400 font-medium tracking-wider">
+                Powered by Cleverbiz AI
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
