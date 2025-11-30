@@ -133,7 +133,10 @@ INSTALLED_APPS = [
     'adminapi',
     'vapi',
     'subscription',
-    'payment'
+    'subscription',
+    'payment',
+    'cloudinary_storage',
+    'cloudinary',
 ]
 
 MIDDLEWARE = [
@@ -279,6 +282,15 @@ USE_TZ = True
 STATIC_URL = '/static/'
 MEDIA_URL = env('MEDIA_URL', default='/media/')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Cloudinary Storage
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME', default=''),
+    'API_KEY': env('CLOUDINARY_API_KEY', default=''),
+    'API_SECRET': env('CLOUDINARY_API_SECRET', default=''),
+}
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 STATICFILES_DIRS = [
         os.path.join(BASE_DIR, 'static'),
