@@ -411,7 +411,7 @@ const LayoutDashboard = () => {
                   <h2 className="text-xl font-medium text-icon-active text-start">
                     Choose Category
                   </h2>
-                  <p className="text-xs text-gray-400">v2.0</p>
+
                 </div>
               </div>
               {/* Horizontal scrollable category list - Main Categories Only */}
