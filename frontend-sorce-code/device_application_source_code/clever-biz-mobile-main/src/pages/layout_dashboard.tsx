@@ -9,7 +9,6 @@ import {
 import { SocketContext } from "@/components/SocketContext";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
-import * as LucideIcons from "lucide-react";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { CartProvider } from "../context/CartContext";
@@ -17,7 +16,8 @@ import axiosInstance from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { DashboardHeader } from "./dashboard/dashboard-header";
 import { DashboardLeftSidebar } from "./dashboard/dashboard-left-sidebar";
-import { FoodItemTypes, FoodItems } from "./dashboard/food-items";
+import { FoodItemTypes } from "./dashboard/food-items";
+import { FoodItemCard } from "./dashboard/food-item-card";
 
 const LayoutDashboard = () => {
   const location = useLocation();
@@ -436,7 +436,7 @@ const LayoutDashboard = () => {
 
               {/* Horizontal scrollable category list - Main Categories Only */}
               <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
-                <div className="flex gap-4 px-4 min-w-max">
+                <div className="flex gap-3 px-4 min-w-max">
                   {categories.filter(c => !c.parent_category).map((category) => (
                     <CategoryItem
                       key={category.id}
@@ -453,20 +453,18 @@ const LayoutDashboard = () => {
 
               {/* Sub-category Filter Row (Pill/Chip style) */}
               {subCategories.length > 0 && (
-                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 mb-2">
-                  <div className="flex gap-3 px-1 min-w-max">
+                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 mb-2 bg-gray-50/50">
+                  <div className="flex gap-2 px-4 py-2 min-w-max">
                     {subCategories.map((sub, idx) => (
                       <button
                         key={sub.id}
                         onClick={() => setSelectedSubCategory(sub.id)}
-                        className={`
-                          snap-start shrink-0
-                          px-5 py-2 rounded-full text-xs font-medium transition-all duration-200
-                          ${selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                            ? "bg-blue-600 text-white shadow-md shadow-blue-100"
-                            : "bg-gray-50 text-gray-500 border border-gray-100"
-                          }
-                        `}
+                        className={cn(
+                          "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200",
+                          selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
+                            ? "bg-black text-white shadow-md"
+                            : "bg-gray-200/50 text-gray-500 hover:bg-gray-300/50"
+                        )}
                       >
                         {sub.Category_name}
                       </button>
@@ -475,8 +473,8 @@ const LayoutDashboard = () => {
                 </div>
               )}
 
-              {/* Items Display Logic - Vertical List */}
-              <div className="flex flex-col gap-y-4 px-4 py-4 pb-32">
+              {/* Items Display Logic - Vertical Grid */}
+              <div className="grid grid-cols-1 gap-4 px-4 py-4 pb-32">
                 {(() => {
                   let filteredItems = items;
 
@@ -521,7 +519,11 @@ const LayoutDashboard = () => {
                   }
 
                   return filteredItems.map((item) => (
-                    <FoodItems key={item.id} item={item} showFood={showFood} />
+                    <FoodItemCard
+                      key={item.id}
+                      item={item}
+                      onAdd={() => showFood(item.id)}
+                    />
                   ));
                 })()}
               </div>
@@ -536,10 +538,10 @@ const LayoutDashboard = () => {
         <footer className="flex-shrink-0 w-full text-center py-3 text-gray-500 text-xs bg-white border-t border-gray-200">
           Powered By CleverBiz AI
         </footer>
-      </div >
+      </div>
 
       {/* Detail modal */}
-      < ModalFoodDetail
+      <ModalFoodDetail
         isOpen={isDetailOpen}
         close={() => setDetailOpen(false)}
         itemId={selectedItemId ?? undefined}
@@ -577,7 +579,7 @@ const LayoutDashboard = () => {
         }}
         onHangUp={handleHangUp}
       />
-    </CartProvider >
+    </CartProvider>
   );
 };
 
