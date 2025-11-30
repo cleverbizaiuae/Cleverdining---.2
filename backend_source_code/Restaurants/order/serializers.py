@@ -19,7 +19,7 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
 
 
 
-class OrderCreateSerializer(serializers.ModelSerializer):
+class OrderCreateSerializerFixed(serializers.ModelSerializer):
     order_items = OrderItemCreateSerializer(many=True)
 
     class Meta:

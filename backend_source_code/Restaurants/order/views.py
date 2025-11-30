@@ -5,7 +5,7 @@ from rest_framework import generics, status,filters, permissions
 from rest_framework.views import APIView
 from .pagination import TenPerPagePagination
 from .models import Order
-from .serializers import OrderCreateSerializer, OrderDetailSerializer
+from .serializers import OrderCreateSerializerFixed, OrderDetailSerializer
 from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff
 from accounts.models import ChefStaff
 from django.utils.timezone import now
@@ -26,7 +26,7 @@ from calendar import monthrange
 
 
 class OrderCreateAPIView(generics.CreateAPIView):
-    serializer_class = OrderCreateSerializer
+    serializer_class = OrderCreateSerializerFixed
     permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
