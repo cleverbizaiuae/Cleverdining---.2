@@ -141,9 +141,9 @@ function MessagingUI() {
   };
 
   return (
-    <div className="flex flex-col bg-slate-100 h-screen xl:h-[100vh] min-h-screen relative">
+    <div className="flex flex-col bg-slate-100 h-[100dvh] relative pb-24">
       {/* Header */}
-      <div className="flex items-center p-4 bg-white shadow-sm">
+      <div className="flex items-center p-4 bg-white shadow-sm shrink-0 z-10">
         <div className="flex items-center space-x-3">
           <div className="relative">
             <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -190,17 +190,17 @@ function MessagingUI() {
                       </div>
                     )}
                     <div
-                      className={`max-w-xs md:max-w-md p-3 rounded-xl ${message.is_from_device === false
-                        ? "bg-gray-200 text-gray-800 rounded-bl-none"
-                        : "bg-blue-500 text-white rounded-br-none"
+                      className={`max-w-[80%] p-3 rounded-xl ${message.is_from_device === false
+                        ? "bg-white text-gray-800 rounded-bl-none shadow-sm"
+                        : "bg-blue-600 text-white rounded-br-none shadow-md"
                         }`}
                     >
-                      <p className="text-sm">{message.text}</p>
+                      <p className="text-sm leading-relaxed">{message.text}</p>
                     </div>
                     {/* Avatar for user (right) */}
                     {message.is_from_device === true && (
-                      <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center ml-2 flex-shrink-0">
-                        <span className="text-blue-700 font-bold">U</span>
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center ml-2 flex-shrink-0">
+                        <span className="text-blue-600 font-bold">U</span>
                       </div>
                     )}
                   </div>
@@ -212,24 +212,25 @@ function MessagingUI() {
       </div>
 
       {/* Input area - Fixed for all devices */}
-      <div className="p-3 sm:p-4 bg-white border-t border-gray-200 shrink-0 mb-0 sm:mb-10 md:mb-0 lg:mb-25  xl:mb-2">
+      <div className="p-3 bg-white border-t border-gray-200 shrink-0">
         <form
           onSubmit={handleSubmit}
           className="flex items-center justify-center gap-2 w-full"
         >
           <input
             type="text"
-            placeholder="Type here"
-            className="text-sm flex-1 min-w-0 p-2 sm:p-3 bg-white border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Type here..."
+            className="text-sm flex-1 min-w-0 p-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
           />
           <button
             type="submit"
-            className="p-2 sm:p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex-shrink-0 transition-colors"
+            className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex-shrink-0 transition-colors shadow-md disabled:opacity-50"
             aria-label="Send message"
+            disabled={!inputValue.trim()}
           >
-            <Send size={20} />
+            <Send size={18} />
           </button>
         </form>
       </div>

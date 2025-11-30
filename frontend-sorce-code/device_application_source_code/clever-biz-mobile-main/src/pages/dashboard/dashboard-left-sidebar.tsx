@@ -38,7 +38,7 @@ export const DashboardLeftSidebar = ({
         " fixed bg-sidebar rounded-r-xl shadow-lg flex flex-col items-center justify-center  py-4 md:pt-16 xl:pt-0 pt-0 text-xs font-light z-50",
         isLargeDevice
           ? " top-1/2 transform -translate-y-1/2 left-0 w-22"
-          : "fixed bottom-3 right-0 left-0  w-96 sm:w-fit    mx-auto rounded-xl   py-2 px-4 flex gap-2 flex-row h-fit transform-none"
+          : "fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-md mx-auto rounded-2xl py-2 px-4 flex justify-between items-center h-fit shadow-xl border border-gray-100"
       )}
     >
       {/* Home */}
@@ -47,7 +47,7 @@ export const DashboardLeftSidebar = ({
         type="button"
         end
         className={({ isActive }) =>
-          cn("w-16 h-16 flex flex-col items-center justify-center", {
+          cn("w-14 h-14 flex flex-col items-center justify-center", {
             "bg-icon-active-bg rounded-full fill-icon-active": isActive,
           })
         }
@@ -75,7 +75,7 @@ export const DashboardLeftSidebar = ({
         onClick={() =>
           confirmToCall(JSON.parse(userInfo as string).user.owner_id)
         }
-        className={cn("w-16 h-16 flex flex-col items-center justify-center", {
+        className={cn("w-14 h-14 flex flex-col items-center justify-center", {
           "bg-icon-active-bg rounded-full": false,
         })}
       >
@@ -96,7 +96,7 @@ export const DashboardLeftSidebar = ({
       <NavLink
         to="/dashboard/message"
         className={({ isActive }) =>
-          cn("w-16 h-16 flex flex-col items-center justify-center relative", {
+          cn("w-14 h-14 flex flex-col items-center justify-center relative", {
             "bg-icon-active-bg rounded-full": isActive,
           })
         }
@@ -133,7 +133,7 @@ export const DashboardLeftSidebar = ({
         }}
         to="/dashboard/cart"
         className={({ isActive }) =>
-          cn("w-16 h-16 flex flex-col items-center justify-center", {
+          cn("w-14 h-14 flex flex-col items-center justify-center", {
             "bg-icon-active-bg rounded-full": isActive,
           })
         }
@@ -161,7 +161,7 @@ export const DashboardLeftSidebar = ({
           if (!isLargeDevice) setIsMobileMenuOpen(true);
           navigate("/dashboard/orders");
         }}
-        className={cn("w-16 h-16 flex flex-col items-center justify-center", {
+        className={cn("w-14 h-14 flex flex-col items-center justify-center", {
           "bg-icon-active-bg rounded-full": location.pathname.includes("/dashboard/orders"),
         })}
       >

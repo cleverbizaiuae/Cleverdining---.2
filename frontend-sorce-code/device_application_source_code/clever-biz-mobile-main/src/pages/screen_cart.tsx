@@ -65,7 +65,7 @@ const ScreenCart = () => {
               <img
                 src={item.image1}
                 alt={item.item_name}
-                className="md:w-10 md:h-10 xl:w-16 xl:h-16 object-cover rounded-md"
+                className="w-20 h-20 object-cover rounded-xl border border-gray-100 bg-gray-50"
               />
               {/* Text & Price */}
               <div className="ml-4 flex-1">
