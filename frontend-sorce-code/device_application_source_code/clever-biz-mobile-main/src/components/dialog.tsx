@@ -48,9 +48,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
   const handleAddToCart = () => {
     if (item) {
-      for (let i = 0; i < quantity; i++) {
-        addToCart(item);
-      }
+      addToCart(item, quantity);
       toast.success(`Added ${quantity} to cart!`);
       close();
       if (onAddToCart) onAddToCart();
@@ -141,7 +139,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Sticky Action Bar */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-6 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-6 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20">
             <div className="flex items-center gap-4">
               {/* Quantity Controls */}
               <div className="flex items-center bg-gray-100 rounded-xl p-1">

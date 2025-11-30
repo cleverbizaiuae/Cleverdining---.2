@@ -53,10 +53,26 @@ axiosInstance.interceptors.response.use(
           return axiosInstance(originalRequest);
         }
       } catch {
-        // Refresh token failed, redirect to login
-        localStorage.removeItem(TOKENS.ACCESS_TOKEN);
-        localStorage.removeItem(TOKENS.REFRESH_TOKEN);
-        localStorage.removeItem(TOKENS.USER_INFO);
+        // Refresh token failed
+        const userInfo = localStorage.getItem(TOKENS.USER_INFO);
+        let isGuest = false;
+        try {
+          if (userInfo) {
+            const parsed = JSON.parse(userInfo);
+            if (parsed.role === "guest") {
+              isGuest = true;
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing userInfo", e);
+        }
+
+        if (!isGuest) {
+          localStorage.removeItem(TOKENS.ACCESS_TOKEN);
+          localStorage.removeItem(TOKENS.REFRESH_TOKEN);
+          localStorage.removeItem(TOKENS.USER_INFO);
+        }
+
         window.location.href = "/";
       }
     }
