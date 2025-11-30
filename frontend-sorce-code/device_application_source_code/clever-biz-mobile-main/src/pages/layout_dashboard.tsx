@@ -1,15 +1,14 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import CallerModal from "@/components/CallerModal";
 import {
-  ModalCall,
-  ModalCallConfirm,
   ModalFoodDetail,
+  ModalAssistance,
 } from "@/components/dialog";
 import { SocketContext } from "@/components/SocketContext";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion, AnimatePresence } from "motion/react";
+import toast from "react-hot-toast";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { CartProvider } from "../context/CartContext";
@@ -31,8 +30,7 @@ const LayoutDashboard = () => {
   const [categories, setCategories] = useState<CategoryItemType[]>([]);
   const [isDetailOpen, setDetailOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-  const [isCallConfirmOpen, setCallConfirmOpen] = useState(false);
-  const [isCallOpen, setCallOpen] = useState(false);
+  const [isAssistanceOpen, setAssistanceOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
   const subCategories = useMemo(() => {
@@ -55,8 +53,8 @@ const LayoutDashboard = () => {
     [socketContext?.response]
   );
 
-  // Access WebSocket context to use setNewMessageFlag
-  const { setNewMessageFlag } = useWebSocket();
+  // Access WebSocket context to use setNewMessageFlag and sendMessage
+  const { setNewMessageFlag, sendMessage } = useWebSocket();
 
   // Check localStorage for newMessage flag when component mounts
   useEffect(() => {
@@ -279,128 +277,18 @@ const LayoutDashboard = () => {
 
   const navigate = useNavigate();
 
-  ////////////////////// caller api /////////////////////////////////////////
-
-  const [newsocket, setNewSocket] = useState<WebSocket | null>(null);
-  const [response, setResponse] = useState<any>(null);
-  const jwt = localStorage.getItem("accessToken");
-  const [idCallingModal, setIsCallingModal] = useState(false);
-  const storedUserInfo = localStorage.getItem("userInfo");
-
-  useEffect(() => {
-    if (!jwt || !storedUserInfo) {
-      return;
-    }
-    // Use environment variable or fallback to production WebSocket URL
-    const WS_BASE_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
-    const restaurantId = JSON.parse(storedUserInfo as string).user?.restaurants[0]?.id;
-    const newSoket = new WebSocket(
-      `${WS_BASE_URL}/ws/calls/${restaurantId}/?token=${jwt}`
-    );
-    newSoket.onopen = () => {
-      console.log("Socket Opened");
-    };
-    newSoket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setResponse(data);
-
-      if (data.action === "incoming_call") {
-        setIsCallingModal(true);
-      }
-      if (data.action === "call_ended") {
-        setIsCallingModal(false);
-      }
-      if (data.action === "call_accepted") {
-        window.location.href = `https://clever-biz.vercel.app?device=${encodeURIComponent(
-          data?.device_id
-        )}&user=${encodeURIComponent(
-          storedUserInfo ? JSON.parse(storedUserInfo).user?.restaurants[0]?.table_name : ""
-        )}&deviceId=${encodeURIComponent("A1")}&receiver=${encodeURIComponent(
-          "Hyatt Benjamin"
-        )}&token=${encodeURIComponent(jwt)}`;
-      }
-      if (data.action === "call_accepted") {
-        setTimeout(() => {
-          const data = {
-            action: "end_call",
-            call_id: response?.call_id,
-            device_id: response?.device_id,
-          };
-          newSoket.send(JSON.stringify(data));
-        }, 5000);
-      }
-      if (data.action === "call_started") {
-        // Store call_id when call starts
-        setResponse((prev: any) => ({ ...prev, call_id: data.call_id }));
-      }
-    };
-
-    newSoket.onclose = () => {
-      console.log("Socket Closed");
-    };
-
-    newSoket.onerror = () => {
-      console.log("Socket Error");
-    };
-
-    setNewSocket(newSoket);
-
-    return () => {
-      newSoket.close();
-    };
-  }, [jwt, storedUserInfo]);
-
-  const handleEndCall = (callerId: string, deviceId: string) => {
-    const data = {
-      action: "end_call",
-      call_id: callerId,
-      device_id: deviceId,
-    };
-    newsocket!.send(JSON.stringify(data));
-    setIsCallingModal(false);
+  const handleRequestAssistance = () => {
+    const tableNum = tableName || "Unknown";
+    const msg = `Table ${tableNum} is requesting assistance.`;
+    sendMessage(msg);
+    toast.success("Assistance request sent.");
+    setAssistanceOpen(false);
   };
 
-  const handleHangUp = () => {
-    if (response?.call_id) {
-      const userObj = storedUserInfo ? JSON.parse(storedUserInfo) : null;
-      const deviceId = userObj?.user?.restaurants[0]?.device_id;
-
-      const data = {
-        action: "end_call",
-        call_id: response.call_id,
-        device_id: deviceId,
-      };
-      newsocket!.send(JSON.stringify(data));
-    }
-    setCallOpen(false);
-  };
-
-  const handleAnswerCall = (callerId: string, deviceId: string) => {
-    const data = {
-      action: "accept_call",
-      call_id: callerId,
-      device_id: deviceId,
-    };
-    newsocket!.send(JSON.stringify(data));
-    setIsCallingModal(false);
-  };
-
-  const confirmToCall = (receiver_id: any) => {
-    const userObj = storedUserInfo ? JSON.parse(storedUserInfo) : null;
-    const data = {
-      action: "start_call",
-      receiver_id: receiver_id,
-      device_id: userObj?.user?.restaurants[0]?.device_id,
-      table_id: userObj?.user?.restaurants[0]?.table_name,
-    };
-    newsocket!.send(JSON.stringify(data));
-    setIsCallingModal(true);
-  };
-
-  // Listen for custom event from BottomNav to trigger call
+  // Listen for custom event from BottomNav to trigger assistance
   useEffect(() => {
     const handleTriggerCall = () => {
-      setCallConfirmOpen(true);
+      setAssistanceOpen(true);
     };
     window.addEventListener("trigger-call-staff", handleTriggerCall);
     return () => {
@@ -575,35 +463,12 @@ const LayoutDashboard = () => {
           // navigate("/dashboard/cart"); // Stay on page or navigate? User requested "shows toast and closes modal", didn't say navigate.
         }}
       />
-      {/* Call modal */}
-      <ModalCallConfirm
-        isOpen={isCallConfirmOpen}
-        close={() => {
-          setCallConfirmOpen(false);
-        }}
-        confirm={() => {
-          setCallConfirmOpen(false);
-          setCallOpen(true);
-          confirmToCall(null); // Pass null or appropriate receiver ID
-        }}
-      />
-      {
-        idCallingModal && (
-          <CallerModal
-            email={JSON.parse(storedUserInfo as string).user.username}
-            handleEndCall={handleEndCall}
-            handleAnswerCall={handleAnswerCall}
-            response={response}
-          />
-        )
-      }
-      {/* Call modal */}
-      <ModalCall
-        isOpen={isCallOpen}
-        close={() => {
-          setCallOpen(false);
-        }}
-        onHangUp={handleHangUp}
+      {/* Assistance modal */}
+      <ModalAssistance
+        isOpen={isAssistanceOpen}
+        close={() => setAssistanceOpen(false)}
+        confirm={handleRequestAssistance}
+        tableName={tableName}
       />
     </CartProvider>
   );
