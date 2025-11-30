@@ -41,10 +41,22 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   }, [isOpen, itemId]);
   return (
     <Dialog open={isOpen} onClose={() => close()} className="relative z-50">
-      <DialogBackdrop className="fixed inset-0 bg-black/10" />
+      <DialogBackdrop className="fixed inset-0 bg-black/20 backdrop-blur-sm transition-opacity" />
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className=" bg-sidebar p-4 rounded-lg shadow-xl min-w-md">
-          <div className="relative max-h-[300px] mx-auto aspect-square rounded-xl overflow-hidden flex justify-center items-center object-contain cursor-pointer">
+        <DialogPanel className="bg-white p-0 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden relative flex flex-col max-h-[90vh]">
+          {/* Close Button */}
+          <button
+            onClick={close}
+            className="absolute top-3 right-3 z-20 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+
+          {/* Image Container */}
+          <div className="relative w-full h-64 shrink-0 bg-gray-100">
             {showVideo && item?.video ? (
               <video
                 src={item.video}
@@ -68,8 +80,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                     onClick={() => setShowVideo(true)}
                   >
                     <svg
-                      width="64"
-                      height="64"
+                      width="48"
+                      height="48"
                       viewBox="0 0 64 64"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
@@ -79,7 +91,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                         cy="32"
                         r="32"
                         fill="#2962FF"
-                        fillOpacity="0.7"
+                        fillOpacity="0.8"
                       />
                       <polygon points="26,20 48,32 26,44" fill="#fff" />
                     </svg>
@@ -88,49 +100,51 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               </>
             )}
           </div>
-          <p className="text-xl text-icon-active text-wrap font-medium mt-4">
-            {truncatedName ? (
-              <span className="text-xl md:text-2xl font-semibold truncate">
+
+          {/* Content Container */}
+          <div className="p-5 flex flex-col flex-1 overflow-y-auto">
+            <div className="flex justify-between items-start gap-2 mb-2">
+              <h3 className="text-xl font-bold text-gray-900 leading-tight">
                 {truncatedName}
+              </h3>
+              <span className="text-lg font-bold text-blue-600 shrink-0">
+                ${item?.price}
               </span>
-            ) : (
-              "Loading..."
-            )}
-          </p>
-          <p className="text-sm text-wrap max-w-lg text-primary/40 mb-4">
-            {item?.description || ""}
-          </p>
-          <div className="flex items-center justify-between">
-            <p className="text-icon-active text-wrap text-start font-bold text-2xl">
-              {item ? `$${item.price}` : ""}
-              <span className="text-sm font-normal">
-                {" "}
-                / {item?.category_name || ""}
-              </span>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+              {item?.description || "No description available."}
             </p>
-            <button
-              className="button-primary flex items-center gap-x-3 fill-primary-text"
-              onClick={() => {
-                if (item) {
-                  addToCart(item);
-                  toast.success("Added to cart!");
-                  close();
-                  if (onAddToCart) onAddToCart();
-                }
-              }}
-            >
-              <span>
+
+            <div className="mt-auto pt-2">
+              <button
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-blue-200"
+                onClick={() => {
+                  if (item) {
+                    addToCart(item);
+                    toast.success("Added to cart!");
+                    close();
+                    if (onAddToCart) onAddToCart();
+                  }
+                }}
+              >
                 <svg
-                  width="18"
+                  width="20"
                   height="20"
-                  viewBox="0 0 18 20"
-                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <path d="M5.375 6C5.30014 5.90123 5.2564 5.7824 5.24936 5.65867C5.24232 5.53494 5.27229 5.41192 5.33546 5.3053C5.39863 5.19867 5.49213 5.11328 5.60403 5.06002C5.71593 5.00676 5.84116 4.98804 5.96375 5.00625C6.12772 5.02979 6.27564 5.11746 6.375 5.25L9 8.75V0.625C9 0.45924 9.06585 0.300269 9.18306 0.183058C9.30027 0.065848 9.45924 0 9.625 0C9.79076 0 9.94973 0.065848 10.0669 0.183058C10.1842 0.300269 10.25 0.45924 10.25 0.625V8.75L12.875 5.25C12.9495 5.15167 13.0513 5.07752 13.1677 5.03684C13.2842 4.99616 13.41 4.99077 13.5295 5.02135C13.649 5.05192 13.7568 5.11709 13.8394 5.2087C13.922 5.3003 13.9757 5.41425 13.9937 5.53625C14.0054 5.61756 14.0009 5.70037 13.9805 5.77995C13.9602 5.85952 13.9243 5.9343 13.875 6L10.125 11C10.1175 11.01 10.1038 11.015 10.095 11.025C10.0534 11.0739 10.0045 11.116 9.95 11.15C9.93065 11.1662 9.90971 11.1805 9.8875 11.1925C9.80598 11.2332 9.71612 11.2544 9.625 11.2544C9.53388 11.2544 9.44402 11.2332 9.3625 11.1925C9.34029 11.1805 9.31935 11.1662 9.3 11.15C9.24553 11.116 9.19663 11.0739 9.155 11.025C9.14625 11.015 9.1325 11.01 9.125 11L5.375 6ZM6.1875 18.4375C6.18808 18.7466 6.09661 19.0489 5.92475 19.3058C5.75289 19.5627 5.50842 19.7626 5.2225 19.88C5.00912 19.9679 4.77894 20.0075 4.54846 19.996C4.31798 19.9844 4.0929 19.9221 3.88934 19.8134C3.68578 19.7047 3.50879 19.5523 3.37103 19.3672C3.23326 19.182 3.13815 18.9687 3.0925 18.7425C3.04901 18.5283 3.05094 18.3074 3.09817 18.094C3.1454 17.8806 3.23687 17.6795 3.36667 17.5036C3.49648 17.3278 3.66173 17.1811 3.85175 17.0731C4.04178 16.9652 4.25234 16.8982 4.46984 16.8767C4.68734 16.8552 4.90693 16.8795 5.11444 16.9481C5.32194 17.0168 5.51274 17.1282 5.6745 17.2752C5.83627 17.4221 5.96539 17.6014 6.05354 17.8014C6.14169 18.0014 6.1869 18.2177 6.18625 18.4362L6.1875 18.4375ZM16.1875 18.4375C16.1881 18.7466 16.0966 19.0489 15.9247 19.3058C15.7529 19.5627 15.5084 19.7626 15.2225 19.88C15.0091 19.9679 14.7789 20.0075 14.5485 19.996C14.318 19.9844 14.0929 19.9221 13.8893 19.8134C13.6858 19.7047 13.5088 19.5523 13.371 19.3672C13.2333 19.182 13.1382 18.9687 13.0925 18.7425C13.051 18.5292 13.0545 18.3096 13.1028 18.0977C13.151 17.8858 13.243 17.6863 13.3727 17.512C13.5025 17.3377 13.6673 17.1924 13.8564 17.0854C14.0456 16.9784 14.255 16.9121 14.4712 16.8907C14.6875 16.8693 14.9058 16.8933 15.1123 16.9611C15.3187 17.0289 15.5088 17.1391 15.6702 17.2846C15.8316 17.4301 15.9609 17.6076 16.0498 17.806C16.1386 18.0043 16.1851 18.2189 16.1862 18.4362L16.1875 18.4375ZM16.5 6.875C16.3342 6.875 16.1753 6.94085 16.0581 7.05806C15.9408 7.17527 15.875 7.33424 15.875 7.5L15.25 12.5H4.1125L2.7375 4.275C2.71335 4.1297 2.63865 3.99759 2.52658 3.90199C2.41452 3.8064 2.2723 3.75345 2.125 3.7525H0.875C0.70924 3.7525 0.550268 3.81835 0.433058 3.93556C0.315848 4.05277 0.25 4.21174 0.25 4.3775C0.25 4.54326 0.315848 4.70223 0.433058 4.81944C0.550268 4.93665 0.70924 5.0025 0.875 5.0025H1.595L3.3825 15.7275C3.40581 15.8739 3.48078 16.0071 3.59383 16.1029C3.70688 16.1988 3.85053 16.2509 3.99875 16.25H15.2487C15.4145 16.25 15.5735 16.1842 15.6907 16.0669C15.8079 15.9497 15.8737 15.7908 15.8737 15.625C15.8737 15.4592 15.8079 15.3003 15.6907 15.1831C15.5735 15.0658 15.4145 15 15.2487 15H4.52375L4.315 13.75H15.24C15.5446 13.7499 15.8387 13.6386 16.067 13.437C16.2954 13.2353 16.4422 12.9573 16.48 12.655L17.115 7.505C17.115 7.33924 17.0492 7.18027 16.9319 7.06306C16.8147 6.94585 16.6558 6.88 16.49 6.88L16.5 6.875Z" />
+                  <circle cx="9" cy="21" r="1"></circle>
+                  <circle cx="20" cy="21" r="1"></circle>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
                 </svg>
-              </span>
-              <span>Add To Cart</span>
-            </button>
+                Add to Cart
+              </button>
+            </div>
           </div>
         </DialogPanel>
       </div>
@@ -155,7 +169,7 @@ export const ModalCallConfirm: React.FC<ModalConfirm> = ({
       <DialogBackdrop className="fixed inset-0 bg-black/10" />
 
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className=" bg-primary/90 p-4 rounded-lg shadow-xl min-w-lg">
+        <DialogPanel className=" bg-primary/90 p-4 rounded-lg shadow-xl w-full max-w-lg">
           <div className="relative max-h-[300px] mx-auto aspect-square rounded-xl overflow-hidden flex flex-col justify-center items-center">
             <p className="text-lg text-primary-text text-center">
               Do you want to call for assitance?
@@ -193,7 +207,7 @@ export const ModalCall: React.FC<ModalCallProps> = ({ isOpen, close, onHangUp })
       <DialogBackdrop className="fixed inset-0 bg-black/10" />
 
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className=" bg-primary/90 p-4 rounded-lg shadow-xl min-w-lg">
+        <DialogPanel className=" bg-primary/90 p-4 rounded-lg shadow-xl w-full max-w-lg">
           <div className="relative max-h-[300px] mx-auto aspect-square rounded-xl overflow-hidden flex flex-col justify-center items-center">
             <div className="flex flex-row gap-x-10">
               <button onClick={close}>

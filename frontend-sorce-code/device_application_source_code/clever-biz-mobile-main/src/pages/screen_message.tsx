@@ -3,6 +3,7 @@ import { FormEvent, useState, useEffect, useRef } from "react";
 import { Send } from "lucide-react";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
+import { useMediaQuery } from "@uidotdev/usehooks";
 
 type Message = {
   id: number;
@@ -18,8 +19,8 @@ function MessagingUI() {
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasNewMessage, setHasNewMessage] = useState(false);
-  console.log(hasNewMessage);
-  console.log("messages--------------", messages);
+  const isLargeDevice = useMediaQuery("only screen and (min-width : 993px)");
+
   const ws = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -141,7 +142,7 @@ function MessagingUI() {
   };
 
   return (
-    <div className="flex flex-col bg-slate-100 h-[100dvh] relative pb-24">
+    <div className={`flex flex-col bg-slate-50 h-[100dvh] relative ${isLargeDevice ? "" : ""}`}>
       {/* Header */}
       <div className="flex items-center p-4 bg-white shadow-sm shrink-0 z-10">
         <div className="flex items-center space-x-3">
@@ -168,11 +169,10 @@ function MessagingUI() {
       </div>
 
       {/* Message area */}
-      <div className="flex-1 p-4 overflow-y-auto">
+      <div className={`flex-1 p-4 overflow-y-auto ${isLargeDevice ? "pb-4" : "pb-40"}`}>
         <div className="flex flex-col space-y-4">
           {messages.length > 0 && (
             <>
-
               {messages
                 .filter((message) => message.text && message.text.trim() !== "")
                 .map((message) => (
@@ -211,16 +211,24 @@ function MessagingUI() {
         </div>
       </div>
 
-      {/* Input area - Fixed for all devices */}
-      <div className="p-3 bg-white border-t border-gray-200 shrink-0">
+      {/* Input area */}
+      <div
+        className={
+          isLargeDevice
+            ? "p-3 bg-white border-t border-gray-200 shrink-0"
+            : "fixed bottom-[88px] left-4 right-4 z-20"
+        }
+      >
         <form
           onSubmit={handleSubmit}
-          className="flex items-center justify-center gap-2 w-full"
+          className={`flex items-center justify-center gap-2 w-full ${!isLargeDevice ? "bg-white p-2 rounded-full shadow-lg border border-gray-100" : ""
+            }`}
         >
           <input
             type="text"
             placeholder="Type here..."
-            className="text-sm flex-1 min-w-0 p-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            className={`text-sm flex-1 min-w-0 p-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${!isLargeDevice ? "bg-transparent border-none focus:ring-0" : ""
+              }`}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
           />
