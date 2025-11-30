@@ -5,6 +5,7 @@ import { OrderCard } from "./order-card";
 import { GameHub } from "./game-hub";
 import { Gamepad2 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { motion } from "motion/react";
 
 const ScreenOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -135,11 +136,17 @@ const ScreenOrders = () => {
             ) : (
               /* 2. Order Card List */
               orders.map((order) => (
-                <OrderCard
+                <motion.div
                   key={order.id}
-                  order={order}
-                  onCheckout={handleCheckout}
-                />
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <OrderCard
+                    order={order}
+                    onCheckout={handleCheckout}
+                  />
+                </motion.div>
               ))
             )}
           </div>

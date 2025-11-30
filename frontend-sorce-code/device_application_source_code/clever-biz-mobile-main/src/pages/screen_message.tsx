@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
 import { useNavigate } from "react-router";
 import { cn } from "clsx-for-tailwind";
+import { motion } from "motion/react";
 
 type Message = {
   id: number;
@@ -217,7 +218,13 @@ function MessagingUI() {
             messages
               .filter((message) => message.text && message.text.trim() !== "")
               .map((message, index) => (
-                <div key={message.id} className="flex flex-col w-full gap-2">
+                <motion.div
+                  key={message.id}
+                  className="flex flex-col w-full gap-2"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
                   <div
                     className={cn(
                       "flex w-full gap-3",
@@ -274,7 +281,7 @@ function MessagingUI() {
                       </div>
                     </div>
                   )}
-                </div>
+                </motion.div>
               ))
           )}
           <div ref={messagesEndRef} />

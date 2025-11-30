@@ -9,6 +9,7 @@ import {
 import { SocketContext } from "@/components/SocketContext";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
+import { motion, AnimatePresence } from "motion/react";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { CartProvider } from "../context/CartContext";
@@ -518,13 +519,25 @@ const LayoutDashboard = () => {
                     );
                   }
 
-                  return filteredItems.map((item) => (
-                    <FoodItemCard
-                      key={item.id}
-                      item={item}
-                      onAdd={() => showFood(item.id)}
-                    />
-                  ));
+                  return (
+                    <AnimatePresence mode="popLayout">
+                      {filteredItems.map((item) => (
+                        <motion.div
+                          key={item.id}
+                          layoutId={`food-item-${item.id}`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <FoodItemCard
+                            item={item}
+                            onAdd={() => showFood(item.id)}
+                          />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  );
                 })()}
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { Gamepad2, X, Trophy, Play } from "lucide-react";
 import { cn } from "clsx-for-tailwind";
+import { motion } from "motion/react";
 
 interface GameHubProps {
     isOpen: boolean;
@@ -65,9 +66,16 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
                         All Games
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
-                        {games.map((game) => (
-                            <div
+                        {games.map((game, index) => (
+                            <motion.div
                                 key={game.id}
+                                initial={{ y: -50, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                transition={{
+                                    type: "spring",
+                                    bounce: 0.4,
+                                    delay: index * 0.1
+                                }}
                                 className="group relative aspect-square rounded-2xl bg-gray-800 border border-gray-700 overflow-hidden hover:border-indigo-500/50 transition-all"
                             >
                                 <div className={cn("absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity", game.color)} />
@@ -77,7 +85,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
                                     </div>
                                     <span className="font-bold text-sm">{game.name}</span>
                                 </div>
-                            </div>
+                            </motion.div>
                         ))}
                     </div>
                 </div>

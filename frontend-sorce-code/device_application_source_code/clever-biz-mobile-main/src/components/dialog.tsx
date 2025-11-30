@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axios";
 import { useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
+import { motion } from "motion/react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -58,13 +59,19 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           {/* Image Container */}
           <div className="relative w-full h-64 shrink-0 bg-gray-100">
             {showVideo && item?.video ? (
-              <video
-                src={item.video}
-                controls
-                autoPlay
-                className="w-full h-full object-cover"
-                onClick={(e) => e.stopPropagation()}
-              />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full h-full"
+              >
+                <video
+                  src={item.video}
+                  controls
+                  autoPlay
+                  className="w-full h-full object-cover"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </motion.div>
             ) : (
               <>
                 <img
@@ -75,8 +82,10 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                   style={{ cursor: item?.video ? "pointer" : "default" }}
                 />
                 {item?.video && (
-                  <span
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+                  <motion.span
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 cursor-pointer"
                     onClick={() => setShowVideo(true)}
                   >
                     <svg
@@ -95,7 +104,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                       />
                       <polygon points="26,20 48,32 26,44" fill="#fff" />
                     </svg>
-                  </span>
+                  </motion.span>
                 )}
               </>
             )}

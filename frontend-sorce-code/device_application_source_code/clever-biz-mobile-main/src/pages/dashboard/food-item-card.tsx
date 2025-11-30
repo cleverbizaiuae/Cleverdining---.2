@@ -22,7 +22,7 @@ export const FoodItemCard: React.FC<FoodItemCardProps> = ({ item, onAdd }) => {
                         return url;
                     })()}
                     alt={item.item_name}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
             </div>
 
