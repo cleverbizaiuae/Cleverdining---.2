@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import { Trash } from "lucide-react"; // Icon for trash
+import { Trash, Pencil } from "lucide-react"; // Icon for trash and pencil
 import toast from "react-hot-toast";
 import {
   Dialog,
@@ -10,15 +10,17 @@ import {
 import { ImSpinner6 } from "react-icons/im";
 import axiosInstance from "@/lib/axios";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
-// import axiosInstance from "@/lib/axios";
-// import { DeleteFoodItemModal } from "./DeleteFoodItemModal"; // Import the modal component
+import { EditCategoryModal } from "../modals";
 
 const CategoriesTable = ({ categories, setCategories }) => {
   const { response } = useContext(WebSocketContext);
   const [isModalOpen, setIsModalOpen] = useState(false); // Modal open/close state
   const [categoryToDelete, setCategoryToDelete] = useState(null); // Selected category to delete
   const [isDeleting, setIsDeleting] = useState(false); // Deletion in progress state
-  //   const [categoryToDelete, setCategoryToDelete] = useState(null);
+
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const openModal = (category) => {
     setCategoryToDelete(category); // Set the selected category
     setIsModalOpen(true); // Open the modal
@@ -27,6 +29,16 @@ const CategoriesTable = ({ categories, setCategories }) => {
   const closeModal = () => {
     setIsModalOpen(false); // Close the modal
     setCategoryToDelete(null); // Clear the selected category
+  };
+
+  const openEditModal = (category) => {
+    setEditingCategory(category);
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditingCategory(null);
+    setIsEditModalOpen(false);
   };
 
   return (
@@ -77,6 +89,12 @@ const CategoriesTable = ({ categories, setCategories }) => {
                   </td>
                   <td className="p-2 text-right">
                     <button
+                      onClick={() => openEditModal(category)}
+                      className="text-blue-500 hover:text-blue-400 transition-colors duration-200 mr-3"
+                    >
+                      <Pencil size={20} />
+                    </button>
+                    <button
                       onClick={() => openModal(category)} // Open modal with the selected category
                       className="text-red-500 hover:text-red-700 transition-colors duration-200"
                       disabled={isDeleting}
@@ -97,6 +115,18 @@ const CategoriesTable = ({ categories, setCategories }) => {
           close={closeModal} // Function to close the modal
           id={categoryToDelete?.id}
           setCategories={setCategories} // Pass the category ID to the modal
+        />
+      )}
+
+      {/* Edit Category Modal */}
+      {isEditModalOpen && (
+        <EditCategoryModal
+          isOpen={isEditModalOpen}
+          close={closeEditModal}
+          id={editingCategory?.id}
+          onSuccess={() => {
+            // Optional: refresh categories if needed, but modal reloads page currently
+          }}
         />
       )}
     </div>

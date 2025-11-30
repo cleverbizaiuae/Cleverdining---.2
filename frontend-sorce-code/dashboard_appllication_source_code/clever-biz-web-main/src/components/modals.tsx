@@ -1082,13 +1082,53 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
   isOpen,
   close,
   onSuccess,
+  id,
 }) => {
   const { fetchCategories } = useOwner();
-  const { handleSubmit, register, reset } = useForm<CategoryInputs>();
+  const { handleSubmit, register, reset, setValue } = useForm<CategoryInputs>();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [iconImageFile, setIconImageFile] = useState<File | null>(null);
   const [selectedIcon, setSelectedIcon] = useState<string>("");
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [existingImage, setExistingImage] = useState<string | null>(null);
+  const [existingIconImage, setExistingIconImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && id) {
+      const fetchCategory = async () => {
+        try {
+          const res = await axiosInstance.get(`/owners/categories/${id}/`);
+          const cat = res.data;
+          setValue("name", cat.Category_name);
+          if (cat.icon) setSelectedIcon(cat.icon);
+
+          if (cat.image) {
+            let url = cat.image;
+            if (url.startsWith("http://")) url = url.replace("http://", "https://");
+            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+            setExistingImage(url);
+          }
+          if (cat.icon_image) {
+            let url = cat.icon_image;
+            if (url.startsWith("http://")) url = url.replace("http://", "https://");
+            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+            setExistingIconImage(url);
+          }
+        } catch (e) {
+          console.error(e);
+          toast.error("Failed to fetch category details");
+        }
+      };
+      fetchCategory();
+    } else if (isOpen && !id) {
+      reset();
+      setImageFile(null);
+      setIconImageFile(null);
+      setSelectedIcon("");
+      setExistingImage(null);
+      setExistingIconImage(null);
+    }
+  }, [isOpen, id, setValue, reset]);
 
   const onSubmit: SubmitHandler<CategoryInputs> = async (data) => {
     try {
@@ -1098,21 +1138,26 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
       if (iconImageFile) formData.append("icon_image", iconImageFile);
       if (selectedIcon) formData.append("icon", selectedIcon);
 
-      const response = await axiosInstance.post(
-        "/owners/categories/",
-        formData,
-        {
+      if (id) {
+        await axiosInstance.patch(`/owners/categories/${id}/`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+        });
+        toast.success("Category Updated successfully");
+      } else {
+        await axiosInstance.post("/owners/categories/", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        toast.success("Category Created successfully");
+      }
+
       fetchCategories();
-      console.log(response.data, "categories---------------");
-      toast.success("Category Created successfully");
       reset();
       setImageFile(null);
       setIconImageFile(null);
       setSelectedIcon("");
-      onSuccess();
+      setExistingImage(null);
+      setExistingIconImage(null);
+      if (onSuccess) onSuccess();
       close();
       window.location.reload();
     } catch (error) {
@@ -1138,7 +1183,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
               as="h3"
               className="text-base/7 font-medium text-white mb-8"
             >
-              Add Category
+              {id ? "Edit Category" : "Add Category"}
             </DialogTitle>
             <form
               onSubmit={handleSubmit(onSubmit)}
@@ -1208,15 +1253,47 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
                 )}
               </div>
 
+              {existingIconImage && !iconImageFile && (
+                <div className="space-y-2">
+                  <label className="block text-white text-sm">Current Icon Image</label>
+                  <div className="relative inline-block">
+                    <img src={existingIconImage} alt="Current Icon" className="h-10 w-10 object-contain rounded bg-white/10 p-1" />
+                    <button
+                      type="button"
+                      onClick={() => setExistingIconImage(null)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
+                    >
+                      <FiX size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <InputImageUploadBox
                 file={iconImageFile}
                 setFile={setIconImageFile}
                 label="Category Icon Image (Optional - Overrides Icon)"
               />
 
+              {existingImage && !imageFile && (
+                <div className="space-y-2">
+                  <label className="block text-white text-sm">Current Background Image</label>
+                  <div className="relative inline-block">
+                    <img src={existingImage} alt="Current Background" className="h-20 w-32 object-cover rounded border border-gray-600" />
+                    <button
+                      type="button"
+                      onClick={() => setExistingImage(null)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
+                    >
+                      <FiX size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <InputImageUploadBox file={imageFile} setFile={setImageFile} />
-              <button className="button-primary" onClick={close}>
-                Submit
+              <button className="button-primary" type="submit">
+                {id ? "Update" : "Submit"}
               </button>
             </form>
           </DialogPanel>
