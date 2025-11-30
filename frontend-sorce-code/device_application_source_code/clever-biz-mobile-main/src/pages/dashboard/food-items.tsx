@@ -40,7 +40,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
                 if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
                 let url = item.image1;
                 // Fix double media path
-                url = url.replace("/media/media/", "/media/");
+                // url = url.replace("/media/media/", "/media/");
                 // Force HTTPS
                 if (url.startsWith("http://")) {
                   url = url.replace("http://", "https://");

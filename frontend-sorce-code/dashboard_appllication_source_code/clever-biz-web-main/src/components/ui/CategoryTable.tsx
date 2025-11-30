@@ -55,7 +55,7 @@ const CategoriesTable = ({ categories, setCategories }) => {
                           return "https://placehold.co/100x100?text=No+Image";
                         let url = category.image;
                         // Fix double media path
-                        url = url.replace("/media/media/", "/media/");
+                        // url = url.replace("/media/media/", "/media/");
                         // Force HTTPS
                         if (url.startsWith("http://")) {
                           url = url.replace("http://", "https://");
