@@ -19,10 +19,10 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative w-28 h-28 rounded-2xl overflow-hidden transition-all duration-300 group snap-start shrink-0",
+        "relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden transition-all duration-300 group snap-start shrink-0 border",
         isActive
-          ? "scale-105 shadow-lg ring-2 ring-primary ring-offset-2"
-          : "scale-100 opacity-90 hover:opacity-100"
+          ? "border-primary shadow-lg shadow-primary/25 scale-105"
+          : "border-transparent hover:border-primary/30 scale-100"
       )}
     >
       {/* Background Image */}
@@ -35,36 +35,28 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
           return url;
         })()}
         alt={cat.Category_name}
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+        className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110"
       />
 
       {/* Overlay */}
       <div className={cn(
         "absolute inset-0 transition-colors duration-300",
         isActive
-          ? "bg-primary/20 backdrop-blur-[1px]"
-          : "bg-black/40 group-hover:bg-black/30"
+          ? "bg-primary/20"
+          : "bg-black/10 group-hover:bg-black/0"
       )} />
 
       {/* Label */}
-      <div className="absolute bottom-2 left-2 right-2">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className={cn(
-          "px-2 py-1 rounded-full text-[10px] font-bold text-center truncate transition-colors duration-300",
+          "px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center truncate transition-colors duration-300 max-w-[90%]",
           isActive
-            ? "bg-white text-primary shadow-sm"
-            : "bg-black/50 text-white backdrop-blur-sm"
+            ? "bg-primary text-white"
+            : "bg-white/90 text-gray-800 backdrop-blur-md"
         )}>
           {cat.Category_name}
         </div>
       </div>
-
-      {/* Active Indicator Dot */}
-      {isActive && (
-        <motion.div
-          layoutId="active-cat-dot"
-          className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border border-white"
-        />
-      )}
     </button>
   );
 };

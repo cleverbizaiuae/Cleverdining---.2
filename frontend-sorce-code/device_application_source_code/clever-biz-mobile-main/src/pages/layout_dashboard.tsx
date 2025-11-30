@@ -349,8 +349,8 @@ const LayoutDashboard = () => {
           {!isSubRoute ? (
             <div className="flex flex-col">
               {/* 2. Category Navigation (Layer 1) */}
-              <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory py-4">
-                <div className="flex gap-3 px-4 min-w-max">
+              <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory py-2 pl-4">
+                <div className="flex gap-3 pr-4 min-w-max">
                   {categories.filter(c => !c.parent_category).map((category) => (
                     <CategoryItem
                       key={category.id}
@@ -367,17 +367,17 @@ const LayoutDashboard = () => {
 
               {/* Sub-category Filter Row (Layer 2) */}
               {subCategories.length > 0 && (
-                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
-                  <div className="flex gap-2 px-4 min-w-max">
+                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory py-2 pl-4 bg-gray-50/50">
+                  <div className="flex gap-2 pr-4 min-w-max">
                     {subCategories.map((sub, idx) => (
                       <button
                         key={sub.id}
                         onClick={() => setSelectedSubCategory(sub.id)}
                         className={cn(
-                          "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all duration-200",
+                          "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
                           selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                            ? "bg-gray-900 text-white shadow-md"
-                            : "bg-white text-gray-500 border border-gray-100"
+                            ? "bg-black text-white border-black"
+                            : "bg-gray-100/50 text-gray-500 border-transparent hover:bg-gray-200"
                         )}
                       >
                         {sub.Category_name}
@@ -388,7 +388,7 @@ const LayoutDashboard = () => {
               )}
 
               {/* 3. Main Content (Menu Feed) */}
-              <div className="px-4 pb-4 flex flex-col gap-4">
+              <div className="px-4 py-4 grid grid-cols-1 gap-4">
                 {(() => {
                   let filteredItems = items;
 
