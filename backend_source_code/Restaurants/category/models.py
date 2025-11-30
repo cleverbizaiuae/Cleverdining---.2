@@ -10,6 +10,7 @@ class Category(models.Model):
     Category_name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100)
     image = models.ImageField(upload_to='media/category_images/', null=True, blank=True)
+    icon = models.CharField(max_length=50, blank=True, null=True)
     
     # Hierarchical fields
     parent_category = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='subcategories')

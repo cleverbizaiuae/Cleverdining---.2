@@ -27,7 +27,7 @@ import {
   BtnUndo,
   BtnRedo,
 } from "react-simple-wysiwyg";
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { set, SubmitHandler, useForm, Controller } from "react-hook-form";
 import toast from "react-hot-toast";
 import axiosInstance from "@/lib/axios";
@@ -41,6 +41,14 @@ import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import "./intt.css";
 import axios from "axios";
+import * as LucideIcons from "lucide-react";
+
+const FOOD_ICONS = [
+  "Utensils", "UtensilsCrossed", "ChefHat", "Coffee", "Soup", "Salad", "Sandwich",
+  "Pizza", "Cake", "IceCream", "Beer", "Wine", "Martini", "Apple", "Banana",
+  "Carrot", "Beef", "Fish", "Drumstick", "Egg", "Milk", "Croissant", "Cookie",
+  "Candy", "Popcorn", "Wheat", "Grape", "Cherry", "Citrus", "Nut", "LeafyGreen"
+];
 /* Edit food item dialog ===========================================================>>>>> */
 type ModalPropsCall = {
   socketRef?: React.RefObject<WebSocket>;
@@ -1078,12 +1086,15 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
   const { fetchCategories } = useOwner();
   const { handleSubmit, register, reset } = useForm<CategoryInputs>();
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [selectedIcon, setSelectedIcon] = useState<string>("");
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   const onSubmit: SubmitHandler<CategoryInputs> = async (data) => {
     try {
       const formData = new FormData();
       formData.append("Category_name", data.name);
       if (imageFile) formData.append("image", imageFile);
+      if (selectedIcon) formData.append("icon", selectedIcon);
 
       const response = await axiosInstance.post(
         "/owners/categories/",
@@ -1097,6 +1108,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
       toast.success("Category Created successfully");
       reset();
       setImageFile(null);
+      setSelectedIcon("");
       onSuccess();
       close();
       window.location.reload();
@@ -1139,6 +1151,59 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
                   ...register("name"),
                 }}
               />
+
+              <div className="space-y-2">
+                <label className="text-sm text-white">Category Icon (Optional)</label>
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowIconPicker(!showIconPicker)}
+                    className="flex items-center gap-2 px-3 py-2 bg-[#201C3F] text-white rounded-md shadow-md text-sm border border-gray-600 hover:border-gray-400 transition-colors"
+                  >
+                    {selectedIcon ? (
+                      <>
+                        {React.createElement((LucideIcons as any)[selectedIcon], { size: 18 })}
+                        <span>{selectedIcon}</span>
+                      </>
+                    ) : (
+                      <span>Select Icon</span>
+                    )}
+                  </button>
+                  {selectedIcon && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIcon("")}
+                      className="text-red-400 hover:text-red-300 text-sm"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {showIconPicker && (
+                  <div className="mt-2 p-3 bg-[#201C3F] rounded-md border border-gray-600 max-h-48 overflow-y-auto grid grid-cols-6 gap-2">
+                    {FOOD_ICONS.map((iconName) => {
+                      const Icon = (LucideIcons as any)[iconName];
+                      if (!Icon) return null;
+                      return (
+                        <button
+                          key={iconName}
+                          type="button"
+                          onClick={() => {
+                            setSelectedIcon(iconName);
+                            setShowIconPicker(false);
+                          }}
+                          className={`p-2 rounded hover:bg-white/10 flex justify-center items-center ${selectedIcon === iconName ? "bg-blue-600 text-white" : "text-gray-300"
+                            }`}
+                          title={iconName}
+                        >
+                          <Icon size={20} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               <InputImageUploadBox file={imageFile} setFile={setImageFile} />
               <button className="button-primary" onClick={close}>

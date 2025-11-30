@@ -7,6 +7,7 @@ export type CategoryItemType = {
   image: string;
   parent_category?: number | null;
   level?: number;
+  icon?: string;
 };
 
 type Props = {

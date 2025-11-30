@@ -9,8 +9,8 @@ import {
 import { SocketContext } from "@/components/SocketContext";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
-import { UtensilsCrossed } from "lucide-react";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import * as LucideIcons from "lucide-react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { CartProvider } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
@@ -449,14 +449,23 @@ const LayoutDashboard = () => {
                       `}
                     >
                       <div className="text-2xl mb-1">
-                        <UtensilsCrossed
-                          size={24}
-                          className={
-                            (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
+                        {category.icon && (LucideIcons as any)[category.icon] ? (
+                          React.createElement((LucideIcons as any)[category.icon], {
+                            size: 24,
+                            className: (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
                               ? "text-white"
                               : "text-gray-400"
-                          }
-                        />
+                          })
+                        ) : (
+                          <LucideIcons.UtensilsCrossed
+                            size={24}
+                            className={
+                              (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
+                                ? "text-white"
+                                : "text-gray-400"
+                            }
+                          />
+                        )}
                       </div>
                       <span className="text-[11px] font-medium text-center leading-tight px-1 truncate w-full">
                         {category.Category_name}
