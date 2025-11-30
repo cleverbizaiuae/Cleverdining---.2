@@ -35,10 +35,10 @@ export const DashboardLeftSidebar = ({
   return (
     <nav
       className={cn(
-        " fixed bg-sidebar rounded-r-xl shadow-lg flex flex-col items-center justify-center  py-4 md:pt-16 xl:pt-0 pt-0 text-xs font-light z-50",
+        " fixed bg-sidebar rounded-r-xl shadow-lg flex items-center justify-center  py-4 md:pt-16 xl:pt-0 pt-0 text-xs font-light z-50",
         isLargeDevice
-          ? " top-1/2 transform -translate-y-1/2 left-0 w-22"
-          : "fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-md mx-auto rounded-2xl py-2 px-4 flex justify-between items-center h-fit shadow-xl border border-gray-100"
+          ? "flex-col top-1/2 transform -translate-y-1/2 left-0 w-22"
+          : "flex-row fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-md mx-auto rounded-2xl py-2 px-4 justify-between h-fit shadow-xl border border-gray-100"
       )}
     >
       {/* Home */}
