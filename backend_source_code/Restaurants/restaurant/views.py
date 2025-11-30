@@ -233,5 +233,17 @@ class RestaurantFullDataAPIView(APIView):
 
             return Response(data)
 
-        except Restaurant.DoesNotExist:
-            return Response({"error": "Restaurant not found"}, status=404)
+class PublicRestaurantListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        restaurants = Restaurant.objects.all()
+        data = []
+        for restaurant in restaurants:
+            data.append({
+                "id": restaurant.id,
+                "name": restaurant.resturent_name,
+                "phone": restaurant.phone_number,
+                "location": restaurant.location
+            })
+        return Response(data)

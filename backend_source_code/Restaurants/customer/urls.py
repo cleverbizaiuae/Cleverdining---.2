@@ -5,6 +5,8 @@ from item.views import CustomerItemViewSet
 from order.views import OrderCreateAPIView, OrderCancelAPIView,MyOrdersAPIView,MySingleOrderAPIView
 from review.views import CreateReviewAPIView
 from payment.views import CreateCheckoutSessionView, PaymentSuccessView, PaymentCancelView
+from restaurant.views import PublicRestaurantListView
+from device.views import PublicDeviceListView
 
 
 router = DefaultRouter()
@@ -14,6 +16,8 @@ router.register('items',CustomerItemViewSet, basename='customer_items')
 urlpatterns = [
     path('', include(router.urls)),
     path('categories/', CustomerCategoryListView.as_view(), name='customer-categories'),
+    path('restaurants/', PublicRestaurantListView.as_view(), name='public-restaurants'),
+    path('devices/', PublicDeviceListView.as_view(), name='public-devices'),
     path('orders/', OrderCreateAPIView.as_view(), name='order-create'),
     path('orders/<int:pk>/cancel/', OrderCancelAPIView.as_view(), name='order-cancel'),
     path('uncomplete/orders/', MyOrdersAPIView.as_view(), name='my-orders'),

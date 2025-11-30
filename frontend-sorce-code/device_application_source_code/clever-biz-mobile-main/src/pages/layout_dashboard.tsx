@@ -106,32 +106,57 @@ const LayoutDashboard = () => {
 
     fetchUserInfo();
 
-    // Fix: Force update ALL users to Restaurant ID 8 to ensure they see items
-    // REMOVED: This logic was causing issues by overriding valid QR code sessions.
-
     const storedUserInfo = localStorage.getItem("userInfo");
     if (!storedUserInfo) {
-      // If no user info, reload to let routes.tsx create it (since we are on /dashboard, routes.tsx might not trigger if we don't go to /)
-      // But routes.tsx only triggers on /.
-      // So we should create it here if missing.
-      const defaultUserInfo = {
-        user: {
-          username: "Guest Table",
-          email: "guest@example.com",
-          restaurants: [
-            {
-              id: 7,
-              table_name: "y",
-              device_id: "14",
-              resturent_name: "XYZ",
-            },
-          ],
-        },
-        role: "guest",
+      // Dynamic Bootstrapping: Fetch valid restaurant and device from API
+      const bootstrapSession = async () => {
+        try {
+          // 1. Fetch Restaurants
+          const resResponse = await axiosInstance.get("/customer/restaurants/");
+          const restaurants = resResponse.data;
+
+          if (restaurants && restaurants.length > 0) {
+            const firstRestaurant = restaurants[0];
+
+            // 2. Fetch Devices for the first restaurant
+            const devResponse = await axiosInstance.get(`/customer/devices/?restaurant_id=${firstRestaurant.id}`);
+            const devices = devResponse.data;
+
+            if (devices && devices.length > 0) {
+              const firstDevice = devices[0];
+
+              // 3. Create Valid Guest Session
+              const defaultUserInfo = {
+                user: {
+                  username: `Guest Table ${firstDevice.table_name}`,
+                  email: "guest@example.com",
+                  restaurants: [
+                    {
+                      id: firstRestaurant.id,
+                      table_name: firstDevice.table_name,
+                      device_id: String(firstDevice.id),
+                      resturent_name: firstRestaurant.name,
+                    },
+                  ],
+                },
+                role: "guest",
+              };
+
+              localStorage.setItem("userInfo", JSON.stringify(defaultUserInfo));
+              localStorage.setItem("accessToken", "guest_token");
+              window.location.reload();
+            } else {
+              console.error("No devices found for restaurant", firstRestaurant.name);
+            }
+          } else {
+            console.error("No active restaurants found.");
+          }
+        } catch (error) {
+          console.error("Failed to bootstrap session:", error);
+        }
       };
-      localStorage.setItem("userInfo", JSON.stringify(defaultUserInfo));
-      localStorage.setItem("accessToken", "guest_token");
-      window.location.reload();
+
+      bootstrapSession();
     }
   }, []);
 
@@ -411,58 +436,17 @@ const LayoutDashboard = () => {
 
               {/* Horizontal scrollable category list - Main Categories Only */}
               <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
-                <div className="flex gap-4 px-1 min-w-max">
+                <div className="flex gap-4 px-4 min-w-max">
                   {categories.filter(c => !c.parent_category).map((category) => (
-                    <div
+                    <CategoryItem
                       key={category.id}
+                      cat={category}
+                      isActive={(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)}
                       onClick={() => {
                         setSelectedCategory(categories.indexOf(category));
                         setSelectedSubCategory(null);
                       }}
-                      className={`
-                        snap-start shrink-0
-                        flex flex-col items-center justify-center gap-2
-                        w-[85px] h-[85px] rounded-2xl cursor-pointer transition-all duration-200
-                        ${(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                          : "bg-white text-gray-400 border border-gray-100 shadow-sm"
-                        }
-                      `}
-                    >
-                      <div className="text-2xl mb-1 flex items-center justify-center w-8 h-8">
-                        {category.icon_image ? (
-                          <img
-                            src={(() => {
-                              let url = category.icon_image;
-                              if (url.startsWith("http://")) url = url.replace("http://", "https://");
-                              if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-                              return url;
-                            })()}
-                            alt={category.Category_name}
-                            className="w-full h-full object-contain"
-                          />
-                        ) : category.icon && (LucideIcons as any)[category.icon] ? (
-                          React.createElement((LucideIcons as any)[category.icon], {
-                            size: 24,
-                            className: (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
-                              ? "text-white"
-                              : "text-gray-400"
-                          })
-                        ) : (
-                          <LucideIcons.UtensilsCrossed
-                            size={24}
-                            className={
-                              (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
-                                ? "text-white"
-                                : "text-gray-400"
-                            }
-                          />
-                        )}
-                      </div>
-                      <span className="text-[11px] font-medium text-center leading-tight px-1 truncate w-full">
-                        {category.Category_name}
-                      </span>
-                    </div>
+                    />
                   ))}
                 </div>
               </div>

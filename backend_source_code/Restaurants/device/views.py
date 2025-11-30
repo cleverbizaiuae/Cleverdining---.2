@@ -292,3 +292,21 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
             return Device.objects.filter(restaurant_id__in=restaurant_ids)
 
         return Device.objects.none()
+
+class PublicDeviceListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        restaurant_id = request.query_params.get('restaurant_id')
+        if not restaurant_id:
+            return Response({"error": "restaurant_id is required"}, status=400)
+        
+        devices = Device.objects.filter(restaurant_id=restaurant_id)
+        data = []
+        for device in devices:
+            data.append({
+                "id": device.id,
+                "table_name": device.table_name,
+                "restaurant_id": device.restaurant.id
+            })
+        return Response(data)
