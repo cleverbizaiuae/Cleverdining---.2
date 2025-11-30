@@ -417,9 +417,9 @@ const LayoutDashboard = () => {
 
           {/* Food item content */}
           <main className={cn("flex flex-row mt-28", isSubRoute && "hidden lg:flex")}>
-            <div className="basis-[10%]">{/* VOID */}</div>
+            <div className="hidden lg:block lg:basis-[10%]">{/* VOID */}</div>
             {/* Main Content section */}
-            <div className="basis-[90%] lg:basis-[60%] flex flex-col overflow-x-hidden">
+            <div className="w-full lg:basis-[60%] flex flex-col overflow-x-hidden">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex flex-col">
                   <h2 className="text-xl font-medium text-icon-active text-start">
