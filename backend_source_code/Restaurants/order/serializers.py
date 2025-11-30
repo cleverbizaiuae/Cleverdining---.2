@@ -25,6 +25,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['device', 'restaurant', 'order_items']
+        extra_kwargs = {
+            'device': {'read_only': True},
+            'restaurant': {'read_only': True}
+        }
 
     def create(self, validated_data):
         order_items_data = validated_data.pop('order_items')

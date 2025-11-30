@@ -1,15 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { FormEvent, useState, useEffect, useRef } from "react";
-import { Send, User, Phone } from "lucide-react";
+import { Send, User, Phone, ChevronLeft } from "lucide-react";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
+import { useNavigate } from "react-router";
 
 type Message = {
   id: number;
   is_from_device: boolean;
   text: string;
-  timestamp?: string; // Added timestamp support if available
+  timestamp?: string;
 };
 
 const ScreenMessage = () => {
@@ -17,6 +18,7 @@ const ScreenMessage = () => {
 };
 
 function MessagingUI() {
+  const navigate = useNavigate();
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasNewMessage, setHasNewMessage] = useState(false);
@@ -37,42 +39,59 @@ function MessagingUI() {
     const accessToken = localStorage.getItem("accessToken");
     if (!userInfo || !accessToken) return;
 
-    const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/chat/${device_id}/?token=${accessToken}&restaurant_id=${restaurant_id}`;
-    ws.current = new WebSocket(wsUrl);
+    // Robust WS URL resolution
+    let wsBaseUrl = import.meta.env.VITE_WS_URL;
+    if (!wsBaseUrl) {
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      wsBaseUrl = apiUrl.replace(/^http/, 'ws');
+    }
 
-    ws.current.onopen = () => {
-      console.log("WebSocket connected");
-    };
+    const wsUrl = `${wsBaseUrl}/ws/chat/${device_id}/?token=${accessToken}&restaurant_id=${restaurant_id}`;
 
-    ws.current.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.message && typeof data.message === "string") {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: prev.length + 1,
-              is_from_device: data.is_from_device,
-              text: data.message,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            },
-          ]);
-          localStorage.setItem("newMessage", "true");
-          setHasNewMessage(true);
+    try {
+      ws.current = new WebSocket(wsUrl);
+
+      ws.current.onopen = () => {
+        console.log("WebSocket connected");
+      };
+
+      ws.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.message && typeof data.message === "string") {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: prev.length + 1,
+                is_from_device: data.is_from_device,
+                text: data.message,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              },
+            ]);
+            localStorage.setItem("newMessage", "true");
+            setHasNewMessage(true);
+          }
+        } catch (error) {
+          console.error("Error processing message:", event.data);
         }
-      } catch (error) {
-        console.error("Error processing message:", event.data);
-      }
-    };
+      };
 
-    ws.current.onclose = () => {
-      console.log("WebSocket closed");
-    };
+      ws.current.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        // toast.error("Connection error. Retrying...");
+      };
+
+      ws.current.onclose = () => {
+        console.log("WebSocket closed");
+      };
+    } catch (e) {
+      console.error("Failed to create WebSocket:", e);
+    }
 
     return () => {
       ws.current?.close();
     };
-  }, [device_id, userInfo]);
+  }, [device_id, restaurant_id, userInfo]);
 
   useEffect(() => {
     if (window.location.pathname === "/dashboard/message") {
@@ -120,10 +139,12 @@ function MessagingUI() {
   const handleSubmit = (e: FormEvent<HTMLElement>) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
+
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       toast.error("Connection lost. Please refresh the page.");
       return;
     }
+
     try {
       ws.current.send(
         JSON.stringify({
@@ -146,6 +167,14 @@ function MessagingUI() {
       `}>
         <div className="flex items-center justify-between px-4 py-3 max-w-3xl mx-auto w-full">
           <div className="flex items-center gap-3">
+            {/* Back Button */}
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
+            >
+              <ChevronLeft size={24} />
+            </button>
+
             <div className="relative">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center border-2 border-white shadow-sm">
                 <User size={20} className="text-blue-600" />

@@ -41,9 +41,10 @@ const ScreenCart = () => {
       toast.success("Order placed successfully!");
       clearCart();
       navigate("/dashboard/orders");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to place order:", error);
-      toast.error("Failed to place order");
+      const errorMessage = error.response?.data?.detail || error.response?.data?.non_field_errors?.[0] || "Failed to place order. Please try again.";
+      toast.error(errorMessage);
     }
   };
 
