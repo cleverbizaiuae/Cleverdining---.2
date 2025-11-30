@@ -33,6 +33,20 @@ const LayoutDashboard = () => {
   const [isCallOpen, setCallOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
+  const subCategories = useMemo(() => {
+    let activeCategoryIndex = selectedCategory;
+    if (activeCategoryIndex === null && categories.length > 0) {
+      const firstParent = categories.find(c => !c.parent_category);
+      if (firstParent) activeCategoryIndex = categories.indexOf(firstParent);
+    }
+
+    if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
+      const mainCatId = categories[activeCategoryIndex].id;
+      return categories.filter(c => c.parent_category === mainCatId);
+    }
+    return [];
+  }, [selectedCategory, categories]);
+
   const socketContext = useContext(SocketContext) as any;
   const NewUpdate = useMemo(
     () => socketContext?.response ?? {},
@@ -411,88 +425,70 @@ const LayoutDashboard = () => {
                   <h2 className="text-xl font-medium text-icon-active text-start">
                     Choose Category
                   </h2>
-
                 </div>
               </div>
-              {/* Horizontal scrollable category list - Main Categories Only */}
-              <div className="w-full flex flex-row gap-3 overflow-x-auto py-2 scrollbar-hide px-4">
-                {categories?.filter(c => !c.parent_category).map((cat, index) => {
-                  const isSelected = selectedCategory === index || (selectedCategory === null && index === 0);
-                  // Auto-select first category if none selected
-                  if (selectedCategory === null && index === 0 && categories.length > 0) {
-                    // We can't set state during render, but we can treat it as selected for UI
-                    // The useEffect below will handle the actual state update if needed, 
-                    // or we just rely on the logic that "null" implies first one for now?
-                    // Better to handle state update in useEffect.
-                  }
 
-                  return (
+              {/* Horizontal scrollable category list - Main Categories Only */}
+              <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
+                <div className="flex gap-4 px-1 min-w-max">
+                  {categories.filter(c => !c.parent_category).map((category) => (
                     <div
-                      key={cat.id}
+                      key={category.id}
                       onClick={() => {
-                        setSelectedCategory(categories.indexOf(cat));
+                        setSelectedCategory(categories.indexOf(category));
                         setSelectedSubCategory(null);
                       }}
-                      className={cn(
-                        "flex-shrink-0 w-24 h-20 px-2 flex flex-col items-center justify-center gap-y-1 rounded-2xl shadow-sm select-none cursor-pointer border transition-all duration-200",
-                        {
-                          "bg-blue-600 border-blue-600 text-white": isSelected,
-                          "bg-white border-gray-100 text-gray-500 hover:bg-gray-50": !isSelected,
+                      className={`
+                        snap-start shrink-0
+                        flex flex-col items-center justify-center gap-2
+                        w-[85px] h-[85px] rounded-2xl cursor-pointer transition-all duration-200
+                        ${(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
+                          : "bg-white text-gray-400 border border-gray-100 shadow-sm"
                         }
-                      )}
+                      `}
                     >
-                      {/* Icon Placeholder - using first letter if no icon, or a generic food icon */}
-                      <div className={cn("p-1 rounded-full", isSelected ? "bg-white/20" : "bg-gray-100")}>
-                        <UtensilsCrossed size={16} className={cn(isSelected ? "text-white" : "text-gray-400")} />
+                      <div className="text-2xl mb-1">
+                        <UtensilsCrossed
+                          size={24}
+                          className={
+                            (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)
+                              ? "text-white"
+                              : "text-gray-400"
+                          }
+                        />
                       </div>
-                      <span className={cn("font-medium text-xs text-center leading-tight line-clamp-2", isSelected ? "text-white" : "text-gray-600")}>
-                        {cat.Category_name}
+                      <span className="text-[11px] font-medium text-center leading-tight px-1 truncate w-full">
+                        {category.Category_name}
                       </span>
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
               </div>
 
-              {/* Subcategory Row - Filter Pills */}
-              <div className="w-full flex flex-row gap-2 overflow-x-auto py-2 scrollbar-hide px-4 mt-1 min-h-[40px]">
-                {(() => {
-                  // Determine active main category
-                  let activeCategoryIndex = selectedCategory;
-                  if (activeCategoryIndex === null && categories.length > 0) {
-                    // Find index of first parent category
-                    const firstParent = categories.find(c => !c.parent_category);
-                    if (firstParent) activeCategoryIndex = categories.indexOf(firstParent);
-                  }
-
-                  if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
-                    const mainCatId = categories[activeCategoryIndex].id;
-                    const subCats = categories.filter(c => c.parent_category === mainCatId);
-
-                    if (subCats.length === 0) return null;
-
-                    return subCats.map((sub, idx) => {
-                      const isSubSelected = selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0);
-
-                      return (
-                        <div
-                          key={sub.id}
-                          onClick={() => setSelectedSubCategory(sub.id)}
-                          className={cn(
-                            "flex-shrink-0 px-5 py-2 rounded-full text-xs font-medium cursor-pointer transition-colors border shadow-sm",
-                            {
-                              "bg-blue-600 text-white border-blue-600": isSubSelected,
-                              "bg-white text-gray-500 border-gray-200 hover:bg-gray-50": !isSubSelected,
-                            }
-                          )}
-                        >
-                          {sub.Category_name}
-                        </div>
-                      );
-                    });
-                  }
-                  return null;
-                })()}
-              </div>
+              {/* Sub-category Filter Row (Pill/Chip style) */}
+              {subCategories.length > 0 && (
+                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 mb-2">
+                  <div className="flex gap-3 px-1 min-w-max">
+                    {subCategories.map((sub, idx) => (
+                      <button
+                        key={sub.id}
+                        onClick={() => setSelectedSubCategory(sub.id)}
+                        className={`
+                          snap-start shrink-0
+                          px-5 py-2 rounded-full text-xs font-medium transition-all duration-200
+                          ${selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-100"
+                            : "bg-gray-50 text-gray-500 border border-gray-100"
+                          }
+                        `}
+                      >
+                        {sub.Category_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Items Display Logic - Vertical List */}
               <div className="flex flex-col gap-y-4 px-4 py-4 pb-32">
@@ -510,34 +506,24 @@ const LayoutDashboard = () => {
                   if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
                     const mainCatId = categories[activeCategoryIndex].id;
                     const subCats = categories.filter(c => c.parent_category === mainCatId);
-                    const subCatIds = subCats.map(c => c.id);
 
                     // 2. Filter by Subcategory
-                    // Default to first subcategory if none selected
                     let activeSubCatId = selectedSubCategory;
                     if (activeSubCatId === null && subCats.length > 0) {
                       activeSubCatId = subCats[0].id;
                     }
 
                     if (activeSubCatId !== null) {
-                      // If we have a specific subcategory selected (or defaulted), show only its items
                       filteredItems = filteredItems.filter(item => item.sub_category === activeSubCatId);
                     } else {
-                      // If no subcategories exist for this main category, show all items of main category
-                      // that don't belong to any subcategory (or just all items of main category?)
-                      // User said "Sub-category row refines...". If no subcats, we just show main cat items.
                       filteredItems = filteredItems.filter(item =>
                         item.category === mainCatId && !item.sub_category
                       );
-                      // Fallback: if items have sub_category but we are in "no subcategory" mode (e.g. main category has no subcats),
-                      // we should show them?
-                      // Actually, if main category has NO subcategories, we show all items of that main category.
                       if (subCats.length === 0) {
                         filteredItems = items.filter(item => item.category === mainCatId);
                       }
                     }
                   } else {
-                    // No categories loaded yet or something
                     return null;
                   }
 
@@ -565,10 +551,10 @@ const LayoutDashboard = () => {
         <footer className="flex-shrink-0 w-full text-center py-3 text-gray-500 text-xs bg-white border-t border-gray-200">
           Powered By CleverBiz AI
         </footer>
-      </div>
+      </div >
 
       {/* Detail modal */}
-      <ModalFoodDetail
+      < ModalFoodDetail
         isOpen={isDetailOpen}
         close={() => setDetailOpen(false)}
         itemId={selectedItemId ?? undefined}
@@ -588,14 +574,16 @@ const LayoutDashboard = () => {
           setCallOpen(true);
         }}
       />
-      {idCallingModal && (
-        <CallerModal
-          email={JSON.parse(storedUserInfo as string).user.username}
-          handleEndCall={handleEndCall}
-          handleAnswerCall={handleAnswerCall}
-          response={response}
-        />
-      )}
+      {
+        idCallingModal && (
+          <CallerModal
+            email={JSON.parse(storedUserInfo as string).user.username}
+            handleEndCall={handleEndCall}
+            handleAnswerCall={handleAnswerCall}
+            response={response}
+          />
+        )
+      }
       {/* Call modal */}
       <ModalCall
         isOpen={isCallOpen}
@@ -604,7 +592,7 @@ const LayoutDashboard = () => {
         }}
         onHangUp={handleHangUp}
       />
-    </CartProvider>
+    </CartProvider >
   );
 };
 

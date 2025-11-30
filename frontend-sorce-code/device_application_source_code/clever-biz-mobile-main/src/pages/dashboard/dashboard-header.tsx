@@ -20,7 +20,7 @@ export const DashboardHeader = ({
   return (
     <div>
       <header className="bg-background fixed right-0 top-0 left-0 lg:me-[30%] h-24 flex items-center justify-between px-8 gap-x-16 z-10 ">
-        <div className="hidden sm:block">
+        <div className="block">
           <Logo />
         </div>
         <SearchBox
