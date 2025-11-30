@@ -9,7 +9,7 @@ import React, {
 type WebSocketContextType = {
   ws: WebSocket | null;
   hasNewMessage: boolean;
-  sendMessage: (message: string) => void;
+  sendMessage: (message: string, type?: string) => void;
   setNewMessageFlag: (value: boolean) => void;
 };
 
@@ -66,9 +66,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     setWs(socket);
   };
 
-  const sendMessage = (message: string) => {
+  const sendMessage = (message: string, type: string = "message") => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ message }));
+      ws.send(JSON.stringify({ message, type }));
     }
   };
 

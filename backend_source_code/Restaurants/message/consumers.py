@@ -57,6 +57,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({"error": "Invalid JSON or missing 'message' field"}))
             return
 
+        msg_type = data.get('type', 'message')
+
         # Determine sender and receiver
         if self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
             receiver = await self._get_restaurant_owner(self.restaurant_id)
@@ -87,6 +89,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             {
                 'type': 'chat_message',
                 'message': message,
+                'msg_type': msg_type,
                 'sender': sender.username,
                 'device_id' : self.device_id,
                 'is_from_device': is_from_device,
@@ -100,6 +103,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             {
                 'type': 'chat_message',
                 'message': message,
+                'msg_type': msg_type,
                 'sender': sender.username,
                 'device_id' : self.device_id,
                 'is_from_device': is_from_device,
@@ -110,6 +114,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
             'message': event['message'],
+            'msg_type': event.get('msg_type', 'message'),
             'sender': event['sender'],
             'device_id': event['device_id'],
             'is_from_device': event['is_from_device'],

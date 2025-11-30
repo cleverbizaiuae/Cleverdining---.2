@@ -277,10 +277,22 @@ const LayoutDashboard = () => {
 
   const navigate = useNavigate();
 
+  const [lastAssistanceRequestTime, setLastAssistanceRequestTime] = useState<number>(0);
+
   const handleRequestAssistance = () => {
+    const now = Date.now();
+    if (now - lastAssistanceRequestTime < 30000) {
+      toast.error("Please wait before requesting assistance again.");
+      return;
+    }
+
     const tableNum = tableName || "Unknown";
     const msg = `Table ${tableNum} is requesting assistance.`;
-    sendMessage(msg);
+
+    // Send message with type "alert"
+    sendMessage(msg, "alert");
+
+    setLastAssistanceRequestTime(now);
     toast.success("Assistance request sent.");
     setAssistanceOpen(false);
   };

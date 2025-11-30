@@ -5,6 +5,7 @@ import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
 import { useNavigate } from "react-router";
+import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion } from "motion/react";
 
@@ -26,7 +27,7 @@ function MessagingUI() {
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const isLargeDevice = useMediaQuery("only screen and (min-width : 993px)");
 
-  const ws = useRef<WebSocket | null>(null);
+  const { ws, sendMessage, hasNewMessage: contextHasNewMessage, setNewMessageFlag } = useWebSocket();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const userInfo = localStorage.getItem("userInfo");
@@ -37,70 +38,41 @@ function MessagingUI() {
     ? JSON.parse(userInfo).user.restaurants[0].id
     : null;
 
+  // Sync local messages with WebSocket events
   useEffect(() => {
-    const accessToken = localStorage.getItem("accessToken");
-    if (!userInfo || !accessToken) return;
+    if (!ws) return;
 
-    // Robust WS URL resolution
-    let wsBaseUrl = import.meta.env.VITE_WS_URL;
-    if (!wsBaseUrl) {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-      wsBaseUrl = apiUrl.replace(/^http/, 'ws');
-    }
-
-    const wsUrl = `${wsBaseUrl}/ws/chat/${device_id}/?token=${accessToken}&restaurant_id=${restaurant_id}`;
-
-    try {
-      ws.current = new WebSocket(wsUrl);
-
-      ws.current.onopen = () => {
-        console.log("WebSocket connected");
-      };
-
-      ws.current.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.message && typeof data.message === "string") {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: prev.length + 1,
-                is_from_device: data.is_from_device,
-                text: data.message,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              },
-            ]);
-            localStorage.setItem("newMessage", "true");
-            setHasNewMessage(true);
-          }
-        } catch (error) {
-          console.error("Error processing message:", event.data);
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message && typeof data.message === "string") {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: prev.length + 1,
+              is_from_device: data.is_from_device,
+              text: data.message,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            },
+          ]);
         }
-      };
+      } catch (error) {
+        console.error("Error processing message:", event.data);
+      }
+    };
 
-      ws.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        // toast.error("Connection error. Retrying...");
-      };
-
-      ws.current.onclose = () => {
-        console.log("WebSocket closed");
-      };
-    } catch (e) {
-      console.error("Failed to create WebSocket:", e);
-    }
+    ws.addEventListener("message", handleMessage);
 
     return () => {
-      ws.current?.close();
+      ws.removeEventListener("message", handleMessage);
     };
-  }, [device_id, restaurant_id, userInfo]);
+  }, [ws]);
 
   useEffect(() => {
     if (window.location.pathname === "/dashboard/message") {
-      localStorage.setItem("newMessage", "false");
-      window.dispatchEvent(new Event("storage"));
+      setNewMessageFlag(false);
     }
-  }, []);
+  }, [setNewMessageFlag]);
 
   useEffect(() => {
     if (!userInfo) return;
@@ -142,18 +114,23 @@ function MessagingUI() {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
       toast.error("Connection lost. Please refresh the page.");
       return;
     }
 
     try {
-      ws.current.send(
-        JSON.stringify({
-          type: "message",
-          message: inputValue,
-        })
-      );
+      sendMessage(inputValue);
+      // Optimistically add message to UI
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: prev.length + 1,
+          is_from_device: true,
+          text: inputValue,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+      ]);
       setInputValue("");
     } catch {
       toast.error("Failed to send message");
