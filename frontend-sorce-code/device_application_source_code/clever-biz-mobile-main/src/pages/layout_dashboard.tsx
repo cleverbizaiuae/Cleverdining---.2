@@ -107,29 +107,10 @@ const LayoutDashboard = () => {
     fetchUserInfo();
 
     // Fix: Force update ALL users to Restaurant ID 8 to ensure they see items
+    // REMOVED: This logic was causing issues by overriding valid QR code sessions.
+
     const storedUserInfo = localStorage.getItem("userInfo");
-    if (storedUserInfo) {
-      try {
-        const parsed = JSON.parse(storedUserInfo);
-        // Check if restaurant ID is NOT 8
-        if (parsed?.user?.restaurants?.[0]?.id !== 8) {
-          if (!parsed.user) parsed.user = {};
-          if (!parsed.user.restaurants) parsed.user.restaurants = [{}];
-
-          parsed.user.restaurants[0].id = 8;
-          parsed.user.restaurants[0].resturent_name = "CleverBiz Restaurant";
-          parsed.user.restaurants[0].device_id = parsed.user.restaurants[0].device_id || "14";
-
-          localStorage.setItem("userInfo", JSON.stringify(parsed));
-          window.location.reload();
-        }
-      } catch (e) {
-        console.error("Error updating user info", e);
-        // If parsing fails, clear it so routes.tsx can recreate it
-        localStorage.removeItem("userInfo");
-        window.location.reload();
-      }
-    } else {
+    if (!storedUserInfo) {
       // If no user info, reload to let routes.tsx create it (since we are on /dashboard, routes.tsx might not trigger if we don't go to /)
       // But routes.tsx only triggers on /.
       // So we should create it here if missing.
@@ -139,10 +120,10 @@ const LayoutDashboard = () => {
           email: "guest@example.com",
           restaurants: [
             {
-              id: 8,
+              id: 7,
               table_name: "y",
               device_id: "14",
-              resturent_name: "CleverBiz Restaurant",
+              resturent_name: "XYZ",
             },
           ],
         },
@@ -416,7 +397,7 @@ const LayoutDashboard = () => {
           />
 
           {/* Food item content */}
-          <main className={cn("flex flex-row mt-28", isSubRoute && "hidden lg:flex")}>
+          <main className={cn("flex flex-row mt-4", isSubRoute && "hidden lg:flex")}>
             <div className="hidden lg:block lg:basis-[10%]">{/* VOID */}</div>
             {/* Main Content section */}
             <div className="w-full lg:basis-[60%] flex flex-col overflow-x-hidden">
@@ -448,8 +429,19 @@ const LayoutDashboard = () => {
                         }
                       `}
                     >
-                      <div className="text-2xl mb-1">
-                        {category.icon && (LucideIcons as any)[category.icon] ? (
+                      <div className="text-2xl mb-1 flex items-center justify-center w-8 h-8">
+                        {category.icon_image ? (
+                          <img
+                            src={(() => {
+                              let url = category.icon_image;
+                              if (url.startsWith("http://")) url = url.replace("http://", "https://");
+                              if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+                              return url;
+                            })()}
+                            alt={category.Category_name}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : category.icon && (LucideIcons as any)[category.icon] ? (
                           React.createElement((LucideIcons as any)[category.icon], {
                             size: 24,
                             className: (selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)

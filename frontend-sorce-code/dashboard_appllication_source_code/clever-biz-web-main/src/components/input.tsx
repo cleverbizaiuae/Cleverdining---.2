@@ -353,19 +353,17 @@ export const DashboardDropDown: React.FC<DashboardDropDownProps> = ({
                     <ListboxOption
                       key={idx}
                       className={({ selected }) =>
-                        `relative cursor-pointer select-none py-2 px-4 ${
-                          selected
-                            ? "bg-[#2C2A4C] text-primary-text"
-                            : " text-primary-text/70"
+                        `relative cursor-pointer select-none py-2 px-4 ${selected
+                          ? "bg-[#2C2A4C] text-primary-text"
+                          : " text-primary-text/70"
                         }`
                       }
                       value={category}
                     >
                       {({ selected }) => (
                         <span
-                          className={`block truncate ${
-                            selected ? "font-medium" : "font-normal"
-                          }`}
+                          className={`block truncate ${selected ? "font-medium" : "font-normal"
+                            }`}
                         >
                           {category}
                         </span>
@@ -388,9 +386,10 @@ export const DashboardDropDown: React.FC<DashboardDropDownProps> = ({
 type Props = {
   file: File | null;
   setFile: (file: File | null) => void;
+  label?: string;
 };
 
-export const InputImageUploadBox: React.FC<Props> = ({ file, setFile }) => {
+export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "Upload image" }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -426,7 +425,7 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile }) => {
   return (
     <div className="space-y-4">
       <label className="block text-primary-text text-sm font-medium">
-        Upload image
+        {label}
       </label>
       {previewUrl ? (
         <div className="relative mt-4 inline-block">
@@ -451,9 +450,8 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile }) => {
           }}
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
-          className={`w-full cursor-pointer rounded-lg border-2 border-dashed ${
-            dragActive ? "border-accent" : "border-transparent"
-          } bg-[#201C3F] p-8 text-center`}
+          className={`w-full cursor-pointer rounded-lg border-2 border-dashed ${dragActive ? "border-accent" : "border-transparent"
+            } bg-[#201C3F] p-8 text-center`}
         >
           <input
             type="file"
@@ -709,9 +707,8 @@ export const InputVideoUploadBox: React.FC<InputVideoUploadBoxProps> = ({
           }}
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
-          className={`w-full cursor-pointer rounded-lg border-2 border-dashed ${
-            dragActive ? "border-accent" : "border-transparent"
-          } bg-[#201C3F] p-8 text-center transition duration-200`}
+          className={`w-full cursor-pointer rounded-lg border-2 border-dashed ${dragActive ? "border-accent" : "border-transparent"
+            } bg-[#201C3F] p-8 text-center transition duration-200`}
         >
           <input
             type="file"

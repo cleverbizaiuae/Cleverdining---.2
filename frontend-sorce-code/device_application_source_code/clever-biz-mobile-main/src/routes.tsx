@@ -66,10 +66,10 @@ function App() {
           email: "guest@example.com",
           restaurants: [
             {
-              id: 8,
+              id: 7,
               table_name: "y",
               device_id: "14",
-              resturent_name: "CleverBiz Restaurant",
+              resturent_name: "XYZ",
             },
           ],
         },

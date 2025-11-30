@@ -8,6 +8,7 @@ export type CategoryItemType = {
   parent_category?: number | null;
   level?: number;
   icon?: string;
+  icon_image?: string;
 };
 
 type Props = {

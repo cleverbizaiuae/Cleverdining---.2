@@ -1086,6 +1086,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
   const { fetchCategories } = useOwner();
   const { handleSubmit, register, reset } = useForm<CategoryInputs>();
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [iconImageFile, setIconImageFile] = useState<File | null>(null);
   const [selectedIcon, setSelectedIcon] = useState<string>("");
   const [showIconPicker, setShowIconPicker] = useState(false);
 
@@ -1094,6 +1095,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
       const formData = new FormData();
       formData.append("Category_name", data.name);
       if (imageFile) formData.append("image", imageFile);
+      if (iconImageFile) formData.append("icon_image", iconImageFile);
       if (selectedIcon) formData.append("icon", selectedIcon);
 
       const response = await axiosInstance.post(
@@ -1108,6 +1110,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
       toast.success("Category Created successfully");
       reset();
       setImageFile(null);
+      setIconImageFile(null);
       setSelectedIcon("");
       onSuccess();
       close();
@@ -1204,6 +1207,12 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
                   </div>
                 )}
               </div>
+
+              <InputImageUploadBox
+                file={iconImageFile}
+                setFile={setIconImageFile}
+                label="Category Icon Image (Optional - Overrides Icon)"
+              />
 
               <InputImageUploadBox file={imageFile} setFile={setImageFile} />
               <button className="button-primary" onClick={close}>
