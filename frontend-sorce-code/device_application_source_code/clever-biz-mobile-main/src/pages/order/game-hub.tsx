@@ -72,23 +72,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
                             exit={{ opacity: 0, x: 20 }}
                             className="space-y-8"
                         >
-                            {/* Featured Banner */}
-                            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 p-6 shadow-2xl">
-                                <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-                                <div className="relative z-10">
-                                    <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-xs font-bold mb-3">
-                                        FEATURED
-                                    </span>
-                                    <h3 className="text-2xl font-bold mb-2">Weekly Tournament</h3>
-                                    <p className="text-indigo-100 text-sm mb-4 max-w-[80%]">
-                                        Compete with other diners and win a free dessert!
-                                    </p>
-                                    <button className="px-5 py-2.5 bg-white text-indigo-600 rounded-xl font-bold text-sm shadow-lg hover:bg-indigo-50 transition-colors flex items-center gap-2">
-                                        <Trophy size={16} />
-                                        Join Now
-                                    </button>
-                                </div>
-                            </div>
+
 
                             {/* Games Grid */}
                             <div>
