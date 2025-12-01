@@ -82,16 +82,16 @@ const ScreenCart = () => {
   };
 
   return (
-    <div className="h-full p-4 flex flex-col items-center">
-      <div>
+    <div className="min-h-full flex flex-col items-center pb-20">
+      <div className="p-4 w-full">
         <h1 className="text-3xl font-medium">Cart List</h1>
       </div>
-      <div className="flex-1 flex flex-col gap-y-2 mt-8 w-full max-w-2xl overflow-y-auto">
+      <div className="flex-1 flex flex-col gap-y-2 w-full max-w-2xl overflow-y-auto px-4">
         {cart.length === 0 ? (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center text-primary/60"
+            className="text-center text-primary/60 mt-8"
           >
             Your cart is empty.
           </motion.p>
@@ -162,22 +162,18 @@ const ScreenCart = () => {
         )}
         <Footer />
       </div>
-      <div className="w-full mt-4 ">
-        <div className="w-full flex flex-col gap-2 rounded-lg shadow-md bg-[#F6F9FF] p-2 text-primary">
-          <div className="flex flex-wrap justify-center gap-3 text-sm font-medium">
-            <span>
-              Total Quantity:{" "}
-              <span className="border px-2 py-1 rounded-md">
-                {totalQuantity}
-              </span>
+      <div className="w-full px-4 -mb-6 mt-auto pt-4">
+        <div className="w-full flex flex-col gap-4 rounded-2xl shadow-lg bg-[#F6F9FF] p-5 text-primary border border-blue-50">
+          <div className="flex items-center justify-between text-sm font-medium px-2">
+            <span className="text-gray-600">
+              Total Quantity: <span className="text-primary font-bold ml-1">{totalQuantity}</span>
             </span>
-            <span>
-              Total Cost:{" "}
-              <span className="border px-2 py-1 rounded-md">AED {totalCost}</span>
+            <span className="text-gray-600">
+              Total Cost: <span className="text-primary font-bold ml-1">AED {totalCost}</span>
             </span>
           </div>
           <button
-            className="button-primary xl:w-1/2 w-full mx-auto"
+            className="button-primary w-full py-3.5 text-base font-bold shadow-blue-200/50"
             onClick={handleOrderNow}
             disabled={cart.length === 0}
           >
