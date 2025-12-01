@@ -20,36 +20,48 @@
 }
 
 @layer base {
+
   html,
   body,
   #root {
     @apply h-full;
   }
+
   #root {
     @apply bg-background text-foreground overflow-y-hidden;
   }
+
   button {
     @apply cursor-pointer;
   }
 }
+
 @layer components {
-  .scrollbar-hide {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
+
+  .scrollbar-hide,
+  .no-scrollbar {
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
 
     &::-webkit-scrollbar {
-      display: none; /* Chrome/Safari */
+      display: none;
+      /* Chrome/Safari */
     }
   }
 }
+
 @utility button-primary {
   @apply bg-accent px-4 py-3 text-primary-text rounded-md;
 }
+
 @utility login-bg {
   background-image: url("./assets/login.webp");
   background-repeat: none;
   background-size: cover;
   background-position: center;
+
   &::before {
     content: "";
     position: absolute;

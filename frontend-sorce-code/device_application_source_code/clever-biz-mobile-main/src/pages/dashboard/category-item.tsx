@@ -19,10 +19,10 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden transition-all duration-300 group snap-start shrink-0 border",
+        "relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden transition-all duration-300 group shrink-0 border flex flex-col items-center justify-center",
         isActive
           ? "border-primary shadow-lg shadow-primary/25 scale-105"
-          : "border-transparent hover:border-primary/30 scale-100"
+          : "border-transparent bg-gray-100 hover:border-primary/30 scale-100"
       )}
     >
       {/* Background Image */}
@@ -35,27 +35,25 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
           return url;
         })()}
         alt={cat.Category_name}
-        className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110"
+        className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110 z-0"
       />
 
       {/* Overlay */}
       <div className={cn(
-        "absolute inset-0 transition-colors duration-300",
+        "absolute inset-0 transition-colors duration-300 z-0",
         isActive
           ? "bg-primary/20"
           : "bg-black/10 group-hover:bg-black/0"
       )} />
 
       {/* Label */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className={cn(
-          "px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center truncate transition-colors duration-300 max-w-[90%]",
-          isActive
-            ? "bg-primary text-white"
-            : "bg-white/90 text-gray-800 backdrop-blur-md"
-        )}>
-          {cat.Category_name}
-        </div>
+      <div className={cn(
+        "relative z-10 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center truncate transition-colors duration-300 max-w-[90%] shadow-sm",
+        isActive
+          ? "bg-primary text-white"
+          : "bg-white/90 text-gray-800 backdrop-blur-md"
+      )}>
+        {cat.Category_name}
       </div>
     </button>
   );

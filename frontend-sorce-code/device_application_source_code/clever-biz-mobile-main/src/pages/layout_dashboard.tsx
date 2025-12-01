@@ -349,7 +349,7 @@ const LayoutDashboard = () => {
           {!isSubRoute ? (
             <div className="flex flex-col">
               {/* 2. Category Navigation (Layer 1) */}
-              <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory py-2 pl-4">
+              <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4">
                 <div className="flex gap-3 pr-4 min-w-max">
                   {categories.filter(c => !c.parent_category).map((category) => (
                     <CategoryItem
@@ -367,14 +367,14 @@ const LayoutDashboard = () => {
 
               {/* Sub-category Filter Row (Layer 2) */}
               {subCategories.length > 0 && (
-                <div className="w-full overflow-x-auto no-scrollbar snap-x snap-mandatory py-2 pl-4 bg-gray-50/50">
+                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 bg-gray-50/50">
                   <div className="flex gap-2 pr-4 min-w-max">
                     {subCategories.map((sub, idx) => (
                       <button
                         key={sub.id}
                         onClick={() => setSelectedSubCategory(sub.id)}
                         className={cn(
-                          "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
+                          "shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
                           selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
                             ? "bg-foreground text-background border-foreground"
                             : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary"
