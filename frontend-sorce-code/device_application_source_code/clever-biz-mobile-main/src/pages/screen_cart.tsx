@@ -82,7 +82,7 @@ const ScreenCart = () => {
   };
 
   return (
-    <div className="min-h-full flex flex-col items-center pb-20">
+    <div className="min-h-full flex flex-col items-center">
       <div className="p-4 w-full">
         <h1 className="text-3xl font-medium">Cart List</h1>
       </div>
@@ -171,7 +171,7 @@ const ScreenCart = () => {
         )}
       </div>
       {cart.length > 0 && (
-        <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 pb-safe mt-auto">
+        <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 mt-auto">
           <div className="w-full flex flex-col gap-4">
             <div className="flex items-center justify-between text-sm font-medium px-2">
               <span className="text-gray-600">

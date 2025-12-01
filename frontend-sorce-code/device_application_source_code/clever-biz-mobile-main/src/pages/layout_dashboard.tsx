@@ -314,7 +314,7 @@ const LayoutDashboard = () => {
       <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto pb-24 relative">
+        <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
               {/* Sticky Header */}
