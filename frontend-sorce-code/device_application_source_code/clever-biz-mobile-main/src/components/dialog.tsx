@@ -55,11 +55,11 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   return (
     <Dialog open={isOpen} onClose={() => close()} className="relative z-50">
       <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-md transition-opacity duration-300" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center sm:p-4">
-        <DialogPanel className="bg-white p-0 h-full sm:h-auto sm:rounded-[2rem] shadow-2xl w-full sm:max-w-lg overflow-hidden relative flex flex-col animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
+        <DialogPanel className="bg-white p-0 rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
 
           {/* Hero Media Area */}
-          <div className="relative w-full h-[40vh] sm:h-80 shrink-0 bg-black">
+          <div className="relative w-full h-72 shrink-0 bg-black">
             {/* Close Button */}
             <button
               onClick={close}
@@ -112,10 +112,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Content Body */}
-          <div className="relative -mt-6 z-20 bg-white rounded-t-3xl flex-1 flex flex-col px-6 pt-6 pb-24 overflow-y-auto">
-            {/* Pull Indicator */}
-            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-6 shrink-0" />
-
+          <div className="flex-1 flex flex-col px-6 pt-6 pb-24 overflow-y-auto">
             <div className="flex flex-col items-center text-center space-y-4">
               <h3 className="text-3xl font-bold text-foreground tracking-tight leading-tight">
                 {truncatedName}
@@ -130,11 +127,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 <span className="flex items-center gap-1">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   20-30 min
-                </span>
-                <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                <span className="flex items-center gap-1 text-yellow-500 font-bold">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                  4.8
                 </span>
               </div>
 
