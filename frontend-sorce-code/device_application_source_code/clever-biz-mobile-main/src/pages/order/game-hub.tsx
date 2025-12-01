@@ -1,4 +1,4 @@
-import { Gamepad2, X, Trophy, Play } from "lucide-react";
+import { Gamepad2, X, Play } from "lucide-react";
 import { cn } from "clsx-for-tailwind";
 import { Footer } from "../../components/Footer";
 import { motion, AnimatePresence } from "motion/react";
@@ -71,10 +71,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            className="space-y-8"
                         >
-
-
                             {/* Games Grid */}
                             <div>
                                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
