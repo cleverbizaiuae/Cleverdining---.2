@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { FormEvent, useState, useEffect, useRef } from "react";
-import { Send, User, Phone, ChevronLeft, Wifi, Instagram, Star, Mic } from "lucide-react";
+import { Send, User, Phone, ChevronLeft, Wifi, Instagram, Star, Mic, Bot } from "lucide-react";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
@@ -14,6 +13,7 @@ type Message = {
   is_from_device: boolean;
   text: string;
   timestamp?: string;
+  hasActions?: boolean;
 };
 
 const ScreenMessage = () => {
@@ -52,7 +52,8 @@ function MessagingUI() {
               id: prev.length + 1,
               is_from_device: data.is_from_device,
               text: data.message,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              hasActions: false // Default to false for incoming messages unless specified
             },
           ]);
         }
@@ -92,7 +93,8 @@ function MessagingUI() {
           id: msg.id,
           is_from_device: msg.is_from_device,
           text: msg.message,
-          timestamp: msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined
+          timestamp: msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+          hasActions: !msg.is_from_device && msg.message.includes("Welcome") // Simple heuristic for now
         }));
 
         setMessages(mapped);
@@ -166,7 +168,7 @@ function MessagingUI() {
 
             <div className="relative">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <User size={20} className="text-blue-600" />
+                <Bot size={20} className="text-blue-600" />
               </div>
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
             </div>
@@ -210,54 +212,60 @@ function MessagingUI() {
                   >
                     {/* Avatar */}
                     <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1",
                       message.is_from_device ? "bg-gray-200" : "bg-blue-100"
                     )}>
                       {message.is_from_device ? (
                         <User size={16} className="text-gray-600" />
                       ) : (
-                        <User size={16} className="text-blue-600" />
+                        <Bot size={16} className="text-blue-600" />
                       )}
                     </div>
 
-                    {/* Bubble */}
+                    {/* Message Content Area */}
                     <div className={cn(
-                      "max-w-[85%] px-4 py-3 text-sm shadow-sm",
-                      message.is_from_device
-                        ? "bg-blue-600 text-white rounded-2xl rounded-tr-none"
-                        : "bg-white text-gray-800 rounded-2xl rounded-tl-none"
+                      "flex flex-col space-y-2 max-w-[85%]",
+                      message.is_from_device ? "items-end" : "items-start"
                     )}>
-                      {message.text}
+                      {/* Text Bubble */}
+                      <div className={cn(
+                        "px-4 py-3 text-sm shadow-sm",
+                        message.is_from_device
+                          ? "bg-blue-600 text-white rounded-2xl rounded-tr-none"
+                          : "bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm"
+                      )}>
+                        {message.text}
+                      </div>
+
+                      {/* Action Cards (Only for Assistant messages with hasActions) */}
+                      {!message.is_from_device && message.hasActions && (
+                        <div className="flex flex-col gap-2 w-full">
+                          {/* WiFi Card */}
+                          <div className="bg-blue-50 rounded-xl p-2 flex items-center gap-2 border border-blue-100">
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                              <Wifi size={16} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-blue-600 font-medium text-xs">WiFi:</span>
+                              <span className="font-mono font-bold text-gray-800 text-sm">Guest123</span>
+                            </div>
+                          </div>
+
+                          {/* Social & Rating Buttons */}
+                          <div className="flex gap-2 w-full">
+                            <button className="flex-1 bg-white rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-gray-200 shadow-sm hover:border-pink-500 hover:text-pink-600 transition-colors">
+                              <Instagram size={14} />
+                              <span className="text-xs font-bold text-gray-600 group-hover:text-pink-600">Instagram</span>
+                            </button>
+                            <button className="flex-1 bg-white rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-gray-200 shadow-sm hover:border-yellow-500 hover:text-yellow-600 transition-colors">
+                              <Star size={14} />
+                              <span className="text-xs font-bold text-gray-600 group-hover:text-yellow-600">Rate Us</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Welcome Message Actions - Only for first bot message */}
-                  {!message.is_from_device && index === 0 && (
-                    <div className="ml-11 flex flex-col gap-2 max-w-[85%]">
-                      {/* WiFi Card */}
-                      <div className="bg-blue-50 rounded-xl p-3 flex items-center gap-3 border border-blue-100">
-                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600 shadow-sm">
-                          <Wifi size={16} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs text-blue-600 font-medium">WiFi Password</span>
-                          <span className="text-sm font-mono font-bold text-gray-800">Guest123</span>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-2">
-                        <button className="flex-1 bg-white rounded-xl p-2 flex items-center justify-center gap-2 border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors">
-                          <Instagram size={16} className="text-pink-600" />
-                          <span className="text-xs font-medium text-gray-700">Instagram</span>
-                        </button>
-                        <button className="flex-1 bg-white rounded-xl p-2 flex items-center justify-center gap-2 border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors">
-                          <Star size={16} className="text-yellow-500 fill-yellow-500" />
-                          <span className="text-xs font-medium text-gray-700">Rate Us</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </motion.div>
               ))
           )}
