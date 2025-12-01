@@ -174,7 +174,7 @@ function MessagingUI() {
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-bold text-gray-900 leading-tight">Assistant</span>
+              <span className="text-lg font-bold text-gray-900 leading-tight">Staff</span>
               <span className="text-xs font-medium text-green-600">Online</span>
             </div>
           </div>
