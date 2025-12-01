@@ -332,10 +332,15 @@ function MessagingUI() {
             </form>
 
             {/* Branding */}
-            <div className="text-center mt-3">
-              <span className="text-[10px] uppercase text-gray-400 font-medium tracking-wider">
+            <div className="text-center pt-3">
+              <a
+                href="https://instagram.com/cleverbiz.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] uppercase text-muted-foreground/60 font-medium tracking-widest hover:text-primary transition-colors"
+              >
                 Powered by Cleverbiz AI
-              </span>
+              </a>
             </div>
           </div>
         </div>

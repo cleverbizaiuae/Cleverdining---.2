@@ -1,5 +1,6 @@
 import { Gamepad2, X, Trophy, Play } from "lucide-react";
 import { cn } from "clsx-for-tailwind";
+import { Footer } from "../../components/Footer";
 import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { Snake } from "./games/Snake";
@@ -108,6 +109,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
                         </motion.div>
                     )}
                 </AnimatePresence>
+                <Footer />
             </div>
         </div>
     );

@@ -1,4 +1,4 @@
-import { Home, Phone, MessageSquare, ShoppingCart, Receipt } from "lucide-react";
+import { Home, Phone, MessageSquare, ShoppingCart, ClipboardList } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
@@ -14,7 +14,7 @@ export const BottomNav = () => {
         { id: "call", icon: Phone, label: "Call", path: "#call" }, // Special handler for call
         { id: "message", icon: MessageSquare, label: "Message", path: "/dashboard/message" },
         { id: "cart", icon: ShoppingCart, label: "Cart", path: "/dashboard/cart" },
-        { id: "orders", icon: Receipt, label: "Orders", path: "/dashboard/orders" },
+        { id: "orders", icon: ClipboardList, label: "Orders", path: "/dashboard/orders" },
     ];
 
     const activeTab = tabs.find(tab => tab.path === location.pathname) || tabs[0];

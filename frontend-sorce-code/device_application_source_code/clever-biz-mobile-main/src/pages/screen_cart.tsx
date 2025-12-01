@@ -2,7 +2,8 @@ import { useNavigate } from "react-router";
 import { useCart } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { Footer } from "../components/Footer";
 
 const ScreenCart = () => {
   const navigate = useNavigate();
@@ -159,6 +160,7 @@ const ScreenCart = () => {
             ))}
           </AnimatePresence>
         )}
+        <Footer />
       </div>
       <div className="w-full mt-4 ">
         <div className="w-full flex flex-col gap-2 rounded-lg shadow-md bg-[#F6F9FF] p-2 text-primary">

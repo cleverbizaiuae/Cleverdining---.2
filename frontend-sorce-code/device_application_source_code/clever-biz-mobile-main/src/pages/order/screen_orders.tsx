@@ -2,6 +2,7 @@ import axiosInstance from "@/lib/axios";
 import { useEffect, useState } from "react";
 import { Order } from "./order-types";
 import { OrderCard } from "./order-card";
+import { Footer } from "../../components/Footer";
 import { GameHub } from "./game-hub";
 import { Gamepad2 } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -149,6 +150,7 @@ const ScreenOrders = () => {
                 </motion.div>
               ))
             )}
+            <Footer />
           </div>
         )}
       </div>
