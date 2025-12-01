@@ -313,83 +313,81 @@ const LayoutDashboard = () => {
     <CartProvider>
       <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
 
-        {/* 1. Header Section (Sticky Top) */}
-        {!isSubRoute && (
-          <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 pb-4 pt-safe-top">
-            <div className="px-4 py-3 flex items-center justify-between">
-              {/* Logo */}
-              <div className="block shrink-0">
-                <Logo />
-              </div>
-
-              {/* Table Info */}
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Table</span>
-                <span className="text-lg font-bold text-foreground leading-none">{tableName || "05"}</span>
-              </div>
-            </div>
-
-            {/* Search Bar */}
-            <div className="px-4 mt-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search for food..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-gray-100 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto pb-24">
+        <div className="flex-1 overflow-y-auto pb-24 relative">
           {!isSubRoute ? (
-            <div className="flex flex-col">
-              {/* 2. Category Navigation (Layer 1) */}
-              <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4">
-                <div className="flex gap-3 pr-4 min-w-max">
-                  {categories.filter(c => !c.parent_category).map((category) => (
-                    <CategoryItem
-                      key={category.id}
-                      cat={category}
-                      isActive={(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)}
-                      onClick={() => {
-                        setSelectedCategory(categories.indexOf(category));
-                        setSelectedSubCategory(null);
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
+            <div className="flex flex-col min-h-full">
+              {/* Sticky Header */}
+              <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-gray-200/50 pb-2 pt-safe-top transition-all duration-300">
+                <div className="px-4 py-3 flex items-center justify-between">
+                  {/* Logo */}
+                  <div className="block shrink-0">
+                    <Logo />
+                  </div>
 
-              {/* Sub-category Filter Row (Layer 2) */}
-              {subCategories.length > 0 && (
-                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 bg-gray-50/50">
-                  <div className="flex gap-2 pr-4 min-w-max">
-                    {subCategories.map((sub, idx) => (
-                      <button
-                        key={sub.id}
-                        onClick={() => setSelectedSubCategory(sub.id)}
-                        className={cn(
-                          "shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
-                          selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                            ? "bg-foreground text-background border-foreground"
-                            : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary"
-                        )}
-                      >
-                        {sub.Category_name}
-                      </button>
+                  {/* Table Info */}
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Table</span>
+                    <span className="text-lg font-bold text-foreground leading-none">{tableName || "05"}</span>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="px-4 mt-1 mb-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search for food..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full bg-gray-100 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Categories */}
+                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4">
+                  <div className="flex gap-3 pr-4 min-w-max">
+                    {categories.filter(c => !c.parent_category).map((category) => (
+                      <CategoryItem
+                        key={category.id}
+                        cat={category}
+                        isActive={(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)}
+                        onClick={() => {
+                          setSelectedCategory(categories.indexOf(category));
+                          setSelectedSubCategory(null);
+                        }}
+                      />
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* 3. Main Content (Menu Feed) */}
-              <div className="px-4 py-4 grid grid-cols-1 gap-4">
+                {/* Sub-categories */}
+                {subCategories.length > 0 && (
+                  <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 bg-gray-50/50 mt-2">
+                    <div className="flex gap-2 pr-4 min-w-max">
+                      {subCategories.map((sub, idx) => (
+                        <button
+                          key={sub.id}
+                          onClick={() => setSelectedSubCategory(sub.id)}
+                          className={cn(
+                            "shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
+                            selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
+                              ? "bg-foreground text-background border-foreground"
+                              : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary"
+                          )}
+                        >
+                          {sub.Category_name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </header>
+
+              {/* Main Content (Menu Feed) */}
+              <main className="px-4 py-4 grid grid-cols-1 gap-4 flex-1">
                 {(() => {
                   let filteredItems = items;
 
@@ -454,7 +452,7 @@ const LayoutDashboard = () => {
                   );
                 })()}
                 <Footer />
-              </div>
+              </main>
             </div>
           ) : (
             <div className="h-full">
