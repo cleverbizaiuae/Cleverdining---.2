@@ -1,5 +1,6 @@
 import { FormEvent, useState, useEffect, useRef } from "react";
-import { Send, User, Phone, ChevronLeft, Wifi, Instagram, Star, Mic, Bot } from "lucide-react";
+import { Bot, Mic, Send, Wifi, Instagram, Star, ChevronLeft, User, Phone } from "lucide-react";
+import { Footer } from "../components/Footer";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
@@ -332,16 +333,7 @@ function MessagingUI() {
             </form>
 
             {/* Branding */}
-            <div className="text-center pt-3">
-              <a
-                href="https://instagram.com/cleverbiz.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] uppercase text-muted-foreground/60 font-medium tracking-widest hover:text-primary transition-colors"
-              >
-                Powered by Cleverbiz AI
-              </a>
-            </div>
+            <Footer />
           </div>
         </div>
       </div>

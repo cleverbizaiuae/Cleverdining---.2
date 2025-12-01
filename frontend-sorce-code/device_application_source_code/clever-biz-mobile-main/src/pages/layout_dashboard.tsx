@@ -19,6 +19,7 @@ import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
 import { Search, MapPin } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
+import { Footer } from "../components/Footer";
 
 const LayoutDashboard = () => {
   const location = useLocation();
@@ -452,6 +453,7 @@ const LayoutDashboard = () => {
                     </AnimatePresence>
                   );
                 })()}
+                <Footer />
               </div>
             </div>
           ) : (
