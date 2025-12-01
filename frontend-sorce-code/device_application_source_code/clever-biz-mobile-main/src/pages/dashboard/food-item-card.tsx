@@ -49,7 +49,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                             e.stopPropagation();
                             onAdd();
                         }}
-                        className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-primary hover:text-white active:scale-90"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-primary hover:text-white active:scale-90"
                     >
                         <span className="text-xl leading-none mb-1">+</span>
                     </button>

@@ -19,7 +19,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative w-16 h-16 rounded-2xl overflow-hidden transition-all duration-300 group shrink-0 border flex flex-col items-center justify-center",
+        "relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden transition-all duration-300 group shrink-0 border flex flex-col items-center justify-center",
         isActive
           ? "border-primary shadow-lg shadow-primary/25 scale-105"
           : "border-transparent bg-gray-100 hover:border-primary/30 scale-100"

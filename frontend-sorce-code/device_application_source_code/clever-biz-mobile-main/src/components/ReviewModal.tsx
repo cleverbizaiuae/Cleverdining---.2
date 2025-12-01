@@ -114,8 +114,8 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 flex justify-center items-center bg-black/60 backdrop-blur-sm z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl transform transition-all duration-300 scale-100 opacity-100">
+    <div className="fixed inset-0 flex justify-center items-center bg-black/60 backdrop-blur-sm z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-none sm:rounded-2xl w-full h-full sm:h-auto sm:max-w-lg shadow-2xl transform transition-all duration-300 scale-100 opacity-100 flex flex-col">
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-100">
           <div className="flex items-center justify-between">
@@ -191,11 +191,10 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
                       aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
                     >
                       <svg
-                        className={`w-8 h-8 transition-colors duration-200 ${
-                          star <= rating
+                        className={`w-8 h-8 transition-colors duration-200 ${star <= rating
                             ? "text-yellow-400 fill-current"
                             : "text-gray-300 hover:text-yellow-200"
-                        }`}
+                          }`}
                         fill={star <= rating ? "currentColor" : "none"}
                         stroke="currentColor"
                         viewBox="0 0 24 24"
