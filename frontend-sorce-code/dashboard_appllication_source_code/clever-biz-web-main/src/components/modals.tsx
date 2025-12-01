@@ -1085,7 +1085,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
   id,
 }) => {
   const { fetchCategories } = useOwner();
-  const { handleSubmit, register, reset, setValue } = useForm<CategoryInputs>();
+  const { handleSubmit, register, reset, setValue, watch } = useForm<CategoryInputs>();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [existingImage, setExistingImage] = useState<string | null>(null);
 
