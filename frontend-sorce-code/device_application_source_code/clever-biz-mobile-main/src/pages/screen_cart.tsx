@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router";
+import { ArrowRight } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
@@ -87,13 +88,22 @@ const ScreenCart = () => {
       </div>
       <div className="flex-1 flex flex-col gap-y-2 w-full max-w-2xl overflow-y-auto px-4">
         {cart.length === 0 ? (
-          <motion.p
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center text-primary/60 mt-8"
+            className="flex flex-col items-center justify-center h-64"
           >
-            Your cart is empty.
-          </motion.p>
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-3xl mb-4">
+              🛒
+            </div>
+            <p className="text-muted-foreground mb-6">Your cart is empty.</p>
+            <button
+              onClick={() => navigate("/")}
+              className="px-6 py-2 border border-gray-300 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              Browse Menu
+            </button>
+          </motion.div>
         ) : (
           <AnimatePresence mode="popLayout">
             {cart.map((item) => (
@@ -160,25 +170,30 @@ const ScreenCart = () => {
           </AnimatePresence>
         )}
       </div>
-      <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 pb-safe mt-auto">
-        <div className="w-full flex flex-col gap-4">
-          <div className="flex items-center justify-between text-sm font-medium px-2">
-            <span className="text-gray-600">
-              Total Quantity: <span className="text-primary font-bold ml-1">{totalQuantity}</span>
-            </span>
-            <span className="text-gray-600">
-              Total Cost: <span className="text-primary font-bold ml-1">AED {totalCost}</span>
-            </span>
+      {cart.length > 0 && (
+        <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 pb-safe mt-auto">
+          <div className="w-full flex flex-col gap-4">
+            <div className="flex items-center justify-between text-sm font-medium px-2">
+              <span className="text-gray-600">
+                Total Quantity: <span className="text-primary font-bold ml-1">{totalQuantity}</span>
+              </span>
+              <span className="text-gray-600">
+                Total Cost: <span className="text-primary font-bold ml-1">AED {totalCost}</span>
+              </span>
+            </div>
+            <button
+              className="w-full h-14 bg-primary text-white rounded-xl shadow-xl flex items-center justify-between px-6 font-bold text-lg active:scale-[0.98] transition-transform"
+              onClick={handleOrderNow}
+            >
+              <span>Place Order</span>
+              <div className="flex items-center gap-2">
+                <span>AED {totalCost}</span>
+                <ArrowRight size={20} />
+              </div>
+            </button>
           </div>
-          <button
-            className="button-primary w-full py-3.5 text-base font-bold shadow-blue-200/50"
-            onClick={handleOrderNow}
-            disabled={cart.length === 0}
-          >
-            Order Now
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
