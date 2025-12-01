@@ -3,7 +3,6 @@ import { useCart } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "motion/react";
-import { Footer } from "../components/Footer";
 
 const ScreenCart = () => {
   const navigate = useNavigate();
@@ -160,10 +159,9 @@ const ScreenCart = () => {
             ))}
           </AnimatePresence>
         )}
-        <Footer />
       </div>
-      <div className="w-full px-4 -mb-6 mt-auto pt-4">
-        <div className="w-full flex flex-col gap-4 rounded-2xl shadow-lg bg-[#F6F9FF] p-5 text-primary border border-blue-50">
+      <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 pb-safe mt-auto">
+        <div className="w-full flex flex-col gap-4">
           <div className="flex items-center justify-between text-sm font-medium px-2">
             <span className="text-gray-600">
               Total Quantity: <span className="text-primary font-bold ml-1">{totalQuantity}</span>
