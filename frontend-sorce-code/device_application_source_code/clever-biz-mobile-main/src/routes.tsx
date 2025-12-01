@@ -12,6 +12,7 @@ import ScreenMessage from "./pages/screen_message";
 import SuccessPage from "./pages/SuccessPage";
 // import { PrivateRouteGuard } from "./components/route-guard";
 import { NotFoundPage } from "./pages/not-found";
+import TableEntry from "./pages/TableEntry";
 
 function App() {
   const [searchParams] = useSearchParams();
@@ -97,6 +98,7 @@ function App() {
         <Route path="cancel" element={<CancelPage />} />
       </Route>
 
+      <Route path="/table/:uuid" element={<TableEntry />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

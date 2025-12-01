@@ -10,7 +10,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
     return (
         <div
             onClick={onAdd}
-            className="group relative flex flex-row gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-gray-200/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden"
+            className="group relative flex flex-row gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden"
         >
             {/* Image Section */}
             <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-gray-50">
@@ -30,11 +30,11 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             {/* Content Section */}
             <div className="flex-1 min-w-0 flex flex-col justify-between">
                 <div>
-                    <h3 className="font-bold text-gray-900 truncate text-base sm:text-lg leading-tight">
+                    <h3 className="font-bold text-foreground truncate text-base sm:text-lg leading-tight">
                         {item.item_name}
                     </h3>
 
-                    <p className="text-[10px] sm:text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                         {item.description || "No description available."}
                     </p>
                 </div>
@@ -49,7 +49,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                             e.stopPropagation();
                             onAdd();
                         }}
-                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 transition-colors hover:bg-primary hover:text-white active:scale-90"
+                        className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-primary hover:text-white active:scale-90"
                     >
                         <span className="text-xl leading-none mb-1">+</span>
                     </button>

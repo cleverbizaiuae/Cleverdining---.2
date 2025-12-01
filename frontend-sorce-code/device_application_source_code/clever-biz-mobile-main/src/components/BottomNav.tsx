@@ -29,32 +29,32 @@ export const BottomNav = () => {
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-2 pb-6 z-40">
-            <div className="flex justify-between items-center max-w-md mx-auto">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] pb-[env(safe-area-inset-bottom)] pt-2 px-2">
+            <div className="flex justify-around items-center w-full">
                 {tabs.map((tab) => {
-                    const isActive = location.pathname === tab.path || (tab.id === "call" && false); // Call is never "active" route
+                    const isActive = location.pathname === tab.path || (tab.id === "call" && false);
                     const Icon = tab.icon;
 
                     return (
                         <button
                             key={tab.id}
                             onClick={() => handleTabClick(tab)}
-                            className="relative flex flex-col items-center justify-center w-12 h-12"
+                            className="group relative flex flex-col items-center justify-center w-16 py-1"
                         >
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-bubble"
-                                    className="absolute inset-0 bg-primary/10 rounded-2xl -z-10"
+                                    className="absolute inset-0 bg-blue-50 rounded-xl -z-10"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
 
-                            <div className="relative">
+                            <div className="relative mb-0.5">
                                 <Icon
                                     size={24}
                                     className={cn(
                                         "transition-colors duration-300",
-                                        isActive ? "text-primary fill-primary/20" : "text-gray-400"
+                                        isActive ? "text-primary fill-primary/20" : "text-gray-400 group-hover:text-gray-600"
                                     )}
                                     strokeWidth={isActive ? 2.5 : 2}
                                 />
@@ -63,12 +63,19 @@ export const BottomNav = () => {
                                     <motion.span
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white"
+                                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm"
                                     >
                                         {cart.length}
                                     </motion.span>
                                 )}
                             </div>
+
+                            <span className={cn(
+                                "text-[10px] font-medium transition-colors duration-300",
+                                isActive ? "text-primary" : "text-gray-400 group-hover:text-gray-600"
+                            )}>
+                                {tab.label}
+                            </span>
                         </button>
                     );
                 })}

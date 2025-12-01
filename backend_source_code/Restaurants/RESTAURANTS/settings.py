@@ -133,8 +133,6 @@ INSTALLED_APPS = [
     'adminapi',
     'vapi',
     'subscription',
-    'subscription',
-    'subscription',
     'payment'
 ]
 

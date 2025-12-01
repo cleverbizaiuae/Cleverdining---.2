@@ -383,16 +383,21 @@ export const DashboardDropDown: React.FC<DashboardDropDownProps> = ({
 /* <<<<<<<<===================================================== Input Drop Down */
 /* Upload pickable item ===========================================================>>>>> */
 // InputImageUploadBox.tsx
+import { ImSpinner6 } from "react-icons/im";
+import { FaMagic } from "react-icons/fa";
+
 type Props = {
   file: File | null;
   setFile: (file: File | null) => void;
   label?: string;
+  searchQuery?: string; // New prop for auto-generation
 };
 
-export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "Upload image" }) => {
+export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "Upload image", searchQuery }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleClick = () => inputRef.current?.click();
 
@@ -415,6 +420,29 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "U
     if (inputRef.current) inputRef.current.value = "";
   };
 
+  const handleAutoGenerate = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!searchQuery) return;
+
+    setIsGenerating(true);
+    try {
+      const prompt = `${searchQuery} food high quality delicious professional photography`;
+      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const generatedFile = new File([blob], `${searchQuery.replace(/\s+/g, "_")}_generated.jpg`, { type: "image/jpeg" });
+
+      setFile(generatedFile);
+    } catch (error) {
+      console.error("Failed to generate image:", error);
+      // You might want to show a toast here if you have access to it
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   useEffect(() => {
     if (!file) return;
     const objectUrl = URL.createObjectURL(file);
@@ -424,9 +452,30 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "U
 
   return (
     <div className="space-y-4">
-      <label className="block text-primary-text text-sm font-medium">
-        {label}
-      </label>
+      <div className="flex justify-between items-center">
+        <label className="block text-primary-text text-sm font-medium">
+          {label}
+        </label>
+        {searchQuery && !file && (
+          <button
+            onClick={handleAutoGenerate}
+            disabled={isGenerating}
+            type="button"
+            className="text-xs flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <ImSpinner6 className="animate-spin" /> Generating...
+              </>
+            ) : (
+              <>
+                <FaMagic /> Auto-Generate
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
       {previewUrl ? (
         <div className="relative mt-4 inline-block">
           <img
@@ -461,7 +510,7 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "U
             className="hidden"
           />
           <div className="text-primary-text">
-            <FiUpload className="text-2xl mb-2" />
+            <FiUpload className="text-2xl mb-2 mx-auto" />
             <p className="font-semibold">Upload a File</p>
             <p className="text-sm text-primary-text/40">
               Drag and drop files here or{" "}

@@ -232,6 +232,10 @@ class RestaurantFullDataAPIView(APIView):
             }
 
             return Response(data)
+        except Restaurant.DoesNotExist:
+            return Response({"error": "Restaurant not found"}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
 
 class PublicRestaurantListView(APIView):
     permission_classes = [AllowAny]

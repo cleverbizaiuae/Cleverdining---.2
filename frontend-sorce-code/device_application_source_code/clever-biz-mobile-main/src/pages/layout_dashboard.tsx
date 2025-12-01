@@ -310,7 +310,7 @@ const LayoutDashboard = () => {
 
   return (
     <CartProvider>
-      <div className="h-[100dvh] flex flex-col bg-gray-50 overflow-hidden">
+      <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
 
         {/* 1. Header Section (Sticky Top) */}
         {!isSubRoute && (
@@ -323,8 +323,8 @@ const LayoutDashboard = () => {
 
               {/* Table Info */}
               <div className="flex flex-col items-end">
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Table</span>
-                <span className="text-lg font-bold text-gray-900 leading-none">{tableName || "05"}</span>
+                <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Table</span>
+                <span className="text-lg font-bold text-foreground leading-none">{tableName || "05"}</span>
               </div>
             </div>
 
@@ -376,8 +376,8 @@ const LayoutDashboard = () => {
                         className={cn(
                           "snap-start shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
                           selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                            ? "bg-black text-white border-black"
-                            : "bg-gray-100/50 text-gray-500 border-transparent hover:bg-gray-200"
+                            ? "bg-foreground text-background border-foreground"
+                            : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary"
                         )}
                       >
                         {sub.Category_name}

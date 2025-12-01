@@ -1,4 +1,5 @@
 from django.db import models
+import uuid
 from .constants import ACTION_CHOICES,STATUS_CHOICES
 from accounts.models import User
 from restaurant.models import Restaurant
@@ -9,6 +10,7 @@ class Device(models.Model):
     table_name = models.CharField(max_length=50)
     region = models.CharField(max_length=50, default='Primary', blank=True)
     table_number = models.CharField(max_length=20, null=True, blank=True)  # New field for table identifier
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='devices')
     action = models.CharField(max_length=10, choices=ACTION_CHOICES, default='active')

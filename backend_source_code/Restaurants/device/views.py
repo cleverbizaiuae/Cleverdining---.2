@@ -310,3 +310,20 @@ class PublicDeviceListView(APIView):
                 "restaurant_id": device.restaurant.id
             })
         return Response(data)
+
+class PublicDeviceByUUIDView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, uuid):
+        try:
+            device = Device.objects.get(uuid=uuid)
+            return Response({
+                "id": device.id,
+                "uuid": str(device.uuid),
+                "table_name": device.table_name,
+                "restaurant_id": device.restaurant.id,
+                "restaurant_name": device.restaurant.resturent_name,
+                "table_number": device.table_number
+            })
+        except Device.DoesNotExist:
+            return Response({"error": "Device not found"}, status=404)

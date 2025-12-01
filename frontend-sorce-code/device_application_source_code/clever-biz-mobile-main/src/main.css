@@ -2,11 +2,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #2e3d67;
-  --color-accent: #2962ff;
+  --color-primary: hsl(221 83% 53%);
+  --color-accent: hsl(221 83% 53%);
   --color-sidebar: #fdfdff;
-  --color-primary-text: #f9f8f8;
-  --color-background: #f6f9ff;
+  --color-primary-text: #ffffff;
+  --color-background: hsl(210 20% 98%);
+  --color-foreground: hsl(222 47% 11%);
+  --color-secondary: hsl(210 40% 96.1%);
+  --color-muted: hsl(215.4 16.3% 46.9%);
+  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+  --color-border: hsl(214.3 31.8% 91.4%);
   --color-icon-active: #3e4f7e;
   --color-icon-active-bg: #f1f5ff;
   --color-icon-inactive: #b2b5be;
@@ -21,7 +26,7 @@
     @apply h-full;
   }
   #root {
-    @apply bg-background overflow-y-hidden;
+    @apply bg-background text-foreground overflow-y-hidden;
   }
   button {
     @apply cursor-pointer;

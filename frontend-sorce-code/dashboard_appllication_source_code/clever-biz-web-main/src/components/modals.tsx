@@ -413,7 +413,7 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
                 </div>
               )}
 
-              <InputImageUploadBox file={imageFile} setFile={setImageFile} />
+              <InputImageUploadBox file={imageFile} setFile={setImageFile} searchQuery={watch("name")} />
 
               {/* Show existing video if editing */}
               {existingVideo && !videoFile && (
@@ -1197,7 +1197,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
                 </div>
               )}
 
-              <InputImageUploadBox file={imageFile} setFile={setImageFile} />
+              <InputImageUploadBox file={imageFile} setFile={setImageFile} searchQuery={watch("name")} />
               <button className="button-primary" type="submit">
                 {id ? "Update" : "Submit"}
               </button>
@@ -1311,7 +1311,7 @@ export const AddSubCategoryModal: React.FC<ModalProps> = ({
                 </select>
               </div>
 
-              <InputImageUploadBox file={imageFile} setFile={setImageFile} />
+              <InputImageUploadBox file={imageFile} setFile={setImageFile} searchQuery={watch("name")} />
               <button className="button-primary" type="submit">
                 Submit
               </button>
