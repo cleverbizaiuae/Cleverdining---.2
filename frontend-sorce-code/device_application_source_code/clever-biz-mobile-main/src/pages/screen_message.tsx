@@ -1,5 +1,5 @@
 import { FormEvent, useState, useEffect, useRef } from "react";
-import { Bot, Mic, Send, Wifi, Instagram, Star, ChevronLeft, User, Phone } from "lucide-react";
+import { Bot, Send, Wifi, Instagram, Star, ChevronLeft, User, Phone } from "lucide-react";
 import { Footer } from "../components/Footer";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
@@ -303,12 +303,7 @@ function MessagingUI() {
               onSubmit={handleSubmit}
               className="flex items-center gap-2 w-full bg-gray-50 rounded-full border border-gray-200 p-1 pr-2"
             >
-              <button
-                type="button"
-                className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                <Mic size={20} />
-              </button>
+
 
               <input
                 type="text"

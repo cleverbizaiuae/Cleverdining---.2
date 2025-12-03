@@ -88,7 +88,7 @@ export const MemoryMatch = ({ onBack }: { onBack: () => void }) => {
                                 className={`absolute inset-0 flex items-center justify-center bg-gray-700 backface-hidden ${isFlipped ? "opacity-0" : "opacity-100"
                                     }`}
                             >
-                                <span className="text-2xl text-gray-500">?</span>
+                                <span className="text-2xl font-bold text-gray-500">{card.id + 1}</span>
                             </div>
                             <div
                                 className={`absolute inset-0 flex items-center justify-center ${isSolved ? "bg-orange-500" : "bg-orange-400"
