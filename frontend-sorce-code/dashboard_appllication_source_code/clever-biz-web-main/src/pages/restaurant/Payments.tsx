@@ -54,9 +54,15 @@ export const Payments = () => {
     const fetchPayments = async () => {
         try {
             const res = await axios.get('/owners/payments/');
-            setPayments(res.data);
+            if (Array.isArray(res.data)) {
+                setPayments(res.data);
+            } else {
+                console.error("Payments API returned non-array data:", res.data);
+                setPayments([]);
+            }
         } catch (error) {
             console.error("Failed to fetch payments", error);
+            setPayments([]);
         } finally {
             setLoading(false);
         }

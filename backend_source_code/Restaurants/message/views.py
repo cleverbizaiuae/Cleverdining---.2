@@ -61,6 +61,9 @@ class ChatMessageViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         user = request.user
+        if not user.is_authenticated:
+            return Response({'unread_count': 0})
+            
         # Calculate directly from messages to ensure accuracy
         count = ChatMessage.objects.filter(receiver=user, is_read=False).count()
         
