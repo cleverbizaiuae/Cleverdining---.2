@@ -109,6 +109,8 @@ class PaymentGateway(models.Model):
     PROVIDER_CHOICES = [
         ('stripe', 'Stripe'),
         ('razorpay', 'Razorpay'),
+        ('checkout', 'Checkout.com'),
+        ('paytabs', 'PayTabs'),
     ]
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payment_gateways')
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
