@@ -4,7 +4,10 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import generics, status,filters, permissions
 from rest_framework.views import APIView
 from .pagination import TenPerPagePagination
-from .models import Order
+from .models import Order, Cart, CartItem
+from device.models import GuestSession
+from rest_framework import viewsets
+from rest_framework.decorators import action
 from .serializers import OrderCreateSerializerFixed, OrderDetailSerializer
 from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff
 from accounts.models import ChefStaff
@@ -30,27 +33,25 @@ class OrderCreateAPIView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
-        # Prioritize device from request data (common for mobile/kiosk apps)
-        device_id = self.request.data.get('device')
-        device = None
-
-        if device_id:
-            from device.models import Device
-            try:
-                device = Device.objects.get(id=device_id)
-            except Device.DoesNotExist:
-                pass
-        
-        # Fallback to user's linked device if not provided in request
-        if not device and self.request.user.is_authenticated:
-            device = self.request.user.devices.first()
-
-        if not device:
+        # Resolve guest session
+        session_token = self.request.headers.get('X-Guest-Session-Token')
+        if not session_token:
             from rest_framework.exceptions import ValidationError
-            raise ValidationError("Device not found. Please scan the QR code again.")
+            raise ValidationError("Missing session token. Please scan the QR code again.")
 
-        order = serializer.save(device=device, restaurant=device.restaurant) 
+        try:
+            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+        except GuestSession.DoesNotExist:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Invalid or expired session. Please scan the QR code again.")
+
+        device = session.device
+        restaurant = device.restaurant
+
+        order = serializer.save(device=device, restaurant=restaurant, guest_session=session) 
         data = OrderDetailSerializer(order).data
+        
+        # Notify Restaurant
         async_to_sync(channel_layer.group_send)(
             f"restaurant_{order.restaurant.id}",
             {
@@ -58,6 +59,9 @@ class OrderCreateAPIView(generics.CreateAPIView):
                 "order": data
             }
         )
+        
+        # Clear cart after order
+        Cart.objects.filter(guest_session=session).delete()
 
 
 
@@ -106,6 +110,19 @@ class MyOrdersAPIView(generics.ListAPIView):
                 status__in=['pending', 'preparing', 'served' , 'paid']
             ).order_by('-created_time')
         else:
+            # Try to resolve guest session
+            session_token = self.request.headers.get('X-Guest-Session-Token')
+            if session_token:
+                try:
+                    session = GuestSession.objects.get(session_token=session_token, is_active=True)
+                    return Order.objects.filter(
+                        guest_session=session,
+                        status__in=['pending', 'preparing', 'served' , 'paid']
+                    ).order_by('-created_time')
+                except GuestSession.DoesNotExist:
+                    return Order.objects.none()
+
+            # Fallback to device_id (Legacy/Insecure - consider deprecating)
             device_id = self.request.query_params.get('device_id')
             if device_id:
                 return Order.objects.filter(
@@ -452,3 +469,73 @@ class MonthlySalesReportView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class CartViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
+    
+    def get_serializer_class(self):
+        # We need a serializer for Cart
+        from .serializers import CartSerializer
+        return CartSerializer
+
+    def get_queryset(self):
+        # Resolve cart from guest session
+        session_token = self.request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+            return Cart.objects.none()
+        
+        try:
+            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+            return Cart.objects.filter(guest_session=session)
+        except GuestSession.DoesNotExist:
+            return Cart.objects.none()
+
+    @action(detail=False, methods=['post'])
+    def add_item(self, request):
+        session_token = request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+            return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+        except GuestSession.DoesNotExist:
+            return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
+            
+        item_id = request.data.get('item_id')
+        quantity = int(request.data.get('quantity', 1))
+        
+        if not item_id:
+            return Response({'error': 'Missing item_id'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Get or create cart
+        cart, created = Cart.objects.get_or_create(guest_session=session, device=session.device)
+        
+        # Add item
+        from item.models import Item
+        try:
+            item = Item.objects.get(id=item_id)
+        except Item.DoesNotExist:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, item=item)
+        if not created:
+            cart_item.quantity += quantity
+        else:
+            cart_item.quantity = quantity
+        cart_item.save()
+        
+        # Serialize and return cart
+        from .serializers import CartSerializer
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=False, methods=['post'])
+    def clear(self, request):
+        session_token = request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+            return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        try:
+            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+            Cart.objects.filter(guest_session=session).delete()
+            return Response({'status': 'cleared'})
+        except GuestSession.DoesNotExist:
+            return Response({'error': 'Invalid session'}, status=status.HTTP_403_FORBIDDEN)

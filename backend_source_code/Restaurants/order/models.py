@@ -6,6 +6,7 @@ from .constants import STATUS,PAYMENT_STATUS
 
 class Order(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='orders')
+    guest_session = models.ForeignKey('device.GuestSession', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='orders')
     status = models.CharField(max_length=20,choices=STATUS,default='pending')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -34,6 +35,25 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.item.item_name}"
+
+class Cart(models.Model):
+    guest_session = models.ForeignKey('device.GuestSession', on_delete=models.CASCADE, related_name='carts')
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='carts')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Cart for {self.guest_session}"
+
+class CartItem(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey(Item, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.item.item_name} in Cart {self.cart.id}"
 
 
 

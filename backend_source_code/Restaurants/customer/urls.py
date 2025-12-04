@@ -2,15 +2,16 @@ from django.urls import path, include
 from category.views import CustomerCategoryListView
 from rest_framework.routers import DefaultRouter
 from item.views import CustomerItemViewSet
-from order.views import OrderCreateAPIView, OrderCancelAPIView,MyOrdersAPIView,MySingleOrderAPIView
+from order.views import OrderCreateAPIView, OrderCancelAPIView,MyOrdersAPIView,MySingleOrderAPIView, CartViewSet
 from review.views import CreateReviewAPIView
 from payment.views import CreateCheckoutSessionView, PaymentSuccessView, PaymentCancelView, VerifyRazorpayPaymentView, VerifyPaymentView, PaymentWebhookView
 from restaurant.views import PublicRestaurantListView
-from device.views import PublicDeviceListView, PublicDeviceByUUIDView
+from device.views import PublicDeviceListView, PublicDeviceByUUIDView, ResolveTableView
 
 
 router = DefaultRouter()
 router.register('items',CustomerItemViewSet, basename='customer_items')
+router.register('cart', CartViewSet, basename='cart')
 
 
 urlpatterns = [
@@ -19,6 +20,7 @@ urlpatterns = [
     path('restaurants/', PublicRestaurantListView.as_view(), name='public-restaurants'),
     path('devices/', PublicDeviceListView.as_view(), name='public-devices'),
     path('devices/<uuid:uuid>/', PublicDeviceByUUIDView.as_view(), name='public-device-by-uuid'),
+    path('resolve-table/', ResolveTableView.as_view(), name='resolve-table'),
     path('orders/', OrderCreateAPIView.as_view(), name='order-create'),
     path('orders/<int:pk>/cancel/', OrderCancelAPIView.as_view(), name='order-cancel'),
     path('uncomplete/orders/', MyOrdersAPIView.as_view(), name='my-orders'),

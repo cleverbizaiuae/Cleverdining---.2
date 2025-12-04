@@ -23,8 +23,42 @@ from datetime import timedelta
 from django.utils.timezone import now
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+import uuid
+from .models import Device, Reservation, GuestSession
 
 channel_layer = get_channel_layer()
+
+class ResolveTableView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        restaurant_id = request.data.get('restaurant_id')
+        table_token = request.data.get('table_token')
+
+        if not restaurant_id or not table_token:
+            return Response({'error': 'Missing restaurant_id or table_token'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
+        except Device.DoesNotExist:
+            return Response({'error': 'Invalid table token'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Create new guest session
+        session_token = str(uuid.uuid4())
+        session = GuestSession.objects.create(
+            device=device,
+            session_token=session_token,
+            expires_at=now() + timedelta(hours=24) # 24 hour session
+        )
+
+        return Response({
+            'guest_session_id': session.id,
+            'session_token': session_token,
+            'table_id': device.id,
+            'table_name': device.table_name,
+            'restaurant_id': device.restaurant.id,
+            'restaurant_name': device.restaurant.resturent_name
+        })
 
 def generate_username(restaurant_name):
     number = random.randint(1000, 9999)

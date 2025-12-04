@@ -13,6 +13,7 @@ import SuccessPage from "./pages/SuccessPage";
 // import { PrivateRouteGuard } from "./components/route-guard";
 import { NotFoundPage } from "./pages/not-found";
 import TableEntry from "./pages/TableEntry";
+import TableLanding from "./pages/TableLanding";
 
 function App() {
   const [searchParams] = useSearchParams();
@@ -88,6 +89,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<div className="flex items-center justify-center h-screen">Loading...</div>} />
+      <Route path="/t/:restaurantId/:tableToken" element={<TableLanding />} />
       <Route path="/dashboard" element={<LayoutDashboard />}>
         <Route index={true} element={<ScreenHome />} />
         <Route path="message" element={<ScreenMessage />} />

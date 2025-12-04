@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Cart, CartItem
 from item.models import Item
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -63,3 +63,22 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['id', 'order_items', 'status','payment_status','total_price', 'created_time', 'updated_time', 'device', 'restaurant','device_name']
+class CartItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source='item.item_name', read_only=True)
+    price = serializers.DecimalField(source='item.price', max_digits=10, decimal_places=2, read_only=True)
+    image = serializers.ImageField(source='item.image', read_only=True)
+
+    class Meta:
+        model = CartItem
+        fields = ['id', 'item', 'item_name', 'quantity', 'price', 'image']
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+    total_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = ['id', 'items', 'total_price']
+
+    def get_total_price(self, obj):
+        return sum(item.quantity * item.item.price for item in obj.items.all())

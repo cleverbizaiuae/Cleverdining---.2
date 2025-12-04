@@ -20,9 +20,16 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKENS.ACCESS_TOKEN);
+  const guestSessionToken = localStorage.getItem("guest_session_token");
+
   if (token && token !== "guest_token") {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  if (guestSessionToken) {
+    config.headers["X-Guest-Session-Token"] = guestSessionToken;
+  }
+
   return config;
 });
 
