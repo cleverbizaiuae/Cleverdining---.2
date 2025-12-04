@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -99,5 +99,7 @@ const WebSocketProvider = ({ children }) => {
     </WebSocketContext.Provider>
   );
 };
+
+export const useWebSocket = () => useContext(WebSocketContext);
 
 export default WebSocketProvider;

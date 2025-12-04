@@ -21,15 +21,15 @@ export const Payments = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
-    const { lastMessage } = useWebSocket();
+    const { response } = useWebSocket();
 
     useEffect(() => {
         fetchPayments();
     }, []);
 
     useEffect(() => {
-        if (lastMessage) {
-            const data = JSON.parse(lastMessage.data);
+        if (response && response.type) {
+            const data = response;
             if (data.type === 'payment:created' || data.type === 'payment:updated' || data.type === 'payment:cash_confirmed') {
                 // Ideally, we should update the list smartly. For now, refresh or prepend.
                 // If it's an update, find and replace.
@@ -49,7 +49,7 @@ export const Payments = () => {
                 }
             }
         }
-    }, [lastMessage]);
+    }, [response]);
 
     const fetchPayments = async () => {
         try {
