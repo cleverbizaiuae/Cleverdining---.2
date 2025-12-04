@@ -3,6 +3,11 @@
 import uuid
 from django.db import migrations, models
 
+def deduplicate_uuids(apps, schema_editor):
+    Device = apps.get_model('device', 'Device')
+    for device in Device.objects.all():
+        device.uuid = uuid.uuid4()
+        device.save()
 
 class Migration(migrations.Migration):
 
@@ -11,6 +16,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(deduplicate_uuids, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='device',
             name='uuid',

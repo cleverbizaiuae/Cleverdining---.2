@@ -10,7 +10,7 @@ from order.views import OwnerRestaurantOrdersAPIView,OwnerUpdateOrderStatusAPIVi
 from review.views import OwnerRestaurantReviewListAPIView
 from device.views import DeviceViewSetall
 from vapi.views import CreateAssistantView,UpdateAssistantNumber,GetRestaurantAssistanceView
-from payment.views import StripeDetailsViewSet
+from payment.views import StripeDetailsViewSet, PaymentGatewayViewSet
 
 
 
@@ -23,6 +23,7 @@ router.register('devices', DeviceViewSet, basename='device')
 router.register('reservations', ReservationViewSet, basename='reservation')
 router.register('devicesall', DeviceViewSetall, basename='deviceall')
 router.register(r'stripe', StripeDetailsViewSet, basename='stripe-details')
+router.register(r'payment-gateways', PaymentGatewayViewSet, basename='payment-gateways')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -25,8 +25,15 @@ class Payment(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='payments')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payments')
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payments')
-    stripe_payment_intent_id = models.CharField(max_length=255, unique=True)
+    
+    # Generic fields
+    provider = models.CharField(max_length=20, default='stripe')
+    transaction_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    
+    # Legacy / Specific fields
+    stripe_payment_intent_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     stripe_payment_method_id = models.CharField(max_length=255, null=True, blank=True)
+    
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(
         max_length=20, choices=[('completed', 'Completed'), ('failed', 'Failed'), ('pending', 'Pending')], default='pending'
@@ -83,5 +90,49 @@ class StripeDetails(models.Model):
     def get_decrypted_publishable_key(self):
         """Retrieve the decrypted publishable key."""
         return self.decrypt(self.stripe_publishable_key)
+
+
+class PaymentGateway(models.Model):
+    PROVIDER_CHOICES = [
+        ('stripe', 'Stripe'),
+        ('razorpay', 'Razorpay'),
+    ]
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payment_gateways')
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
+    is_active = models.BooleanField(default=False)
+    
+    # Common fields for keys
+    key_id = models.CharField(max_length=255) # Publishable Key (Stripe) / Key ID (Razorpay)
+    key_secret = models.CharField(max_length=255) # Secret Key (Stripe) / Key Secret (Razorpay)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('restaurant', 'provider')
+
+    def clean(self):
+        if not self.key_id or not self.key_secret:
+            raise ValidationError("Both Key ID and Key Secret are required.")
+
+    def save(self, *args, **kwargs):
+        # Ensure only one gateway is active per restaurant
+        if self.is_active:
+            PaymentGateway.objects.filter(restaurant=self.restaurant).exclude(id=self.id).update(is_active=False)
+            
+        # Encrypt secret key if it's not already encrypted (basic check)
+        # Note: In a real app, handle this more robustly to avoid double encryption
+        try:
+            fernet.decrypt(self.key_secret.encode())
+        except:
+            self.key_secret = fernet.encrypt(self.key_secret.encode()).decode()
+            
+        super().save(*args, **kwargs)
+
+    def get_decrypted_secret(self):
+        return fernet.decrypt(self.key_secret.encode()).decode()
+
+    def __str__(self):
+        return f"{self.provider} - {self.restaurant.resturent_name}"
     
 

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Snake } from "./games/Snake";
 import { Connect4 } from "./games/Connect4";
 import { TicTacToe } from "./games/TicTacToe";
-import { MemoryMatch } from "./games/MemoryMatch";
+import { FlappyBird } from "./games/FlappyBird";
 
 interface GameHubProps {
     isOpen: boolean;
@@ -22,7 +22,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
         { id: "snake", name: "Snake", color: "bg-green-500", component: Snake },
         { id: "connect4", name: "Connect 4", color: "bg-blue-500", component: Connect4 },
         { id: "tictactoe", name: "Tic Tac Toe", color: "bg-purple-500", component: TicTacToe },
-        { id: "memory", name: "Memory Match", color: "bg-orange-500", component: MemoryMatch },
+        { id: "flappybird", name: "Flappy Bird", color: "bg-yellow-500", component: FlappyBird },
     ];
 
     const handleBack = () => setActiveGame(null);
