@@ -28,20 +28,60 @@ class PaymentSerializer(serializers.ModelSerializer):
             'confirmed_at', 'cancelled_at', 'cancel_reason'
         ]
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
+import csv
+from django.http import HttpResponse
+
 class PaymentAdminViewSet(ModelViewSet):
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
     queryset = Payment.objects.all()
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = {
+        'created_at': ['gte', 'lte', 'date'],
+        'status': ['exact'],
+        'provider': ['exact'],
+    }
+    ordering_fields = ['created_at', 'amount']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         user = self.request.user
         # Filter by user's restaurants
         # Assuming user is owner or staff
         if hasattr(user, 'restaurants'):
-            return Payment.objects.filter(restaurant__in=user.restaurants.all()).order_by('-updated_at')
+            return Payment.objects.filter(restaurant__in=user.restaurants.all())
         elif hasattr(user, 'staff_profile'):
-             return Payment.objects.filter(restaurant=user.staff_profile.restaurant).order_by('-updated_at')
+             return Payment.objects.filter(restaurant=user.staff_profile.restaurant)
         return Payment.objects.none()
+
+    @action(detail=False, methods=['get'])
+    def export_csv(self, request):
+        # Apply filters to the queryset
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="payments_{timezone.now().strftime("%Y%m%d")}.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Order ID', 'Table', 'Customer', 'Amount', 'Provider', 'Status', 'Transaction ID', 'Date', 'Confirmed At'])
+        
+        for payment in queryset:
+            writer.writerow([
+                payment.id,
+                payment.order.id,
+                payment.order.table.table_number if payment.order.table else "Online",
+                payment.order.customer.name if payment.order.customer else "Guest",
+                payment.amount,
+                payment.provider,
+                payment.status,
+                payment.transaction_id,
+                payment.created_at.strftime("%Y-%m-%d %H:%M"),
+                payment.confirmed_at.strftime("%Y-%m-%d %H:%M") if payment.confirmed_at else ""
+            ])
+            
+        return response
 
     @action(detail=True, methods=['post'])
     def confirm_cash(self, request, pk=None):

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '../../hooks/WebSocketProvider';
-import { Search, Filter, CheckCircle, XCircle, Clock, Eye, RefreshCw } from 'lucide-react';
+import { Search, Filter, CheckCircle, XCircle, Clock, Eye, RefreshCw, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from '../../lib/axios';
 
@@ -23,9 +23,12 @@ export const Payments = () => {
     const [search, setSearch] = useState('');
     const { response } = useWebSocket();
 
+    const [startDate, setStartDate] = useState<Date | null>(null);
+    const [endDate, setEndDate] = useState<Date | null>(null);
+
     useEffect(() => {
         fetchPayments();
-    }, []);
+    }, [startDate, endDate]);
 
     useEffect(() => {
         if (response && response.type) {
@@ -53,7 +56,21 @@ export const Payments = () => {
 
     const fetchPayments = async () => {
         try {
-            const res = await axios.get('/owners/payments/');
+            let url = '/owners/payments/';
+            const params = new URLSearchParams();
+
+            if (startDate) {
+                params.append('created_at__gte', startDate.toISOString().split('T')[0]);
+            }
+            if (endDate) {
+                params.append('created_at__lte', endDate.toISOString().split('T')[0]);
+            }
+
+            if (params.toString()) {
+                url += `?${params.toString()}`;
+            }
+
+            const res = await axios.get(url);
             if (Array.isArray(res.data)) {
                 setPayments(res.data);
             } else {
@@ -65,6 +82,34 @@ export const Payments = () => {
             setPayments([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleExportCSV = async () => {
+        try {
+            let url = '/owners/payments/export_csv/';
+            const params = new URLSearchParams();
+
+            if (startDate) {
+                params.append('created_at__gte', startDate.toISOString().split('T')[0]);
+            }
+            if (endDate) {
+                params.append('created_at__lte', endDate.toISOString().split('T')[0]);
+            }
+            if (params.toString()) {
+                url += `?${params.toString()}`;
+            }
+
+            const response = await axios.get(url, { responseType: 'blob' });
+            const downloadUrl = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.setAttribute('download', `payments_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error("Failed to export CSV", error);
         }
     };
 
@@ -107,12 +152,48 @@ export const Payments = () => {
 
     return (
         <div className="p-6 space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Payments</h1>
-                    <p className="text-gray-400">Monitor and manage real-time transactions</p>
+                    <h1 className="text-2xl font-bold text-white mb-1">Payments</h1>
+                    <p className="text-gray-400 text-sm">Manage and track all transaction history</p>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 bg-[#201C3F] rounded-lg p-1 border border-white/10">
+                        <input
+                            type="date"
+                            className="bg-transparent text-white text-sm px-2 py-1 outline-none"
+                            onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value) : null)}
+                        />
+                        <span className="text-gray-400">-</span>
+                        <input
+                            type="date"
+                            className="bg-transparent text-white text-sm px-2 py-1 outline-none"
+                            onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
+                        />
+                    </div>
+
+                    <button
+                        onClick={handleExportCSV}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#201C3F] text-white rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
+                    >
+                        <Download className="w-4 h-4" />
+                        <span>Export CSV</span>
+                    </button>
+
+                    <button
+                        onClick={fetchPayments}
+                        className="p-2 bg-[#201C3F] text-white rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
+                        title="Refresh"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Search and Filter Controls */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex gap-3">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
