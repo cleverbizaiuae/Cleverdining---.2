@@ -33,6 +33,7 @@ import ScreenRestaurantOrderList from "./pages/restaurant/screen_restaurant_orde
 import ScreenRestaurantReservations from "./pages/restaurant/screen_restaurant_reservations";
 // import { RestaurantReservationsWithGraphs } from "./pages/restaurant/screen_restaurant_reservations-with-graphs";
 import ScreenRestaurantReviews from "./pages/restaurant/screen_restaurant_reviews";
+import { Payments } from "./pages/restaurant/Payments";
 import StaffLayout from "./pages/staff/layout";
 import ScreenStaffChat from "./pages/staff/screen_staff_chat";
 import ScreenStaffDashboard from "./pages/staff/screen_staff_dashboard";
@@ -94,6 +95,7 @@ function App() {
         />
         <Route path="management" element={<ScreenRestaurantManagement />} />
         <Route path="devices" element={<ScreenRestaurantDevices />} />
+        <Route path="payments" element={<Payments />} />
         <Route path="reviews" element={<ScreenRestaurantReviews />} />
         <Route path="messages" element={<ScreenRestaurantChat />} />
       </Route>

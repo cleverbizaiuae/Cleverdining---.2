@@ -39,6 +39,19 @@ class Payment(models.Model):
         max_length=20, choices=[('completed', 'Completed'), ('failed', 'Failed'), ('pending', 'Pending')], default='pending'
     )
     card_owner_name = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Audit / Staff Action Fields
+    created_by = models.CharField(max_length=255, null=True, blank=True) # e.g., 'guest', 'staff:ID'
+    
+    confirmed_by_staff = models.ForeignKey('staff.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_payments')
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    
+    cancelled_by = models.ForeignKey('staff.Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_payments')
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.TextField(null=True, blank=True)
+    
+    raw_response = models.JSONField(null=True, blank=True) # Store provider response for debug
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

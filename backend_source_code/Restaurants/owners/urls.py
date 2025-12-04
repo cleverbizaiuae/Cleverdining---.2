@@ -11,6 +11,7 @@ from review.views import OwnerRestaurantReviewListAPIView
 from device.views import DeviceViewSetall
 from vapi.views import CreateAssistantView,UpdateAssistantNumber,GetRestaurantAssistanceView
 from payment.views import StripeDetailsViewSet, PaymentGatewayViewSet
+from payment.admin_views import PaymentAdminViewSet
 
 
 
@@ -24,6 +25,7 @@ router.register('reservations', ReservationViewSet, basename='reservation')
 router.register('devicesall', DeviceViewSetall, basename='deviceall')
 router.register(r'stripe', StripeDetailsViewSet, basename='stripe-details')
 router.register(r'payment-gateways', PaymentGatewayViewSet, basename='payment-gateways')
+router.register('payments', PaymentAdminViewSet, basename='admin-payments')
 
 urlpatterns = [
     path('', include(router.urls)),

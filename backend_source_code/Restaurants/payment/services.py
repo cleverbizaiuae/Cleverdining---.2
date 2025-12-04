@@ -48,7 +48,7 @@ class PaymentService:
         result = adapter.create_payment_session(order, success_url, cancel_url)
         
         # Create Payment Record
-        Payment.objects.create(
+        payment = Payment.objects.create(
             order=order,
             restaurant=order.restaurant,
             device=order.device,
@@ -56,6 +56,18 @@ class PaymentService:
             transaction_id=result.get('transaction_id'),
             amount=order.total_price,
             status=result.get('status', 'pending')
+        )
+
+        # Notify Restaurant of new payment
+        from .serializers import PaymentSerializer
+        payment_data = PaymentSerializer(payment).data
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{order.restaurant.id}",
+            {
+                "type": "payment_update",
+                "event": "payment:created",
+                "payment": payment_data
+            }
         )
         
         return result
@@ -99,6 +111,18 @@ class PaymentService:
                 {
                     "type": "order_paid",
                     "order": order_data
+                }
+            )
+
+            # Notify Restaurant of payment update
+            from .serializers import PaymentSerializer
+            payment_data = PaymentSerializer(payment).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "payment_update",
+                    "event": "payment:updated",
+                    "payment": payment_data
                 }
             )
             
@@ -178,6 +202,18 @@ class PaymentService:
                     {
                         "type": "order_paid",
                         "order": order_data
+                    }
+                )
+
+                # Notify Restaurant of payment update
+                from .serializers import PaymentSerializer
+                payment_data = PaymentSerializer(payment).data
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{order.restaurant.id}",
+                    {
+                        "type": "payment_update",
+                        "event": "payment:updated",
+                        "payment": payment_data
                     }
                 )
         return result

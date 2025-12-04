@@ -11,6 +11,7 @@ import {
   IconReservations,
   IconReviews,
 } from "./icons";
+import { Wallet } from "lucide-react";
 import { cn } from "clsx-for-tailwind";
 import { CgMenu } from "react-icons/cg";
 import { LogoDashboard } from "./utilities";
@@ -343,6 +344,7 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
       path: "/restaurant/management",
     },
     { title: "Tables", icon: <IconDevice />, path: "/restaurant/devices" },
+    { title: "Payments", icon: <Wallet className="w-5 h-5" />, path: "/restaurant/payments" },
     { title: "Reviews", icon: <IconReviews />, path: "/restaurant/reviews" },
   ];
   const navigate = useNavigate();
@@ -432,4 +434,3 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
     </div>
   );
 };
-/* <<<<<<<<===================================================== Chef Sidebar */
