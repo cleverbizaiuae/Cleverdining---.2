@@ -171,6 +171,11 @@ class PaymentSuccessView(APIView):
         # We construct a mock request data
         return VerifyPaymentView().post(type('MockRequest', (), {'data': {'session_id': session_id}})())
 
+class PaymentCancelView(APIView):
+    """API view for handling canceled payments"""
+    def get(self, request):
+        return Response({'message': 'Payment was canceled'}, status=status.HTTP_200_OK)
+
 class VerifyRazorpayPaymentView(APIView):
      def post(self, request):
          return VerifyPaymentView().post(request)
