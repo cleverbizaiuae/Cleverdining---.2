@@ -48,7 +48,8 @@ const ScreenOrders = () => {
     };
     fetchOrders();
 
-    const token = accessToken || "guest_token";
+    const guestSessionToken = localStorage.getItem("guest_session_token");
+    const token = accessToken || guestSessionToken || "guest_token";
     // Robust WS URL resolution
     let wsBaseUrl = import.meta.env.VITE_WS_URL;
     if (!wsBaseUrl) {

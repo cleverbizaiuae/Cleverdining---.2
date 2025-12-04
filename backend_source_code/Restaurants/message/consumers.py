@@ -361,8 +361,20 @@ class OrderConsumer(AsyncWebsocketConsumer):
         # Retrieve device id from the URL
         self.device_id = self.scope['url_route']['kwargs']['device_id']
         self.room_group_name = f'device_{self.device_id}'
+        
+        # Check for guest session
+        self.guest_session = self.scope.get('guest_session')
+        self.session_group_name = None
 
-        # Join the WebSocket group for this device
+        if self.guest_session:
+            self.session_group_name = f'session_{self.guest_session.id}'
+            print(f"DEBUG: Joining session group {self.session_group_name}")
+            await self.channel_layer.group_add(
+                self.session_group_name,
+                self.channel_name
+            )
+
+        # Join the WebSocket group for this device (Legacy/Shared)
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -376,6 +388,12 @@ class OrderConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
+        
+        if self.session_group_name:
+            await self.channel_layer.group_discard(
+                self.session_group_name,
+                self.channel_name
+            )
 
     # Receive message from the group
     async def order_status_update(self, event):

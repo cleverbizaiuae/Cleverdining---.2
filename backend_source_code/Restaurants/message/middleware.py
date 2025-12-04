@@ -39,6 +39,16 @@ class JWTAuthMiddleware(BaseMiddleware):
                 from django.contrib.auth.models import AnonymousUser
                 scope["user"] = AnonymousUser()
             else:
+                # Check for GuestSession first
+                from device.models import GuestSession
+                try:
+                    session = await sync_to_async(GuestSession.objects.get)(session_token=token, is_active=True)
+                    print(f"DEBUG: GuestSession found: {session.id}", file=sys.stderr)
+                    from django.contrib.auth.models import AnonymousUser
+                    scope["user"] = AnonymousUser()
+                    scope["guest_session"] = session
+                except GuestSession.DoesNotExist:
+                    # Fallback to User authentication
                 try:
                     print(f"DEBUG: Attempting to authenticate with token: {token[:10]}...", file=sys.stderr)
                     access_token = AccessToken(token)

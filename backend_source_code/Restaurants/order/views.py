@@ -60,6 +60,18 @@ class OrderCreateAPIView(generics.CreateAPIView):
             }
         )
         
+        # Notify Guest Session
+        if order.guest_session:
+            async_to_sync(channel_layer.group_send)(
+                f"session_{order.guest_session.id}",
+                {
+                    "type": "order_status_update", # Reusing existing handler in OrderConsumer
+                    "order_id": order.id,
+                    "status": order.status,
+                    "order": data # Sending full order data if needed
+                }
+            )
+        
         # Clear cart after order
         Cart.objects.filter(guest_session=session).delete()
 
