@@ -94,10 +94,24 @@ class CreateCheckoutSessionView(APIView):
     """API View for creating a checkout session (Unified)"""
 
     def post(self, request, order_id):
+        # 1. Resolve Guest Session
+        session_token = request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+             return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from device.models import GuestSession
         try:
-            order = Order.objects.get(id=order_id)
+            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+        except GuestSession.DoesNotExist:
+            return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # 2. Strict Order Validation
+            # Ensure order belongs to the session's table (or session itself if strict-strict)
+            # For now, matching Table ID is the critical isolation requirement.
+            order = Order.objects.get(id=order_id, device=session.device)
         except Order.DoesNotExist:
-            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Order not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
 
         success_url = 'https://clever-biz2.netlify.app/dashboard/success/'
         cancel_url = 'https://clever-biz2.netlify.app/dashboard/cancel/'
