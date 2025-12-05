@@ -4,6 +4,24 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def add_guest_session_field(apps, schema_editor):
+    from django.db import connection
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='order_order' AND column_name='guest_session_id'")
+        if cursor.fetchone():
+            return
+
+    Order = apps.get_model('order', 'Order')
+    field = models.ForeignKey(
+        'device.GuestSession',
+        blank=True, 
+        null=True, 
+        on_delete=django.db.models.deletion.SET_NULL, 
+        related_name='orders'
+    )
+    field.set_attributes_from_name('guest_session')
+    schema_editor.add_field(Order, field)
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -13,10 +31,17 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='order',
-            name='guest_session',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='orders', to='device.guestsession'),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(add_guest_session_field),
+            ],
+            state_operations=[
+                migrations.AddField(
+                    model_name='order',
+                    name='guest_session',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='orders', to='device.guestsession'),
+                ),
+            ]
         ),
         migrations.CreateModel(
             name='Cart',
