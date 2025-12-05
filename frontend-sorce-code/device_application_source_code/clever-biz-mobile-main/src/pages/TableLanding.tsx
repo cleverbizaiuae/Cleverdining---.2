@@ -58,9 +58,15 @@ export default function TableLanding() {
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-4">
-                <div className="text-red-500 text-xl mb-2">Error</div>
-                <p>{error}</p>
+            <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-4 text-center">
+                <div className="text-red-500 text-xl mb-4 font-bold">Connection Failed</div>
+                <p className="mb-6 text-gray-300">{error}</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="px-6 py-2 bg-orange-500 hover:bg-orange-600 rounded-full font-medium transition-colors"
+                >
+                    Retry Connection
+                </button>
             </div>
         );
     }
