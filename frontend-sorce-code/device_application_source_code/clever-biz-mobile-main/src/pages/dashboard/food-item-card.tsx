@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import { FoodItemTypes } from "./food-items";
 import { cn } from "clsx-for-tailwind";
+import { API_BASE_URL } from "../../lib/axios";
 
 interface FoodItemCardProps {
     item: FoodItemTypes;
@@ -11,16 +12,16 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
     return (
         <div
             onClick={onAdd}
-            className="group relative flex flex-row gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden"
+            className="group relative grid grid-cols-[auto_1fr] gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden min-h-[7rem]"
         >
-            {/* Image Section */}
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-gray-50 flex items-center justify-center">
+            {/* Image Section - Fixed Width */}
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-gray-50 flex items-center justify-center self-center">
                 {item.image1 ? (
                     <img
                         src={(() => {
                             let url = item.image1;
                             if (url.startsWith("http://")) url = url.replace("http://", "https://");
-                            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+                            if (url.startsWith("/")) url = `${API_BASE_URL}${url}`;
                             return url;
                         })()}
                         alt={item.item_name}
@@ -41,7 +42,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             </div>
 
             {/* Content Section */}
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
+            <div className="flex flex-col justify-between h-full py-1">
                 <div>
                     <h3 className="font-bold text-foreground truncate text-base sm:text-lg leading-tight">
                         {item.item_name}
@@ -62,9 +63,9 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                             e.stopPropagation();
                             onAdd();
                         }}
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-primary hover:text-white active:scale-90"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-primary hover:text-white active:scale-90 shadow-sm"
                     >
-                        <span className="text-xl leading-none mb-1">+</span>
+                        <Plus size={20} strokeWidth={2.5} />
                     </button>
                 </div>
             </div>

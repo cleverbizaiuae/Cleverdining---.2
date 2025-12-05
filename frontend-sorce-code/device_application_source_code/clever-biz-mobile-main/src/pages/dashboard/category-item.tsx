@@ -31,7 +31,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
           src={(() => {
             let url = cat.image;
             if (url.startsWith("http://")) url = url.replace("http://", "https://");
-            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+            if (url.startsWith("/")) url = `${API_BASE_URL}${url}`;
             return url;
           })()}
           alt={cat.Category_name}
