@@ -41,39 +41,44 @@ class JWTAuthMiddleware(BaseMiddleware):
             else:
                 # Check for GuestSession first
                 from device.models import GuestSession
+                session = None
                 try:
                     session = await sync_to_async(GuestSession.objects.get)(session_token=token, is_active=True)
+                except GuestSession.DoesNotExist:
+                    pass
+
+                if session:
                     print(f"DEBUG: GuestSession found: {session.id}", file=sys.stderr)
                     from django.contrib.auth.models import AnonymousUser
                     scope["user"] = AnonymousUser()
                     scope["guest_session"] = session
-                except GuestSession.DoesNotExist:
+                else:
                     # Fallback to User authentication
-                try:
-                    print(f"DEBUG: Attempting to authenticate with token: {token[:10]}...", file=sys.stderr)
-                    access_token = AccessToken(token)
-                    print(f"DEBUG: Token valid. User ID: {access_token['user_id']}", file=sys.stderr)
-                    user = await sync_to_async(User.objects.get)(id=access_token["user_id"])
-                    print(f"DEBUG: User found: {user.username}", file=sys.stderr)
-                    scope["user"] = user
-                    
-                    @sync_to_async
-                    def get_user_info(user):
-                        info = {
-                            "id": user.id,
-                            "username": user.username,
-                            "email": user.email,
-                            "role": getattr(user, "role", "unknown"),
-                            "restaurants_id": None
-                        }
-                        if hasattr(user, "restaurants") and user.restaurants.exists():
-                            info["restaurants_id"] = user.restaurants.first().id
-                        return info
+                    try:
+                        print(f"DEBUG: Attempting to authenticate with token: {token[:10]}...", file=sys.stderr)
+                        access_token = AccessToken(token)
+                        print(f"DEBUG: Token valid. User ID: {access_token['user_id']}", file=sys.stderr)
+                        user = await sync_to_async(User.objects.get)(id=access_token["user_id"])
+                        print(f"DEBUG: User found: {user.username}", file=sys.stderr)
+                        scope["user"] = user
+                        
+                        @sync_to_async
+                        def get_user_info(user):
+                            info = {
+                                "id": user.id,
+                                "username": user.username,
+                                "email": user.email,
+                                "role": getattr(user, "role", "unknown"),
+                                "restaurants_id": None
+                            }
+                            if hasattr(user, "restaurants") and user.restaurants.exists():
+                                info["restaurants_id"] = user.restaurants.first().id
+                            return info
 
-                    scope["user_info"] = await get_user_info(user)
-                except Exception as e:
-                    print(f"DEBUG: Authentication failed: {e}", file=sys.stderr)
-                    scope["user"] = None
+                        scope["user_info"] = await get_user_info(user)
+                    except Exception as e:
+                        print(f"DEBUG: Authentication failed: {e}", file=sys.stderr)
+                        scope["user"] = None
         else:
             print("DEBUG: No token found in request")
             scope["user"] = None
