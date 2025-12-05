@@ -366,21 +366,40 @@ class OrderConsumer(AsyncWebsocketConsumer):
         self.guest_session = self.scope.get('guest_session')
         self.session_group_name = None
 
+        # Strict Isolation: Require valid guest session for this table
         if self.guest_session:
+            # Verify session belongs to this device/table
+            if str(self.guest_session.device.id) != str(self.device_id):
+                print(f"DEBUG: Session device mismatch. Session: {self.guest_session.device.id}, Requested: {self.device_id}")
+                await self.close(code=4003) # Forbidden
+                return
+
             self.session_group_name = f'session_{self.guest_session.id}'
             print(f"DEBUG: Joining session group {self.session_group_name}")
             await self.channel_layer.group_add(
                 self.session_group_name,
                 self.channel_name
             )
-
-        # Join the WebSocket group for this device (Legacy/Shared)
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-
-        await self.accept()
+            
+            # Join the shared table group (authorized)
+            await self.channel_layer.group_add(
+                self.room_group_name,
+                self.channel_name
+            )
+            await self.accept()
+            
+        elif self.scope.get("user") and self.scope["user"].is_authenticated:
+             # Allow staff/admin to join table group
+             # TODO: Add strict staff-restaurant validation here if needed
+             await self.channel_layer.group_add(
+                self.room_group_name,
+                self.channel_name
+            )
+             await self.accept()
+        else:
+            # Reject unauthenticated connections
+            print("DEBUG: Rejecting unauthenticated socket connection")
+            await self.close(code=4001) # Unauthorized
 
     async def disconnect(self, close_code):
         # Leave the WebSocket group

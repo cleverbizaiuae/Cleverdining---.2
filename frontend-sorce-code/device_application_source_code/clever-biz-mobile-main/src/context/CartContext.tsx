@@ -57,13 +57,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
           setCart(backendItems);
         } catch (error) {
           console.error("Failed to fetch cart from server", error);
-          // Fallback to local storage if server fails (e.g. offline)
-          const stored = localStorage.getItem("cart");
+          // Fallback to namespaced local storage
+          const stored = localStorage.getItem(`cb:cart:${sessionToken}`);
           if (stored) setCart(JSON.parse(stored));
         }
       } else {
-        const stored = localStorage.getItem("cart");
-        if (stored) setCart(JSON.parse(stored));
+        // No session, clear cart or handle appropriately
+        setCart([]);
       }
       setIsInitialized(true);
     };
@@ -71,10 +71,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchCart();
   }, []);
 
-  // Sync to local storage as backup
+  // Sync to local storage as backup (Namespaced)
   useEffect(() => {
     if (isInitialized) {
-      localStorage.setItem("cart", JSON.stringify(cart));
+      const sessionToken = localStorage.getItem("guest_session_token");
+      if (sessionToken) {
+        localStorage.setItem(`cb:cart:${sessionToken}`, JSON.stringify(cart));
+      }
     }
   }, [cart, isInitialized]);
 

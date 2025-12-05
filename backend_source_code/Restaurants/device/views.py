@@ -45,10 +45,11 @@ class ResolveTableView(APIView):
 
         # Create new guest session
         session_token = str(uuid.uuid4())
+        expires_at = now() + timedelta(hours=24) # 24 hour session
         session = GuestSession.objects.create(
             device=device,
             session_token=session_token,
-            expires_at=now() + timedelta(hours=24) # 24 hour session
+            expires_at=expires_at
         )
 
         return Response({
@@ -57,7 +58,8 @@ class ResolveTableView(APIView):
             'table_id': device.id,
             'table_name': device.table_name,
             'restaurant_id': device.restaurant.id,
-            'restaurant_name': device.restaurant.resturent_name
+            'restaurant_name': device.restaurant.resturent_name,
+            'expires_at': expires_at.isoformat()
         })
 
 def generate_username(restaurant_name):

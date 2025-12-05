@@ -45,6 +45,15 @@ class OrderCreateAPIView(generics.CreateAPIView):
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Invalid or expired session. Please scan the QR code again.")
 
+        # Strict Table Isolation Check
+        request_table_id = self.request.data.get('table_id')
+        if request_table_id and str(request_table_id) != str(session.device.id):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied(detail={
+                 'error': 'table_mismatch',
+                 'message': 'Your session does not belong to the requested table.'
+             })
+
         device = session.device
         restaurant = device.restaurant
 
@@ -512,13 +521,21 @@ class CartViewSet(viewsets.ModelViewSet):
         except GuestSession.DoesNotExist:
             return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
             
+        # Strict Table Isolation Check
+        request_table_id = request.data.get('table_id')
+        if request_table_id and str(request_table_id) != str(session.device.id):
+             return Response({
+                 'error': 'table_mismatch',
+                 'message': 'Your session does not belong to the requested table.'
+             }, status=status.HTTP_403_FORBIDDEN)
+
         item_id = request.data.get('item_id')
         quantity = int(request.data.get('quantity', 1))
         
         if not item_id:
             return Response({'error': 'Missing item_id'}, status=status.HTTP_400_BAD_REQUEST)
             
-        # Get or create cart
+        # Get or create cart - ALWAYS use session.device (Server Authority)
         cart, created = Cart.objects.get_or_create(guest_session=session, device=session.device)
         
         # Add item

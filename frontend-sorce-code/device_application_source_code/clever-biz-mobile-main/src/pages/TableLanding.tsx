@@ -23,6 +23,9 @@ export default function TableLanding() {
                 localStorage.setItem('accessToken', session_token); // Use session token as access token
                 localStorage.setItem('refreshToken', session_token);
 
+                // Clear old non-namespaced cart to prevent leaks
+                localStorage.removeItem('cart');
+
                 // Construct and store userInfo
                 const userInfo = {
                     user: {
