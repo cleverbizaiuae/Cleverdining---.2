@@ -4,6 +4,12 @@ import uuid
 from django.db import migrations, models
 
 
+def fix_duplicates(apps, schema_editor):
+    Device = apps.get_model('device', 'Device')
+    for device in Device.objects.all():
+        device.table_token = uuid.uuid4()
+        device.save()
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,6 +17,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(fix_duplicates),
         migrations.AlterField(
             model_name='device',
             name='table_token',
