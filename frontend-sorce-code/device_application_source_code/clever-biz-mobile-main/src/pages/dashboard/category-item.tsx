@@ -19,7 +19,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1", // Added px-1
+        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1 snap-start", // Added snap-start
         "min-w-[4rem] w-auto h-16 sm:min-w-[5rem] sm:h-20", // Changed to min-w and auto width (Option A)
         isActive
           ? "border-primary shadow-lg shadow-primary/25 scale-105"

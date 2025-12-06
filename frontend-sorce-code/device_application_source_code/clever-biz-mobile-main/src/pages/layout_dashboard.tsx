@@ -348,7 +348,7 @@ const LayoutDashboard = () => {
                 </div>
 
                 {/* Categories */}
-                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4">
+                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 snap-x snap-mandatory touch-pan-x">
                   <div className="flex gap-3 pr-4 min-w-max">
                     {categories.filter(c => !c.parent_category).map((category) => (
                       <CategoryItem
