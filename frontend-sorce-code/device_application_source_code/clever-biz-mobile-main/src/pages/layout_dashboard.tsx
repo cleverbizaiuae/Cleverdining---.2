@@ -437,11 +437,12 @@ const LayoutDashboard = () => {
                       {filteredItems.map((item) => (
                         <motion.div
                           key={item.id}
-                          layoutId={`food-item-${item.id}`}
+                          layout="position" // specific fix for list filtering layout containment
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
                           transition={{ duration: 0.2 }}
+                          className="w-full" // Ensure it takes full width of grid column
                         >
                           <FoodItemCard
                             item={item}
