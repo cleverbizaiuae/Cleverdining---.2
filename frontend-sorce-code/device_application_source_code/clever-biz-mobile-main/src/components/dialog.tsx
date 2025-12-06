@@ -88,10 +88,22 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               </motion.div>
             ) : (
               <>
+                import {API_BASE_URL} from "../lib/axios";
+
+// Helper to resolve image URL
+const getImageUrl = (path: string | null | undefined) => {
+  if (!path) return "https://placehold.co/600x400?text=No+Image";
+                let url = path;
+                if (url.startsWith("http://")) url = url.replace("http://", "https://");
+                if (url.startsWith("/")) url = `${API_BASE_URL}${url}`;
+                return url;
+};
+
+                // ... inside component ...
                 <img
-                  src={item?.image1 || "/placeholder-food.jpg"}
+                  src={getImageUrl(item?.image1)}
                   alt={item?.item_name || "img"}
-                  className="w-full h-full object-cover opacity-90"
+                  className="w-full h-full object-cover opacity-90 transition-transform duration-700 hover:scale-105" // Added hover scale for extra "zoom" feel
                 />
                 {/* Video Play Button Overlay */}
                 {item?.video && (
