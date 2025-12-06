@@ -425,6 +425,14 @@ class OrderConsumer(AsyncWebsocketConsumer):
             'status': status
         }))
 
+    # Receive cart update from the session group
+    async def cart_updated(self, event):
+        # Forward the update notification to the client
+        await self.send(text_data=json.dumps({
+            'type': 'cart_updated',
+            'cart_id': event['cart_id']
+        }))
+
 
 
 class RestaurantConsumer(AsyncWebsocketConsumer):
