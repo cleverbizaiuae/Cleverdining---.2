@@ -388,7 +388,7 @@ const LayoutDashboard = () => {
               </header>
 
               {/* Main Content (Menu Feed) */}
-              <main className="px-4 py-4 grid grid-cols-1 gap-4 flex-1">
+              <main className="px-4 py-4 flex flex-col gap-4 flex-1">
                 {(() => {
                   let filteredItems = items;
 
