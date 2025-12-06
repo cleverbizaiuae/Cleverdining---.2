@@ -23,6 +23,21 @@ import { Footer } from "../components/Footer";
 
 const LayoutDashboard = () => {
   const location = useLocation();
+
+  // --- FORCE RESET LOGIC ---
+  const RESET_VERSION = "RESET_2024_12_06_V2"; // Bump this string to force logout everyone again
+  useEffect(() => {
+    const currentVersion = localStorage.getItem("app_reset_version");
+    if (currentVersion !== RESET_VERSION) {
+      console.log("App version mismatch. Clearing storage for reset.");
+      localStorage.clear();
+      localStorage.setItem("app_reset_version", RESET_VERSION);
+      window.location.reload();
+    }
+  }, []);
+  // -------------------------
+
+  const isSubRoute = location.pathname !== "/dashboard";
   const isSubRoute = location.pathname !== "/dashboard";
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null);
