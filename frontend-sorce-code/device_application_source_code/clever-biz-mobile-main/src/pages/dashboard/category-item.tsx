@@ -19,8 +19,8 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border",
-        "w-16 h-16 sm:w-20 sm:h-20", // Fixed dimensions
+        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1", // Added px-1
+        "min-w-[4rem] w-auto h-16 sm:min-w-[5rem] sm:h-20", // Changed to min-w and auto width (Option A)
         isActive
           ? "border-primary shadow-lg shadow-primary/25 scale-105"
           : "border-transparent bg-gray-100 hover:border-primary/30 scale-100"
@@ -61,7 +61,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
 
       {/* Text Label (Layer 2 - Top) */}
       <span className={cn(
-        "relative z-10 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center transition-colors duration-300 shadow-sm max-w-[90%] truncate",
+        "relative z-10 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center transition-colors duration-300 shadow-sm whitespace-nowrap", // Removed max-w/truncate to allow full expansion
         isActive
           ? "bg-primary text-white"
           : "bg-white/90 text-gray-800 backdrop-blur-md"
