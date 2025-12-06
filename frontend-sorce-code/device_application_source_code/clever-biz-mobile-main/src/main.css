@@ -31,6 +31,14 @@
     @apply bg-background text-foreground overflow-y-hidden;
   }
 
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
   button {
     @apply cursor-pointer;
   }

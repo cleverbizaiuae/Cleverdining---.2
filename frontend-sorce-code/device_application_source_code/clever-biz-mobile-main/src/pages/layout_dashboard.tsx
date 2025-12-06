@@ -318,7 +318,8 @@ const LayoutDashboard = () => {
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
               {/* Sticky Header */}
-              <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-gray-200/50 pb-2 pt-safe-top transition-all duration-300">
+              {/* Sticky Header Group - Single container for Logo, Search, Categories */}
+              <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-gray-200/50 pb-2 pt-safe-top transition-all duration-300 shadow-sm">
                 <div className="px-4 py-3 flex items-center justify-between">
                   {/* Logo */}
                   <div className="block shrink-0">
