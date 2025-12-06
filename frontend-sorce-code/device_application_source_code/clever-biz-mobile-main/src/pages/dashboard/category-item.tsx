@@ -65,7 +65,9 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
         isActive
           ? "bg-primary text-white"
           : "bg-white/90 text-gray-800 backdrop-blur-md"
-      )}>
+      )}
+        style={{ fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif' }}
+      >
         {cat.Category_name}
       </span>
     </button>
