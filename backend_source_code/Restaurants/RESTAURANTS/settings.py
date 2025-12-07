@@ -277,8 +277,31 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-MEDIA_URL = env('MEDIA_URL', default='/media/')
-MEDIA_ROOT = env('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'media'))
+# Media Files (Uploads)
+GS_BUCKET_NAME = env('GS_BUCKET_NAME', default=None)
+
+if GS_BUCKET_NAME:
+    # Google Cloud Storage Configuration
+    DEFAULT_FILE_STORAGE = "storages.backends.gcloud.GoogleCloudStorage"
+    GS_PROJECT_ID = env('GS_PROJECT_ID', default=None) # Optional if in creds
+    
+    # Load Credentials from JSON string in Env Var
+    import json
+    from google.oauth2 import service_account
+    GS_CREDENTIALS_JSON = env('GS_CREDENTIALS', default='{}')
+    try:
+        GS_CREDENTIALS = service_account.Credentials.from_service_account_info(
+            json.loads(GS_CREDENTIALS_JSON)
+        )
+    except Exception as e:
+        print(f"Warning: Failed to load GS_CREDENTIALS: {e}")
+        GS_CREDENTIALS = None
+
+    MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/"
+else:
+    # Local Storage (or Render Disk)
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = env('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'media'))
 
 STATICFILES_DIRS = [
         os.path.join(BASE_DIR, 'static'),

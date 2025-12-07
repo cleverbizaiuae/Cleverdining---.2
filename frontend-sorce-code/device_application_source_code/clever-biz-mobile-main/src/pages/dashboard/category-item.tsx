@@ -22,8 +22,8 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
         "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1 snap-start", // Added snap-start
         "min-w-[64px] w-auto h-[64px] sm:min-w-[80px] sm:h-[80px]", // Changed to explicit px values to avoid rem scaling issues
         isActive
-          ? "border-primary shadow-lg shadow-primary/25 scale-105"
-          : "border-transparent bg-gray-100 hover:border-primary/30 scale-100"
+          ? "border-primary shadow-md shadow-primary/25" // Removed scale-105
+          : "border-transparent bg-gray-100 hover:border-primary/30" // Removed scale-100
       )}
     >
       {/* Background Image (Layer 0) */}
@@ -36,7 +36,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
             return url;
           })()}
           alt={cat.Category_name}
-          className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110 z-0"
+          className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 z-0" // Removed group-hover:scale-110
           onError={(e) => {
             e.currentTarget.style.display = 'none';
             e.currentTarget.nextElementSibling?.classList.remove('hidden');
