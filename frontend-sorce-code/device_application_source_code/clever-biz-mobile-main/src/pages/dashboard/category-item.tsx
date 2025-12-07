@@ -19,11 +19,11 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1 snap-start", // Added snap-start
-        "min-w-[64px] w-auto h-[64px] sm:min-w-[80px] sm:h-[80px]", // Changed to explicit px values to avoid rem scaling issues
+        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1 snap-start",
+        "w-[72px] h-[72px] sm:w-[90px] sm:h-[90px]", // FIXED WIDTH (Uniformity enforced)
         isActive
-          ? "border-primary shadow-md shadow-primary/25" // Removed scale-105
-          : "border-transparent bg-gray-100 hover:border-primary/30" // Removed scale-100
+          ? "border-primary shadow-md shadow-primary/25"
+          : "border-gray-200 bg-gray-50 hover:border-primary/30" // Added visible border to inactive for consistency
       )}
     >
       {/* Background Image (Layer 0) */}
@@ -61,7 +61,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
 
       {/* Text Label (Layer 2 - Top) */}
       <span className={cn(
-        "relative z-10 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center transition-colors duration-300 shadow-sm whitespace-nowrap", // Removed max-w/truncate to allow full expansion
+        "relative z-10 px-2 py-0.5 rounded-full text-[9px] sm:text-[11px] font-bold text-center transition-colors duration-300 shadow-sm w-full truncate", // Restored truncate, smaller font
         isActive
           ? "bg-primary text-white"
           : "bg-white/90 text-gray-800 backdrop-blur-md"
