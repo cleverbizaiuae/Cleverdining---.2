@@ -20,14 +20,15 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       onClick={onClick}
       className={cn(
         "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1 snap-start",
-        "w-[72px] h-[72px] sm:w-[90px] sm:h-[90px]", // STRICT FIXED DIMENSIONS
+        "min-w-[4rem] w-auto h-16 sm:min-w-20 sm:h-20", // SMART RECTANGLE: min-w-16 (64px) + w-auto
         isActive
-          ? "border-primary shadow-md shadow-primary/25"
-          : "border-gray-200 bg-gray-50 hover:border-primary/30"
+          ? "border-primary shadow-lg shadow-primary/25 scale-105" // ACTIVE: Scale 105% + Shadow
+          : "border-transparent bg-gray-100 hover:border-primary/30 scale-100" // INACTIVE: Transparent border, Scale 100%
       )}
     >
       {/* Background Image (Layer 0) */}
       {cat.image ? (
+        // Wrapper for Image & Overlay (as per spec structure, though we use absolute inset-0 on img directly in current code, effectively same)
         <img
           src={(() => {
             let url = cat.image;
@@ -36,7 +37,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
             return url;
           })()}
           alt={cat.Category_name}
-          className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 z-0"
+          className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110 z-0" // ANIMATION: Scale 110%
           onError={(e) => {
             e.currentTarget.style.display = 'none';
             e.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -61,7 +62,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
 
       {/* Text Label (Layer 2 - Top) */}
       <span className={cn(
-        "relative z-10 px-2 py-0.5 rounded-full text-[9px] sm:text-[11px] font-bold text-center transition-colors duration-300 shadow-sm w-full truncate", // Truncate enabled for fixed width
+        "relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold text-center transition-colors duration-300 shadow-sm whitespace-nowrap", // TEXT: 10px, spacing, nowrap
         isActive
           ? "bg-primary text-white"
           : "bg-white/90 text-gray-800 backdrop-blur-md"
