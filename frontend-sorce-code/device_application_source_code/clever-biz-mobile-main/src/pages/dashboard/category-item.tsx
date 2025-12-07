@@ -20,10 +20,10 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       onClick={onClick}
       className={cn(
         "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1 snap-start",
-        "w-[72px] h-[72px] sm:w-[90px] sm:h-[90px]", // FIXED WIDTH (Uniformity enforced)
+        "min-w-[64px] w-auto h-[64px] sm:min-w-[80px] sm:h-[80px]", // SMART RECTANGLE: Min 64px, Auto-expand for long text
         isActive
           ? "border-primary shadow-md shadow-primary/25"
-          : "border-gray-200 bg-gray-50 hover:border-primary/30" // Added visible border to inactive for consistency
+          : "border-gray-200 bg-gray-50 hover:border-primary/30"
       )}
     >
       {/* Background Image (Layer 0) */}
@@ -36,7 +36,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
             return url;
           })()}
           alt={cat.Category_name}
-          className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 z-0" // Removed group-hover:scale-110
+          className="absolute inset-0 w-full h-full object-cover opacity-90 transition-transform duration-500 z-0"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
             e.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -61,7 +61,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
 
       {/* Text Label (Layer 2 - Top) */}
       <span className={cn(
-        "relative z-10 px-2 py-0.5 rounded-full text-[9px] sm:text-[11px] font-bold text-center transition-colors duration-300 shadow-sm w-full truncate", // Restored truncate, smaller font
+        "relative z-10 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold text-center transition-colors duration-300 shadow-sm whitespace-nowrap", // EXPAND: whitespace-nowrap, no truncate
         isActive
           ? "bg-primary text-white"
           : "bg-white/90 text-gray-800 backdrop-blur-md"
