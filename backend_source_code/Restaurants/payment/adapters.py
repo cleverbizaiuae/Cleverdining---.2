@@ -215,11 +215,15 @@ class PayTabsAdapter(PaymentAdapter):
         # Ensure description is clean
         desc = f"Order #{order.id}"
         
+        # Unique Cart ID for retries (PayTabs rejects duplicates)
+        import time
+        unique_cart_id = f"{order.id}_{int(time.time())}"
+
         payload = {
             "profile_id": profile_id,
             "tran_type": "sale",
             "tran_class": "ecom",
-            "cart_id": str(order.id),
+            "cart_id": unique_cart_id,
             "cart_description": desc,
             "cart_currency": "AED",
             "cart_amount": float(order.total_price),
