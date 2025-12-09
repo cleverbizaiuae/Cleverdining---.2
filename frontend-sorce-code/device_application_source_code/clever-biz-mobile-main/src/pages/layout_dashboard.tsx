@@ -325,10 +325,12 @@ const LayoutDashboard = () => {
                   </div>
 
                   {/* Table Info */}
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Table</span>
-                    <span className="text-lg font-bold text-foreground leading-none">{tableName || "05"}</span>
-                  </div>
+                  {tableName && (
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Table</span>
+                      <span className="text-lg font-bold text-foreground leading-none">{tableName}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Search Bar */}
