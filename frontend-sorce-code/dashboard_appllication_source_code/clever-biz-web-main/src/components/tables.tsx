@@ -928,26 +928,35 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
                 </button>
               </td>
               <td className="p-2 sm:p-4 text-primary-text text-center">
-                <button
-                  className="text-red-600 hover:text-red-700 p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                  onClick={() => handleStatusChange(item.id, "Cancelled")}
-                  disabled={["completed", "cancelled", "paid"].includes(item.status.toLowerCase())}
-                  title="Cancel Order"
-                >
-                  <IconClose className="w-5 h-5" />
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                    onClick={() => handleViewOrders(item.id)}
+                    title="View Details"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                  <button
+                    className="text-red-600 hover:text-red-700 p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                    onClick={() => handleStatusChange(item.id, "Cancelled")}
+                    disabled={["completed", "cancelled", "paid"].includes(item.status.toLowerCase())}
+                    title="Cancel Order"
+                  >
+                    <IconClose className="w-5 h-5" />
+                  </button>
+                </div>
               </td>
-              {viewOpen && (
-                <OrderDetailsModal
-                  isOpen={viewOpen}
-                  order={oderViewData}
-                  onClose={() => setViewOpen(false)}
-                />
-              )}
             </tr>
           ))}
         </tbody>
       </table>
+      {viewOpen && (
+        <OrderDetailsModal
+          isOpen={viewOpen}
+          order={oderViewData}
+          onClose={() => setViewOpen(false)}
+        />
+      )}
     </div>
   );
 };

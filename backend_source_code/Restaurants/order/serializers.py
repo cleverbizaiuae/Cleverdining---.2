@@ -56,13 +56,20 @@ class OrderCreateSerializerFixed(serializers.ModelSerializer):
 
 
 
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        from payment.models import Payment
+        model = Payment
+        fields = ['id', 'provider', 'transaction_id', 'amount', 'status', 'created_at']
+
 class OrderDetailSerializer(serializers.ModelSerializer):
     order_items = OrderItemSerializer(many=True, read_only=True)
     device_name = serializers.CharField(source='device.table_name')
+    payments = PaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'created_time', 'updated_time', 'device', 'restaurant','device_name']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'payments']
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)
     price = serializers.DecimalField(source='item.price', max_digits=10, decimal_places=2, read_only=True)

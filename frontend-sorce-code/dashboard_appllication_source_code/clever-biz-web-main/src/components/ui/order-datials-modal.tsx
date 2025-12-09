@@ -19,6 +19,7 @@ interface Order {
   status: string;
   total_price: string;
   updated_time: string;
+  payments?: any[];
 }
 
 interface OrderDetailsModalProps {
@@ -32,7 +33,7 @@ export default function OrderDetailsModal({
   isOpen,
   onClose,
   order,
-   formatMoney = (v) => `AED ${v}`
+  formatMoney = (v) => `AED ${v}`
 }: OrderDetailsModalProps) {
   if (!isOpen || !order) return null;
   console.log(order);
@@ -98,7 +99,7 @@ export default function OrderDetailsModal({
                 </span>
               </div>
 
-            
+
             </div>
 
             <div>
@@ -148,6 +149,45 @@ export default function OrderDetailsModal({
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Payment Details Section */}
+            <div className="space-y-3">
+              <h3 className="text-white font-semibold text-sm uppercase tracking-wide">
+                Payment Details
+              </h3>
+              {order.payments && order.payments.length > 0 ? (
+                order.payments.map((payment: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-white/70">Provider</span>
+                      <span className="text-white font-medium capitalize">{payment.provider}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-white/70">Status</span>
+                      <span className={`font-medium capitalize ${payment.status === 'completed' ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {payment.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-white/70">Transaction ID</span>
+                      <span className="text-white/90 font-mono text-xs">{payment.transaction_id || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-white/70">Amount</span>
+                      <span className="text-white font-bold">{formatMoney(payment.amount)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-white/70">Date</span>
+                      <span className="text-white/70 text-xs">{new Date(payment.created_at).toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-center">
+                  <span className="text-white/50 text-sm">No payment details available</span>
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl border border-white/20">
