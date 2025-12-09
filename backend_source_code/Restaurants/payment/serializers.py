@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import StripeDetails, PaymentGateway
+from .models import StripeDetails, PaymentGateway, Payment
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = '__all__'
 
 class StripeDetailsSerializer(serializers.ModelSerializer):
     class Meta:
