@@ -44,8 +44,11 @@ class OrderCreateAPIView(generics.CreateAPIView):
             session_token = self.request.query_params.get('guest_token')
 
         if not session_token:
+            dbg_headers = list(self.request.headers.keys())
+            dbg_data = list(self.request.data.keys())
+            dbg_query = list(self.request.query_params.keys())
             from rest_framework.exceptions import ValidationError
-            raise ValidationError("DEBUG CHECK v3: Missing session token. Please scan the QR code again. (Headers/Body/Query empty)")
+            raise ValidationError(f"DEBUG CHECK v4: Token Missing. H:{dbg_headers} B:{dbg_data} Q:{dbg_query}")
 
         try:
             session = GuestSession.objects.get(session_token=session_token, is_active=True)
