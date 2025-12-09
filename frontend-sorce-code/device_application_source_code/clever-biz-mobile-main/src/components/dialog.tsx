@@ -16,6 +16,14 @@ interface ModalFoodDetailProps extends ModalProps {
   onAddToCart?: () => void;
 }
 
+const getImageUrl = (url: string | undefined) => {
+  if (!url) return "https://placehold.co/600x400?text=No+Image";
+  if (url.startsWith("http://")) {
+    return url.replace("http://", "https://");
+  }
+  return url;
+};
+
 export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   isOpen,
   close,
@@ -55,7 +63,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   return (
     <Dialog open={isOpen} onClose={() => close()} className="relative z-50">
       <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-md transition-opacity duration-300" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
+      <div className="fixed inset-0 flex w-screen items-center justify-center p-6">
         <DialogPanel className="bg-white p-0 rounded-3xl shadow-2xl w-full max-w-sm h-auto max-h-[80vh] overflow-hidden relative flex flex-col animate-in zoom-in-95 duration-200 mx-auto">
 
           {/* Hero Media Area */}
