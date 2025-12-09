@@ -19,8 +19,9 @@ export default function CheckoutButton({
     try {
       setLoading(true);
 
+      const guestToken = localStorage.getItem("guest_session_token");
       const res = await axiosInstance.post(
-        `/customer/create-checkout-session/${orderId}/`
+        `/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`
       );
       // create-checkout-session/<int:order_id>/</int:order_id>
       const url: string | undefined = res?.data?.url;
