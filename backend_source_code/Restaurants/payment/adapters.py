@@ -199,9 +199,12 @@ class CashAdapter(PaymentAdapter):
 import requests
 
 class PayTabsAdapter(PaymentAdapter):
-    BASE_URL = "https://secure-global.paytabs.com/payment/request"
-    # Note: PayTabs has regional URLs (e.g., paytabs.com, secure-egypt.paytabs.com, etc.)
-    # We might need to make this configurable or default to global.
+    # Default to main secure endpoint. 
+    # Valid endpoints: 
+    # - https://secure.paytabs.com (UAE/KSA/General)
+    # - https://secure-global.paytabs.com (Global)
+    # - https://secure-egypt.paytabs.com (Egypt)
+    BASE_URL = "https://secure.paytabs.com/payment/request"
 
     def create_payment_session(self, order, success_url, cancel_url):
         # 1. Input Vectors
@@ -209,40 +212,54 @@ class PayTabsAdapter(PaymentAdapter):
         server_key = self.gateway.get_decrypted_secret() # "Server Key" from Dashboard
 
         # 2. Construct Payload
+        # Ensure description is clean
+        desc = f"Order #{order.id}"
+        
         payload = {
             "profile_id": profile_id,
             "tran_type": "sale",
             "tran_class": "ecom",
             "cart_id": str(order.id),
-            "cart_description": f"Order #{order.id} from {order.restaurant.resturent_name}",
+            "cart_description": desc,
             "cart_currency": "AED",
             "cart_amount": float(order.total_price),
-            "callback": "https://cleverdining-backend.onrender.com/api/payment/webhook/paytabs/", # Webhook
-            "return": success_url # Redirect after success
+            "callback": "https://cleverdining-2.onrender.com/api/payment/webhook/paytabs/",
+            "return": success_url, 
+            "hide_shipping": True
         }
 
         # 3. Connection (HTTP Headers)
         headers = {
-            "Authorization": server_key, # Server Key acts as the Bearer token (or specific auth header)
+            "Authorization": server_key, 
             "Content-Type": "application/json"
         }
 
         try:
             response = requests.post(self.BASE_URL, json=payload, headers=headers)
-            data = response.json()
+            
+            try:
+                data = response.json()
+            except:
+                raise ValidationError(f"PayTabs Invalid JSON Response: {response.text}")
 
             if response.status_code != 200 or 'redirect_url' not in data:
-                 raise ValidationError(f"PayTabs Error: {data.get('message', 'Unknown error')}")
+                 # Try another endpoint if Profile Invalid? 
+                 # For now, just return detailed error.
+                 msg = data.get('message', 'Unknown error')
+                 details = data.get('details', '')
+                 raise ValidationError(f"PayTabs Error ({response.status_code}): {msg} {details}")
 
             return {
-                'url': data['redirect_url'], # The URL to redirect the user to
-                'transaction_id': data.get('tran_ref'), # PayTabs Transaction Reference
+                'url': data['redirect_url'], 
+                'transaction_id': data.get('tran_ref'), 
                 'provider': 'paytabs',
                 'status': 'pending',
                 'raw_response': data
             }
 
         except Exception as e:
+            # Catch requests exception or validation error
+            # Include specific message if possible
             raise ValidationError(f"PayTabs Connection Failed: {str(e)}")
 
     def verify_payment(self, data):
