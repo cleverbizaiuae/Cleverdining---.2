@@ -9,7 +9,7 @@ const TOKENS = {
 // Use environment variable or fallback to production URL
 // Use environment variable or fallback to production URL
 // Hardcoded for production stability
-export const API_BASE_URL = "https://cleverdining-2.onrender.com";
+export const API_BASE_URL = "https://cleverdining-2.onrender.com/";
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
