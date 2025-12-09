@@ -68,7 +68,10 @@ const ScreenCart = () => {
 
       // Navigate to checkout with the new Order ID
       if (response.data && response.data.id) {
-        navigate(`/dashboard/checkout?orderId=${response.data.id}`, { state: { orderId: response.data.id } });
+        // Robust Persistence
+        localStorage.setItem("pending_order_id", String(response.data.id));
+        // Navigate with AutoPay flag
+        navigate(`/dashboard/checkout?orderId=${response.data.id}&autoPay=true`, { state: { orderId: response.data.id } });
       } else {
         // Fallback if ID is missing (should not happen with backend fix)
         console.error("Order ID missing in response", response.data);
