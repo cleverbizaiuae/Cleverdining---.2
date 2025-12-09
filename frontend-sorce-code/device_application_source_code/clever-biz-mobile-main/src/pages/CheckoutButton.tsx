@@ -20,10 +20,22 @@ export default function CheckoutButton({
       setLoading(true);
 
       const guestToken = localStorage.getItem("guest_session_token");
+      if (!guestToken) {
+        toast.error("Session expired. Please log in again.");
+        return;
+      }
+
+      console.log("Using Token:", guestToken.slice(0, 10) + "...");
+
       const res = await axiosInstance.post(
-        `/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`
+        `/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
+        {},
+        {
+          headers: {
+            "X-Guest-Session-Token": guestToken
+          }
+        }
       );
-      // create-checkout-session/<int:order_id>/</int:order_id>
       const url: string | undefined = res?.data?.url;
       const sessionId: string | undefined = res?.data?.sessionId;
 
@@ -58,8 +70,10 @@ export default function CheckoutButton({
         sessionId: sessionId!,
       });
       if (error) throw error;
-    } catch {
-      toast.error("Something went wrong");
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.response?.data?.error || e?.message || "Something went wrong";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
