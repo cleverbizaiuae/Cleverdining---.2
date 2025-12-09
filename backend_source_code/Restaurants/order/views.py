@@ -32,14 +32,31 @@ class OrderCreateAPIView(generics.CreateAPIView):
     serializer_class = OrderCreateSerializerFixed
     permission_classes = [permissions.AllowAny]
 
-    def perform_create(self, serializer):
-        # Resolve guest session
-        session_token = self.request.headers.get('X-Guest-Session-Token')
+    def create(self, request, *args, **kwargs):
+        # Override create to return full OrderDetailSerializer data (including ID)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
         
-        # Fallback: Check body if header is missing (fixes issues with some proxies/browsers stripping headers)
+        # At this point, perform_create has saved the instance and set self.created_instance (if we modified it to do so)
+        # OR we can just rely on the fact that perform_create calls save().
+        # But wait, perform_create in this class is custom and computes data.
+        # Let's check perform_create above. 
+        # It creates the order and returns nothing.
+        # But we can capture the created instance if we modify perform_create or just duplicate logic here.
+        # Cleaner approach: The custom perform_create does the heavy lifting.
+        # But standard perform_create returns nothing.
+        # So we need to capture the instance.
+        
+        # Let's MODIFY perform_create to return the instance or store it on 'self'.
+        # Actually, let's just implement the logic in 'create' and remove 'perform_create' to avoid confusion?
+        # NO, perform_create is called by mixing, but we are overriding create, so we can define the flow.
+        
+        # Let's copy the logic from perform_create into create.
+        
+        session_token = self.request.headers.get('X-Guest-Session-Token')
         if not session_token:
             session_token = self.request.data.get('guest_session_token')
-            
         if not session_token:
             session_token = self.request.query_params.get('guest_token')
 
@@ -68,7 +85,11 @@ class OrderCreateAPIView(generics.CreateAPIView):
         device = session.device
         restaurant = device.restaurant
 
-        order = serializer.save(device=device, restaurant=restaurant, guest_session=session) 
+        # Save via serializer
+        order = serializer.save(device=device, restaurant=restaurant, guest_session=session)
+        
+        # Serialize Response
+        headers = self.get_success_headers(serializer.data)
         data = OrderDetailSerializer(order).data
         
         # Notify Restaurant
@@ -85,15 +106,20 @@ class OrderCreateAPIView(generics.CreateAPIView):
             async_to_sync(channel_layer.group_send)(
                 f"session_{order.guest_session.id}",
                 {
-                    "type": "order_status_update", # Reusing existing handler in OrderConsumer
+                    "type": "order_status_update", 
                     "order_id": order.id,
                     "status": order.status,
-                    "order": data # Sending full order data if needed
+                    "order": data
                 }
             )
         
-        # Clear cart after order
+        # Clear cart
         Cart.objects.filter(guest_session=session).delete()
+        
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        pass # Deprecated by custom create() above
 
 
 

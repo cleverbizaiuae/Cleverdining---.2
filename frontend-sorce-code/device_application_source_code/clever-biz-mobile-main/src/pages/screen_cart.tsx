@@ -62,10 +62,19 @@ const ScreenCart = () => {
         guest_session_token: guestSessionToken,
       };
 
-      await axiosInstance.post(`/customer/orders/?guest_token=${guestSessionToken}`, orderData);
+      const response = await axiosInstance.post(`/customer/orders/?guest_token=${guestSessionToken}`, orderData);
       toast.success("Order placed successfully!");
       clearCart();
-      navigate("/dashboard/orders");
+
+      // Navigate to checkout with the new Order ID
+      if (response.data && response.data.id) {
+        navigate("/dashboard/checkout", { state: { orderId: response.data.id } });
+      } else {
+        // Fallback if ID is missing (should not happen with backend fix)
+        console.error("Order ID missing in response", response.data);
+        toast.error("Order placed, but ID missing. Check Orders tab.");
+        navigate("/dashboard/orders");
+      }
     } catch (error: any) {
       console.error("Failed to place order:", error);
       let errorMessage = "Failed to place order. Please try again.";
