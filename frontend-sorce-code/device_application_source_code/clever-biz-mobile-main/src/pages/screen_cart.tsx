@@ -22,7 +22,8 @@ const ScreenCart = () => {
     // Auto-repair "Zombie" sessions (Logged in but no token)
     if (userInfo && !guestSessionToken) {
       console.warn("Detected Zombie Session - Repairing...");
-      localStorage.clear();
+      localStorage.removeItem("userInfo");
+      localStorage.removeItem("guest_session_token");
       // Redirect to default login to regen token. 
       // Ideally should use params from userInfo if available, but default safe fallback is device 14.
       window.location.href = "/login?id=14&table=Default Table";
