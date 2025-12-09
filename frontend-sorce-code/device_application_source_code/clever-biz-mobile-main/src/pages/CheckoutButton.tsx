@@ -6,16 +6,12 @@ import toast from "react-hot-toast";
 export default function CheckoutButton({
   orderId,
   disabled,
-  autoTrigger = false,
 }: {
   orderId: number | string;
   disabled?: boolean;
-  autoTrigger?: boolean;
 }) {
   console.log(orderId);
   const [loading, setLoading] = useState(false);
-  // Track if auto-trigger fired to prevent loops
-  const [autoTriggered, setAutoTriggered] = useState(false);
   const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PK!);
 
   const handleCheckout = async () => {
@@ -67,17 +63,6 @@ export default function CheckoutButton({
       setLoading(false);
     }
   };
-
-  // Auto Trigger Effect
-  useEffect(() => {
-    if (autoTrigger && !autoTriggered && !disabled && orderId) {
-      setAutoTriggered(true);
-      // Small delay to ensure render is stable
-      setTimeout(() => {
-        handleCheckout();
-      }, 500);
-    }
-  }, [autoTrigger, autoTriggered, disabled, orderId]);
 
   return (
     <>

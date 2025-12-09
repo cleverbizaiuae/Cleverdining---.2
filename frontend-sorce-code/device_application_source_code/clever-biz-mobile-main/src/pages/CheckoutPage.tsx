@@ -11,7 +11,7 @@ export default function CheckoutPage() {
 
   // Prioritize state -> query param -> localStorage (Bulletproof fallback)
   const orderId = location.state?.orderId || params.get("orderId") || localStorage.getItem("pending_order_id");
-  const autoPay = params.get("autoPay") === "true";
+
 
   console.log("CheckoutPage Debug:", {
     stateId: location.state?.orderId,
@@ -43,7 +43,7 @@ export default function CheckoutPage() {
   return (
     <div className="p-4 h-full overflow-y-auto pb-24">
       <h1 className="text-lg font-bold mb-4">Checkout</h1>
-      <CheckoutButton orderId={orderId} autoTrigger={autoPay} />
+      <CheckoutButton orderId={orderId} />
     </div>
   );
 }
