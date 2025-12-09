@@ -45,7 +45,7 @@ class OrderCreateAPIView(generics.CreateAPIView):
 
         if not session_token:
             from rest_framework.exceptions import ValidationError
-            raise ValidationError("Missing session token. Please scan the QR code again.")
+            raise ValidationError("DEBUG CHECK v3: Missing session token. Please scan the QR code again. (Headers/Body/Query empty)")
 
         try:
             session = GuestSession.objects.get(session_token=session_token, is_active=True)
