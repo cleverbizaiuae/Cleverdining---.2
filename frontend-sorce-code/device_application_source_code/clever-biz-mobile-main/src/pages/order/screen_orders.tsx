@@ -80,8 +80,8 @@ const ScreenOrders = () => {
   }, [device_id, accessToken]);
 
   const handleCheckout = (order: Order) => {
-    // Navigate to checkout or handle checkout logic
-    navigate("/dashboard/checkout", { state: { order } });
+    // Navigate to checkout with robust ID passing
+    navigate(`/dashboard/checkout?orderId=${order.id}`, { state: { orderId: order.id } });
   };
 
   return (
