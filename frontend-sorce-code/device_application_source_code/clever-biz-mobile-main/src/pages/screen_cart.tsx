@@ -186,9 +186,9 @@ const ScreenCart = () => {
             </div>
             <button
               onClick={handleOrderNow}
-              className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-red-700 active:scale-95 transition-all flex items-center justify-between group border-4 border-yellow-400"
+              className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-between group"
             >
-              <span>[V5] RED BUTTON: {(localStorage.getItem("guest_session_token") || "NONE").slice(0, 6)}...</span>
+              <span>Place Order</span>
               <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors">
                 AED {totalCost.toFixed(2)} <ArrowRight className="inline ml-1 w-4 h-4" />
               </span>
