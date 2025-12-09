@@ -1,4 +1,4 @@
-import { Navigate } from "react-router";
+import { Navigate } from "react-router-dom";
 
 export const PrivateRouteGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = localStorage.getItem("accessToken");

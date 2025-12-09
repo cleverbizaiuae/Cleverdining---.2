@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router-dom";
 
 export default function CancelPage() {
   const [p] = useSearchParams();

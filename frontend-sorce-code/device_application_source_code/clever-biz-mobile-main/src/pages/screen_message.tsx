@@ -4,7 +4,7 @@ import { Footer } from "../components/Footer";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
 import { useMediaQuery } from "@uidotdev/usehooks";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion } from "motion/react";

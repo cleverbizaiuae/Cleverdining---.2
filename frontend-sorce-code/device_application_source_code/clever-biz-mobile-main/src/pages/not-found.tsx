@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {  ArrowLeft, } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router-dom";
 
 export const NotFoundPage = () => {
   const [glitchText, setGlitchText] = useState("404");

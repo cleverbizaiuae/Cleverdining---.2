@@ -1,5 +1,5 @@
 // import { useSearchParams } from "react-router-dom";
-import { useSearchParams, useLocation, useNavigate } from "react-router";
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import CheckoutButton from "./CheckoutButton";
 // import CheckoutButton from "../components/CheckoutButton";
@@ -11,6 +11,13 @@ export default function CheckoutPage() {
 
   // Prioritize state (from navigation), then fallback to query param
   const orderId = location.state?.orderId || params.get("orderId");
+
+  console.log("CheckoutPage Debug:", {
+    stateId: location.state?.orderId,
+    paramId: params.get("orderId"),
+    fullUrl: window.location.href,
+    search: location.search
+  });
 
   useEffect(() => {
     if (!orderId) {

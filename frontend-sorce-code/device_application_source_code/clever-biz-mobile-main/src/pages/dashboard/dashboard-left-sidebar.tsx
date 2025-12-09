@@ -2,7 +2,7 @@
 
 import { useMediaQuery } from "@uidotdev/usehooks";
 import { cn } from "clsx-for-tailwind";
-import { NavLink, useLocation, useNavigate } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   IconCall,
   IconCart,

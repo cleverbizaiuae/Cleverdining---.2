@@ -1,6 +1,6 @@
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, X } from "lucide-react";
-import { Outlet } from "react-router";
+import { Outlet } from "react-router-dom";
 
 type OutletSheetProps = {
   open: boolean;

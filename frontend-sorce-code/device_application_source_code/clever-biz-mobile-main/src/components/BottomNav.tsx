@@ -1,5 +1,5 @@
 import { Home, Phone, MessageSquare, ShoppingCart, ClipboardList } from "lucide-react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { useCart } from "../context/CartContext";

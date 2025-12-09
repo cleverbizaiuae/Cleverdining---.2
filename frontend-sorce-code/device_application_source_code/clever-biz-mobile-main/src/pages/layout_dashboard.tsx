@@ -10,7 +10,7 @@ import { cn } from "clsx-for-tailwind";
 import { motion, AnimatePresence } from "motion/react";
 import toast from "react-hot-toast";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import axiosInstance from "../lib/axios";

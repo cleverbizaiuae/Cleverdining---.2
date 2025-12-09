@@ -5,7 +5,7 @@ import { OrderCard } from "./order-card";
 import { Footer } from "../../components/Footer";
 import { GameHub } from "./game-hub";
 import { Gamepad2 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 
 const ScreenOrders = () => {

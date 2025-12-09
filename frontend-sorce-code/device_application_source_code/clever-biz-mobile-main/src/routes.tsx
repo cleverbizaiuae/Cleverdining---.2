@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router";
+import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 
 import CancelPage from "./pages/CancelPage";
 import CheckoutPage from "./pages/CheckoutPage";
