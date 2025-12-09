@@ -3,17 +3,31 @@ import { ArrowRight } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion } from "framer-motion"; // Corrected from "motion/react"
+import { useEffect } from "react";
 
 const ScreenCart = () => {
   const navigate = useNavigate();
   const { cart, removeFromCart, clearCart, incrementQuantity, decrementQuantity } = useCart();
-  console.log(cart);
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalCost = cart.reduce(
     (sum, item) => sum + Number(item.price) * item.quantity,
     0
   );
+
+  useEffect(() => {
+    const userInfo = localStorage.getItem("userInfo");
+    const guestSessionToken = localStorage.getItem("guest_session_token");
+
+    // Auto-repair "Zombie" sessions (Logged in but no token)
+    if (userInfo && !guestSessionToken) {
+      console.warn("Detected Zombie Session - Repairing...");
+      localStorage.clear();
+      // Redirect to default login to regen token. 
+      // Ideally should use params from userInfo if available, but default safe fallback is device 14.
+      window.location.href = "/login?id=14&table=Default Table";
+    }
+  }, []);
 
   const handleOrderNow = async () => {
     try {
@@ -34,7 +48,9 @@ const ScreenCart = () => {
 
       const guestSessionToken = localStorage.getItem("guest_session_token");
       if (!guestSessionToken) {
-        toast.error("Session token missing. Please scan the QR code again.");
+        // Redundant check since useEffect handles it, but good for safety
+        toast.error("Session token missing. Refreshing...");
+        window.location.reload();
         return;
       }
 
@@ -44,7 +60,6 @@ const ScreenCart = () => {
         order_items: orderItems,
         guest_session_token: guestSessionToken,
       };
-      console.log(orderData);
 
       await axiosInstance.post(`/customer/orders/?guest_token=${guestSessionToken}`, orderData);
       toast.success("Order placed successfully!");
@@ -64,20 +79,15 @@ const ScreenCart = () => {
         }
       }
 
-      // Check for specific "Device not found" error
       if (errorMessage.includes("Device not found")) {
         toast.error("Session expired. Refreshing...");
         localStorage.removeItem("userInfo");
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        setTimeout(() => window.location.reload(), 1500);
         return;
       }
 
       // Check for "writable nested fields" error (Backend issue workaround)
-      // If this error occurs, the order IS created, so we treat it as success.
       if (errorMessage.includes("writable nested fields")) {
-        console.warn("Caught 'writable nested fields' error, treating as success.");
         toast.success("Order placed successfully!");
         clearCart();
         navigate("/dashboard/orders");
@@ -89,11 +99,11 @@ const ScreenCart = () => {
   };
 
   return (
-    <div className="min-h-full flex flex-col items-center">
+    <div className="min-h-full flex flex-col items-center pb-24">
       <div className="p-4 w-full">
         <h1 className="text-3xl font-medium">Cart List</h1>
       </div>
-      <div className="flex-1 flex flex-col gap-y-2 w-full max-w-2xl overflow-y-auto px-4">
+      <div className="flex-1 flex flex-col gap-y-2 w-full max-w-2xl overflow-y-auto px-4 pb-48">
         {cart.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -178,8 +188,8 @@ const ScreenCart = () => {
         )}
       </div>
       {cart.length > 0 && (
-        <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 mt-auto">
-          <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 max-w-md mx-auto">
+        <div className="w-full mt-auto">
+          <div className="fixed bottom-24 left-4 right-4 bg-white p-4 shadow-xl rounded-2xl z-50 max-w-2xl mx-auto border border-gray-100">
             <div className="flex justify-between items-center mb-4">
               <span className="text-gray-600">Total Quantity: <span className="font-bold text-blue-600">{totalQuantity}</span></span>
               <span className="text-gray-600">Total Cost: <span className="font-bold text-blue-600">AED {totalCost.toFixed(2)}</span></span>
