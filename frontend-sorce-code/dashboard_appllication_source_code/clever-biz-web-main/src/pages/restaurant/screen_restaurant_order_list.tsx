@@ -32,15 +32,15 @@ const ScreenRestaurantOrderList = () => {
     }
   };
 
-  useEffect(() => {
-    fetchGateways();
-  }, [openGatewayModal, openStripe]); // Refresh when modals close
-
   const [openStripe, setOpenStripe] = useState(false);
   const [openGatewayModal, setOpenGatewayModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<"stripe" | "razorpay" | "checkout" | "paytabs">("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchGateways();
+  }, [openGatewayModal, openStripe]); // Refresh when modals close
 
   // Close dropdown when clicking outside
   useEffect(() => {
