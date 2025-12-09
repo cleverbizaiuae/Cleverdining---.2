@@ -8,7 +8,7 @@ class DeviceSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     class Meta:
         model = Device
-        fields = ['id', 'table_name', 'region', 'table_number', 'restaurant', 'action','restaurant_name','username','user_id']
+        fields = ['id', 'table_name', 'region', 'table_number', 'restaurant', 'action','restaurant_name','username','user_id', 'qr_code_image']
         read_only_fields =['username', 'restaurant_name','restaurant']
 
 

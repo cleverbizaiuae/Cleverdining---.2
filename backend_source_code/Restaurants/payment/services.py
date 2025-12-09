@@ -1,5 +1,5 @@
 from .models import PaymentGateway, Payment, StripeDetails
-from .adapters import StripeAdapter, RazorpayAdapter, CashAdapter
+from .adapters import StripeAdapter, RazorpayAdapter, CashAdapter, PayTabsAdapter
 from rest_framework.exceptions import ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -11,7 +11,8 @@ class PaymentService:
     ADAPTERS = {
         'stripe': StripeAdapter,
         'razorpay': RazorpayAdapter,
-        'cash': CashAdapter
+        'cash': CashAdapter,
+        'paytabs': PayTabsAdapter
     }
 
     @staticmethod

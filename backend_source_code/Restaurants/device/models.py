@@ -3,6 +3,10 @@ import uuid as uuid_lib
 from .constants import ACTION_CHOICES,STATUS_CHOICES
 from accounts.models import User
 from restaurant.models import Restaurant
+import qrcode
+from io import BytesIO
+from django.core.files.base import ContentFile
+import urllib.parse
 
 # Create your models here.
 
@@ -15,6 +19,37 @@ class Device(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='devices')
     action = models.CharField(max_length=10, choices=ACTION_CHOICES, default='active')
     table_token = models.UUIDField(default=uuid_lib.uuid4, editable=True, unique=True) # Token for QR code, rotatable
+    qr_code_image = models.ImageField(upload_to='media/qr_codes/', blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)  # Save first to get ID if new
+        
+        if is_new or not self.qr_code_image:
+            self.generate_qr_code()
+
+    def generate_qr_code(self):
+        # Frontend URL: https://clever-biz-mobile.netlify.app/login?table={table_name}&id={id}
+        table_name_encoded = urllib.parse.quote(self.table_name)
+        qr_url = f"https://clever-biz-mobile.netlify.app/login?table={table_name_encoded}&id={self.id}"
+        
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        file_name = f"qr_table_{self.id}_{self.uuid}.png"
+        
+        self.qr_code_image.save(file_name, ContentFile(buffer.getvalue()), save=False)
+        super().save(update_fields=['qr_code_image'])
 
     def __str__(self):
         return f"{self.table_name}"

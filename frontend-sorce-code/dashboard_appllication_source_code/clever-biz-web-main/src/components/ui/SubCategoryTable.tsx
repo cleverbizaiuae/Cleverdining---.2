@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import { Trash } from "lucide-react";
+import { Trash, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 import {
     Dialog,
@@ -10,12 +10,16 @@ import {
 import { ImSpinner6 } from "react-icons/im";
 import axiosInstance from "@/lib/axios";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
+import { EditCategoryModal } from "../modals";
 
 const SubCategoryTable = ({ categories, setCategories }) => {
     const { response } = useContext(WebSocketContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    const [editingCategory, setEditingCategory] = useState(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     // Filter for subcategories (those with a parent_category)
     const subCategories = categories?.filter(c => c.parent_category) || [];
@@ -28,6 +32,16 @@ const SubCategoryTable = ({ categories, setCategories }) => {
     const closeModal = () => {
         setIsModalOpen(false);
         setCategoryToDelete(null);
+    };
+
+    const openEditModal = (category) => {
+        setEditingCategory(category);
+        setIsEditModalOpen(true);
+    };
+
+    const closeEditModal = () => {
+        setEditingCategory(null);
+        setIsEditModalOpen(false);
     };
 
     return (
@@ -80,6 +94,12 @@ const SubCategoryTable = ({ categories, setCategories }) => {
                                         <td className="p-2 text-gray-400">{parent?.Category_name || "Unknown"}</td>
                                         <td className="p-2 text-right">
                                             <button
+                                                onClick={() => openEditModal(category)}
+                                                className="text-blue-500 hover:text-blue-400 transition-colors duration-200 mr-3"
+                                            >
+                                                <Pencil size={20} />
+                                            </button>
+                                            <button
                                                 onClick={() => openModal(category)}
                                                 className="text-red-500 hover:text-red-700 transition-colors duration-200"
                                                 disabled={isDeleting}
@@ -107,6 +127,17 @@ const SubCategoryTable = ({ categories, setCategories }) => {
                     close={closeModal}
                     id={categoryToDelete?.id}
                     setCategories={setCategories}
+                />
+            )}
+
+            {isEditModalOpen && (
+                <EditCategoryModal
+                    isOpen={isEditModalOpen}
+                    close={closeEditModal}
+                    id={editingCategory?.id}
+                    onSuccess={() => {
+                        // handled by page reload in modal currently
+                    }}
                 />
             )}
         </div>

@@ -55,8 +55,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   return (
     <Dialog open={isOpen} onClose={() => close()} className="relative z-50">
       <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-md transition-opacity duration-300" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-0 sm:p-4">
-        <DialogPanel className="bg-white p-0 rounded-none sm:rounded-[2rem] shadow-2xl w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg overflow-hidden relative flex flex-col animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
+        <DialogPanel className="bg-white p-0 rounded-3xl shadow-2xl w-full max-w-sm h-auto max-h-[80vh] overflow-hidden relative flex flex-col animate-in zoom-in-95 duration-200 mx-auto">
 
           {/* Hero Media Area */}
           <div className="relative w-full h-72 shrink-0 bg-black">

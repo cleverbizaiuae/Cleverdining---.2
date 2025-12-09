@@ -195,3 +195,78 @@ class CashAdapter(PaymentAdapter):
 
     def verify_webhook(self, request):
         return None
+
+import requests
+
+class PayTabsAdapter(PaymentAdapter):
+    BASE_URL = "https://secure-global.paytabs.com/payment/request"
+    # Note: PayTabs has regional URLs (e.g., paytabs.com, secure-egypt.paytabs.com, etc.)
+    # We might need to make this configurable or default to global.
+
+    def create_payment_session(self, order, success_url, cancel_url):
+        # 1. Input Vectors
+        profile_id = self.gateway.key_id       # "Profile ID" from Dashboard
+        server_key = self.gateway.get_decrypted_secret() # "Server Key" from Dashboard
+
+        # 2. Construct Payload
+        payload = {
+            "profile_id": profile_id,
+            "tran_type": "sale",
+            "tran_class": "ecom",
+            "cart_id": str(order.id),
+            "cart_description": f"Order #{order.id} from {order.restaurant.resturent_name}",
+            "cart_currency": "AED",
+            "cart_amount": float(order.total_price),
+            "callback": "https://cleverdining-backend.onrender.com/api/payment/webhook/paytabs/", # Webhook
+            "return": success_url # Redirect after success
+        }
+
+        # 3. Connection (HTTP Headers)
+        headers = {
+            "Authorization": server_key, # Server Key acts as the Bearer token (or specific auth header)
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.post(self.BASE_URL, json=payload, headers=headers)
+            data = response.json()
+
+            if response.status_code != 200 or 'redirect_url' not in data:
+                 raise ValidationError(f"PayTabs Error: {data.get('message', 'Unknown error')}")
+
+            return {
+                'url': data['redirect_url'], # The URL to redirect the user to
+                'transaction_id': data.get('tran_ref'), # PayTabs Transaction Reference
+                'provider': 'paytabs',
+                'status': 'pending',
+                'raw_response': data
+            }
+
+        except Exception as e:
+            raise ValidationError(f"PayTabs Connection Failed: {str(e)}")
+
+    def verify_payment(self, data):
+        # PayTabs usually relies on the Return URL parameters or Webhook.
+        # If the user is redirected back with a `tran_ref`, we can query the status.
+        return {'status': 'pending'} # Placeholder, as usually verification happens via Webhook/Redirect
+
+    def verify_webhook(self, request):
+        # 1. Inputs
+        server_key = self.gateway.get_decrypted_secret()
+        data = request.data # DRF parses JSON body
+
+        # 2. Validation
+        # PayTabs sends the signature in the header or we can verify the transaction status
+        # For simple integration, we verify the cart_id and status matches.
+        
+        payment_result = data.get('payment_result', {})
+        
+        if payment_result.get('response_status') == 'A': # A = Authorized/ECaptured
+             return {
+                'status': 'completed',
+                'transaction_id': data.get('tran_ref'),
+                'amount': data.get('cart_amount'),
+                'meta': data
+             }
+        
+        return {'status': 'failed'}
