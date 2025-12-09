@@ -32,28 +32,9 @@ function App() {
     const storedUserInfo = localStorage.getItem("userInfo");
 
     if (tableIdParam && restaurantIdParam) {
-      // Case 1: URL params present - use them to set session
-      const mockUserInfo = {
-        user: {
-          username: tableNameParam || `Table ${tableIdParam} `,
-          email: `${tableIdParam} @guest.com`,
-          restaurants: [
-            {
-              id: parseInt(restaurantIdParam),
-              table_name: tableNameParam || `Table ${tableIdParam} `,
-              device_id: tableIdParam,
-              resturent_name: "Restaurant",
-            },
-          ],
-        },
-        role: "guest",
-      };
-
-      localStorage.setItem("userInfo", JSON.stringify(mockUserInfo));
-      localStorage.setItem("accessToken", "guest_token");
-      localStorage.setItem("refreshToken", "guest_refresh");
-
-      setTimeout(() => navigate("/dashboard"), 100);
+      // Case 1: URL params present - redirect to real login flow
+      window.location.href = `/login?id=${tableIdParam}&table=${tableNameParam || 'Table'}`;
+      return;
 
     } else if (storedUserInfo) {
       // Case 2: Session already exists - redirect to dashboard
