@@ -61,24 +61,14 @@ axiosInstance.interceptors.response.use(
         }
       } catch {
         // Refresh token failed
-        const userInfo = localStorage.getItem(TOKENS.USER_INFO);
-        let isGuest = false;
-        try {
-          if (userInfo) {
-            const parsed = JSON.parse(userInfo);
-            if (parsed.role === "guest") {
-              isGuest = true;
-            }
-          }
-        } catch (e) {
-          console.error("Error parsing userInfo", e);
-        }
-
-        if (!isGuest) {
-          localStorage.removeItem(TOKENS.ACCESS_TOKEN);
-          localStorage.removeItem(TOKENS.REFRESH_TOKEN);
-          localStorage.removeItem(TOKENS.USER_INFO);
-        }
+        // Refresh token failed or ignored
+        // UNCONDITIONALLY clear storage to prevent infinite loops.
+        // If the token is invalid (401), the session is dead.
+        // Clearing storage forces LayoutDashboard to re-bootstrap a new valid session.
+        localStorage.removeItem(TOKENS.ACCESS_TOKEN);
+        localStorage.removeItem(TOKENS.REFRESH_TOKEN);
+        localStorage.removeItem(TOKENS.USER_INFO);
+        localStorage.removeItem("guest_session_token");
 
         window.location.href = "/";
       }

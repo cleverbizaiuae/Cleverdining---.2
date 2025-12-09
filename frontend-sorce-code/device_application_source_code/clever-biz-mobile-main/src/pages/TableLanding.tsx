@@ -35,8 +35,9 @@ export default function TableLanding() {
 
                 // Store session token
                 localStorage.setItem('guest_session_token', session_token);
-                localStorage.setItem('accessToken', session_token); // Use session token as access token
-                localStorage.setItem('refreshToken', session_token);
+                // DO NOT set accessToken to session_token. It is a UUID, not a JWT.
+                // Backend treats it as Invalid Token (401) if sent as Bearer.
+                // Guest access relies on X-Guest-Session-Token header.
 
                 // Clear old non-namespaced cart to prevent leaks
                 localStorage.removeItem('cart');
