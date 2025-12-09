@@ -61,34 +61,16 @@ function App() {
 
     } else {
       // Case 3: No params and no session - Create default guest session (Bypass Login)
-      // Defaulting to Restaurant 7 as observed in user context
-      const defaultUserInfo = {
-        user: {
-          username: "Guest Table",
-          email: "guest@example.com",
-          restaurants: [
-            {
-              id: 7,
-              table_name: "y",
-              device_id: "14",
-              resturent_name: "XYZ",
-            },
-          ],
-        },
-        role: "guest",
-      };
-
-      localStorage.setItem("userInfo", JSON.stringify(defaultUserInfo));
-      localStorage.setItem("accessToken", "guest_token");
-      localStorage.setItem("refreshToken", "guest_refresh");
-
-      setTimeout(() => navigate("/dashboard"), 100);
+      // Redirect to the login route with a default device ID to generate a REAL session token via backend.
+      // Using Device ID 14 as default (matches previous hardcoded logic).
+      window.location.href = "/login?id=14&table=Default Table";
     }
   }, [searchParams, navigate, location.pathname]);
 
   return (
     <Routes>
       <Route path="/" element={<div className="flex items-center justify-center h-screen">Loading...</div>} />
+      <Route path="/login" element={<TableLanding />} /> {/* Added for QR Code compatibility */}
       <Route path="/t/:restaurantId/:tableToken" element={<TableLanding />} />
       <Route path="/dashboard" element={<LayoutDashboard />}>
         <Route index={true} element={<ScreenHome />} />

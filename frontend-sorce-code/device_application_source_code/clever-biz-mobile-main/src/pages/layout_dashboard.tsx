@@ -141,26 +141,9 @@ const LayoutDashboard = () => {
             if (devices && devices.length > 0) {
               const firstDevice = devices[0];
 
-              // 3. Create Valid Guest Session
-              const defaultUserInfo = {
-                user: {
-                  username: `Guest Table ${firstDevice.table_name}`,
-                  email: "guest@example.com",
-                  restaurants: [
-                    {
-                      id: firstRestaurant.id,
-                      table_name: firstDevice.table_name,
-                      device_id: String(firstDevice.id),
-                      resturent_name: firstRestaurant.name,
-                    },
-                  ],
-                },
-                role: "guest",
-              };
-
-              localStorage.setItem("userInfo", JSON.stringify(defaultUserInfo));
-              localStorage.setItem("accessToken", "guest_token");
-              window.location.reload();
+              // Redirect to login to generate real session token
+              window.location.href = `/login?id=${firstDevice.id}&table=${firstDevice.table_name}`;
+              return; // Stop execution
             } else {
               console.error("No devices found for restaurant", firstRestaurant.name);
             }

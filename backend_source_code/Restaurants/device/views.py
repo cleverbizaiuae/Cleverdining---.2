@@ -34,14 +34,19 @@ class ResolveTableView(APIView):
     def post(self, request):
         restaurant_id = request.data.get('restaurant_id')
         table_token = request.data.get('table_token')
+        device_id = request.data.get('device_id') # Support lookup by ID
 
-        if not restaurant_id or not table_token:
-            return Response({'error': 'Missing restaurant_id or table_token'}, status=status.HTTP_400_BAD_REQUEST)
+        if not device_id and (not restaurant_id or not table_token):
+            return Response({'error': 'Missing required parameters'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
+            if device_id:
+                device = Device.objects.get(id=device_id)
+                restaurant_id = device.restaurant.id # Infer restaurant
+            else:
+                device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
         except Device.DoesNotExist:
-            return Response({'error': 'Invalid table token'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Invalid table token or device ID'}, status=status.HTTP_404_NOT_FOUND)
 
         # Create new guest session
         session_token = str(uuid.uuid4())

@@ -1,20 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
 
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const resolveTable = async () => {
+            const qrDeviceId = searchParams.get('id');
+            const qrTableName = searchParams.get('table');
+
+            // Payload construction
+            const payload: any = {};
+            if (restaurantId && tableToken) {
+                payload.restaurant_id = restaurantId;
+                payload.table_token = tableToken;
+            } else if (qrDeviceId) {
+                payload.device_id = qrDeviceId;
+            }
+
+            if (Object.keys(payload).length === 0) {
+                setError("Invalid link parameters");
+                return;
+            }
+
             try {
-                const res = await axios.post('/customer/resolve-table/', {
-                    restaurant_id: restaurantId,
-                    table_token: tableToken
-                });
+                const res = await axios.post('/customer/resolve-table/', payload);
 
                 const { guest_session_id, session_token, table_id, table_name } = res.data;
 
@@ -33,7 +48,7 @@ export default function TableLanding() {
                         email: `${table_id}@guest.com`,
                         restaurants: [
                             {
-                                id: parseInt(restaurantId || '0'),
+                                id: res.data.restaurant_id, // Use validated ID from backend
                                 table_name: table_name || `Table ${table_id}`,
                                 device_id: table_id,
                                 resturent_name: res.data.restaurant_name || "Restaurant",
@@ -52,12 +67,8 @@ export default function TableLanding() {
             }
         };
 
-        if (restaurantId && tableToken) {
-            resolveTable();
-        } else {
-            setError("Invalid link parameters");
-        }
-    }, [restaurantId, tableToken, navigate]);
+        resolveTable();
+    }, [restaurantId, tableToken, searchParams, navigate]);
 
     if (error) {
         return (
