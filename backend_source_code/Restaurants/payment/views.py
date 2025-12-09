@@ -92,6 +92,8 @@ from .services import PaymentService
 
 class CreateCheckoutSessionView(APIView):
     """API View for creating a checkout session (Unified)"""
+    permission_classes = [] # Allow guests (manual token check inside)
+    authentication_classes = []
 
     def post(self, request, order_id):
         # 1. Resolve Guest Session
