@@ -39,6 +39,9 @@ class OrderCreateAPIView(generics.CreateAPIView):
         # Fallback: Check body if header is missing (fixes issues with some proxies/browsers stripping headers)
         if not session_token:
             session_token = self.request.data.get('guest_session_token')
+            
+        if not session_token:
+            session_token = self.request.query_params.get('guest_token')
 
         if not session_token:
             from rest_framework.exceptions import ValidationError

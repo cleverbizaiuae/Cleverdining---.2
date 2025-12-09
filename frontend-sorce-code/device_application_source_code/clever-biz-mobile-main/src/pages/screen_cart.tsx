@@ -32,15 +32,21 @@ const ScreenCart = () => {
         quantity: item.quantity,
       }));
 
+      const guestSessionToken = localStorage.getItem("guest_session_token");
+      if (!guestSessionToken) {
+        toast.error("Session token missing. Please scan the QR code again.");
+        return;
+      }
+
       const orderData = {
         restaurant,
         device,
         order_items: orderItems,
-        guest_session_token: localStorage.getItem("guest_session_token"),
+        guest_session_token: guestSessionToken,
       };
       console.log(orderData);
 
-      await axiosInstance.post("/customer/orders/", orderData);
+      await axiosInstance.post(`/customer/orders/?guest_token=${guestSessionToken}`, orderData);
       toast.success("Order placed successfully!");
       clearCart();
       navigate("/dashboard/orders");
