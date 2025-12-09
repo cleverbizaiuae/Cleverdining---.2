@@ -35,6 +35,11 @@ class OrderCreateAPIView(generics.CreateAPIView):
     def perform_create(self, serializer):
         # Resolve guest session
         session_token = self.request.headers.get('X-Guest-Session-Token')
+        
+        # Fallback: Check body if header is missing (fixes issues with some proxies/browsers stripping headers)
+        if not session_token:
+            session_token = self.request.data.get('guest_session_token')
+
         if not session_token:
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Missing session token. Please scan the QR code again.")

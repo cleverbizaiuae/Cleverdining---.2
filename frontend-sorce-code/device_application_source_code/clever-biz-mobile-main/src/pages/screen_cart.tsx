@@ -36,6 +36,7 @@ const ScreenCart = () => {
         restaurant,
         device,
         order_items: orderItems,
+        guest_session_token: localStorage.getItem("guest_session_token"),
       };
       console.log(orderData);
 

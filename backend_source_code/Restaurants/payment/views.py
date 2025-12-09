@@ -97,6 +97,9 @@ class CreateCheckoutSessionView(APIView):
         # 1. Resolve Guest Session
         session_token = request.headers.get('X-Guest-Session-Token')
         if not session_token:
+            session_token = request.data.get('guest_session_token')
+            
+        if not session_token:
              return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
 
         from device.models import GuestSession
