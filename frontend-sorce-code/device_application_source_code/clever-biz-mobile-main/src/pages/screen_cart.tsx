@@ -179,24 +179,19 @@ const ScreenCart = () => {
       </div>
       {cart.length > 0 && (
         <div className="w-full bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 mt-auto">
-          <div className="w-full flex flex-col gap-4">
-            <div className="flex items-center justify-between text-sm font-medium px-2">
-              <span className="text-gray-600">
-                Total Quantity: <span className="text-primary font-bold ml-1">{totalQuantity}</span>
-              </span>
-              <span className="text-gray-600">
-                Total Cost: <span className="text-primary font-bold ml-1">AED {totalCost}</span>
-              </span>
+          <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 max-w-md mx-auto">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-gray-600">Total Quantity: <span className="font-bold text-blue-600">{totalQuantity}</span></span>
+              <span className="text-gray-600">Total Cost: <span className="font-bold text-blue-600">AED {totalCost.toFixed(2)}</span></span>
             </div>
             <button
-              className="w-full h-14 bg-primary text-white rounded-xl shadow-xl flex items-center justify-between px-6 font-bold text-lg active:scale-[0.98] transition-transform"
               onClick={handleOrderNow}
+              className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-between group"
             >
-              <span>Place Order</span>
-              <div className="flex items-center gap-2">
-                <span>AED {totalCost}</span>
-                <ArrowRight size={20} />
-              </div>
+              <span>Place Order v3</span>
+              <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors">
+                AED {totalCost.toFixed(2)} <ArrowRight className="inline ml-1 w-4 h-4" />
+              </span>
             </button>
           </div>
         </div>
