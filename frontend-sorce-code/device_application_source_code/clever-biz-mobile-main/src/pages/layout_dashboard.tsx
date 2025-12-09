@@ -38,7 +38,7 @@ const LayoutDashboard = () => {
   // -------------------------
 
   const isSubRoute = location.pathname !== "/dashboard";
-  const isSubRoute = location.pathname !== "/dashboard";
+
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
