@@ -68,7 +68,7 @@ function App() {
 
       {/* Entry screens */}
       <Route element={<Layout />}>
-        <Route path="user-login" element={<ScreenLogin />} />
+
         <Route path="adminregister" element={<ScreenAdminRegister />} />
         <Route path="register" element={<ScreenRegister />} />
         <Route path="verify-email" element={<ScreenEmailVerification />} />
