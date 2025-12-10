@@ -161,7 +161,7 @@ const ScreenRestaurantReservations = () => {
             <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <DatePicker
               selected={selectedDate}
-              onChange={(date) => {
+              onChange={(date: Date | null) => {
                 setSelectedDate(date);
                 setReservationsCurrentPage(1);
               }}
@@ -299,7 +299,7 @@ const ScreenRestaurantReservations = () => {
       <div className="py-6 flex justify-center">
         <div className="flex gap-2">
           <button
-            onClick={() => setReservationsCurrentPage((p: number) => Math.max(1, p - 1))}
+            onClick={() => setReservationsCurrentPage(Math.max(1, reservationsCurrentPage - 1))}
             disabled={reservationsCurrentPage === 1}
             className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
           >
@@ -307,7 +307,7 @@ const ScreenRestaurantReservations = () => {
           </button>
           <span className="px-3 py-1 text-sm text-slate-600 self-center border border-transparent">Page {reservationsCurrentPage}</span>
           <button
-            onClick={() => setReservationsCurrentPage((p: number) => p + 1)}
+            onClick={() => setReservationsCurrentPage(reservationsCurrentPage + 1)}
             disabled={reservations.length < 10}
             className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
           >

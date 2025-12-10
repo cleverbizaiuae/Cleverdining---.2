@@ -14,7 +14,8 @@ import {
     CreditCard,
     Banknote,
     Smartphone,
-    ChevronRight
+    ChevronRight,
+    ShoppingBag
 } from 'lucide-react';
 import axios from '../../lib/axios';
 import DatePicker from "react-datepicker";

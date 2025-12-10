@@ -276,8 +276,8 @@ const ScreenRestaurantDashboard = () => {
                         <td className="px-6 py-4 text-slate-600 font-medium">${item.price}</td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${item.availability
-                              ? "bg-emerald-50 text-emerald-600"
-                              : "bg-slate-100 text-slate-500"
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-slate-100 text-slate-500"
                             }`}>
                             {item.availability ? "Available" : "Unavailable"}
                           </span>
@@ -304,17 +304,17 @@ const ScreenRestaurantDashboard = () => {
             <div className="p-4 border-t border-slate-200 flex justify-center">
               <div className="flex gap-2">
                 <button
-                  onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                  className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
                 >
                   Previous
                 </button>
-                <span className="px-3 py-1 text-sm text-slate-600 self-center">Page {currentPage}</span>
+                <span className="px-3 py-1 text-sm text-slate-600 self-center border border-transparent">Page {currentPage}</span>
                 <button
-                  onClick={() => setCurrentPage((p: number) => p + 1)}
-                  disabled={foodItems.length < 10} // Assuming 10 items per page limit from backend or context
-                  className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={foodItems.length < 10}
+                  className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
                 >
                   Next
                 </button>

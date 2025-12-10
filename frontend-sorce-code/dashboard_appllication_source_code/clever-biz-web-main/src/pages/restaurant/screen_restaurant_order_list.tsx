@@ -176,8 +176,8 @@ const ScreenRestaurantOrderList = () => {
                       setOpenGatewayModal(true);
                     }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide border transition-all ${gw.is_active
-                        ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
-                        : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+                      ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
                       }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${gw.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
@@ -320,17 +320,17 @@ const ScreenRestaurantOrderList = () => {
         <div className="p-4 border-t border-slate-200 flex justify-center">
           <div className="flex gap-2">
             <button
-              onClick={() => setOrdersCurrentPage((p: number) => Math.max(1, p - 1))}
+              onClick={() => setOrdersCurrentPage(Math.max(1, ordersCurrentPage - 1))}
               disabled={ordersCurrentPage === 1}
-              className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+              className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
             >
               Previous
             </button>
-            <span className="px-3 py-1 text-sm text-slate-600 self-center">Page {ordersCurrentPage}</span>
+            <span className="px-3 py-1 text-sm text-slate-600 self-center border border-transparent">Page {ordersCurrentPage}</span>
             <button
-              onClick={() => setOrdersCurrentPage((p: number) => p + 1)}
+              onClick={() => setOrdersCurrentPage(ordersCurrentPage + 1)}
               disabled={orders.length < 10}
-              className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+              className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
             >
               Next
             </button>
