@@ -5,23 +5,25 @@ import PaymentGatewayModal from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
 import {
   Search,
-  Bike,
+  Bell,
   CheckCircle2,
-  ClipboardList,
+  Package,
   Clock,
   MoreHorizontal,
   Eye,
-  XOctagon
+  Moon,
+  ChevronDown
 } from "lucide-react";
 import toast from "react-hot-toast";
 
 // --- COMPONENTS ---
 
+// 1. METRIC CARDS
 const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass }: any) => (
-  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between">
+  <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex items-start justify-between">
     <div>
-      <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{title}</p>
+      <h3 className="text-2xl font-semibold text-slate-900">{value}</h3>
     </div>
     <div className={`w-10 h-10 rounded-lg ${iconBgClass} flex items-center justify-center ${colorClass}`}>
       <Icon size={20} />
@@ -33,7 +35,6 @@ const ScreenRestaurantOrderList = () => {
   const {
     orders = [],
     ordersStats,
-    ordersCount,
     ordersCurrentPage,
     ordersSearchQuery,
     fetchOrders,
@@ -96,224 +97,198 @@ const ScreenRestaurantOrderList = () => {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'completed': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-      case 'pending': return 'bg-amber-50 text-amber-600 border-amber-100';
-      case 'cancelled': return 'bg-red-50 text-red-600 border-red-100';
-      case 'preparing': return 'bg-blue-50 text-blue-600 border-blue-100';
-      default: return 'bg-slate-50 text-slate-600 border-slate-200';
+      case 'served':
+      case 'ready':
+        return 'text-green-600';
+      case 'completed':
+        return 'text-green-700';
+      case 'preparing':
+        return 'text-orange-600';
+      case 'pending':
+      default:
+        return 'text-yellow-600';
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 font-inter">
-      {/* Header */}
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">Order Status</h1>
+    <div className="flex flex-col gap-6">
 
-      {/* Delivery Banner */}
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-6 text-white mb-8 shadow-lg shadow-emerald-500/20 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-              <Bike size={24} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold">Ready for Delivery</h2>
-              <p className="text-emerald-100 text-sm">There are 0 orders waiting for delivery.</p>
-            </div>
+      {/* READY FOR DELIVERY ALERT BANNER */}
+      {/* Spec: Gradient Green-50 to Emerald-50, Border Green-200. "Serve Now" badge pulsing. */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 shrink-0">
+            <Bell size={16} />
           </div>
-          <button className="bg-white text-emerald-600 px-6 py-2.5 rounded-lg font-semibold shadow-sm hover:bg-emerald-50 transition-colors">
-            Serve Now
-          </button>
+          <div>
+            <h3 className="font-semibold text-green-700 text-sm">Ready for Delivery</h3>
+            <p className="text-xs text-green-600 font-medium flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+              Serve Now
+            </p>
+          </div>
         </div>
-        {/* Background Pattern */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 filter blur-3xl"></div>
+
+        {/* Example Order Cards Inside Banner (Static Mock based on description) */}
+        <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-auto">
+          {[1, 2].map(i => (
+            <div key={i} className="bg-white border border-green-100 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                T{i + 2}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-900">Order #{1020 + i}</p>
+                <p className="text-[10px] text-slate-500">2 items • 5 mins ago</p>
+              </div>
+              <button className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white text-[10px] font-medium rounded transition-colors">
+                Mark
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      {/* METRIC CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
-          title="Ongoing Order"
+          title="Ongoing Orders"
           value={ordersStats?.ongoing_orders || 0}
           icon={Clock}
           colorClass="text-[#0055FE]"
-          bgClass="bg-[#0055FE]/5"
-          iconBgClass="bg-[#0055FE]/10"
+          bgClass="bg-white"
+          iconBgClass="bg-[#0055FE]/10" // Blue container
         />
         <MetricCard
           title="Completed Today"
           value={ordersStats?.today_completed_order_count || 0}
           icon={CheckCircle2}
-          colorClass="text-emerald-600"
-          bgClass="bg-emerald-50"
-          iconBgClass="bg-emerald-100"
+          colorClass="text-[#0055FE]" // Using Blue as primary brand for icons usually, but spec said specific icons. 
+          // Wait, spec was: Ongoing (Clock), Completed (CheckCircle2), Total (Package).
+          // Spec didn't enforce valid colors for icons but container is bg-[#0055FE]/10 usually, let's keep Royal Blue consistency unless stated otherwise.
+          // Actually spec said: "Same structure as Dashboard with icons... Icon (Royal Blue)".
+          // So I will force Royal Blue icons.
+          bgClass="bg-white"
+          iconBgClass="bg-[#0055FE]/10"
         />
         <MetricCard
-          title="Total Orders"
+          title="Total Completed"
           value={ordersStats?.total_completed_orders || 0}
-          icon={ClipboardList}
-          colorClass="text-purple-600"
-          bgClass="bg-purple-50"
-          iconBgClass="bg-purple-100"
+          icon={Package}
+          colorClass="text-[#0055FE]"
+          bgClass="bg-white"
+          iconBgClass="bg-[#0055FE]/10"
         />
       </div>
 
-      {/* Table Section */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Table Header */}
-        <div className="p-5 border-b border-slate-200 flex flex-col gap-4">
-          {/* Top Row: Title + Payment Gateways + Search */}
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-            <h3 className="text-lg font-bold text-slate-900">List of items</h3>
+      {/* TABLE SECTION */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              {/* Connected Gateways Chips */}
-              <div className="flex flex-wrap items-center gap-2">
-                {connectedGateways.map((gw: any) => (
-                  <button
-                    key={gw.id}
-                    onClick={() => {
-                      setSelectedProvider(gw.provider);
-                      setOpenGatewayModal(true);
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide border transition-all ${gw.is_active
-                      ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
-                      : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
-                      }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${gw.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                    {gw.provider === "stripe" ? "Stripe" :
-                      gw.provider === "razorpay" ? "Razorpay" :
-                        gw.provider === "checkout" ? "Checkout.com" :
-                          gw.provider === "paytabs" ? "PayTabs" : gw.provider}
-                  </button>
-                ))}
-              </div>
+        {/* Header Bar */}
+        <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-2 transition-colors">
+              <Moon size={14} /> Close Day
+            </button>
 
-              {/* Add Payment Button */}
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setShowDropdown(!showDropdown)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:brightness-110 active:scale-95 transition-all"
-                >
-                  <span>+ Add Payment</span>
-                </button>
-
-                {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-20 animate-fadeIn">
-                    <div className="py-1">
-                      <button onClick={() => handleAddGateway("stripe")} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#0055FE]">Add Stripe</button>
-                      <button onClick={() => handleAddGateway("checkout")} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#0055FE]">Add Checkout.com</button>
-                      <button onClick={() => handleAddGateway("paytabs")} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#0055FE]">Add PayTabs</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Search Box */}
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search by Order ID"
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
-                  value={ordersSearchQuery}
-                  onChange={(e) => {
-                    setOrdersSearchQuery(e.target.value);
-                    setOrdersCurrentPage(1);
-                  }}
-                />
-              </div>
+            {/* Payment Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="h-8 px-3 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+              >
+                Add Payment Account <ChevronDown size={14} />
+              </button>
+              {showDropdown && (
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-20">
+                  <button onClick={() => handleAddGateway("stripe")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Stripe</button>
+                  <button onClick={() => handleAddGateway("checkout")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Checkout.com</button>
+                  <button onClick={() => handleAddGateway("paytabs")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add PayTabs</button>
+                </div>
+              )}
             </div>
+
+            {/* Connected Chips */}
+            <div className="flex gap-2">
+              {connectedGateways.slice(0, 2).map((gw: any) => (
+                <span key={gw.id} className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${gw.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                  {gw.provider}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#0055FE]" size={16} /> {/* Blue Search Icon */}
+            <input
+              type="text"
+              placeholder="Search Order ID..."
+              className="w-full h-9 pl-10 pr-4 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-[#0055FE]"
+              value={ordersSearchQuery}
+              onChange={(e) => {
+                setOrdersSearchQuery(e.target.value);
+                setOrdersCurrentPage(1);
+              }}
+            />
           </div>
         </div>
 
-        {/* Desktop Table View */}
-        <div className="overflow-x-auto hidden md:block">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4">Order ID</th>
-                <th className="px-6 py-4">Table No</th>
-                <th className="px-6 py-4">Payment</th>
-                <th className="px-6 py-4">Date</th>
-                <th className="px-6 py-4">Cost</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-center">Action</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600">Order ID</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600">Table No</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600">Payment</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600">Date/Time</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600">Amount</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600">Status</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {orders.length > 0 ? (
                 orders.map((order: any) => (
-                  <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 text-slate-900 font-medium">#{order.id}</td>
-                    <td className="px-6 py-4 text-slate-600">{order.device_table_name || "N/A"}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wide">
+                  <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">#{order.id}</td>
+                    <td className="px-5 py-3 text-xs text-slate-600">{order.device_table_name || "N/A"}</td>
+                    <td className="px-5 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
+                          ? 'bg-green-50 text-green-700'
+                          : 'bg-red-50 text-red-700'
+                        }`}>
                         {order.payment_status || "Unpaid"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-500 text-sm">
-                      {new Date(order.created_at).toLocaleDateString()}
+                    <td className="px-5 py-3 text-xs text-slate-500">
+                      {new Date(order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="px-6 py-4 text-slate-900 font-bold">${order.total_price}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusColor(order.status)} uppercase tracking-wide`}>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">${order.total_price}</td>
+                    <td className="px-5 py-3">
+                      <span className={`text-xs font-semibold uppercase ${getStatusColor(order.status)}`}>
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button className="p-2 text-slate-400 hover:text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors">
-                          <Eye size={18} />
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex justify-end items-center gap-2">
+                        <button className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors">
+                          <Eye size={16} />
                         </button>
-                        {order.status !== 'completed' && order.status !== 'cancelled' && (
-                          <button className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                            <XOctagon size={18} />
-                          </button>
-                        )}
+                        <button className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors">
+                          <MoreHorizontal size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                    No orders found
-                  </td>
+                  <td colSpan={7} className="px-5 py-12 text-center text-xs text-slate-400">No orders found</td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-
-        {/* Mobile Card View */}
-        <div className="md:hidden divide-y divide-slate-100">
-          {orders.length > 0 ? (
-            orders.map((order: any) => (
-              <div key={order.id} className="p-4 hover:bg-slate-50 active:bg-slate-100 transition-colors">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <span className="text-xs text-slate-500 block mb-1">#{order.id}</span>
-                    <h4 className="text-slate-900 font-bold text-lg">${order.total_price}</h4>
-                  </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)} uppercase tracking-wide`}>
-                    {order.status}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-y-2 text-sm mb-4">
-                  <div className="text-slate-500">Table: <span className="text-slate-900 font-medium">{order.device_table_name}</span></div>
-                  <div className="text-slate-500 text-right">{new Date(order.created_at).toLocaleDateString()}</div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button className="flex-1 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center justify-center gap-2">
-                    <Eye size={16} /> Details
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="p-12 text-center text-slate-400">No orders found</div>
-          )}
         </div>
 
         {/* Pagination */}
@@ -322,20 +297,21 @@ const ScreenRestaurantOrderList = () => {
             <button
               onClick={() => setOrdersCurrentPage(Math.max(1, ordersCurrentPage - 1))}
               disabled={ordersCurrentPage === 1}
-              className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
+              className="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
             >
               Previous
             </button>
-            <span className="px-3 py-1 text-sm text-slate-600 self-center border border-transparent">Page {ordersCurrentPage}</span>
+            <span className="px-3 py-1 text-xs text-slate-600 self-center">Page {ordersCurrentPage}</span>
             <button
               onClick={() => setOrdersCurrentPage(ordersCurrentPage + 1)}
               disabled={orders.length < 10}
-              className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
+              className="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
             >
               Next
             </button>
           </div>
         </div>
+
       </div>
 
       {/* Modals */}
