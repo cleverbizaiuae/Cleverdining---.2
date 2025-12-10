@@ -1,98 +1,117 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
+
+// Image imports
+import heroImage from "../../assets/hero-image-1.webp"; // Using existing asset
+import mobileLogo from "../../assets/mobile_logo.png";   // Using existing asset
+
+type PortalRole = "manager" | "staff" | "chef";
 
 const ScreenAdminLogin = () => {
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        email: "",
-        password: "",
-        role: "manager", // Default role
-    });
+
+    // State
+    const [selectedRole, setSelectedRole] = useState<PortalRole>("manager");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+    // Initial load
+    useEffect(() => {
+        // Optional: Pre-fill from localStorage if needed
+        const savedRole = localStorage.getItem("adminRole");
+        if (savedRole && ["manager", "staff", "chef"].includes(savedRole)) {
+            setSelectedRole(savedRole as PortalRole);
+        }
+    }, []);
 
-    const handleRoleSelect = (role: string) => {
-        setFormData({ ...formData, role });
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        setIsLoading(true);
 
-        try {
-            const response = await axiosInstance.post(`/staff/login/`, formData);
+        if (!email || !password) {
+            toast.error("Please enter both email and password");
+            return;
+        }
 
-            const { access, refresh, role, name, restaurant_id } = response.data;
+        setLoading(true);
 
-            // Store Tokens
-            localStorage.setItem("accessToken", access);
-            localStorage.setItem("refreshToken", refresh);
-            localStorage.setItem("role", role);
-            localStorage.setItem("userInfo", JSON.stringify({ username: name, role, restaurant_id }));
+        // Simulated API Call
+        setTimeout(() => {
+            // Store role (and mock tokens if needed for route protection in a real app, 
+            // but here we follow specific instructions)
+            localStorage.setItem("adminRole", selectedRole);
+            localStorage.setItem("accessToken", "mock_access_token");
+            localStorage.setItem("role", selectedRole);
 
-            // Also set the legacy key "adminRole" as per request history, if needed, 
-            // but standardized approach is above. 
-            localStorage.setItem("adminRole", role);
+            // Mock user info for the dashboard to not crash
+            const mockUser = {
+                username: email.split("@")[0],
+                role: selectedRole,
+                restaurant_id: 1
+            };
+            localStorage.setItem("userInfo", JSON.stringify(mockUser));
 
-            toast.success(`Welcome back, ${name}!`);
+            setLoading(false);
+            toast.success(`Welcome back, ${mockUser.username}!`);
 
             // Redirect Logic
-            if (role === "manager") {
-                navigate("/restaurant"); // Mapped from /manageradmindashboard
-            } else if (role === "staff") {
-                navigate("/staff"); // Mapped from /staffadmindashboard
-            } else if (role === "chef") {
-                navigate("/chef"); // Mapped from /chefadmindashboard
-            } else {
-                navigate("/admin"); // Fallback
+            switch (selectedRole) {
+                case "chef":
+                    navigate("/chef");
+                    break;
+                case "staff":
+                    navigate("/staff");
+                    break;
+                case "manager":
+                default:
+                    navigate("/restaurant");
+                    break;
             }
 
-        } catch (error: any) {
-            console.error(error);
-            const msg = error.response?.data?.error || "Login failed. Please check your credentials.";
-            toast.error(msg);
-        } finally {
-            setIsLoading(false);
-        }
+        }, 1200);
     };
 
     return (
-        <div className="flex min-h-screen bg-white font-inter">
-            {/* Left Panel - Login Form */}
-            <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-24 xl:px-32 py-12">
-                <div className="max-w-[480px] w-full mx-auto">
+        <div className="flex min-h-screen font-inter bg-white">
 
-                    <div className="mb-10">
-                        <h1 className="text-[32px] font-bold text-slate-900 mb-2">Welcome Back</h1>
-                        <p className="text-slate-500 text-lg">Sign in to your dashboard to manage your restaurant.</p>
+            {/* LEFT SIDE - Form Panel */}
+            <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 lg:p-16 relative">
+
+                <div className="w-full max-w-md">
+                    {/* Logo */}
+                    <Link to="/" className="block mb-8">
+                        <img src={mobileLogo} alt="CleverBiz" className="h-8 w-auto" />
+                    </Link>
+
+                    {/* Heading */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-slate-900 mb-2">Sign in</h1>
+                        <p className="text-slate-500">Enter your credentials to continue</p>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Form */}
+                    <form onSubmit={handleLogin} className="space-y-6">
 
-                        {/* Role Selection */}
-                        <div className="space-y-3">
-                            <label className="text-sm font-medium text-slate-600 block">Select Portal</label>
-                            <div className="grid grid-cols-3 gap-3">
-                                {['manager', 'staff', 'chef'].map((role) => (
+                        {/* Portal Selector */}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-2">Portal</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(["manager", "staff", "chef"] as PortalRole[]).map((role) => (
                                     <button
                                         key={role}
                                         type="button"
-                                        onClick={() => handleRoleSelect(role)}
+                                        onClick={() => setSelectedRole(role)}
                                         className={`
-                        py-2.5 px-4 rounded-lg text-sm font-medium capitalize transition-all duration-200 border
-                        ${formData.role === role
-                                                ? "bg-[#0055FE] border-[#0055FE] text-white shadow-md shadow-blue-500/20"
-                                                : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                                            py-2 px-3 rounded-md text-xs font-medium capitalize transition-all border
+                                            ${selectedRole === role
+                                                ? "bg-[#0055FE] border-[#0055FE] text-white"
+                                                : "bg-transparent border-slate-200 text-slate-600 hover:border-slate-300"
                                             }
-                      `}
+                                        `}
                                     >
                                         {role}
                                     </button>
@@ -100,94 +119,112 @@ const ScreenAdminLogin = () => {
                             </div>
                         </div>
 
-                        {/* Email Input */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">Email Address</label>
+                        {/* Email */}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">Email</label>
                             <input
                                 type="email"
-                                name="email"
-                                required
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                className="w-full h-11 px-4 bg-white border border-slate-200 rounded-lg outline-none text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 transition-all duration-200"
                                 placeholder="name@company.com"
+                                className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 transition-all"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
                             />
                         </div>
 
-                        {/* Password Input */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">Password</label>
+                        {/* Password */}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">Password</label>
                             <div className="relative">
                                 <input
                                     type={showPassword ? "text" : "password"}
-                                    name="password"
+                                    placeholder="Enter password"
+                                    className="w-full h-10 pl-3 pr-10 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 transition-all"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     required
-                                    value={formData.password}
-                                    onChange={handleInputChange}
-                                    className="w-full h-11 pl-4 pr-11 bg-white border border-slate-200 rounded-lg outline-none text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 transition-all duration-200"
-                                    placeholder="Enter your password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                                 >
-                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                 </button>
                             </div>
                         </div>
 
-                        {/* Remember & Forgot Password */}
+                        {/* Remember & Forgot */}
                         <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <div
-                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${rememberMe ? "bg-[#0055FE] border-[#0055FE]" : "bg-white border-slate-300 group-hover:border-slate-400"}`}
-                                    onClick={() => setRememberMe(!rememberMe)}
-                                >
-                                    {rememberMe && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <div className={`
+                                    w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors
+                                    ${rememberMe ? "bg-[#0055FE] border-[#0055FE]" : "bg-white border-slate-300"}
+                                `}>
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={rememberMe}
+                                        onChange={() => setRememberMe(!rememberMe)}
+                                    />
+                                    {rememberMe && (
+                                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    )}
                                 </div>
-                                <span className="text-sm text-slate-500 group-hover:text-slate-600">Remember me</span>
+                                <span className="text-xs text-slate-500">Remember me</span>
                             </label>
-
-                            <Link to="/forgot-password" className="text-sm font-medium text-[#0055FE] hover:underline">
+                            <Link to="/forgot-password" className="text-xs text-[#0055FE] hover:underline">
                                 Forgot password?
                             </Link>
                         </div>
 
-                        {/* Submit Button */}
+                        {/* Submit */}
                         <button
                             type="submit"
-                            disabled={isLoading}
-                            className="w-full h-12 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0"
+                            disabled={loading}
+                            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
-                            {isLoading ? "Signing in..." : "Sign In"}
+                            {loading ? <Loader2 className="animate-spin" size={18} /> : "Sign in"}
                         </button>
 
                     </form>
 
-                    <p className="mt-8 text-center text-slate-500 text-sm">
-                        Don't have an account? <Link to="/adminregister" className="text-[#0055FE] font-bold hover:underline">Join Now</Link>
-                    </p>
+                    {/* Footer Link */}
+                    <div className="mt-8 text-center">
+                        <p className="text-xs text-slate-500">
+                            Don&apos;t have an account?{" "}
+                            <Link to="/adminregister" className="text-[#0055FE] font-medium hover:underline">
+                                Contact admin
+                            </Link>
+                        </p>
+                    </div>
 
                 </div>
             </div>
 
-            {/* Right Panel - Image Overlay */}
-            <div className="hidden lg:flex w-1/2 relative bg-slate-900 overflow-hidden">
-                {/* Background Image with Opacity */}
-                <div className="absolute inset-0 bg-[url('/src/assets/hero-image-1.webp')] bg-cover bg-center opacity-60 mix-blend-overlay"></div>
+            {/* RIGHT SIDE - Image Panel */}
+            <div className="hidden lg:block w-1/2 relative bg-slate-900 overflow-hidden">
+                <img
+                    src={heroImage}
+                    alt="Restaurant Interior"
+                    className="absolute inset-0 w-full h-full object-cover opacity-60"
+                />
 
                 {/* Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+                <div
+                    className="absolute inset-0 z-10"
+                    style={{
+                        background: 'linear-gradient(to top, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.4), transparent)'
+                    }}
+                />
 
-                {/* Content */}
-                <div className="relative z-10 w-full h-full flex flex-col justify-end p-12 lg:p-20">
-                    <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
-                        Manage your restaurant <br /> like a pro.
-                    </h2>
-                    <p className="text-slate-300 text-lg max-w-md">
-                        Access real-time analytics, manage staff, and streamline your operations from one central dashboard.
+                {/* Text Content */}
+                <div className="absolute bottom-16 left-16 right-16 z-20">
+                    <h2 className="text-3xl font-semibold text-white mb-2">Restaurant Management</h2>
+                    <p className="text-sm text-slate-300">
+                        Streamline operations, track orders, and manage your team from one centralized platform.
                     </p>
                 </div>
             </div>
