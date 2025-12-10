@@ -15,6 +15,8 @@ import Layout from "./pages/authentication/layout";
 import ScreenEmailVerification from "./pages/authentication/screen_email_verification";
 import ScreenLanding from "./pages/authentication/screen_landing";
 import ScreenLogin from "./pages/authentication/screen_login";
+import ScreenAdminLogin from "./pages/authentication/screen_admin_login";
+import ScreenAdminRegister from "./pages/authentication/screen_admin_register";
 import ScreenOtpVerification from "./pages/authentication/screen_otp_verification";
 import ScreenPassword from "./pages/authentication/screen_password";
 import ScreenPrivacy from "./pages/authentication/screen_privacy";
@@ -64,6 +66,8 @@ function App() {
       {/* Entry screens */}
       <Route element={<Layout />}>
         <Route path="login" element={<ScreenLogin />} />
+        <Route path="adminlogin" element={<ScreenAdminLogin />} />
+        <Route path="adminregister" element={<ScreenAdminRegister />} />
         <Route path="register" element={<ScreenRegister />} />
         <Route path="verify-email" element={<ScreenEmailVerification />} />
         <Route path="create-password" element={<ScreenPassword />} />

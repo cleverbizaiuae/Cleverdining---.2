@@ -395,7 +395,7 @@ STRIPE_WEBHOOK_SECRET=env('STRIPE_WEBHOOK_SECRET', default='')
 
 
 # Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
-USE_SQLITE = env.bool('USE_SQLITE', default=False)
+USE_SQLITE = True # env.bool('USE_SQLITE', default=False)
 
 if USE_SQLITE:
     DATABASES = {

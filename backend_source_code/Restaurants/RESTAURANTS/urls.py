@@ -23,11 +23,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('accounts.urls')),
     path('adminapi/', include('adminapi.urls')),
-    path('owners/', include('owners.urls')),
-    path('customer/', include('customer.urls')),
-    path('staff/', include('staff.urls')),
-    path('chef/', include('chef.urls')),
-    path('message/', include('message.urls')),
+    path('owners/', include('owners.urls')), # Main Restaurant Owner API
+    path('api/staff/', include('staff.urls')),
+    path('api/customer/', include('customer.urls')),
+    # path('api/payments/', include('payment.urls')),
     path('vapi/', include('vapi.urls')),
     path('subscription/', include('subscription.urls')),
 ]

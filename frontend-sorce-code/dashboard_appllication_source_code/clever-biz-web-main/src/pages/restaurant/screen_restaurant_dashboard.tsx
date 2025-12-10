@@ -1,21 +1,120 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { MonthlyChart, YearlyChart } from "@/components/charts";
-import { ButtonAdd, TextSearchBox } from "../../components/input";
-import {
-  DashboardCard,
-  DashboardMostSellingItems,
-  Pagination,
-  TableFoodList,
-} from "../../components/utilities";
 import { useEffect, useState, useCallback } from "react";
-import { EditCategoryModal, EditFoodItemModal, AddSubCategoryModal } from "@/components/modals";
-import { IconGrowth, IconSales, IconTeam } from "@/components/icons";
 import { useOwner } from "@/context/ownerContext";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-import CategoryTable from "@/components/ui/CategoryTable";
-import SubCategoryTable from "@/components/ui/SubCategoryTable";
-import { DailyReportChart } from "@/components/ui/MonthlyChartx";
+import {
+  TrendingUp,
+  ShoppingBag,
+  Users,
+  Search,
+  Plus,
+  MoreHorizontal,
+  ArrowUpRight,
+  Loader2
+} from "lucide-react";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend,
+  ScriptableContext
+} from "chart.js";
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend
+);
+
+// --- COMPONENTS ---
+
+const MetricCard = ({ title, value, subtext, icon: Icon, trend }: any) => (
+  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between">
+    <div>
+      <p className="text-slate-500 text-sm font-medium mb-1">{title}</p>
+      <h3 className="text-2xl font-bold text-slate-900 mb-1">{value}</h3>
+      <p className="text-xs text-slate-400 flex items-center gap-1">
+        {trend && <span className="text-emerald-500 font-medium flex items-center"><ArrowUpRight size={12} /> {trend}</span>}
+        {subtext}
+      </p>
+    </div>
+    <div className="w-10 h-10 rounded-lg bg-[#0055FE]/10 flex items-center justify-center text-[#0055FE]">
+      <Icon size={20} />
+    </div>
+  </div>
+);
+
+const SalesChart = ({ data, labels }: { data: number[], labels: string[] }) => {
+  const chartData = {
+    labels: labels,
+    datasets: [
+      {
+        label: 'Revenue',
+        data: data,
+        borderColor: '#0055FE',
+        backgroundColor: (context: ScriptableContext<"line">) => {
+          const ctx = context.chart.ctx;
+          const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+          gradient.addColorStop(0, 'rgba(0, 85, 254, 0.2)');
+          gradient.addColorStop(1, 'rgba(0, 85, 254, 0)');
+          return gradient;
+        },
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#FFFFFF',
+        pointBorderColor: '#0055FE',
+        pointBorderWidth: 2,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        backgroundColor: '#1E293B',
+        padding: 12,
+        titleFont: { size: 13 },
+        bodyFont: { size: 13 },
+        displayColors: false,
+        callbacks: {
+          label: (context: any) => `$${context.parsed.y}`
+        }
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: '#64748B', font: { size: 11 } }
+      },
+      y: {
+        grid: { color: '#F1F5F9' },
+        ticks: { color: '#64748B', font: { size: 11 }, callback: (val: any) => `$${val}` },
+        min: 0,
+      },
+    },
+  };
+
+  return <Line data={chartData} options={options} />;
+};
 
 const ScreenRestaurantDashboard = () => {
   const {
@@ -28,73 +127,21 @@ const ScreenRestaurantDashboard = () => {
     setSearchQuery,
   } = useOwner();
 
-  const [categoryModal, setShowCategoryModal] = useState(false);
-  const [subCategoryModal, setShowSubCategoryModal] = useState(false);
-  const [foodItemModal, setShowFoodItemModal] = useState(false);
+  // State
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [sellingItemData, setSellingItemData] = useState([]);
-  const [currentYear, setCurrentYear] = useState(null);
-  const [lastYear, setLastYear] = useState(null);
-  const [cate, setCate] = useState([]);
-  const [productsSold, setProductsSold] = useState<number[]>([]);
-  const [salesAmount, setSalesAmount] = useState<number[]>([]);
-  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  // Analytics state
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
 
-  const showFoodItemAddModal = () => setShowFoodItemModal(true);
-  const showCategoryAddModal = () => setShowCategoryModal(true);
-  const showSubCategoryAddModal = () => setShowSubCategoryModal(true);
-  const closeFoodItemModal = () => setShowFoodItemModal(false);
-  const closeCaegoryModal = () => setShowCategoryModal(false);
-  const closeSubCategoryModal = () => setShowSubCategoryModal(false);
-
-  // Debounced search effect
+  // Handlers
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 500); // 500ms delay
-
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // const user = localStorage.getItem("userInfo");
-  // console.log(user, "user info in dashboard");
-  // useEffect(() => {
-  //   if (!user) {
-  //     window.location.reload();
-  //   }
-  // }, [user]);
-
-  // Load food items on component mount and when page or debounced search changes
   useEffect(() => {
     fetchFoodItems(currentPage, debouncedSearchQuery);
   }, [currentPage, debouncedSearchQuery, fetchFoodItems]);
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    setCurrentPage(1); // Reset to first page when searching
-  };
-
-  // Fetch most selling items
-  const fetchaAllcategories = async () => {
-    try {
-      const response = await axiosInstance.get("/owners/categories/");
-      setCate(response.data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-  useEffect(() => {
-    fetchaAllcategories();
-  }, []);
 
   const fetchMostSellingItems = useCallback(async () => {
     try {
@@ -102,27 +149,15 @@ const ScreenRestaurantDashboard = () => {
       setSellingItemData(response.data);
     } catch (error) {
       console.error("Failed to fetch most selling items:", error);
-      toast.error("Failed to load most selling items.");
     }
   }, []);
 
-  // Load most selling items on component mount
-  useEffect(() => {
-    fetchMostSellingItems();
-  }, [fetchMostSellingItems]);
-
-  // Fetch analytics data
   const fetchAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
-    setAnalyticsError(null);
     try {
       const response = await axiosInstance.get("/owners/orders/analytics/");
-
-      setCurrentYear(response.data?.status?.current_year);
-      setLastYear(response.data?.status?.last_year);
       setAnalytics(response.data);
     } catch (error) {
-      setAnalyticsError("Failed to load analytics data.");
       toast.error("Failed to load analytics data.");
     } finally {
       setAnalyticsLoading(false);
@@ -130,218 +165,198 @@ const ScreenRestaurantDashboard = () => {
   }, []);
 
   useEffect(() => {
+    fetchMostSellingItems();
     fetchAnalytics();
-  }, [fetchAnalytics]);
-  const fetchMonthlyReport = async () => {
-    try {
-      const response = await axiosInstance.get("/owners/sales-report/monthly/");
-      const data = response.data;
-      console.log(response.data.month);
-      // Extract month + year
-      const [monthName, yearStr] = data.month.split(" "); // "October 2025"
-      const yearNum = parseInt(yearStr, 10);
+  }, [fetchMostSellingItems, fetchAnalytics]);
 
-      // Convert month name → number
-      const monthNum = response.data.month; // October → 10
+  // Chart Data Preparation
+  const chartLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const chartValues = analytics?.current_year ? Object.values(analytics.current_year) as number[] : Array(12).fill(0);
 
-      // Convert objects (day1, day2, ...) → arrays
-      const productsArray = Object.values(
-        data.sales_report_count_completed_order
-      );
-      const salesArray = Object.values(data.sales_report_price);
-
-      setMonth(monthNum);
-      setYear(yearNum);
-      setProductsSold(productsArray as number[]);
-      setSalesAmount(salesArray as number[]);
-    } catch (error) {
-      console.log("Fetch error:", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchMonthlyReport();
-  }, []);
-  console.log(month);
   return (
-    <>
-      <div className="flex flex-col ">
-        {/* Dashboard Cards */}
-        <div className="flex flex-col lg:flex-row gap-y-3 lg:gap-y-0 lg:gap-x-3">
-          <DashboardCard
-            icon={<IconSales />}
-            label="Total Sells today"
-            data={
-              analyticsLoading
-                ? "..."
-                : analytics?.status?.today_total_completed_order_price
-                  ? `$${analytics.status.today_total_completed_order_price}`
-                  : "$0"
-            }
-            accentColor="#31BB24"
-            gradientStart="#48E03A"
-            gradientEnd="#161F42"
-            tail={analyticsLoading ? "" : analytics?.status ? "" : "(0)"}
-          />
-          <DashboardCard
-            icon={<IconGrowth />}
-            label="Weekly growth"
-            data={
-              analyticsLoading
-                ? "..."
-                : analytics?.status?.weekly_growth !== undefined
-                  ? `$${analytics.status.weekly_growth}`
-                  : "$0"
-            }
-            accentColor="#FFB056"
-            gradientStart="#FFB056"
-            gradientEnd="#161F42"
-            tail={
-              analyticsLoading
-                ? ""
-                : analytics?.status?.weekly_growth !== undefined
-                  ? `${analytics.status.weekly_growth}%`
-                  : "0%"
-            }
-          />
-          <DashboardCard
-            icon={<IconTeam />}
-            label="Total member"
-            data={
-              analyticsLoading
-                ? "..."
-                : analytics?.status?.total_member !== undefined
-                  ? `${analytics.status.total_member}`
-                  : "0"
-            }
-            accentColor="#FF6561"
-            gradientStart="#EB342E"
-            gradientEnd="#161F42"
-            tail="Team"
-          />
+    <div className="min-h-screen bg-slate-50/50 p-6 font-inter">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard Overview</h1>
+          <p className="text-slate-500 mt-1">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
         </div>
-        {/* Charts */}
-        <div className="grid grid-cols-3 mt-4 z-10 gap-x-4">
-          <div className="col-span-3 bg-sidebar rounded-xl p-4 w-full h-[600px] ">
-            <YearlyChart
-              title="Sales Report"
-              firstData={
-                analyticsLoading
-                  ? Array(12).fill(0)
-                  : analytics?.current_year
-                    ? Object.values(analytics.current_year)
-                    : Array(12).fill(0)
-              }
-              secondData={
-                analyticsLoading
-                  ? Array(12).fill(0)
-                  : analytics?.last_year
-                    ? Object.values(analytics.last_year)
-                    : Array(12).fill(0)
-              }
-              currentYear={currentYear}
-              lastYear={lastYear}
-            />
-          </div>
+        <div className="flex items-center gap-3">
+          <button className="bg-white px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+            Export Report
+          </button>
+          <button className="bg-[#0055FE] px-4 py-2 rounded-lg text-white text-sm font-medium hover:bg-[#0047D1] transition-colors shadow-lg shadow-blue-500/20">
+            + Add New Item
+          </button>
         </div>
-        {/* Search + Add Buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 grid-rows-[auto_1fr] gap-x-4 items-start mt-4">
-          <div className="col-span-2 flex items-center justify-end mb-4 gap-x-4">
-            <TextSearchBox
-              placeholder="Search by Name"
-              className="flex-1 max-w-none"
-              value={searchQuery}
-              onChange={handleSearch}
-            />
-            <ButtonAdd label="Add Items" onClick={showFoodItemAddModal} />
-            <ButtonAdd label="Add Category" onClick={showCategoryAddModal} />
-            <ButtonAdd label="Add Sub-Category" onClick={showSubCategoryAddModal} />
-          </div>
+      </div>
 
-          {/* Table */}
-
-          <div className="col-span-2 bg-sidebar p-4 rounded-lg">
-            <TableFoodList data={foodItems} />
-            <div className="mt-4 flex justify-center">
-              <Pagination
-                page={currentPage}
-                total={foodItemsCount}
-                onPageChange={handlePageChange}
-              />
-            </div>
-          </div>
-
-          {/* Most Selling Items */}
-          <div className="grid md:grid-cols-1 xl:grid-cols-2 lg:block gap-6">
-            {/* First Card - Most Selling Items */}
-            {sellingItemData && sellingItemData.length > 0 && (
-              <div
-                className="h-[300px] w-[500px] xl:w-full md:w-full max-h-[80vh]  bg-sidebar rounded-xl p-4 mt-5 xl:mt-0 flex flex-col scrollbar-custom"
-                style={{
-                  scrollbarWidth: "thin",
-                  scrollbarColor: "#141527 #141527",
-                }}
-              >
-                <h6 className="text-xl text-primary-text">
-                  Most Selling Items
-                </h6>
-                <DashboardMostSellingItems
-                  containerProps={{
-                    className: "mt-8 gap-y-4",
-                  }}
-                  data={sellingItemData}
-                />
-              </div>
-            )}
-
-            {/* Second Card - Category Table */}
-            {cate && cate.length > 0 && (
-              <div
-                className="mt-10  max-h-[80vh]  overflow-y-auto bg-sidebar rounded-xl p-4 flex flex-col  xl:w-full"
-                style={{
-                  scrollbarWidth: "thin",
-                  scrollbarColor: "#141527 #141527",
-                }}
-              >
-                <CategoryTable categories={cate} setCategories={setCate} />
-              </div>
-            )}
-
-            {/* Third Card - SubCategory Table */}
-            {cate && cate.length > 0 && (
-              <div
-                className="mt-10 max-h-[80vh] overflow-y-auto bg-sidebar rounded-xl p-4 flex flex-col xl:w-full"
-                style={{
-                  scrollbarWidth: "thin",
-                  scrollbarColor: "#141527 #141527",
-                }}
-              >
-                <SubCategoryTable categories={cate} setCategories={setCate} />
-              </div>
-            )}
-          </div>
-        </div>
-        <DailyReportChart
-          month={month.toString()}
-          year={year}
-          productsSold={productsSold}
-          salesAmount={salesAmount}
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <MetricCard
+          title="Total Revenue"
+          value={analyticsLoading ? "..." : `$${analytics?.status?.today_total_completed_order_price || 0}`}
+          subtext="Today's earnings"
+          icon={TrendingUp}
+          trend={analytics?.status?.weekly_growth ? `${analytics.status.weekly_growth}%` : "0%"}
+        />
+        <MetricCard
+          title="Total Orders"
+          value={analyticsLoading ? "..." : analytics?.status?.today_total_completed_order || 0}
+          subtext="Orders processed today"
+          icon={ShoppingBag}
+        />
+        <MetricCard
+          title="Team Members"
+          value={analyticsLoading ? "..." : analytics?.status?.total_member || 0}
+          subtext="Active staff"
+          icon={Users}
         />
       </div>
 
-      {/* Modals */}
-      <EditFoodItemModal isOpen={foodItemModal} close={closeFoodItemModal} />
-      <EditCategoryModal
-        isOpen={categoryModal}
-        close={closeCaegoryModal}
-        onSuccess={fetchFoodItems}
-      />
-      <AddSubCategoryModal
-        isOpen={subCategoryModal}
-        close={closeSubCategoryModal}
-        onSuccess={fetchFoodItems}
-      />
-    </>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+        {/* Left Column (Chart + Table) */}
+        <div className="xl:col-span-2 space-y-6">
+          {/* Chart Section */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-slate-900">Revenue Analytics</h3>
+              <select className="bg-slate-50 border-none text-sm text-slate-600 rounded-lg px-3 py-1 cursor-pointer outline-none focus:ring-2 focus:ring-[#0055FE]/20">
+                <option>This Year</option>
+                <option>Last Year</option>
+              </select>
+            </div>
+            <div className="h-[300px] w-full">
+              <SalesChart data={chartValues} labels={chartLabels} />
+            </div>
+          </div>
+
+          {/* Food Items Table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h3 className="text-lg font-bold text-slate-900">Popular Items</h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search items..."
+                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 w-full sm:w-64"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
+                  <tr>
+                    <th className="px-6 py-4">Item Name</th>
+                    <th className="px-6 py-4">Price</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {foodItems.length > 0 ? (
+                    foodItems.map((item: any) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden">
+                              <img src={item.image} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <span className="font-medium text-slate-900">{item.item_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 font-medium">${item.price}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${item.availability
+                              ? "bg-emerald-50 text-emerald-600"
+                              : "bg-slate-100 text-slate-500"
+                            }`}>
+                            {item.availability ? "Available" : "Unavailable"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button className="p-2 rounded-lg text-slate-400 hover:text-[#0055FE] hover:bg-[#0055FE]/5 transition-colors">
+                            <MoreHorizontal size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        No items found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination (Simple) */}
+            <div className="p-4 border-t border-slate-200 flex justify-center">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-sm text-slate-600 self-center">Page {currentPage}</span>
+                <button
+                  onClick={() => setCurrentPage((p: number) => p + 1)}
+                  disabled={foodItems.length < 10} // Assuming 10 items per page limit from backend or context
+                  className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column (Most Selling) */}
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+            <h3 className="text-lg font-bold text-slate-900 mb-6">Top Selling Items</h3>
+            <div className="space-y-6">
+              {sellingItemData && sellingItemData.length > 0 ? (
+                sellingItemData.slice(0, 5).map((item: any, index: number) => (
+                  <div key={index}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-slate-700 truncate max-w-[150px]">{item.item_name}</span>
+                      <span className="text-sm font-bold text-slate-900">{item.total_sold} sold</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#0055FE] rounded-full"
+                        style={{ width: `${Math.min((item.total_sold / 100) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-slate-500 text-center py-10">No sales data yet.</p>
+              )}
+            </div>
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <button className="w-full py-2.5 text-sm font-medium text-[#0055FE] bg-[#0055FE]/5 rounded-lg hover:bg-[#0055FE]/10 transition-colors">
+                View Full Report
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
   );
 };
 

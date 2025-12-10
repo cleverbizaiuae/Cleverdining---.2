@@ -17,6 +17,8 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(required=False)
     logo = serializers.ImageField(required=False)
 
+    username = serializers.CharField(max_length=150, required=False) # Made optional
+
     class Meta:
         model = User
         fields = ['username', 'email', 'password', 'resturent_name', 'location', 'phone_number', 'package', 'image', 'logo']
@@ -27,9 +29,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         errors = {}
         
         # Check required fields - handle None and empty strings
-        username = attrs.get('username')
-        if not username or (isinstance(username, str) and not username.strip()):
-            errors['username'] = ['Username is required.']
+        # Username is now optional, will be generated from email if missing
         
         email = attrs.get('email')
         if not email or (isinstance(email, str) and not email.strip()):
@@ -49,6 +49,23 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                 logger.error(f"Error checking email uniqueness: {str(db_error)}")
                 # Continue - will be caught during create
         
+        # Auto-generate username if not provided
+        username = attrs.get('username')
+        if not username or (isinstance(username, str) and not username.strip()):
+            if 'email' not in errors and email:
+                import uuid
+                base_name = email.split('@')[0]
+                # Ensure it's clean alnum
+                import re
+                base_name = re.sub(r'[^a-zA-Z0-9]', '', base_name) or 'user'
+                # Add random suffix to ensure uniqueness
+                attrs['username'] = f"{base_name}_{uuid.uuid4().hex[:8]}"
+            else:
+                 # If email is invalid, we can't generate username, but email error will be raised
+                 pass
+        elif username and isinstance(username, str):
+             attrs['username'] = username.strip()
+
         password = attrs.get('password')
         if not password:
             errors['password'] = ['Password is required.']
@@ -66,10 +83,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
             errors['location'] = ['Location is required.']
         elif location and isinstance(location, str):
             attrs['location'] = location.strip()
-        
-        # Normalize username
-        if username and isinstance(username, str):
-            attrs['username'] = username.strip()
+            
         
         if errors:
             raise serializers.ValidationError(errors)

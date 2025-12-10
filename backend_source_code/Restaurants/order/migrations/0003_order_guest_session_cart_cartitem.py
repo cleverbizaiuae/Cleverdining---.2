@@ -6,14 +6,27 @@ from django.db import migrations, models
 
 def add_guest_session_field(apps, schema_editor):
     from django.db import connection
+    # Use introspection to be database agnostic (SQLite friendly)
     with connection.cursor() as cursor:
-        cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='order_order' AND column_name='guest_session_id'")
-        if cursor.fetchone():
-            return
+        try:
+            # Check if table exists first
+            tables = connection.introspection.table_names(cursor)
+            if 'order_order' not in tables:
+                return # Table doesn't exist yet, so field definitely doesn't
+            
+            # Check columns
+            description = connection.introspection.get_table_description(cursor, 'order_order')
+            columns = [col.name for col in description]
+            if 'guest_session_id' in columns:
+                return
+        except Exception:
+            # Fallback or ignore if something weird happens, let migration try to add field
+            pass
 
     Order = apps.get_model('order', 'Order')
+    GuestSession = apps.get_model('device', 'GuestSession')
     field = models.ForeignKey(
-        'device.GuestSession',
+        GuestSession,
         blank=True, 
         null=True, 
         on_delete=django.db.models.deletion.SET_NULL, 
