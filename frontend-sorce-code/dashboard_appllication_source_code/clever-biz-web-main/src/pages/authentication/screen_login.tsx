@@ -17,6 +17,12 @@ const ScreenLogin = () => {
     remember: boolean;
   };
   const navigate = useNavigate();
+
+  // Redirect to new admin login if accessed directly
+  useEffect(() => {
+    navigate("/adminlogin");
+  }, [navigate]);
+
   const [loading, setLoading] = useState(false);
   const { updateUserData, userInfo, isLoading, getDashboardPath } = useRole();
   const redirectToRoleDashboard = useCallback(
@@ -50,10 +56,10 @@ const ScreenLogin = () => {
       // Use the hook to update user data
       updateUserData(user, access, refresh);
       setLoading(false);
-      
+
       // Show success message with role info
       toast.success(`Welcome! You are logged in as ${user.role}`);
-     
+
 
       redirectToRoleDashboard(user.role);
     } catch (error: any) {

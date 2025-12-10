@@ -174,11 +174,15 @@ export const ScreenRestaurantDevices = () => {
 
   return (
     <div className="min-h-screen bg-white font-inter">
-      {/* Metric Card */}
-      <div className="mb-8 w-full md:w-1/3">
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 w-full md:w-2/3">
         <MetricCard
           title="Total Tables"
           value={deviceStats?.total_devices || 0}
+        />
+        <MetricCard
+          title="Active Tables"
+          value={deviceStats?.active_devices || 0}
         />
       </div>
 
@@ -226,7 +230,7 @@ export const ScreenRestaurantDevices = () => {
               {allDevices.length > 0 ? (
                 allDevices.map((device: any) => (
                   <tr key={device.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-900">{device.name}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{device.name || device.table_name}</td>
                     <td className="px-6 py-4 text-slate-600 font-medium">Primary</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">

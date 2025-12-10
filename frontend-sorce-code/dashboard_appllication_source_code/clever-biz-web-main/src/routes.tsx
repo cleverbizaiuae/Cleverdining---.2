@@ -63,10 +63,11 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<ScreenLanding />} />
+      <Route path="login" element={<ScreenAdminLogin />} />
+      <Route path="adminlogin" element={<ScreenAdminLogin />} />
+
       {/* Entry screens */}
       <Route element={<Layout />}>
-        <Route path="login" element={<ScreenAdminLogin />} />
-        <Route path="adminlogin" element={<ScreenAdminLogin />} />
         <Route path="user-login" element={<ScreenLogin />} />
         <Route path="adminregister" element={<ScreenAdminRegister />} />
         <Route path="register" element={<ScreenRegister />} />
