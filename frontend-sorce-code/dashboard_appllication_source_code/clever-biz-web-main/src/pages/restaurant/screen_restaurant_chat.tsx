@@ -140,18 +140,18 @@ const ScreenRestaurantChat = () => {
     <div className="flex flex-col gap-6 h-[calc(100vh-6rem)]">
 
       {/* ALERT BANNER */}
-      {/* Spec: Blue/Indigo Gradient */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 shadow-lg text-white flex items-center justify-between shrink-0">
+      {/* Spec: Blue/Indigo Gradient - Light Theme */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-            <Bell size={20} className="text-white" />
+          <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center">
+            <Bell size={20} className="text-[#0055FE]" />
           </div>
           <div>
-            <h3 className="font-bold text-lg">New Messages</h3>
-            <p className="text-indigo-100 text-sm">You have 0 unread messages from customers.</p>
+            <h3 className="font-bold text-lg text-[#0055FE]">New Messages</h3>
+            <p className="text-slate-600 text-sm">You have 0 unread messages from customers.</p>
           </div>
         </div>
-        <button className="px-4 py-2 bg-white text-indigo-600 font-semibold rounded-lg text-sm hover:bg-indigo-50 transition-colors">
+        <button className="px-4 py-2 bg-[#0055FE] text-white font-semibold rounded-lg text-sm hover:bg-[#0047D1] transition-colors shadow-md shadow-blue-500/10">
           Mark All Read
         </button>
       </div>

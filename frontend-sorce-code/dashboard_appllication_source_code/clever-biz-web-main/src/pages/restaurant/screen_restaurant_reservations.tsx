@@ -127,7 +127,7 @@ const ScreenRestaurantReservations = () => {
 
 
   return (
-    <div className="min-h-screen bg-white font-inter">
+    <div className="font-inter">
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900">

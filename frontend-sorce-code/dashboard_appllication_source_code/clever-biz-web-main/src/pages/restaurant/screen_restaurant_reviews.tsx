@@ -207,9 +207,9 @@ const ScreenRestaurantReviews = () => {
           title="Total Reviews"
           value={stats.total_reviews_count}
           icon={MessageSquare}
-          colorClass="text-purple-600"
+          colorClass="text-[#0055FE]"
           bgClass="bg-white"
-          iconBgClass="bg-purple-100"
+          iconBgClass="bg-[#0055FE]/10"
         />
       </div>
 
