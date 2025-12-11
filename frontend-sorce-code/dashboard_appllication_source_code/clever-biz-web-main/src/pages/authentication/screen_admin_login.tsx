@@ -41,7 +41,7 @@ const ScreenAdminLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axiosInstance.post("/accounts/login/", {
+            const response = await axiosInstance.post("/login/", {
                 email,
                 password
             });
