@@ -166,6 +166,10 @@ const ScreenRestaurantDashboard = () => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
+  const [isEdit, setIsEdit] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<any>(null);
+
   // Category Management State
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [showEditCategory, setShowEditCategory] = useState(false);
