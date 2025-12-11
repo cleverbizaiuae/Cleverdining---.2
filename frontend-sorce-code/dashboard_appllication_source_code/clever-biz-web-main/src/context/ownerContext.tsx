@@ -60,6 +60,7 @@ interface ReservationItem {
   email: string;
   reservationTime: string;
   customRequest: string;
+  status?: string;
 }
 
 // Define reservation status report type
@@ -201,7 +202,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           if (userRole === "owner") {
             endpoint = "/owners/categories/";
           } else if (userRole === "staff") {
-            endpoint = "/staff/categories/";
+            endpoint = "/owners/categories/";
           } else if (userRole === "chef") {
             endpoint = "/chef/categories/";
           } else {
@@ -223,7 +224,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     if (isLoading || !userRole) return;
     try {
       // Assuming generic endpoint pattern or specific one
-      const endpoint = userRole === "owner" ? "/owners/categories/" : "/staff/categories/";
+      const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/categories/" : "/chef/categories/";
       // Note: User spec mentioned /api/categories, checking if we should stick to owners pattern. 
       // Sticking to pattern for consistency unless 404.
       const res = await axiosInstance.get(endpoint);
@@ -236,7 +237,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const fetchSubCategories = useCallback(async () => {
     if (isLoading || !userRole) return;
     try {
-      const endpoint = userRole === "owner" ? "/owners/sub-categories/" : "/staff/sub-categories/";
+      const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/sub-categories/" : "/chef/sub-categories/";
       const res = await axiosInstance.get(endpoint);
       setSubCategories(res.data);
     } catch (err) {
@@ -337,7 +338,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         if (userRole === "owner") {
           endpoint = `/owners/items/?page=${page}&search=${search || ""}`;
         } else if (userRole === "staff") {
-          endpoint = `/staff/items/?page=${page}&search=${search || ""}`;
+          endpoint = `/owners/items/?page=${page}&search=${search || ""}`;
         } else if (userRole === "chef") {
           endpoint = `/chef/items/?page=${page}&search=${search || ""}`;
         } else {
@@ -368,13 +369,21 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const fetchOrders = useCallback(async (page?: number, search?: string) => {
+    if (isLoading || !userRole) return;
     try {
-      // const params: Record<string, any> = {
-      //   page, // ?page=1,2,3...
-      //   page_size: PAGE_SIZE, // ?page_size=5
-      // };
-      // if (search.trim()) params.restaurant_name = search.trim();
-      const endpoint = `/owners/orders/`;
+      // Choose endpoint based on role
+      let endpoint;
+      if (userRole === "owner") {
+        endpoint = "/owners/orders/";
+      } else if (userRole === "staff") {
+        endpoint = "/owners/orders/";
+      } else if (userRole === "chef") {
+        endpoint = "/chef/orders/";
+      } else {
+        // Fallback or error?
+        endpoint = "/owners/orders/";
+      }
+
       const response = await axiosInstance.get(endpoint, {
         params: { page: page, search: search },
       });
@@ -440,9 +449,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         let endpoint =
-          userRole === "owner"
+          (userRole === "owner" || userRole === "staff")
             ? `/owners/reservations/?page=${page}&search=${search || ""}`
-            : `/staff/reservations/?page=${page}&search=${search || ""}`;
+            : `/chef/reservations/?page=${page}&search=${search || ""}`;
 
         // Add date parameter if provided
         if (date) {
@@ -460,7 +469,8 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           cellNumber: item.cell_number,
           email: item.email,
           reservationTime: item.reservation_time,
-          customRequest: item.status,
+          customRequest: item.special_request || "", // Correct mapping
+          status: item.status || "confirmed", // Correct mapping
         }));
 
         setReservations(formattedReservations);
@@ -493,9 +503,10 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       const endpoint =
-        userRole === "owner"
+      const endpoint =
+        (userRole === "owner" || userRole === "staff")
           ? "/owners/reservations/report-reservation-status/"
-          : "/staff/reservations/report-reservation-status/";
+          : "/chef/reservations/report-reservation-status/";
 
       const response = await axiosInstance.get(endpoint);
       setReservationStatusReport(response.data);
@@ -513,7 +524,8 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       const endpoint =
-        userRole === "owner" ? "/owners/orders/" : "/staff/orders/";
+      const endpoint =
+        (userRole === "owner" || userRole === "staff") ? "/owners/orders/" : "/chef/orders/";
 
       const response = await axiosInstance.get(endpoint);
       setReservationStatusReport(response.data);
@@ -533,9 +545,10 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const searchParam = search || devicesSearchQuery;
         const endpoint =
-          userRole === "owner"
+        const endpoint =
+          (userRole === "owner" || userRole === "staff")
             ? `/owners/devices/?page=${page}&search=${searchParam}`
-            : `/staff/devices/?page=${page}&search=${searchParam}`;
+            : `/chef/devices/?page=${page}&search=${searchParam}`;
 
         const response = await axiosInstance.get(endpoint);
         console.log(response, "response");
@@ -561,9 +574,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       const endpoint =
-        userRole === "owner"
+        (userRole === "owner" || userRole === "staff")
           ? "/owners/devices/stats/"
-          : "/staff/devices/stats/";
+          : "/chef/devices/stats/";
 
       const response = await axiosInstance.get(endpoint);
       setDeviceStats(response.data);
@@ -788,6 +801,8 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         if (userRole === "owner") {
           endpoint = `/owners/orders/status/${id}/`;
         } else if (userRole === "staff") {
+          // Staff updates use Generic/Owner endpoint if explicit Staff one missing, likely Owner endpoint
+          endpoint = `/owners/orders/status/${id}/`;
           endpoint = `/staff/orders/status/${id}/`;
         } else if (userRole === "chef") {
           endpoint = `/chef/orders/status/${id}/`;

@@ -11,7 +11,8 @@ import {
   Clock,
   MoreVertical,
   Phone,
-  Video
+  Video,
+  ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -99,7 +100,8 @@ const ScreenRestaurantChat = () => {
     const fetchHistory = async () => {
       try {
         // Endpoint pattern from utilities.tsx: /message/chat/?device_id=...&restaurant_id=...
-        const restaurantId = userInfo?.restaurants?.[0]?.id;
+        // Use selectedChat.restaurant_id which is available for all roles (Owner/Staff/Chef)
+        const restaurantId = selectedChat.restaurant_id;
         const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
         setMessages(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -148,19 +150,25 @@ const ScreenRestaurantChat = () => {
           </div>
           <div>
             <h3 className="font-bold text-lg text-[#0055FE]">New Messages</h3>
-            <p className="text-slate-600 text-sm">You have 0 unread messages from customers.</p>
+            <p className="text-slate-600 text-sm">You have unread requests. Check table list.</p>
           </div>
         </div>
-        <button className="px-4 py-2 bg-[#0055FE] text-white font-semibold rounded-lg text-sm hover:bg-[#0047D1] transition-colors shadow-md shadow-blue-500/10">
-          Mark All Read
+        <button
+          onClick={() => toast.success("All messages acknowledged")}
+          className="px-4 py-2 bg-[#0055FE] text-white font-semibold rounded-lg text-sm hover:bg-[#0047D1] transition-colors shadow-md shadow-blue-500/10"
+        >
+          Acknowledge
         </button>
       </div>
 
       {/* CHAT INTERFACE */}
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex overflow-hidden">
+      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex overflow-hidden relative">
 
         {/* LEFT SIDEBAR (Chat List) */}
-        <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50">
+        <div className={cn(
+          "w-full md:w-80 border-r border-slate-200 flex flex-col bg-slate-50 h-full absolute md:relative z-10",
+          selectedChat ? "hidden md:flex" : "flex"
+        )}>
           <div className="p-4 border-b border-slate-200">
             <h3 className="font-bold text-slate-900 mb-3">Messages</h3>
             <div className="relative">
@@ -182,11 +190,11 @@ const ScreenRestaurantChat = () => {
                   key={chat.id}
                   onClick={() => setSelectedChat(chat)}
                   className={cn(
-                    "w-full p-3 rounded-lg flex items-center gap-3 transition-colors text-left relative overflow-hidden",
-                    isActive ? "bg-white shadow border border-slate-100 ring-1 ring-[#0055FE]/20" : "hover:bg-slate-100 border border-transparent"
+                    "w-full p-3 flex items-center gap-3 transition-colors text-left relative overflow-hidden rounded-r-lg", // Modified rounded
+                    isActive ? "bg-[#0055FE]/5 border-l-2 border-l-[#0055FE]" : "hover:bg-slate-100 border-l-2 border-transparent"
                   )}
                 >
-                  {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0055FE]" />}
+
                   <div className={cn(
                     "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
                     isActive ? "bg-blue-50 text-[#0055FE]" : "bg-slate-200 text-slate-600"
@@ -210,12 +218,18 @@ const ScreenRestaurantChat = () => {
         </div>
 
         {/* RIGHT AREA (Chat Window) */}
-        <div className="flex-1 flex flex-col relative bg-white">
+        <div className={cn(
+          "flex-1 flex flex-col relative bg-white h-full",
+          !selectedChat ? "hidden md:flex" : "flex"
+        )}>
           {selectedChat ? (
             <>
               {/* Header */}
               <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white">
                 <div className="flex items-center gap-3">
+                  <button onClick={() => setSelectedChat(null)} className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-full">
+                    <ArrowLeft size={20} />
+                  </button>
                   <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center text-[#0055FE] font-bold">
                     {selectedChat.table_name.substring(0, 2)}
                   </div>

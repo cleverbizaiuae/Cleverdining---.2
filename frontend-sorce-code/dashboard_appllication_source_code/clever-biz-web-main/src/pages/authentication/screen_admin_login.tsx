@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import axiosInstance from "@/lib/axios";
 
 // Image imports
 import heroImage from "../../assets/hero-image-1.webp"; // Using existing asset
@@ -29,7 +30,7 @@ const ScreenAdminLogin = () => {
         }
     }, []);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!email || !password) {
@@ -39,41 +40,54 @@ const ScreenAdminLogin = () => {
 
         setLoading(true);
 
-        // Simulated API Call
-        setTimeout(() => {
-            // Store role (and mock tokens if needed for route protection in a real app, 
-            // but here we follow specific instructions)
-            localStorage.setItem("adminRole", selectedRole);
-            localStorage.setItem("accessToken", "mock_access_token");
-            localStorage.setItem("role", selectedRole);
+        try {
+            const response = await axiosInstance.post("/accounts/login/", {
+                email,
+                password
+            });
 
-            // Mock user info for the dashboard to not crash
-            const mockUser = {
-                username: email.split("@")[0],
-                role: selectedRole,
-                restaurant_id: 1
-            };
-            localStorage.setItem("userInfo", JSON.stringify(mockUser));
+            const { access, refresh, user } = response.data;
+            const dbRole = user.role; // "owner", "staff", "chef"
 
-            setLoading(false);
-            toast.success(`Welcome back, ${mockUser.username}!`);
+            // Store Tokens & User Info
+            localStorage.setItem("accessToken", access);
+            localStorage.setItem("refreshToken", refresh);
+            localStorage.setItem("adminRole", dbRole === "owner" ? "manager" : dbRole); // Map backend owner to frontend manager
+            localStorage.setItem("role", dbRole);
 
-            // Redirect Logic
-            // Redirect Logic
-            switch (selectedRole) {
-                case "chef":
-                    navigate("/chef");
-                    break;
-                case "staff":
-                    navigate("/staffadmindashboard");
-                    break;
-                case "manager":
-                default:
-                    navigate("/restaurant");
-                    break;
+            // Store User Object
+            localStorage.setItem("userInfo", JSON.stringify(user));
+
+            // Store Restaurant ID if available
+            if (user.restaurants && user.restaurants.length > 0) {
+                localStorage.setItem("restaurantId", user.restaurants[0].id);
+            } else if (user.owner_id) {
+                // For staff/chef, might not have array but owner_id
+                // Logic depends on how frontend uses it. 
+                // We'll trust user object storage for now.
             }
 
-        }, 1200);
+            toast.success(`Welcome back, ${user.username || "User"}!`);
+
+            // Role Validation & Redirection
+            // We strictly redirect based on the ACTUAL role from DB
+            if (dbRole === "owner") {
+                navigate("/restaurant"); // Manager Admin Dashboard
+            } else if (dbRole === "chef") {
+                navigate("/chefadmindashboard");
+            } else if (dbRole === "staff") {
+                navigate("/staffadmindashboard");
+            } else {
+                toast.error("Unknown role: " + dbRole);
+            }
+
+        } catch (error: any) {
+            console.error("Login failed:", error);
+            const msg = error.response?.data?.detail || "Login failed. Please check your credentials.";
+            toast.error(msg);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

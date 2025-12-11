@@ -235,7 +235,7 @@ const ScreenRestaurantReservations = () => {
                     {new Date(res.reservation_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-6 py-4 text-slate-500 text-sm italic truncate max-w-[150px]">
-                    {res.special_request || "-"}
+                    {res.customRequest || "-"}
                   </td>
                 </tr>
               ))

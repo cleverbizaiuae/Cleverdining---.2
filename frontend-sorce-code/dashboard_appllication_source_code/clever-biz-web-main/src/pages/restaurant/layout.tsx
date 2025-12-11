@@ -30,9 +30,9 @@ type MenuItem = {
 
 const MENU_ITEMS: MenuItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['manager'] },
-  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['manager', 'staff'] },
+  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['manager', 'staff', 'chef'] },
   { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['manager', 'staff'] },
-  { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['manager', 'staff'] },
+  { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['manager', 'staff', 'chef'] },
   { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['manager'] },
   { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['manager'] },
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['manager'] },
@@ -50,7 +50,11 @@ const RestaurantLayout = () => {
 
   // Determine Base Path based on current URL
   const isStaffDashboard = location.pathname.startsWith('/staffadmindashboard');
-  const basePath = isStaffDashboard ? '/staffadmindashboard' : '/restaurant';
+  const isChefDashboard = location.pathname.startsWith('/chefadmindashboard');
+
+  let basePath = '/restaurant';
+  if (isStaffDashboard) basePath = '/staffadmindashboard';
+  if (isChefDashboard) basePath = '/chefadmindashboard';
 
   const handleLogout = () => {
     localStorage.clear();
@@ -64,9 +68,15 @@ const RestaurantLayout = () => {
     // Explicitly handle root path matching for dashboard/orders
     if (item.path === '' && location.pathname === basePath) return true;
 
-    // For Staff, default route '/' is actually Orders, but mapped in routes. 
-    // If we are at /staffadmindashboard (exact) and item is OrderList, it should be active? 
-    // No, index route for staff is Orders. So if path covers it.
+    // For Staff/Chef, default route index is Orders (empty string path in Routes, but mapped to OrderList which has /orders path in MENU).
+    // Wait, OrderList path in MENU is '/orders'.
+    // In Routes:
+    // /staffadmindashboard/ -> ScreenRestaurantOrderList (active)
+    // /staffadmindashboard/orders -> ScreenRestaurantOrderList (active?)
+    // If I'm at /staffadmindashboard/ (root), isActive for OrderList should be true.
+    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath && item.label === 'OrderList') {
+      return true;
+    }
 
     if (item.matchType === 'exact') {
       return location.pathname === fullPath;
@@ -76,7 +86,6 @@ const RestaurantLayout = () => {
 
   const getPageTitle = () => {
     // Find active item
-    // Logic needs to adapt to dynamic paths
     const activeItem = filteredItems.find(item => {
       const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
       if (item.path === '' && location.pathname === basePath) return true;
@@ -85,14 +94,17 @@ const RestaurantLayout = () => {
 
     if (activeItem) return activeItem.label;
 
-    // Fallback for staff index
-    if (isStaffDashboard && location.pathname === basePath) return "OrderList";
+    // Fallback for staff/chef index
+    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath) return "OrderList";
 
     return "Dashboard";
   };
 
   // Filter items based on role
-  const currentRole = isStaffDashboard ? 'staff' : 'manager'; // Enforce role based on route for UI consistency
+  let currentRole = 'manager';
+  if (isStaffDashboard) currentRole = 'staff';
+  if (isChefDashboard) currentRole = 'chef';
+
   const filteredItems = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
   return (
@@ -194,7 +206,7 @@ const RestaurantLayout = () => {
           <div className="flex items-center gap-4 h-full">
             <div className="hidden sm:flex flex-col items-end pr-4 border-r border-slate-200 h-10 justify-center">
               <p className="text-sm font-bold text-slate-900 leading-tight">Welcome, {user.username}</p>
-              <p className="text-xs font-medium text-[#0055FE] uppercase">{user.role}</p>
+              <p className="text-xs font-medium text-[#0055FE] capitalize">{user.role}</p>
             </div>
 
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#0055FE] to-cyan-400 p-[2px]">

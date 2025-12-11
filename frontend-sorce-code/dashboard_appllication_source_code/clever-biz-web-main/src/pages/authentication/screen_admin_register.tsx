@@ -75,7 +75,8 @@ const ScreenAdminRegister = () => {
                 package: formData.package
             };
 
-            await axiosInstance.post(`/owners/registered-restaurants/`, payload);
+            // Using the robust SimpleOwnerRegisterView endpoint
+            await axiosInstance.post(`/owners/register/`, payload);
 
             toast.success("Restaurant registered successfully!");
             navigate("/adminlogin");
