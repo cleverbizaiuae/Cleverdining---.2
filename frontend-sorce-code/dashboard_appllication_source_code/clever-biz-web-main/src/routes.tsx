@@ -14,7 +14,7 @@ import { Route, Routes } from "react-router";
 import Layout from "./pages/authentication/layout";
 import ScreenEmailVerification from "./pages/authentication/screen_email_verification";
 import ScreenLanding from "./pages/authentication/screen_landing";
-import ScreenLogin from "./pages/authentication/screen_login";
+import ScreenLogin from "./pages/authentication/screen_login_redirect";
 import ScreenAdminLogin from "./pages/authentication/screen_admin_login";
 import ScreenAdminRegister from "./pages/authentication/screen_admin_register";
 import ScreenOtpVerification from "./pages/authentication/screen_otp_verification";
