@@ -77,12 +77,12 @@ function App() {
         <Route path="privacy-policy" element={<ScreenPrivacy />} />
         <Route path="terms-condition" element={<ScreenTermsCondition />} />
       </Route>
-      {/* Staff screens */}
-      <Route path="/staff" element={<StaffLayout />}>
-        <Route index={true} element={<ScreenStaffDashboard />} />
-        <Route path="reservations" element={<ScreenStaffReservations />} />
-        <Route path="orders" element={<ScreenStaffOrderList />} />
-        <Route path="messages" element={<ScreenStaffChat />} />
+      {/* Staff screens - Unified with Restaurant Layout */}
+      <Route path="/staff" element={<RestaurantLayout />}>
+        <Route index={true} element={<ScreenRestaurantDashboard />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="reservations" element={<ScreenRestaurantReservations />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
       </Route>
       {/* Chef screens */}
       <Route path="/chef" element={<ChefLayout />}>
