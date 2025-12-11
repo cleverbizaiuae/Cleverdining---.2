@@ -394,295 +394,295 @@ const ScreenRestaurantDashboard = () => {
           </div>
         </div>
 
-      </div>
 
-      {/* MOST SELLING ITEMS - OWNER ONLY */}
-      {userRole === 'owner' && (
-        <div className="bg-white p-5 rounded-lg border border-slate-200 h-fit">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-semibold text-slate-900">Most Selling</h3>
-            <button className="p-1 rounded hover:bg-slate-50 text-slate-400">
-              <MoreVertical size={14} />
-            </button>
-          </div>
 
-          <div className="space-y-4">
-            {sellingItemData && sellingItemData.length > 0 ? (
-              sellingItemData.slice(0, 5).map((item: any, idx) => (
-                <div key={idx}>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="font-medium text-slate-700">{item.item_name}</span>
-                    <span className="text-slate-500">{item.percentage || '0%'}</span>
+        {/* MOST SELLING ITEMS - OWNER ONLY */}
+        {userRole === 'owner' && (
+          <div className="bg-white p-5 rounded-lg border border-slate-200 h-fit">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-semibold text-slate-900">Most Selling</h3>
+              <button className="p-1 rounded hover:bg-slate-50 text-slate-400">
+                <MoreVertical size={14} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {sellingItemData && sellingItemData.length > 0 ? (
+                sellingItemData.slice(0, 5).map((item: any, idx) => (
+                  <div key={idx}>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="font-medium text-slate-700">{item.item_name}</span>
+                      <span className="text-slate-500">{item.percentage || '0%'}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#0055FE] rounded-full"
+                        style={{ width: `${Math.min((item.total_sold / 100) * 100, 100)}%` }} // Rough percentage calc if backend doesn't send %
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#0055FE] rounded-full"
-                      style={{ width: `${Math.min((item.total_sold / 100) * 100, 100)}%` }} // Rough percentage calc if backend doesn't send %
-                    />
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-slate-400 text-center py-4">No data available</p>
-            )}
+                ))
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-4">No data available</p>
+              )}
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* CATEGORY & SUB-CATEGORY MANAGEMENT */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ALL CATEGORY TABLE */}
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-900">All Category</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Category</th>
+                  <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {categories.length > 0 ? (
+                  categories.map((cat: any) => (
+                    <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                            {cat.image ? (
+                              <img src={cat.image} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">No Image</span>
+                            )}
+                          </div>
+                          <span className="text-xs font-medium text-slate-900">{cat.Category_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          {/* Edit/Delete Actions - Wiring up to Modals later */}
+                          <button onClick={() => { setEditingCategory(cat); setShowEditCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
+                          <button onClick={() => { setCategoryToDelete(cat); setShowDeleteCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={2} className="py-6 text-center text-slate-500 text-xs">No categories</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
 
-    </div>
-
-      {/* CATEGORY & SUB-CATEGORY MANAGEMENT */ }
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    {/* ALL CATEGORY TABLE */}
-    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-900">All Category</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-5 py-3 text-xs font-medium text-slate-600">Category</th>
-              <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {categories.length > 0 ? (
-              categories.map((cat: any) => (
-                <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                        {cat.image ? (
-                          <img src={cat.image} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-[10px] text-slate-400">No Image</span>
-                        )}
-                      </div>
-                      <span className="text-xs font-medium text-slate-900">{cat.Category_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      {/* Edit/Delete Actions - Wiring up to Modals later */}
-                      <button onClick={() => { setEditingCategory(cat); setShowEditCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
-                      <button onClick={() => { setCategoryToDelete(cat); setShowDeleteCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
+        {/* SUB CATEGORIES TABLE */}
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-900">Sub Categories</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Sub-Category</th>
+                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Parent Category</th>
+                  <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>
                 </tr>
-              ))
-            ) : (
-              <tr><td colSpan={2} className="py-6 text-center text-slate-500 text-xs">No categories</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {/* SUB CATEGORIES TABLE */}
-    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-900">Sub Categories</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-5 py-3 text-xs font-medium text-slate-600">Sub-Category</th>
-              <th className="px-5 py-3 text-xs font-medium text-slate-600">Parent Category</th>
-              <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {subCategories.length > 0 ? (
-              subCategories.map((sub: any) => (
-                <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                        {sub.image ? <img src={sub.image} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] text-slate-400">No Image</span>}
-                      </div>
-                      <span className="text-xs font-medium text-slate-900">{sub.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-xs text-slate-500">
-                    {categories.find(c => c.id === sub.category)?.Category_name || '-'}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => { setEditingSubCategory(sub); setShowEditSubCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
-                      <button onClick={() => { setSubCategoryToDelete(sub); setShowDeleteSubCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr><td colSpan={3} className="py-6 text-center text-slate-500 text-xs">No sub-categories</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  {/* --- MODALS --- */ }
-
-  {/* ADD/EDIT CATEGORY MODAL */ }
-  <Modal
-    isOpen={showAddCategory || showEditCategory}
-    onClose={() => { setShowAddCategory(false); setShowEditCategory(false); setCatFormData({ name: "", image: null }); }}
-    title={showEditCategory ? "Edit Category" : "Add Category"}
-  >
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Category Name</label>
-        <input
-          type="text"
-          placeholder="Category Name"
-          className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-          value={showEditCategory ? editingCategory?.Category_name : catFormData.name}
-          onChange={e => showEditCategory ? setEditingCategory({ ...editingCategory, Category_name: e.target.value }) : setCatFormData({ ...catFormData, name: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Upload image</label>
-        <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
-          <input
-            type="file"
-            accept="image/*"
-            className="absolute inset-0 opacity-0 cursor-pointer"
-            onChange={e => {
-              const file = e.target.files?.[0] || null;
-              if (showEditCategory) { /* Handle edit image logic if needed, complex with current state setup */ }
-              else setCatFormData({ ...catFormData, image: file });
-            }}
-          />
-          <div className="mb-2 text-slate-400"><Upload size={24} /></div>
-          <p className="text-sm font-medium text-slate-700">Upload a File</p>
-          <p className="text-xs text-slate-500">Drag and drop files here or <span className="text-[#0055FE]">browse</span></p>
-          {catFormData.image && <p className="mt-2 text-xs text-green-600 font-medium">{catFormData.image.name}</p>}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {subCategories.length > 0 ? (
+                  subCategories.map((sub: any) => (
+                    <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                            {sub.image ? <img src={sub.image} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] text-slate-400">No Image</span>}
+                          </div>
+                          <span className="text-xs font-medium text-slate-900">{sub.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-500">
+                        {categories.find(c => c.id === sub.category)?.Category_name || '-'}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => { setEditingSubCategory(sub); setShowEditSubCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
+                          <button onClick={() => { setSubCategoryToDelete(sub); setShowDeleteSubCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={3} className="py-6 text-center text-slate-500 text-xs">No sub-categories</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <button
-        onClick={async () => {
-          const formData = new FormData();
-          if (showEditCategory) {
-            formData.append('Category_name', editingCategory.Category_name);
-            // formData.append('image', ...); // Image update logic omitted for brevity/complexity
-            await updateCategory(editingCategory.id, formData);
-            setShowEditCategory(false);
-          } else {
-            formData.append('Category_name', catFormData.name);
-            if (catFormData.image) formData.append('image', catFormData.image);
-            await createCategory(formData);
-            setShowAddCategory(false);
-            setCatFormData({ name: "", image: null });
-          }
-        }}
-        className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+
+      {/* --- MODALS --- */}
+
+      {/* ADD/EDIT CATEGORY MODAL */}
+      <Modal
+        isOpen={showAddCategory || showEditCategory}
+        onClose={() => { setShowAddCategory(false); setShowEditCategory(false); setCatFormData({ name: "", image: null }); }}
+        title={showEditCategory ? "Edit Category" : "Add Category"}
       >
-        Submit
-      </button>
-    </div>
-  </Modal>
-
-  {/* DELETE CATEGORY MODAL */ }
-  <Modal isOpen={showDeleteCategory} onClose={() => setShowDeleteCategory(false)} title="Delete Category">
-    <div className="space-y-6">
-      <p className="text-slate-600 text-sm">
-        Are you sure you want to delete <span className="font-bold text-slate-900">{categoryToDelete?.Category_name}</span>? This will also delete all sub-categories within it.
-      </p>
-      <div className="flex gap-3">
-        <button onClick={() => setShowDeleteCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
-        <button onClick={async () => { await deleteCategory(categoryToDelete.id); setShowDeleteCategory(false); }} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
-      </div>
-    </div>
-  </Modal>
-
-  {/* ADD/EDIT SUB-CATEGORY MODAL */ }
-  <Modal
-    isOpen={showAddSubCategory || showEditSubCategory}
-    onClose={() => { setShowAddSubCategory(false); setShowEditSubCategory(false); setSubCatFormData({ name: "", category: "", image: null }); }}
-    title={showEditSubCategory ? "Edit Sub-Category" : "Add Sub-Category"}
-  >
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Sub-Category Name</label>
-        <input
-          type="text"
-          placeholder="Sub-Category Name"
-          className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-          value={showEditSubCategory ? editingSubCategory?.name : subCatFormData.name}
-          onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, name: e.target.value }) : setSubCatFormData({ ...subCatFormData, name: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Parent Category</label>
-        <select
-          className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
-          value={showEditSubCategory ? editingSubCategory?.category : subCatFormData.category}
-          onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, category: e.target.value }) : setSubCatFormData({ ...subCatFormData, category: e.target.value })}
-        >
-          <option value="">Select Parent Category</option>
-          {categories.map((cat: any) => (
-            <option key={cat.id} value={cat.id}>{cat.Category_name}</option>
-          ))}
-        </select>
-      </div>
-      {/* Image Upload for SubCategory (Simplified) */}
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Upload image</label>
-        <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
-          <input
-            type="file"
-            accept="image/*"
-            className="absolute inset-0 opacity-0 cursor-pointer"
-            onChange={e => {
-              const file = e.target.files?.[0] || null;
-              if (!showEditSubCategory) setSubCatFormData({ ...subCatFormData, image: file });
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Category Name</label>
+            <input
+              type="text"
+              placeholder="Category Name"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              value={showEditCategory ? editingCategory?.Category_name : catFormData.name}
+              onChange={e => showEditCategory ? setEditingCategory({ ...editingCategory, Category_name: e.target.value }) : setCatFormData({ ...catFormData, name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Upload image</label>
+            <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
+              <input
+                type="file"
+                accept="image/*"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={e => {
+                  const file = e.target.files?.[0] || null;
+                  if (showEditCategory) { /* Handle edit image logic if needed, complex with current state setup */ }
+                  else setCatFormData({ ...catFormData, image: file });
+                }}
+              />
+              <div className="mb-2 text-slate-400"><Upload size={24} /></div>
+              <p className="text-sm font-medium text-slate-700">Upload a File</p>
+              <p className="text-xs text-slate-500">Drag and drop files here or <span className="text-[#0055FE]">browse</span></p>
+              {catFormData.image && <p className="mt-2 text-xs text-green-600 font-medium">{catFormData.image.name}</p>}
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              const formData = new FormData();
+              if (showEditCategory) {
+                formData.append('Category_name', editingCategory.Category_name);
+                // formData.append('image', ...); // Image update logic omitted for brevity/complexity
+                await updateCategory(editingCategory.id, formData);
+                setShowEditCategory(false);
+              } else {
+                formData.append('Category_name', catFormData.name);
+                if (catFormData.image) formData.append('image', catFormData.image);
+                await createCategory(formData);
+                setShowAddCategory(false);
+                setCatFormData({ name: "", image: null });
+              }
             }}
-          />
-          <div className="mb-2 text-slate-400"><Upload size={24} /></div>
-          <p className="text-sm font-medium text-slate-700">Upload a File</p>
-          {subCatFormData.image && <p className="mt-2 text-xs text-green-600 font-medium">{subCatFormData.image.name}</p>}
+            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+          >
+            Submit
+          </button>
         </div>
-      </div>
-      <button
-        onClick={async () => {
-          const formData = new FormData();
-          if (showEditSubCategory) {
-            formData.append('name', editingSubCategory.name);
-            formData.append('category', editingSubCategory.category);
-            await updateSubCategory(editingSubCategory.id, formData);
-            setShowEditSubCategory(false);
-          } else {
-            formData.append('name', subCatFormData.name);
-            formData.append('category', subCatFormData.category);
-            if (subCatFormData.image) formData.append('image', subCatFormData.image);
-            await createSubCategory(formData);
-            setShowAddSubCategory(false);
-            setSubCatFormData({ name: "", category: "", image: null });
-          }
-        }}
-        className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
-      >
-        Submit
-      </button>
-    </div>
-  </Modal>
+      </Modal>
 
-  {/* DELETE SUB-CATEGORY MODAL */ }
-  <Modal isOpen={showDeleteSubCategory} onClose={() => setShowDeleteSubCategory(false)} title="Delete Sub-Category">
-    <div className="space-y-6">
-      <p className="text-slate-600 text-sm">
-        Are you sure you want to delete <span className="font-bold text-slate-900">{subCategoryToDelete?.name}</span>? This action cannot be undone.
-      </p>
-      <div className="flex gap-3">
-        <button onClick={() => setShowDeleteSubCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
-        <button onClick={async () => { await deleteSubCategory(subCategoryToDelete.id); setShowDeleteSubCategory(false); }} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
-      </div>
-    </div>
-  </Modal>
+      {/* DELETE CATEGORY MODAL */}
+      <Modal isOpen={showDeleteCategory} onClose={() => setShowDeleteCategory(false)} title="Delete Category">
+        <div className="space-y-6">
+          <p className="text-slate-600 text-sm">
+            Are you sure you want to delete <span className="font-bold text-slate-900">{categoryToDelete?.Category_name}</span>? This will also delete all sub-categories within it.
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => setShowDeleteCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+            <button onClick={async () => { await deleteCategory(categoryToDelete.id); setShowDeleteCategory(false); }} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ADD/EDIT SUB-CATEGORY MODAL */}
+      <Modal
+        isOpen={showAddSubCategory || showEditSubCategory}
+        onClose={() => { setShowAddSubCategory(false); setShowEditSubCategory(false); setSubCatFormData({ name: "", category: "", image: null }); }}
+        title={showEditSubCategory ? "Edit Sub-Category" : "Add Sub-Category"}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Sub-Category Name</label>
+            <input
+              type="text"
+              placeholder="Sub-Category Name"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              value={showEditSubCategory ? editingSubCategory?.name : subCatFormData.name}
+              onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, name: e.target.value }) : setSubCatFormData({ ...subCatFormData, name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Parent Category</label>
+            <select
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
+              value={showEditSubCategory ? editingSubCategory?.category : subCatFormData.category}
+              onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, category: e.target.value }) : setSubCatFormData({ ...subCatFormData, category: e.target.value })}
+            >
+              <option value="">Select Parent Category</option>
+              {categories.map((cat: any) => (
+                <option key={cat.id} value={cat.id}>{cat.Category_name}</option>
+              ))}
+            </select>
+          </div>
+          {/* Image Upload for SubCategory (Simplified) */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Upload image</label>
+            <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
+              <input
+                type="file"
+                accept="image/*"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={e => {
+                  const file = e.target.files?.[0] || null;
+                  if (!showEditSubCategory) setSubCatFormData({ ...subCatFormData, image: file });
+                }}
+              />
+              <div className="mb-2 text-slate-400"><Upload size={24} /></div>
+              <p className="text-sm font-medium text-slate-700">Upload a File</p>
+              {subCatFormData.image && <p className="mt-2 text-xs text-green-600 font-medium">{subCatFormData.image.name}</p>}
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              const formData = new FormData();
+              if (showEditSubCategory) {
+                formData.append('name', editingSubCategory.name);
+                formData.append('category', editingSubCategory.category);
+                await updateSubCategory(editingSubCategory.id, formData);
+                setShowEditSubCategory(false);
+              } else {
+                formData.append('name', subCatFormData.name);
+                formData.append('category', subCatFormData.category);
+                if (subCatFormData.image) formData.append('image', subCatFormData.image);
+                await createSubCategory(formData);
+                setShowAddSubCategory(false);
+                setSubCatFormData({ name: "", category: "", image: null });
+              }
+            }}
+            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+          >
+            Submit
+          </button>
+        </div>
+      </Modal>
+
+      {/* DELETE SUB-CATEGORY MODAL */}
+      <Modal isOpen={showDeleteSubCategory} onClose={() => setShowDeleteSubCategory(false)} title="Delete Sub-Category">
+        <div className="space-y-6">
+          <p className="text-slate-600 text-sm">
+            Are you sure you want to delete <span className="font-bold text-slate-900">{subCategoryToDelete?.name}</span>? This action cannot be undone.
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => setShowDeleteSubCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+            <button onClick={async () => { await deleteSubCategory(subCategoryToDelete.id); setShowDeleteSubCategory(false); }} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
+          </div>
+        </div>
+      </Modal>
 
     </div >
   );
