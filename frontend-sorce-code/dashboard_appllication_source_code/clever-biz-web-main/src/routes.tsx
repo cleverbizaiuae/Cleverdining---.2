@@ -105,6 +105,19 @@ function App() {
         <Route path="reviews" element={<ScreenRestaurantReviews />} />
         <Route path="messages" element={<ScreenRestaurantChat />} />
       </Route>
+
+      {/* Staff Dashboard - Reusing Restaurant Components & Layout */}
+      <Route path="/staffadmindashboard" element={<RestaurantLayout />}>
+        {/* Index is OrderList by default */}
+        <Route index={true} element={<ScreenRestaurantOrderList />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route
+          path="reservations"
+          element={<ScreenRestaurantReservations />}
+        />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+      </Route>
       {/* Admin screens */}
       <Route path="/admin" element={<AdminLayout />}>
         <Route index={true} element={<ScreenAdminDashboard />} />

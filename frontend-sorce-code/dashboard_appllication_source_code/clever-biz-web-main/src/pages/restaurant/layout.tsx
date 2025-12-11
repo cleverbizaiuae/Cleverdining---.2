@@ -25,17 +25,18 @@ type MenuItem = {
   label: string;
   path: string;
   matchType: 'exact' | 'startsWith';
+  roles: string[]; // Added roles property
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/restaurant', matchType: 'exact' },
-  { icon: ClipboardList, label: 'OrderList', path: '/restaurant/orders', matchType: 'startsWith' },
-  { icon: CalendarDays, label: 'Reservation', path: '/restaurant/reservations', matchType: 'startsWith' },
-  { icon: MessageSquare, label: 'Messages', path: '/restaurant/messages', matchType: 'startsWith' },
-  { icon: Users, label: 'Management', path: '/restaurant/management', matchType: 'startsWith' },
-  { icon: ScanQrCode, label: 'Tables', path: '/restaurant/devices', matchType: 'startsWith' }, // Mapped 'Tables' to '/restaurant/devices' as per previous context
-  { icon: Wallet, label: 'Payments', path: '/restaurant/payments', matchType: 'startsWith' },
-  { icon: Star, label: 'Reviews', path: '/restaurant/reviews', matchType: 'startsWith' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['manager'] },
+  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['manager', 'staff'] },
+  { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['manager', 'staff'] },
+  { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['manager', 'staff'] },
+  { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['manager'] },
+  { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['manager'] },
+  { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['manager'] },
+  { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['manager', 'staff'] },
 ];
 
 const RestaurantLayout = () => {
@@ -47,6 +48,10 @@ const RestaurantLayout = () => {
   const userStr = localStorage.getItem("userInfo");
   const user = userStr ? JSON.parse(userStr) : { username: "Manager", role: "manager" };
 
+  // Determine Base Path based on current URL
+  const isStaffDashboard = location.pathname.startsWith('/staffadmindashboard');
+  const basePath = isStaffDashboard ? '/staffadmindashboard' : '/restaurant';
+
   const handleLogout = () => {
     localStorage.clear();
     toast.success("Logged out successfully");
@@ -54,16 +59,41 @@ const RestaurantLayout = () => {
   };
 
   const isActive = (item: MenuItem) => {
+    const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
+
+    // Explicitly handle root path matching for dashboard/orders
+    if (item.path === '' && location.pathname === basePath) return true;
+
+    // For Staff, default route '/' is actually Orders, but mapped in routes. 
+    // If we are at /staffadmindashboard (exact) and item is OrderList, it should be active? 
+    // No, index route for staff is Orders. So if path covers it.
+
     if (item.matchType === 'exact') {
-      return location.pathname === item.path;
+      return location.pathname === fullPath;
     }
-    return location.pathname.startsWith(item.path);
+    return location.pathname.startsWith(fullPath);
   };
 
   const getPageTitle = () => {
-    const currentItem = MENU_ITEMS.find(item => isActive(item));
-    return currentItem ? currentItem.label : "Dashboard";
+    // Find active item
+    // Logic needs to adapt to dynamic paths
+    const activeItem = filteredItems.find(item => {
+      const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
+      if (item.path === '' && location.pathname === basePath) return true;
+      return location.pathname.startsWith(fullPath) && item.path !== '';
+    });
+
+    if (activeItem) return activeItem.label;
+
+    // Fallback for staff index
+    if (isStaffDashboard && location.pathname === basePath) return "OrderList";
+
+    return "Dashboard";
   };
+
+  // Filter items based on role
+  const currentRole = isStaffDashboard ? 'staff' : 'manager'; // Enforce role based on route for UI consistency
+  const filteredItems = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-inter">
@@ -96,12 +126,16 @@ const RestaurantLayout = () => {
 
         {/* Navigation */}
         <div className="p-4 space-y-2 overflow-y-auto h-[calc(100vh-160px)]">
-          {MENU_ITEMS.map((item) => {
+          {filteredItems.map((item) => {
+            const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
+            // Special handling for Staff Index (Orders) URL correctness
+            // If item is OrderList and we are Staff, path is /staffadmindashboard/orders OR default /staffadmindashboard
+
             const active = isActive(item);
             return (
               <Link
-                key={item.path}
-                to={item.path}
+                key={item.label}
+                to={fullPath}
                 onClick={() => setSidebarOpen(false)} // Close on mobile click
                 className={`
                    flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200

@@ -59,12 +59,13 @@ const ScreenAdminLogin = () => {
             toast.success(`Welcome back, ${mockUser.username}!`);
 
             // Redirect Logic
+            // Redirect Logic
             switch (selectedRole) {
                 case "chef":
                     navigate("/chef");
                     break;
                 case "staff":
-                    navigate("/staff");
+                    navigate("/staffadmindashboard");
                     break;
                 case "manager":
                 default:
