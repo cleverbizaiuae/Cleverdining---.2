@@ -106,37 +106,37 @@ function App() {
         <Route path="messages" element={<ScreenRestaurantChat />} />
       </Route>
 
-    </Route>
-      {/* Staff Dashboard - Reusing Restaurant Components & Layout */ }
-  <Route path="/staffadmindashboard" element={<RestaurantLayout />}>
-    {/* Index is OrderList by default */}
-    <Route index={true} element={<ScreenRestaurantOrderList />} />
-    <Route path="orders" element={<ScreenRestaurantOrderList />} />
-    <Route
-      path="reservations"
-      element={<ScreenRestaurantReservations />}
-    />
-    <Route path="messages" element={<ScreenRestaurantChat />} />
-    <Route path="reviews" element={<ScreenRestaurantReviews />} />
-  </Route>
 
-  {/* Chef Dashboard - Reusing Restaurant Components & Layout */ }
-  <Route path="/chefadmindashboard" element={<RestaurantLayout />}>
-    <Route index={true} element={<ScreenRestaurantOrderList />} />
-    <Route path="orders" element={<ScreenRestaurantOrderList />} />
-    <Route path="messages" element={<ScreenRestaurantChat />} />
-  </Route>
-  {/* Admin screens */ }
-  <Route path="/admin" element={<AdminLayout />}>
-    <Route index={true} element={<ScreenAdminDashboard />} />
-    <Route path="management" element={<ScreenAdminManagement />} />
-    <Route
-      path="terms-condition"
-      element={<ScreenAdminTermsAndCondition />}
-    />
-    <Route path="privacy-policy" element={<ScreenAdminPrivacy />} />
-    <Route path="faq" element={<ScreenAdminFaq />} />
-  </Route>
+      {/* Staff Dashboard - Reusing Restaurant Components & Layout */}
+      <Route path="/staffadmindashboard" element={<RestaurantLayout />}>
+        {/* Index is OrderList by default */}
+        <Route index={true} element={<ScreenRestaurantOrderList />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route
+          path="reservations"
+          element={<ScreenRestaurantReservations />}
+        />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+      </Route>
+
+      {/* Chef Dashboard - Reusing Restaurant Components & Layout */}
+      <Route path="/chefadmindashboard" element={<RestaurantLayout />}>
+        <Route index={true} element={<ScreenRestaurantOrderList />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+      </Route>
+      {/* Admin screens */}
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index={true} element={<ScreenAdminDashboard />} />
+        <Route path="management" element={<ScreenAdminManagement />} />
+        <Route
+          path="terms-condition"
+          element={<ScreenAdminTermsAndCondition />}
+        />
+        <Route path="privacy-policy" element={<ScreenAdminPrivacy />} />
+        <Route path="faq" element={<ScreenAdminFaq />} />
+      </Route>
     </Routes >
   );
 }

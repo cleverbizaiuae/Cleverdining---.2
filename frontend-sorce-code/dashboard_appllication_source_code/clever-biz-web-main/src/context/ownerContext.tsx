@@ -503,7 +503,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       const endpoint =
-      const endpoint =
+
         (userRole === "owner" || userRole === "staff")
           ? "/owners/reservations/report-reservation-status/"
           : "/chef/reservations/report-reservation-status/";
@@ -524,7 +524,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       const endpoint =
-      const endpoint =
+
         (userRole === "owner" || userRole === "staff") ? "/owners/orders/" : "/chef/orders/";
 
       const response = await axiosInstance.get(endpoint);
@@ -545,7 +545,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const searchParam = search || devicesSearchQuery;
         const endpoint =
-        const endpoint =
+
           (userRole === "owner" || userRole === "staff")
             ? `/owners/devices/?page=${page}&search=${searchParam}`
             : `/chef/devices/?page=${page}&search=${searchParam}`;
