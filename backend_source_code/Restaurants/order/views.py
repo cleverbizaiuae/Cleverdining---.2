@@ -399,7 +399,7 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
 
 
 class OrderAnalyticsAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsOwnerRole]
+    permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def get(self, request):
         user = request.user
@@ -408,7 +408,33 @@ class OrderAnalyticsAPIView(APIView):
         this_year = today.year
         last_year = this_year - 1
 
-        restaurants = Restaurant.objects.filter(owner=user)
+        restaurants = []
+        # Check if Owner
+        if getattr(user, 'role', '') == 'owner':
+            restaurants = Restaurant.objects.filter(owner=user)
+        else:
+            # Check ChefStaff (legacy/standard)
+            chef_staff = ChefStaff.objects.filter(user=user).first()
+            if chef_staff:
+                restaurants = [chef_staff.restaurant]
+            
+            # Check Staff (newer implementation if applicable)
+            if not restaurants and hasattr(user, 'staff_profile') and user.staff_profile:
+                restaurants = [user.staff_profile.restaurant]
+
+        if not restaurants:
+             # Return empty data instead of crashing
+             return Response({
+                "status": {
+                    "today_total_completed_order_price": "0",
+                    "weekly_growth": 0,
+                    "total_member": 0,
+                    "current_year": this_year,
+                    "last_year": last_year
+                },
+                "current_year": {month.lower()[:3]: 0 for month in month_name if month},
+                "last_year": {month.lower()[:3]: 0 for month in month_name if month}
+            })
 
         # Get all orders for owner's restaurant
         orders = Order.objects.filter(restaurant__in=restaurants)
@@ -476,10 +502,11 @@ class OrderAnalyticsAPIView(APIView):
 
 class MonthlySalesReportView(APIView):
     """
-    Returns the current month's day-wise completed sales report 
+    Returns the current month's day-wise completed sales report
     (both total sales price and completed order count)
-    for the restaurant owned by the logged-in user.
+    for the restaurant owned by the logged-in user or their employer.
     """
+    permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def get(self, request):
         try:
@@ -488,8 +515,21 @@ class MonthlySalesReportView(APIView):
             current_year = today.year
             current_month = today.month
 
-            # Get the restaurant owned by this user
-            restaurant = Restaurant.objects.filter(owner=request.user).first()
+            # Get the restaurant
+            user = request.user
+            restaurant = None
+            
+            if getattr(user, 'role', '') == 'owner':
+                restaurant = Restaurant.objects.filter(owner=user).first()
+            else:
+                # Check ChefStaff
+                chef_staff = ChefStaff.objects.filter(user=user).first()
+                if chef_staff:
+                    restaurant = chef_staff.restaurant
+                # Check Staff
+                elif hasattr(user, 'staff_profile') and user.staff_profile:
+                    restaurant = user.staff_profile.restaurant
+
             if not restaurant:
                 return Response(
                     {"error": "No restaurant found for this user."},
