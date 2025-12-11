@@ -145,6 +145,7 @@ const ScreenRestaurantDashboard = () => {
   const {
     foodItems,
     currentPage,
+    setCurrentPage,
     searchQuery,
 
     categories,
