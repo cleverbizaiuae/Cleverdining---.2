@@ -147,6 +147,8 @@ const ScreenRestaurantDashboard = () => {
     currentPage,
     setCurrentPage,
     searchQuery,
+    setSearchQuery,
+    fetchFoodItems, // Added
 
     categories,
     subCategories,
@@ -367,7 +369,7 @@ const ScreenRestaurantDashboard = () => {
           </div>
           <div className="p-3 border-t border-slate-200 text-center">
             <button
-              onClick={() => setCurrentPage(p => p + 1)} // Simple navigation for now
+              onClick={() => setCurrentPage(currentPage + 1)} // Corrected call
               className="text-xs text-[#0055FE] font-medium hover:underline"
             >
               View All Items
