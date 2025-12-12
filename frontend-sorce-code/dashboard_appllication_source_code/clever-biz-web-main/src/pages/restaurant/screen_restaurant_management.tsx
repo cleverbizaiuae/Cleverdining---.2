@@ -84,6 +84,7 @@ const ScreenRestaurantManagement = () => {
     setSelectedMember(member);
     setFormData({
       name: member.first_name || "", // Assuming backend uses first_name/last_name or name
+      email: member.email || "", // Add email
       username: member.username || "",
       password: "",
       role: member.role || "staff"
@@ -120,6 +121,7 @@ const ScreenRestaurantManagement = () => {
       setIsAddModalOpen(false);
       setFormData({
         name: "",
+        email: "",
         username: "",
         password: "",
         role: "staff",
@@ -216,7 +218,7 @@ const ScreenRestaurantManagement = () => {
             </div>
             <button
               onClick={() => {
-                setFormData({ name: "", username: "", password: "", role: "staff" });
+                setFormData({ name: "", email: "", username: "", password: "", role: "staff" });
                 setIsAddModalOpen(true);
               }}
               className="bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
