@@ -98,7 +98,7 @@ const ScreenAdminLogin = () => {
 
                 <div className="w-full max-w-md">
                     {/* Logo */}
-                    <Link to="/" className="block mb-8">
+                    <Link to="/adminlanding" className="block mb-8">
                         <img src={mobileLogo} alt="CleverBiz" className="h-8 w-auto" />
                     </Link>
 

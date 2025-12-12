@@ -49,15 +49,9 @@ const ScreenLanding = () => {
                 Logout
               </button>
             ) : (
-              <>
-                <Link to="/login" className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300">
-                  Login
-                </Link>
-                {/* <div className="border-l border-slate-200 h-6"></div> */}
-                <Link to="/register" className="text-slate-500 hover:text-[#0055FE] font-medium transition-colors">
-                  Register
-                </Link>
-              </>
+              <Link to="/login" className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300">
+                Login
+              </Link>
             )}
           </div>
         </div>
@@ -80,7 +74,7 @@ const ScreenLanding = () => {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0055FE] opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0055FE]"></span>
                 </span>
-                <span className="text-xs font-semibold text-[#0055FE] uppercase tracking-wide">AI-Powered Dining</span>
+                <span className="text-xs font-semibold text-[#0055FE] uppercase tracking-wide">Restaurant Management OS</span>
               </div>
 
               <h1 className="text-[56px] md:text-[64px] font-bold leading-[1.1] text-slate-900 mb-6">
@@ -96,7 +90,7 @@ const ScreenLanding = () => {
 
               <div className="flex items-center gap-4">
                 <Link to="/register" className="px-8 py-4 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold text-lg shadow-xl shadow-blue-600/20 hover:shadow-blue-600/30 hover:-translate-y-0.5 transition-all duration-300">
-                  Get Started Free
+                  Visit Cleverbiz AI Website
                 </Link>
                 <div className="h-full w-[1px] bg-slate-200 mx-2"></div>
                 <SocialContactButtons className="text-slate-400 hover:text-[#0055FE] transition-colors" />
@@ -233,6 +227,8 @@ const ScreenLanding = () => {
               <Link to="/privacy-policy" className="text-slate-600 hover:text-[#0055FE] transition-colors mx-1">Privacy</Link>
               &bull;
               <Link to="/terms-condition" className="text-slate-600 hover:text-[#0055FE] transition-colors mx-1">Terms</Link>
+              &bull;
+              <Link to="#" className="text-slate-600 hover:text-[#0055FE] transition-colors mx-1">Contact Support</Link>
             </p>
           </div>
 

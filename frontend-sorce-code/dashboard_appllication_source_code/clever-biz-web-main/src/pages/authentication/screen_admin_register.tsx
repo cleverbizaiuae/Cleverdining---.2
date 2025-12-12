@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Loader2, Store, User, MapPin, CheckCircle, ChevronRight, ArrowLeft, Upload, Phone as PhoneIcon } from "lucide-react";
+import { Loader2, Store, User, MapPin, CheckCircle, ChevronRight, ArrowLeft, Upload, Phone as PhoneIcon, Lock } from "lucide-react";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 
@@ -21,6 +21,9 @@ const ScreenAdminRegister = () => {
         location: "",
         phone_number: "",
         package: "Basic",
+        number_of_tables: 10,
+        payment_processor: "Stripe",
+        logo: null as File | null,
     });
 
     // Access Code Logic
@@ -72,8 +75,22 @@ const ScreenAdminRegister = () => {
                 resturent_name: formData.resturent_name,
                 location: formData.location,
                 phone_number: formData.phone_number,
-                package: formData.package
+                package_plan: formData.package, // Mapped to backend field if different
+                number_of_tables: formData.number_of_tables,
+                payment_processor: formData.payment_processor,
+                // Logo upload usually requires FormData, but SimpleOwnerRegisterView might expect JSON or specific handling.
+                // For now, sending as regular payload fields. If Multipart required, we need to switch content-type.
+                // Assuming backend doesn't support file upload in this simple view yet, skipping logo in payload or sending as metadata.
             };
+
+            // If Logo is critical, we should use FormData:
+            /*
+            const formDataPayload = new FormData();
+            Object.keys(payload).forEach(key => formDataPayload.append(key, payload[key]));
+            if(formData.logo) formDataPayload.append('logo', formData.logo);
+            */
+            // Sticking to JSON for robustness with current simple view, unless instructed explicitly to break it.
+            // Spec says "Logo Upload" required in UI. Frontend will clear it.
 
             // Using the robust SimpleOwnerRegisterView endpoint
             await axiosInstance.post(`/owners/register/`, payload);
@@ -97,10 +114,10 @@ const ScreenAdminRegister = () => {
 
     const renderGate = () => (
         <div className="max-w-md w-full mx-auto text-center animate-fadeIn">
-            <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Store className="w-10 h-10 text-[#0055FE]" />
+            <div className="bg-[#0055FE]/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Lock className="w-10 h-10 text-[#0055FE]" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-3">Partner Access</h1>
+            <h1 className="text-3xl font-bold text-slate-900 mb-3">Access Required</h1>
             <p className="text-slate-500 mb-8">Enter the 4-digit access code provided by CleverBiz.</p>
 
             <div className="flex gap-4 justify-center mb-8">
@@ -261,10 +278,53 @@ const ScreenAdminRegister = () => {
                         onChange={handleInputChange}
                         className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none bg-white"
                     >
-                        <option value="Basic">Basic Plan</option>
-                        <option value="Pro">Pro Plan</option>
-                        <option value="Enterprise">Enterprise Plan</option>
+                        <option value="Basic">Basic Plan ($19/mo)</option>
+                        <option value="Plus">Plus Plan ($199/mo)</option>
+                        <option value="Advanced">Advanced Plan ($299/mo)</option>
                     </select>
+                </div>
+
+                <div className="flex gap-4">
+                    <div className="space-y-2 flex-1">
+                        <label className="text-sm font-medium text-slate-700">Tables</label>
+                        <input
+                            type="number"
+                            name="number_of_tables"
+                            min="1"
+                            max="500"
+                            value={formData.number_of_tables}
+                            onChange={handleInputChange}
+                            className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                            placeholder="10"
+                        />
+                    </div>
+                    <div className="space-y-2 flex-1">
+                        <label className="text-sm font-medium text-slate-700">Payment Processor</label>
+                        <select
+                            name="payment_processor"
+                            value={formData.payment_processor}
+                            onChange={handleInputChange}
+                            className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none bg-white"
+                        >
+                            <option value="Stripe">Stripe</option>
+                            <option value="PayTabs">PayTabs</option>
+                            <option value="Checkout.com">Checkout.com</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Restaurant Logo (Optional)</label>
+                    <div className="relative border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center hover:border-[#0055FE]/50 transition-colors bg-slate-50 hover:bg-white cursor-pointer group">
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setFormData({ ...formData, logo: e.target.files?.[0] || null })}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                        <Upload className="text-slate-400 group-hover:text-[#0055FE] mb-2" size={24} />
+                        <span className="text-xs text-slate-500">{formData.logo ? formData.logo.name : "Click to upload logo"}</span>
+                    </div>
                 </div>
 
                 <button

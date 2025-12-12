@@ -63,6 +63,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<ScreenLanding />} />
+      <Route path="adminlanding" element={<ScreenLanding />} />
+      <Route path="admin" element={<ScreenLanding />} /> {/* Redirects/Renders Landing */}
       <Route path="login" element={<ScreenAdminLogin />} />
       <Route path="adminlogin" element={<ScreenAdminLogin />} />
 
