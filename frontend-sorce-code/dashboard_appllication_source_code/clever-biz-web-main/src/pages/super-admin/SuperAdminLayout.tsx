@@ -8,7 +8,7 @@ import {
     X,
     UserCircle
 } from "lucide-react";
-import logo from "../../assets/cleverbiz-01_1765104936372.png"; // Using existing logo
+import logo from "../../assets/mobile_logo.png"; // Using existing mobile logo
 
 const SuperAdminLayout = () => {
     const navigate = useNavigate();

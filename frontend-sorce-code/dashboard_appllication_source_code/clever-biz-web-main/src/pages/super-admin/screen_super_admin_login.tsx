@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
-import logo from "../../assets/cleverbiz-01_1765104936372.png"; // Using existing logo asset
+import logo from "../../assets/mobile_logo.png"; // Using existing mobile logo
 
 const ScreenSuperAdminLogin = () => {
     const navigate = useNavigate();
