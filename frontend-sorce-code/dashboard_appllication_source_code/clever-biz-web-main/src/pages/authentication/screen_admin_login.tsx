@@ -1,6 +1,6 @@
-```javascript
+
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router"; // Fixed import source
+import { useNavigate, Link } from "react-router"; // Fixed import source
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import axiosInstance from "../../lib/axios";
@@ -69,7 +69,7 @@ const ScreenAdminLogin = () => {
                 // We'll trust user object storage for now.
             }
 
-            toast.success(`Welcome back, ${ user.username || "User" } !`);
+            toast.success(`Welcome back, ${user.username || "User"} !`);
 
             // Role Validation & Redirection
             // We strictly redirect based on the ACTUAL role from DB
@@ -119,13 +119,12 @@ const ScreenAdminLogin = () => {
                                         type="button"
                                         onClick={() => setSelectedRole(role)}
                                         className={`
-py - 2 px - 3 rounded - md text - xs font - medium capitalize transition - all border
-                                            ${
-    selectedRole === role
-    ? "bg-[#0055FE] border-[#0055FE] text-white"
-    : "bg-transparent border-slate-200 text-slate-600 hover:border-slate-300"
-}
-`}
+                                            py-2 px-3 rounded-md text-xs font-medium capitalize transition-all border
+                                            ${selectedRole === role
+                                                ? "bg-[#0055FE] border-[#0055FE] text-white"
+                                                : "bg-transparent border-slate-200 text-slate-600 hover:border-slate-300"
+                                            }
+                                        `}
                                     >
                                         {role}
                                     </button>
@@ -172,9 +171,9 @@ py - 2 px - 3 rounded - md text - xs font - medium capitalize transition - all b
                         <div className="flex items-center justify-between">
                             <label className="flex items-center gap-2 cursor-pointer select-none">
                                 <div className={`
-w - 3.5 h - 3.5 rounded border flex items - center justify - center transition - colors
-                                    ${ rememberMe ? "bg-[#0055FE] border-[#0055FE]" : "bg-white border-slate-300" }
-`}>
+                                    w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors
+                                    ${rememberMe ? "bg-[#0055FE] border-[#0055FE]" : "bg-white border-slate-300"}
+                                `}>
                                     <input
                                         type="checkbox"
                                         className="hidden"
