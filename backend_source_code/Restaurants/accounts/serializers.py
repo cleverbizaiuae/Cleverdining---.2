@@ -150,12 +150,13 @@ class ChefStaffSerializer(serializers.Serializer):
 class ChefStaffCreateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True)
     username = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False) # Add password field
     role = serializers.ChoiceField(choices=[('chef', 'Chef'), ('staff', 'Staff')], write_only=True)
     image = serializers.ImageField(write_only=True, required=False)
 
     class Meta:
         model = ChefStaff
-        fields = ['email', 'username', 'role', 'action', 'generate','image']
+        fields = ['email', 'username', 'password', 'role', 'action', 'generate','image']
 
     def create(self, validated_data):
         request = self.context.get('request')
@@ -170,12 +171,14 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
         username = validated_data.pop('username')
         role = validated_data.pop('role')
         image = validated_data.pop('image', None)
+        password = validated_data.pop('password', None) # Get password if provided
 
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "A user with this email already exists."})
 
-        # Generate a secure random password
-        password = secrets.token_urlsafe(10)
+        # Use provided password or generate a secure random one
+        if not password:
+            password = secrets.token_urlsafe(10)
 
         new_user = User.objects.create_user(
             email=email,
