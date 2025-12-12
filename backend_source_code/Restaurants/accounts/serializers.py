@@ -194,7 +194,8 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
             staff_member = ChefStaff.objects.create(
                 user=new_user,
                 restaurant=restaurant,
-                **validated_data
+                action='accepted',  # Force accepted status so they can access items immediately
+                **{k: v for k, v in validated_data.items() if k != 'action'} # Avoid duplicate arg if action is in validated_data
             )
 
         # Send password to user via email (outside atomic block usually fine, or inside)
