@@ -51,6 +51,20 @@ const ScreenAdminLogin = () => {
             const { access, refresh, user } = response.data;
             const dbRole = user.role; // "owner", "staff", "chef"
 
+            // Validate against selected Portal
+            let isValidRole = false;
+            if (selectedRole === "manager" && dbRole === "owner") isValidRole = true;
+            if (selectedRole === "staff" && dbRole === "staff") isValidRole = true;
+            if (selectedRole === "chef" && dbRole === "chef") isValidRole = true;
+
+            if (!isValidRole) {
+                const actualRoleDisplay = dbRole === 'owner' ? 'Manager' : dbRole.charAt(0).toUpperCase() + dbRole.slice(1);
+                const selectedRoleDisplay = selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1);
+                toast.error(`Access Denied: You cannot log in as ${selectedRoleDisplay} using ${actualRoleDisplay} credentials.`);
+                setLoading(false);
+                return;
+            }
+
             // Store Tokens & User Info
             localStorage.setItem("accessToken", access);
             localStorage.setItem("refreshToken", refresh);
