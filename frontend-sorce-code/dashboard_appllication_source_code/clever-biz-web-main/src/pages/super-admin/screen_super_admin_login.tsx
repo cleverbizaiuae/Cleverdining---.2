@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
-import logo from "../../assets/mobile_logo.png"; // Using existing mobile logo
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
+import axiosInstance from "../../lib/axios";
+import logo from "../../assets/mobile_logo.png";
 
 const ScreenSuperAdminLogin = () => {
     const navigate = useNavigate();
@@ -11,20 +12,40 @@ const ScreenSuperAdminLogin = () => {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setLoading(true);
 
-        // Hardcoded Validation
-        if (email === "admin@cleverbiz.ai" && password === "superadmin2024") {
-            // Success
+        try {
+            const response = await axiosInstance.post("/login/", {
+                email,
+                password,
+            });
+
+            const { access, refresh, user } = response.data;
+
+            // STRICT CHECK: Ensure user is actually authorized for Super Admin
+            // Adjust this condition based on actual backend 'Super Admin' role string
+            // For now, assuming 'admin' or 'super_admin' or specific email check if role is missing
+            if (user.role !== 'admin' && user.role !== 'super_admin' && user.email !== 'admin@cleverbiz.ai') {
+                setError("Access Denied: You do not have Super Admin privileges.");
+                setLoading(false);
+                return;
+            }
+
+            localStorage.setItem("superAdminToken", access);
             localStorage.setItem("superAdminAuth", "true");
-            // Redirect to Super Admin Dashboard (mapped to /admin in routes)
-            navigate("/admin");
-        } else {
-            // Failure
-            setError("Invalid credentials");
+
+            navigate("/superadmin");
+
+        } catch (err: any) {
+            console.error("Super Admin Login Error:", err);
+            setError(err.response?.data?.detail || "Invalid email or password.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -92,9 +113,11 @@ const ScreenSuperAdminLogin = () => {
                     {/* Sign In Button */}
                     <button
                         type="submit"
-                        className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
+                        disabled={loading}
+                        className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
                     >
-                        Sign In
+                        {loading && <Loader2 className="animate-spin" size={16} />}
+                        {loading ? "Signing in..." : "Sign In"}
                     </button>
 
                 </form>
