@@ -9,7 +9,7 @@ from device.models import GuestSession
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from .serializers import OrderCreateSerializerFixed, OrderDetailSerializer
-from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff
+from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff,IsOwnerChefOrStaff
 from accounts.models import ChefStaff
 from django.utils.timezone import now
 from django.db.models import Sum, Count
