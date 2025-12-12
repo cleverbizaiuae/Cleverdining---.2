@@ -342,6 +342,16 @@ const ScreenRestaurantManagement = () => {
             />
           </div>
           <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+            <input
+              type="email"
+              placeholder="user@restaurant.com"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              value={formData.email}
+              onChange={e => setFormData({ ...formData, email: e.target.value })}
+            />
+          </div>
+          <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Username</label>
             <input
               type="text"
