@@ -47,6 +47,7 @@ import ScreenAdminFaq from "./pages/super-admin/screen_admin_faq";
 import ScreenAdminManagement from "./pages/super-admin/screen_admin_management";
 import ScreenAdminPrivacy from "./pages/super-admin/screen_admin_privacy";
 import ScreenAdminTermsAndCondition from "./pages/super-admin/screen_admin_terms";
+import ScreenSuperAdminLogin from "./pages/super-admin/screen_super_admin_login";
 
 ChartJS.register(
   CategoryScale,
@@ -65,6 +66,10 @@ function App() {
       <Route path="/" element={<ScreenLanding />} />
       <Route path="adminlanding" element={<ScreenLanding />} />
       <Route path="admin" element={<ScreenLanding />} /> {/* Redirects/Renders Landing */}
+
+      {/* Super Admin Login */}
+      <Route path="superadmin/login" element={<ScreenSuperAdminLogin />} />
+
       <Route path="login" element={<ScreenAdminLogin />} />
       <Route path="adminlogin" element={<ScreenAdminLogin />} />
 
