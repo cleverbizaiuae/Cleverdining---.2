@@ -47,7 +47,11 @@ import ScreenAdminFaq from "./pages/super-admin/screen_admin_faq";
 import ScreenAdminManagement from "./pages/super-admin/screen_admin_management";
 import ScreenAdminPrivacy from "./pages/super-admin/screen_admin_privacy";
 import ScreenAdminTermsAndCondition from "./pages/super-admin/screen_admin_terms";
+
 import ScreenSuperAdminLogin from "./pages/super-admin/screen_super_admin_login";
+import SuperAdminLayout from "./pages/super-admin/SuperAdminLayout"; // Import the new layout
+import ScreenSuperAdminDashboard from "./pages/super-admin/ScreenSuperAdminDashboard"; // Import the new dashboard
+import ScreenSuperAdminManagement from "./pages/super-admin/ScreenSuperAdminManagement"; // Import new Management screen
 
 ChartJS.register(
   CategoryScale,
@@ -69,6 +73,12 @@ function App() {
 
       {/* Super Admin Login */}
       <Route path="superadmin/login" element={<ScreenSuperAdminLogin />} />
+
+      {/* Super Admin Dashboard - New Route */}
+      <Route path="/superadmin" element={<SuperAdminLayout />}>
+        <Route index element={<ScreenSuperAdminDashboard />} />
+        <Route path="management" element={<ScreenSuperAdminManagement />} />
+      </Route>
 
       <Route path="login" element={<ScreenAdminLogin />} />
       <Route path="adminlogin" element={<ScreenAdminLogin />} />
