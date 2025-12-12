@@ -74,8 +74,9 @@ const RestaurantLayout = () => {
     // /staffadmindashboard/ -> ScreenRestaurantOrderList (active)
     // /staffadmindashboard/orders -> ScreenRestaurantOrderList (active?)
     // If I'm at /staffadmindashboard/ (root), isActive for OrderList should be true.
+    // Logic removed: previously forced OrderList to be active on root for staff/chef, causing double highlight with Dashboard.
     if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath && item.label === 'OrderList') {
-      return true;
+      return false;
     }
 
     if (item.matchType === 'exact') {
