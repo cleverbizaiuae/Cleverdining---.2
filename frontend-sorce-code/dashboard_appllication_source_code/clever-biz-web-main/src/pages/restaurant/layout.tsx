@@ -29,7 +29,7 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['manager'] },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['manager', 'staff', 'chef'] },
   { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['manager', 'staff', 'chef'] },
   { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['manager', 'staff'] },
   { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['manager', 'staff', 'chef'] },
@@ -49,12 +49,12 @@ const RestaurantLayout = () => {
   const user = userStr ? JSON.parse(userStr) : { username: "Manager", role: "manager" };
 
   // Determine Base Path based on current URL
-  const isStaffDashboard = location.pathname.startsWith('/staffadmindashboard');
-  const isChefDashboard = location.pathname.startsWith('/chefadmindashboard');
+  const isStaffDashboard = location.pathname.startsWith('/staff');
+  const isChefDashboard = location.pathname.startsWith('/chef');
 
   let basePath = '/restaurant';
-  if (isStaffDashboard) basePath = '/staffadmindashboard';
-  if (isChefDashboard) basePath = '/chefadmindashboard';
+  if (isStaffDashboard) basePath = '/staff';
+  if (isChefDashboard) basePath = '/chef';
 
   const handleLogout = () => {
     localStorage.clear();

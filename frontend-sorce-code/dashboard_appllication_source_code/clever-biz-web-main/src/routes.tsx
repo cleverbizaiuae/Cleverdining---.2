@@ -96,13 +96,13 @@ function App() {
       </Route>
       {/* Staff screens - Unified with Restaurant Layout */}
       <Route path="/staff" element={<RestaurantLayout />}>
-        <Route index={true} element={<ScreenRestaurantDashboard />} />
+        <Route index={true} element={<ScreenStaffDashboard />} />
         <Route path="orders" element={<ScreenRestaurantOrderList />} />
         <Route path="reservations" element={<ScreenRestaurantReservations />} />
         <Route path="messages" element={<ScreenRestaurantChat />} />
       </Route>
       {/* Chef screens */}
-      <Route path="/chef" element={<ChefLayout />}>
+      <Route path="/chef" element={<RestaurantLayout />}>
         <Route index={true} element={<ScreenChefDashboard />} />
         <Route path="orders" element={<ScreenChefOrderList />} />
         <Route path="messages" element={<ScreenChefChat />} />
