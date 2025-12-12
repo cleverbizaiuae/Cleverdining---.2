@@ -80,7 +80,7 @@ def generate_password(length=10):
 
 class DeviceViewSet(viewsets.ModelViewSet):
     serializer_class = DeviceSerializer
-    permission_classes = [permissions.IsAuthenticated,IsOwnerRole]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
     queryset = Device.objects.all()
     filter_backends = [filters.SearchFilter]
     search_fields = ['table_name'] 
@@ -88,16 +88,32 @@ class DeviceViewSet(viewsets.ModelViewSet):
     pagination_class = DevicePagination
 
     def get_queryset(self):
-        # Return devices belonging to the requesting owner's restaurant
         user = self.request.user
-        return Device.objects.filter(restaurant__owner=user).order_by('-id')
+        if user.role == 'owner':
+            return Device.objects.filter(restaurant__owner=user).order_by('-id')
+        elif user.role in ['chef', 'staff']:
+            restaurant_ids = ChefStaff.objects.filter(
+                user=user,
+                action='accepted'
+            ).values_list('restaurant_id', flat=True)
+            return Device.objects.filter(restaurant_id__in=restaurant_ids).order_by('-id')
+        return Device.objects.none()
 
     def perform_create(self, serializer):
-        owner = self.request.user
-        try:
-            restaurant = Restaurant.objects.get(owner=owner)
-        except Restaurant.DoesNotExist:
-            raise serializers.ValidationError("Restaurant not found for this owner.")
+        user = self.request.user
+        
+        if user.role == 'owner':
+            try:
+                restaurant = Restaurant.objects.get(owner=user)
+            except Restaurant.DoesNotExist:
+                raise serializers.ValidationError("Restaurant not found for this owner.")
+        elif user.role in ['chef', 'staff']:
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if not chef_staff:
+                raise serializers.ValidationError("You are not associated with any accepted restaurant.")
+            restaurant = chef_staff.restaurant
+        else:
+             raise PermissionDenied("You are not authorized to create devices.")
 
         username = generate_username(restaurant.resturent_name)
         password = generate_password()
@@ -110,15 +126,19 @@ class DeviceViewSet(viewsets.ModelViewSet):
             role='customer'
         )
 
-        device=serializer.save(user=device_user, restaurant=restaurant)
+        device = serializer.save(user=device_user, restaurant=restaurant)
 
-        print(owner.email)
+        # Notify owner if possible, or log it
+        if user.role == 'owner':
+             owner_email = user.email
+        else:
+             owner_email = restaurant.owner.email
 
         send_mail(
             subject="New Device User Created",
             message=f"Username: {username}\nPassword: {password}",
             from_email=settings.EMAIL_HOST_USER,
-            recipient_list=[owner.email],
+            recipient_list=[owner_email],
             fail_silently=False
         )
 
@@ -162,13 +182,31 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='stats')
     def get_device_stats(self, request):
-        owner = request.user
-        try:
-            restaurant = Restaurant.objects.get(owner=owner)
-        except Restaurant.DoesNotExist:
-            return Response({"detail": "Restaurant not found."}, status=404)
+        user = request.user
+        
+        if user.role == 'owner':
+            try:
+                restaurant = Restaurant.objects.get(owner=user)
+                all_devices = Device.objects.filter(restaurant=restaurant)
+            except Restaurant.DoesNotExist:
+                return Response({"detail": "Restaurant not found."}, status=404)
+        elif user.role in ['chef', 'staff']:
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if not chef_staff:
+                 # If no restaurant, return empty 0 stats instead of 404 to avoid frontend error noise? 
+                 # Or 403?
+                 # Returning valid empty structure prevents "Failed to load summary" toast.
+                 return Response({
+                    "restaurant": "N/A",
+                    "total_devices": 0,
+                    "active_devices": 0,
+                    "hold_devices": 0,
+                })
+            restaurant = chef_staff.restaurant
+            all_devices = Device.objects.filter(restaurant=restaurant)
+        else:
+            return Response({"detail": "Not authorized."}, status=403)
 
-        all_devices = Device.objects.filter(restaurant=restaurant)
         return Response({
             "restaurant": restaurant.resturent_name,
             "total_devices": all_devices.count(),
