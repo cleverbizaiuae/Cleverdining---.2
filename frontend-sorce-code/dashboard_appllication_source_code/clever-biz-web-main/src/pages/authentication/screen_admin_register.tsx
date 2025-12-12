@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Loader2, Store, User, MapPin, CheckCircle, ChevronRight, ArrowLeft, Upload, Phone as PhoneIcon, Lock } from "lucide-react";
+import { Store, MapPin, ChevronRight, Upload, Phone, Lock, Image as ImageIcon, Loader2, User, ArrowLeft, CheckCircle, Phone as PhoneIcon } from "lucide-react";
+import logo from "../../assets/cleverbiz_full_logo.png";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 
@@ -129,7 +130,7 @@ const ScreenAdminRegister = () => {
                         maxLength={1}
                         value={digit}
                         onChange={(e) => handleCodeChange(idx, e.target.value)}
-                        className="w-14 h-16 text-center text-2xl font-bold border-2 border-slate-200 rounded-xl focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none transition-all"
+                        className="w-14 h-16 text-center text-2xl font-bold border-2 border-slate-200 rounded-xl text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none transition-all"
                     />
                 ))}
             </div>
@@ -166,7 +167,7 @@ const ScreenAdminRegister = () => {
                             required
                             value={formData.email}
                             onChange={handleInputChange}
-                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                             placeholder="owner@restaurant.com"
                         />
                     </div>
@@ -180,7 +181,7 @@ const ScreenAdminRegister = () => {
                         required
                         value={formData.password}
                         onChange={handleInputChange}
-                        className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                        className="w-full px-4 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                         placeholder="Create a strong password"
                     />
                 </div>
@@ -193,7 +194,7 @@ const ScreenAdminRegister = () => {
                         required
                         value={formData.confirmPassword}
                         onChange={handleInputChange}
-                        className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                        className="w-full px-4 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                         placeholder="Repeat password"
                     />
                 </div>
@@ -233,7 +234,7 @@ const ScreenAdminRegister = () => {
                             required
                             value={formData.resturent_name}
                             onChange={handleInputChange}
-                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                             placeholder="e.g. Bella Italia"
                         />
                     </div>
@@ -249,7 +250,7 @@ const ScreenAdminRegister = () => {
                             required
                             value={formData.location}
                             onChange={handleInputChange}
-                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                             placeholder="City, Area"
                         />
                     </div>
@@ -264,7 +265,7 @@ const ScreenAdminRegister = () => {
                             name="phone_number"
                             value={formData.phone_number}
                             onChange={handleInputChange}
-                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                            className="w-full pl-10 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                             placeholder="+971 50 123 4567"
                         />
                     </div>
@@ -276,7 +277,7 @@ const ScreenAdminRegister = () => {
                         name="package"
                         value={formData.package}
                         onChange={handleInputChange}
-                        className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none bg-white"
+                        className="w-full px-4 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none bg-white"
                     >
                         <option value="Basic">Basic Plan ($19/mo)</option>
                         <option value="Plus">Plus Plan ($199/mo)</option>
@@ -294,7 +295,7 @@ const ScreenAdminRegister = () => {
                             max="500"
                             value={formData.number_of_tables}
                             onChange={handleInputChange}
-                            className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
+                            className="w-full px-4 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none"
                             placeholder="10"
                         />
                     </div>
@@ -304,7 +305,7 @@ const ScreenAdminRegister = () => {
                             name="payment_processor"
                             value={formData.payment_processor}
                             onChange={handleInputChange}
-                            className="w-full px-4 h-11 border border-slate-200 rounded-lg focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none bg-white"
+                            className="w-full px-4 h-11 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none bg-white"
                         >
                             <option value="Stripe">Stripe</option>
                             <option value="PayTabs">PayTabs</option>

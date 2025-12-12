@@ -39,8 +39,8 @@ const ScreenRestaurantManagement = () => {
     members,
     membersSearchQuery,
     fetchMembers,
-    // createMember, // We might use custom logic or existing
-    // updateMemberStatus,
+    createMember,
+    updateMemberStatus,
     setMembersSearchQuery,
   } = useOwner();
 
@@ -105,18 +105,28 @@ const ScreenRestaurantManagement = () => {
   const handleCreateSubmit = async () => {
     setLoading(true);
     try {
-      await axiosInstance.post("/owners/team/create/", {
-        first_name: formData.name,
-        username: formData.username,
-        password: formData.password,
-        role: formData.role
-      });
+      // Create FormData properly
+      const data = new FormData();
+      data.append("first_name", formData.name);
+      data.append("username", formData.username);
+      data.append("password", formData.password);
+      data.append("role", formData.role);
+
+      await createMember(data);
+
       toast.success("Member created successfully");
       setIsAddModalOpen(false);
+      setFormData({
+        name: "",
+        username: "",
+        password: "",
+        role: "staff",
+      });
       fetchMembers();
-    } catch (error) {
-      console.error("Create failed", error);
-      toast.error("Failed to create member");
+    } catch (error: any) {
+      console.error(error);
+      const msg = error.response?.data?.error || "Failed to create member";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -197,7 +207,7 @@ const ScreenRestaurantManagement = () => {
               <input
                 type="text"
                 placeholder="Search by name or username"
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
                 value={membersSearchQuery}
                 onChange={handleSearch}
               />
@@ -324,7 +334,7 @@ const ScreenRestaurantManagement = () => {
             <input
               type="text"
               placeholder="Full Name"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
@@ -334,7 +344,7 @@ const ScreenRestaurantManagement = () => {
             <input
               type="text"
               placeholder="username"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.username}
               onChange={e => setFormData({ ...formData, username: e.target.value })}
             />
@@ -344,7 +354,7 @@ const ScreenRestaurantManagement = () => {
             <input
               type="password"
               placeholder="••••••••"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.password}
               onChange={e => setFormData({ ...formData, password: e.target.value })}
             />
@@ -352,7 +362,7 @@ const ScreenRestaurantManagement = () => {
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
             <select
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
               value={formData.role}
               onChange={e => setFormData({ ...formData, role: e.target.value })}
             >
@@ -378,7 +388,7 @@ const ScreenRestaurantManagement = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
             <input
               type="text"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
@@ -387,7 +397,7 @@ const ScreenRestaurantManagement = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">Username</label>
             <input
               type="text"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.username}
               onChange={e => setFormData({ ...formData, username: e.target.value })}
             />
@@ -395,7 +405,7 @@ const ScreenRestaurantManagement = () => {
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
             <select
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
               value={formData.role}
               onChange={e => setFormData({ ...formData, role: e.target.value })}
             >
@@ -422,7 +432,7 @@ const ScreenRestaurantManagement = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">Old Password</label>
             <input
               type="password"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={passwordData.oldPassword}
               onChange={e => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
             />
@@ -431,7 +441,7 @@ const ScreenRestaurantManagement = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">New Password</label>
             <input
               type="password"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={passwordData.newPassword}
               onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
             />
@@ -440,7 +450,7 @@ const ScreenRestaurantManagement = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">Confirm Password</label>
             <input
               type="password"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={passwordData.confirmPassword}
               onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
             />

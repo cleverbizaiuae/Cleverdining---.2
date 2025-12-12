@@ -1,3 +1,4 @@
+```
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation, Link } from "react-router";
 import {
@@ -8,7 +9,7 @@ import {
     X,
     UserCircle
 } from "lucide-react";
-import logo from "../../assets/mobile_logo.png"; // Using existing mobile logo
+import logo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
 
 const SuperAdminLayout = () => {
     const navigate = useNavigate();
@@ -54,17 +55,17 @@ const SuperAdminLayout = () => {
 
             {/* --- Sidebar --- */}
             <aside className={`
-                fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 shadow-xl z-50 transition-transform duration-300
-                ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-            `}>
+                fixed top - 0 left - 0 h - full w - 64 bg - white border - r border - slate - 200 shadow - xl z - 50 transition - transform duration - 300
+                ${ sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0" }
+`}>
                 <div className="flex flex-col h-full">
-                    {/* Logo Section */}
-                    <div className="p-6 flex items-center justify-between">
-                        <img src={logo} alt="CleverBiz" className="h-8" />
-                        <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-600">
+                    {/* Sidebar Header */}
+            <div className="h-16 flex items-center px-6 border-b border-slate-700/50">
+                <img src={logo} alt="CleverBiz AI" className="h-8 w-auto" /> {/* Logo */}
+            </div>
+                    <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-600 absolute top-4 right-4">
                             <X size={24} />
                         </button>
-                    </div>
 
                     {/* Navigation */}
                     <nav className="flex-1 px-4 py-4 space-y-2">
@@ -75,12 +76,13 @@ const SuperAdminLayout = () => {
                                     key={item.path}
                                     to={item.path}
                                     className={`
-                                        flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
-                                        ${isActive
-                                            ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE]"
-                                        }
-                                    `}
+                                        flex items - center gap - 3 px - 4 py - 3 rounded - xl text - sm font - medium transition - all
+                                        ${
+    isActive
+        ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
+        : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE]"
+}
+`}
                                 >
                                     {item.icon}
                                     {item.label}

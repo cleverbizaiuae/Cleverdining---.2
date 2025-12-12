@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
 import axiosInstance from "../../lib/axios";
-import logo from "../../assets/mobile_logo.png";
+import logo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
 
 const ScreenSuperAdminLogin = () => {
     const navigate = useNavigate();
@@ -53,7 +53,7 @@ const ScreenSuperAdminLogin = () => {
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 font-inter">
             {/* Header Section */}
             <div className="flex flex-col items-center mb-8">
-                <img src={logo} alt="CleverBiz AI" className="h-10 mb-4" />
+                <img src={logo} alt="CleverBiz AI" className="h-12 w-auto mb-4" /> {/* Adjusted size for full logo */}
                 <h1 className="text-2xl font-bold text-white">Super Admin</h1>
                 <p className="text-sm text-slate-400 mt-1">Sign in to manage restaurants</p>
             </div>

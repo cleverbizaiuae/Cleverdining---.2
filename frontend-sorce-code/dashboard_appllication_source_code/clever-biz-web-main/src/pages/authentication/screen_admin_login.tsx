@@ -1,8 +1,10 @@
+```javascript
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router"; // Fixed import source
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
-import axiosInstance from "@/lib/axios";
+import axiosInstance from "../../lib/axios";
+import logo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
 
 // Image imports
 import heroImage from "../../assets/hero-image-1.webp"; // Using existing asset
@@ -67,7 +69,7 @@ const ScreenAdminLogin = () => {
                 // We'll trust user object storage for now.
             }
 
-            toast.success(`Welcome back, ${user.username || "User"}!`);
+            toast.success(`Welcome back, ${ user.username || "User" } !`);
 
             // Role Validation & Redirection
             // We strictly redirect based on the ACTUAL role from DB
@@ -97,15 +99,11 @@ const ScreenAdminLogin = () => {
             <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 lg:p-16 relative">
 
                 <div className="w-full max-w-md">
-                    {/* Logo */}
-                    <Link to="/adminlanding" className="block mb-8">
-                        <img src={mobileLogo} alt="CleverBiz" className="h-8 w-auto" />
-                    </Link>
-
-                    {/* Heading */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-slate-900 mb-2">Sign in</h1>
-                        <p className="text-slate-500">Enter your credentials to continue</p>
+                    {/* Header Section */}
+                    <div className="flex flex-col items-center mb-8">
+                        <img src={logo} alt="CleverBiz AI" className="h-12 w-auto mb-4" /> {/* Adjusted size for full logo */}
+                        <h1 className="text-2xl font-bold text-slate-900">Admin Login</h1>
+                        <p className="text-sm text-slate-500 mt-1">Sign in to manage your restaurant</p>
                     </div>
 
                     {/* Form */}
@@ -121,12 +119,13 @@ const ScreenAdminLogin = () => {
                                         type="button"
                                         onClick={() => setSelectedRole(role)}
                                         className={`
-                                            py-2 px-3 rounded-md text-xs font-medium capitalize transition-all border
-                                            ${selectedRole === role
-                                                ? "bg-[#0055FE] border-[#0055FE] text-white"
-                                                : "bg-transparent border-slate-200 text-slate-600 hover:border-slate-300"
-                                            }
-                                        `}
+py - 2 px - 3 rounded - md text - xs font - medium capitalize transition - all border
+                                            ${
+    selectedRole === role
+    ? "bg-[#0055FE] border-[#0055FE] text-white"
+    : "bg-transparent border-slate-200 text-slate-600 hover:border-slate-300"
+}
+`}
                                     >
                                         {role}
                                     </button>
@@ -173,9 +172,9 @@ const ScreenAdminLogin = () => {
                         <div className="flex items-center justify-between">
                             <label className="flex items-center gap-2 cursor-pointer select-none">
                                 <div className={`
-                                    w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors
-                                    ${rememberMe ? "bg-[#0055FE] border-[#0055FE]" : "bg-white border-slate-300"}
-                                `}>
+w - 3.5 h - 3.5 rounded border flex items - center justify - center transition - colors
+                                    ${ rememberMe ? "bg-[#0055FE] border-[#0055FE]" : "bg-white border-slate-300" }
+`}>
                                     <input
                                         type="checkbox"
                                         className="hidden"

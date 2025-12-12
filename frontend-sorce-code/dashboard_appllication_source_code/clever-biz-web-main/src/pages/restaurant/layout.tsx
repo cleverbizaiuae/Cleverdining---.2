@@ -17,7 +17,7 @@ import {
 import toast from 'react-hot-toast';
 
 // Assets
-import mobileLogo from "../../assets/mobile_logo.png";
+import mobileLogo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
 // import bgAuth from "../../assets/bg-auth.webp"; // Not used here based on specs
 
 type MenuItem = {
