@@ -159,13 +159,15 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
         fields = ['email', 'username', 'password', 'role', 'action', 'generate','image']
 
     def create(self, validated_data):
+        from django.db import transaction
+        
         request = self.context.get('request')
         user = request.user
 
-        try:
-            restaurant = user.restaurants.get()
-        except Restaurant.DoesNotExist:
-            raise serializers.ValidationError("You do not own a restaurant.")
+        # Get first restaurant safely
+        restaurant = user.restaurants.first()
+        if not restaurant:
+             raise serializers.ValidationError("You do not own a restaurant.")
 
         email = validated_data.pop('email')
         username = validated_data.pop('username')
@@ -180,28 +182,36 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
         if not password:
             password = secrets.token_urlsafe(10)
 
-        new_user = User.objects.create_user(
-            email=email,
-            username=username,
-            password=password,
-            role=role,
-            image=image
-        )
+        with transaction.atomic():
+            new_user = User.objects.create_user(
+                email=email,
+                username=username,
+                password=password,
+                role=role,
+                image=image
+            )
 
-        # Send password to user via email
-        send_mail(
-            subject='Your account has been created',
-            message=f"Hello {username},\n\nYour account has been created.\nEmail: {email}\nPassword: {password}\n\nPlease login and change your password.",
-            from_email=settings.EMAIL_HOST_USER,
-            recipient_list=[email],
-            fail_silently=False,
-        )
+            staff_member = ChefStaff.objects.create(
+                user=new_user,
+                restaurant=restaurant,
+                **validated_data
+            )
 
-        return ChefStaff.objects.create(
-            user=new_user,
-            restaurant=restaurant,
-            **validated_data
-        )
+        # Send password to user via email (outside atomic block usually fine, or inside)
+        # Verify email settings are correct or catch error so it doesn't rollback
+        try:
+            send_mail(
+                subject='Your account has been created',
+                message=f"Hello {username},\n\nYour account has been created.\nEmail: {email}\nPassword: {password}\n\nPlease login and change your password.",
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            # Log error but don't fail the creation
+            print(f"Failed to send email: {e}")
+
+        return staff_member
     def to_representation(self, instance):
         return ChefStaffDetailSerializer(instance, context=self.context).data
     
