@@ -223,11 +223,13 @@ class ChefStaffDetailSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email')
     username = serializers.CharField(source='user.username')
     role = serializers.CharField(source='user.role')
+    first_name = serializers.CharField(source='user.first_name', required=False)
+    last_name = serializers.CharField(source='user.last_name', required=False)
     restaurant = serializers.CharField(source='restaurant.resturent_name', read_only=True)
     image = serializers.ImageField(source='user.image', read_only=True)
     class Meta:
         model = ChefStaff
-        fields = ['id', 'email', 'username', 'role', 'action', 'generate', 'created_at', 'updated_time','restaurant','image']
+        fields = ['id', 'email', 'username', 'role', 'first_name', 'last_name', 'action', 'generate', 'created_at', 'updated_time','restaurant','image']
 
     def update(self, instance, validated_data):
         # update user fields
