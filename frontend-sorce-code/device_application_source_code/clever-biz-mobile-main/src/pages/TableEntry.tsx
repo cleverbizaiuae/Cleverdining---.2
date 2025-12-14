@@ -13,11 +13,18 @@ const TableEntry = () => {
             if (!uuid) return;
 
             try {
-                // Fetch device details by UUID
+                // 1. Fetch device details by UUID
                 const response = await axiosInstance.get(`/customer/devices/${uuid}/`);
                 const device = response.data;
 
-                // Create guest session data
+                // 2. Resolve Table Session (Get Real Token)
+                const sessionRes = await axiosInstance.post('/customer/resolve-table/', {
+                    device_id: device.id // Use ID from details
+                });
+
+                const { session_token } = sessionRes.data;
+
+                // 3. Create guest user info
                 const mockUserInfo = {
                     user: {
                         username: device.table_name || `Table ${device.table_number}`,
@@ -34,17 +41,18 @@ const TableEntry = () => {
                     role: "guest",
                 };
 
-                // Store session
+                // 4. Store session & info
                 localStorage.setItem("userInfo", JSON.stringify(mockUserInfo));
-                localStorage.setItem("accessToken", "guest_token");
-                localStorage.setItem("refreshToken", "guest_refresh");
+                localStorage.setItem("accessToken", "guest_token"); // Marker for axios interceptor (optional but keeps flow)
+                localStorage.setItem("guest_session_token", session_token); // CRITICAL for backend auth
+                localStorage.removeItem('cart'); // Clear old cart to be safe
 
-                // Redirect to dashboard
+                // 5. Redirect to dashboard
                 navigate("/dashboard");
 
             } catch (err) {
-                console.error("Failed to fetch device details:", err);
-                setError("Invalid Table URL or Table not found.");
+                console.error("Failed to fetch device/session:", err);
+                setError("Invalid Table URL or Connection Failed.");
             }
         };
 
