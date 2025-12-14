@@ -55,7 +55,7 @@ class UserWithRestaurantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'image', 'restaurants','owner_id']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'image', 'restaurants','owner_id']
 
 
     def get_owner_id(self, obj):
