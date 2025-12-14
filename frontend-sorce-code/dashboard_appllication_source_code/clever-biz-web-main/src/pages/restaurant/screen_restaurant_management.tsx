@@ -57,9 +57,8 @@ const ScreenRestaurantManagement = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    username: "",
     password: "",
-    role: "staff"
+    role: "staff",
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -85,7 +84,6 @@ const ScreenRestaurantManagement = () => {
     setFormData({
       name: member.first_name || "", // Assuming backend uses first_name/last_name or name
       email: member.email || "", // Add email
-      username: member.username || "",
       password: "",
       role: member.role || "staff"
     });
@@ -109,9 +107,9 @@ const ScreenRestaurantManagement = () => {
     try {
       // Create FormData properly
       const data = new FormData();
-      data.append("first_name", formData.name);
+      data.append("first_name", formData.name); // Send name as first_name
       data.append("email", formData.email); // Append email
-      data.append("username", formData.username);
+      data.append("username", formData.email); // Use email as username
       data.append("password", formData.password);
       data.append("role", formData.role);
 
@@ -122,7 +120,6 @@ const ScreenRestaurantManagement = () => {
       setFormData({
         name: "",
         email: "",
-        username: "",
         password: "",
         role: "staff",
       });
@@ -142,7 +139,9 @@ const ScreenRestaurantManagement = () => {
     try {
       await axiosInstance.patch(`/owners/chef-staff/${selectedMember.id}/`, {
         first_name: formData.name, // Will be mapped to user.first_name via serializer
-        username: formData.username,
+        // username: formData.email, // Use email as username if needed, but usually email is immutable or separate. 
+        // For now, let's assuming removing it from payload relies on existing username or separate email update if changed.
+        // User requested removing username field.
         role: formData.role
       });
       toast.success("Member updated successfully");
@@ -218,7 +217,7 @@ const ScreenRestaurantManagement = () => {
             </div>
             <button
               onClick={() => {
-                setFormData({ name: "", email: "", username: "", password: "", role: "staff" });
+                setFormData({ name: "", email: "", password: "", role: "staff" });
                 setIsAddModalOpen(true);
               }}
               className="bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
@@ -353,16 +352,7 @@ const ScreenRestaurantManagement = () => {
               onChange={e => setFormData({ ...formData, email: e.target.value })}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Username</label>
-            <input
-              type="text"
-              placeholder="username"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-              value={formData.username}
-              onChange={e => setFormData({ ...formData, username: e.target.value })}
-            />
-          </div>
+          {/* Username field removed as per request - Email used as username */}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
             <input
@@ -407,15 +397,7 @@ const ScreenRestaurantManagement = () => {
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Username</label>
-            <input
-              type="text"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-              value={formData.username}
-              onChange={e => setFormData({ ...formData, username: e.target.value })}
-            />
-          </div>
+          {/* Username field removed */}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
             <select

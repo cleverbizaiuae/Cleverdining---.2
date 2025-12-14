@@ -102,7 +102,7 @@ export const ScreenRestaurantDevices = () => {
 
   const openEditModal = (device: any) => {
     setSelectedDevice(device);
-    setFormData({ name: device.name || "", area: device.area || "Primary" });
+    setFormData({ name: device.table_name || device.name || "", area: device.region || device.area || "Primary" });
     setIsEditModalOpen(true);
   };
 
@@ -116,8 +116,8 @@ export const ScreenRestaurantDevices = () => {
     setLoading(true);
     try {
       await axiosInstance.post("/owners/devices/", {
-        name: formData.name,
-        area: formData.area
+        table_name: formData.name,
+        region: formData.area
       });
       toast.success("Table created successfully");
       setIsAddModalOpen(false);
@@ -136,8 +136,8 @@ export const ScreenRestaurantDevices = () => {
     setLoading(true);
     try {
       await axiosInstance.patch(`/owners/devices/${selectedDevice.id}/`, {
-        name: formData.name,
-        area: formData.area
+        table_name: formData.name,
+        region: formData.area
       });
       toast.success("Table updated successfully");
       setIsEditModalOpen(false);
@@ -167,10 +167,10 @@ export const ScreenRestaurantDevices = () => {
     }
   };
 
-  // Helper to generate full URL (Assuming generic structure or from context)
-  const getTableUrl = (uid: string) => {
-    return `${window.location.origin}/menu/${uid}`;
-  };
+  // Helper to generate full URL (Previously used, now using API-provided table_url)
+  // const getTableUrl = (uid: string) => {
+  //   return `${window.location.origin}/menu/${uid}`;
+  // };
 
   return (
     <div className="min-h-screen bg-white font-inter">
@@ -235,10 +235,10 @@ export const ScreenRestaurantDevices = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <span className="text-xs text-slate-400 truncate max-w-[200px]">
-                          {getTableUrl(device.uid)}
+                          {device.table_url}
                         </span>
                         <button
-                          onClick={() => copyToClipboard(getTableUrl(device.uid), device.id)}
+                          onClick={() => copyToClipboard(device.table_url, device.id)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0055FE] text-[#0055FE] text-xs font-bold hover:bg-[#0055FE]/5 transition-colors"
                         >
                           {copiedId === device.id ? <Check size={14} /> : <Copy size={14} />}
@@ -289,7 +289,7 @@ export const ScreenRestaurantDevices = () => {
             <input
               type="text"
               placeholder="e.g. Table 1"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
@@ -309,12 +309,12 @@ export const ScreenRestaurantDevices = () => {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={getTableUrl(selectedDevice?.uid)}
+                  value={selectedDevice?.table_url || ""}
                   readOnly
                   className="flex-1 h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 outline-none"
                 />
                 <button
-                  onClick={() => copyToClipboard(getTableUrl(selectedDevice?.uid), selectedDevice?.id)}
+                  onClick={() => copyToClipboard(selectedDevice?.table_url, selectedDevice?.id)}
                   className="h-10 px-3 border border-[#0055FE] text-[#0055FE] rounded-lg hover:bg-blue-50 transition-colors"
                 >
                   <Copy size={16} />

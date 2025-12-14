@@ -164,9 +164,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
     if (!userRole) return;
     let endpoint = "";
     if (userRole === "staff") {
-      endpoint = "/staff/items/status-summary/";
+      endpoint = "/api/staff/items/status-summary/";
     } else if (userRole === "chef") {
-      endpoint = "/chef/items/status-summary/";
+      endpoint = "/api/chef/items/status-summary/";
     } else {
       return;
     }
@@ -187,9 +187,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
       if (!userRole) return;
       let endpoint = "";
       if (userRole === "staff") {
-        endpoint = `/staff/items/?page=${page}&search=${search || ""}`;
+        endpoint = `/api/staff/items/?page=${page}&search=${search || ""}`;
       } else if (userRole === "chef") {
-        endpoint = `/chef/items/?page=${page}&search=${search || ""}`;
+        endpoint = `/api/chef/items/?page=${page}&search=${search || ""}`;
       } else {
         return;
       }
@@ -225,9 +225,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
     try {
       let endpoint = "";
       if (userRole === "staff") {
-        endpoint = `/staff/orders/`;
+        endpoint = `/api/staff/orders/`;
       } else if (userRole === "chef") {
-        endpoint = `/chef/orders/`;
+        endpoint = `/api/chef/orders/`;
       } else {
         return;
       }
@@ -262,8 +262,8 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const endpoint =
           userRole === "staff"
-            ? `/staff/orders/status/${id}/`
-            : `/chef/orders/status/${id}/`;
+            ? `/api/staff/orders/status/${id}/`
+            : `/api/chef/orders/status/${id}/`;
         const response = await axiosInstance.patch(endpoint, {
           status: status.toLowerCase(),
         });
@@ -293,7 +293,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
     [setOrders]
   );
   useEffect(() => {
- if (
+    if (
       response.type === "order_created" ||
       response.type === "order_updated"
     ) {
@@ -305,7 +305,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
     ) {
       // fetchAllDevices(devicesCurrentPage, devicesSearchQuery);
     }
-  }, [response,ordersCurrentPage, ordersSearchQuery,fetchOrders]);
+  }, [response, ordersCurrentPage, ordersSearchQuery, fetchOrders]);
   const value: StaffContextType = {
     categories,
     foodItems,

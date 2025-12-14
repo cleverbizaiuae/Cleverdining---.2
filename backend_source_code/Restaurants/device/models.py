@@ -21,6 +21,15 @@ class Device(models.Model):
     table_token = models.UUIDField(default=uuid_lib.uuid4, editable=True, unique=True) # Token for QR code, rotatable
     qr_code_image = models.ImageField(upload_to='media/qr_codes/', blank=True, null=True)
 
+    @property
+    def table_url(self):
+        # Centralized logic for table URL
+        # You can move the base URL to settings.base if needed later
+        base_url = "https://clever-biz-mobile.netlify.app"
+        # base_url = "https://cleverbiz-mobile.onrender.com" # Alternative if needed
+        table_name_encoded = urllib.parse.quote(self.table_name)
+        return f"{base_url}/login?table={table_name_encoded}&id={self.id}"
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)  # Save first to get ID if new
@@ -29,9 +38,7 @@ class Device(models.Model):
             self.generate_qr_code()
 
     def generate_qr_code(self):
-        # Frontend URL: https://clever-biz-mobile.netlify.app/login?table={table_name}&id={id}
-        table_name_encoded = urllib.parse.quote(self.table_name)
-        qr_url = f"https://clever-biz-mobile.netlify.app/login?table={table_name_encoded}&id={self.id}"
+        qr_url = self.table_url
         
         qr = qrcode.QRCode(
             version=1,
