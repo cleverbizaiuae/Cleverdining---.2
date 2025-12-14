@@ -109,7 +109,7 @@ const ScreenChefDashboard = () => {
           /> */}
         </div>
         {/* List of content */}
-        <div className="bg-sidebar p-4 rounded-lg">
+        <div className="bg-white border border-slate-200 p-4 rounded-lg">
           <TableFoodList data={foodItems} />
           <div className="mt-4 flex justify-center">
             <Pagination

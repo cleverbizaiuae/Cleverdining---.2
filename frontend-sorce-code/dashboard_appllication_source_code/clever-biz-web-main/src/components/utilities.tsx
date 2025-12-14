@@ -845,47 +845,45 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full table-auto text-left clever-table">
-          <thead className="table-header">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-4 py-2 text-start">Image</th>
-              <th className="px-4 py-2 text-start">Name of the food</th>
-              <th className="px-4 py-2 text-center">Category</th>
-              <th className="px-4 py-2 text-center">Price</th>
-              <th className="px-4 py-2 text-start">Action</th>
-              <th className="px-4 py-2 text-start">Availability</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-600">Image</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-600">Name of the food</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-600 text-center">Category</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-600 text-center">Price</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-600">Action</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-600">Availability</th>
             </tr>
           </thead>
-          <tbody className="bg-sidebar text-sm">
+          <tbody className="bg-white divide-y divide-slate-100 text-sm">
             {data?.map((item, index) => (
-              <tr key={index} className="border-b  border-[#1C1E3C]">
-                <td className="p-4 items-center">
-                  <img
-                    src={(() => {
-                      if (!item.image1) return "https://placehold.co/100x100?text=No+Image";
-                      let url = item.image1;
-                      // Fix double media path
-                      // url = url.replace("/media/media/", "/media/");
-                      // Force HTTPS
-                      if (url.startsWith("http://")) {
-                        url = url.replace("http://", "https://");
-                      }
-                      // Handle relative paths
-                      if (url.startsWith("/")) {
-                        url = `https://cleverdining-2.onrender.com${url}`;
-                      }
-                      return url;
-                    })()}
-                    alt="Food Item"
-                    className="bg-dashboard/50 w-12 h-12 rounded-md"
-                    onError={(e) => {
-                      e.currentTarget.src = "https://placehold.co/100x100?text=No+Image";
-                    }}
-                  />
+              <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                <td className="px-5 py-3">
+                  <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden shrink-0">
+                    <img
+                      src={(() => {
+                        if (!item.image1) return "https://placehold.co/100x100?text=No+Image";
+                        let url = item.image1;
+                        if (url.startsWith("http://")) {
+                          url = url.replace("http://", "https://");
+                        }
+                        if (url.startsWith("/")) {
+                          url = `https://cleverdining-2.onrender.com${url}`;
+                        }
+                        return url;
+                      })()}
+                      alt="Food Item"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "https://placehold.co/100x100?text=No+Image";
+                      }}
+                    />
+                  </div>
                 </td>
-                <td className="p-4 text-primary-text truncate text-start">{item.name.substring(0, 30) + '...'}</td>
-                <td className="p-4 text-primary-text text-center">{item.category}</td>
-                <td className="p-4 text-primary-text text-center">{item.price}</td>
+                <td className="px-5 py-3 text-slate-900 font-medium truncate">{item.name.substring(0, 30) + '...'}</td>
+                <td className="px-5 py-3 text-slate-500 text-center">{item.category}</td>
+                <td className="px-5 py-3 text-slate-900 font-medium text-center">${item.price}</td>
                 <td className="h-20 p-4 flex gap-x-4 items-center">
                   <button
                     onClick={() => openEdit(item?.id)}
