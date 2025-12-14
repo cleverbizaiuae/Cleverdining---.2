@@ -252,7 +252,7 @@ const ScreenRestaurantManagement = () => {
                         <span className="font-medium text-slate-900">{member.first_name} {member.last_name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600 text-sm">@{member.username}</td>
+                    <td className="px-6 py-4 text-slate-600 text-sm">{member.username}</td>
                     <td className="px-6 py-4">
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-[#0055FE]/10 text-[#0055FE]">
                         {member.role}
