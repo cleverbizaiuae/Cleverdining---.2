@@ -150,13 +150,15 @@ class ChefStaffSerializer(serializers.Serializer):
 class ChefStaffCreateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True)
     username = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(write_only=True, required=False) # Add first_name
+    last_name = serializers.CharField(write_only=True, required=False) # Add last_name
     password = serializers.CharField(write_only=True, required=False) # Add password field
     role = serializers.ChoiceField(choices=[('chef', 'Chef'), ('staff', 'Staff')], write_only=True)
     image = serializers.ImageField(write_only=True, required=False)
 
     class Meta:
         model = ChefStaff
-        fields = ['email', 'username', 'password', 'role', 'action', 'generate','image']
+        fields = ['email', 'username', 'first_name', 'last_name', 'password', 'role', 'action', 'generate','image']
 
     def create(self, validated_data):
         from django.db import transaction
@@ -171,6 +173,8 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
 
         email = validated_data.pop('email')
         username = validated_data.pop('username')
+        first_name = validated_data.pop('first_name', '')
+        last_name = validated_data.pop('last_name', '')
         role = validated_data.pop('role')
         image = validated_data.pop('image', None)
         password = validated_data.pop('password', None) # Get password if provided
@@ -190,6 +194,11 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
                 role=role,
                 image=image
             )
+            if first_name:
+                new_user.first_name = first_name
+            if last_name:
+                new_user.last_name = last_name
+            new_user.save()
 
             staff_member = ChefStaff.objects.create(
                 user=new_user,
