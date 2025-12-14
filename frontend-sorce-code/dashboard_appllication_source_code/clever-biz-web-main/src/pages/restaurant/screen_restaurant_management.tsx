@@ -140,8 +140,8 @@ const ScreenRestaurantManagement = () => {
     if (!selectedMember) return;
     setLoading(true);
     try {
-      await axiosInstance.patch(`/owners/team/${selectedMember.id}/update/`, {
-        first_name: formData.name,
+      await axiosInstance.patch(`/owners/chef-staff/${selectedMember.id}/`, {
+        first_name: formData.name, // Will be mapped to user.first_name via serializer
         username: formData.username,
         role: formData.role
       });
@@ -296,7 +296,7 @@ const ScreenRestaurantManagement = () => {
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900">{member.first_name} {member.last_name}</h4>
-                      <p className="text-xs text-slate-500">@{member.username}</p>
+                      <p className="text-xs text-slate-500">{member.username}</p>
                     </div>
                   </div>
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-[#0055FE]/10 text-[#0055FE]">
