@@ -298,9 +298,10 @@ export const ScreenRestaurantDevices = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">Area</label>
             <input
               type="text"
-              value="Primary"
-              disabled
-              className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 outline-none cursor-not-allowed"
+              placeholder="e.g. Main Hall"
+              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              value={formData.area}
+              onChange={e => setFormData({ ...formData, area: e.target.value })}
             />
           </div>
           {isEditModalOpen && (
