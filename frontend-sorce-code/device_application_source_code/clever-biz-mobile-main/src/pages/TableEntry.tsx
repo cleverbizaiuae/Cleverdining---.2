@@ -14,11 +14,11 @@ const TableEntry = () => {
 
             try {
                 // 1. Fetch device details by UUID
-                const response = await axiosInstance.get(`/customer/devices/${uuid}/`);
+                const response = await axiosInstance.get(`/api/customer/devices/${uuid}/`);
                 const device = response.data;
 
                 // 2. Resolve Table Session (Get Real Token)
-                const sessionRes = await axiosInstance.post('/customer/resolve-table/', {
+                const sessionRes = await axiosInstance.post('/api/customer/resolve-table/', {
                     device_id: device.id // Use ID from details
                 });
 
