@@ -454,6 +454,16 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation */}
         <BottomNav />
+
+        {/* DEBUG INFO - REMOVE AFTER FIX */}
+        <div className="fixed top-20 right-0 bg-black/80 text-white text-[10px] p-2 max-w-[200px] z-50 pointer-events-none opacity-50 hover:opacity-100">
+          <p>RestID: {restaurantId}</p>
+          <p>Cats: {categories.length}</p>
+          <p>Items: {items.length}</p>
+          <p>SelCat: {selectedCategory}</p>
+          <p>Sub: {selectedSubCategory}</p>
+          <p>User: {JSON.stringify(userInfo?.user?.username)}</p>
+        </div>
       </div>
 
       {/* Detail modal */}
