@@ -68,19 +68,22 @@ SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False) # Set to Tr
 SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
 CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
 
-CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOWED_ORIGINS = [
-#     "https://abc.winaclaim.com",
-#     "https://clever-biz.netlify.app",
-#     "https://clever-biz2.netlify.app",
-#     "https://officialcleverdining.netlify.app",
-#     "http://localhost:5175",
-#     "http://localhost:5176",
-#     "http://localhost:5177",
-#     "http://127.0.0.1:5175",
-#     "http://127.0.0.1:5176",
-#     "http://127.0.0.1:5177",
-# ]
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    "https://abc.winaclaim.com",
+    "https://clever-biz.netlify.app",
+    "https://clever-biz2.netlify.app",
+    "https://officialcleverdining.netlify.app",
+    "https://officialcleverdiningcustomer.netlify.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:5177",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:5176",
+    "http://127.0.0.1:5177",
+]
 
 # Allow credentials for authenticated requests
 CORS_ALLOW_CREDENTIALS = True
