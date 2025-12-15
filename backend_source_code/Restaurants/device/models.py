@@ -24,8 +24,7 @@ class Device(models.Model):
     @property
     def table_url(self):
         # Centralized logic for table URL
-        # You can move the base URL to settings.base if needed later
-        base_url = "https://clever-biz-mobile.netlify.app"
+        base_url = "https://officialcleverdining.netlify.app"
         # base_url = "https://cleverbiz-mobile.onrender.com" # Alternative if needed
         table_name_encoded = urllib.parse.quote(self.table_name)
         return f"{base_url}/login?table={table_name_encoded}&id={self.id}"
