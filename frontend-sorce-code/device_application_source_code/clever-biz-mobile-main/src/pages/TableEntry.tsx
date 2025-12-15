@@ -50,9 +50,13 @@ const TableEntry = () => {
                 // 5. Redirect to dashboard
                 navigate("/dashboard");
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Failed to fetch device/session:", err);
-                setError("Invalid Table URL or Connection Failed.");
+                const status = err.response?.status;
+                const statusText = err.response?.statusText;
+                const data = JSON.stringify(err.response?.data || {});
+                const msg = err.message;
+                setError(`Connection Failed: ${status || 'N/A'} ${statusText || ''} - ${msg} \n Data: ${data}`);
             }
         };
 
@@ -63,12 +67,16 @@ const TableEntry = () => {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground p-4 text-center">
                 <h1 className="text-2xl font-bold mb-2">Error</h1>
-                <p className="text-muted-foreground">{error}</p>
+                <p className="text-red-500 text-sm whitespace-pre-wrap break-all">{error}</p>
+                <div className="mt-4 p-2 bg-gray-100 rounded text-xs text-left w-full overflow-auto max-h-40">
+                    <p>Debug Info:</p>
+                    <p>UUID: {uuid}</p>
+                </div>
                 <button
-                    onClick={() => navigate("/")}
+                    onClick={() => window.location.reload()}
                     className="mt-4 px-4 py-2 bg-primary text-white rounded-lg"
                 >
-                    Go Home
+                    Retry
                 </button>
             </div>
         );
