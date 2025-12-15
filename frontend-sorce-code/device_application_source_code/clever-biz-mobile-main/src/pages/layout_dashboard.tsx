@@ -117,14 +117,14 @@ const LayoutDashboard = () => {
       const bootstrapSession = async () => {
         try {
           // 1. Fetch Restaurants
-          const resResponse = await axiosInstance.get("/customer/restaurants/");
+          const resResponse = await axiosInstance.get("/api/customer/restaurants/");
           const restaurants = resResponse.data;
 
           if (restaurants && restaurants.length > 0) {
             const firstRestaurant = restaurants[0];
 
             // 2. Fetch Devices for the first restaurant
-            const devResponse = await axiosInstance.get(`/customer/devices/?restaurant_id=${firstRestaurant.id}`);
+            const devResponse = await axiosInstance.get(`/api/customer/devices/?restaurant_id=${firstRestaurant.id}`);
             const devices = devResponse.data;
 
             if (devices && devices.length > 0) {
@@ -169,7 +169,7 @@ const LayoutDashboard = () => {
     try {
       const userInfo = localStorage.getItem("userInfo");
       const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
-      const url = restaurantId ? `/customer/categories/?restaurant_id=${restaurantId}` : "/customer/categories/";
+      const url = restaurantId ? `/api/customer/categories/?restaurant_id=${restaurantId}` : "/api/customer/categories/";
       const response = await axiosInstance.get(url);
       const data = response.data;
       setCategories(Array.isArray(data) ? data : data?.results || []);
@@ -190,7 +190,7 @@ const LayoutDashboard = () => {
 
   const fetchItems = async () => {
     try {
-      let url = "/customer/items/";
+      let url = "/api/customer/items/";
       const params = [];
 
       const userInfo = localStorage.getItem("userInfo");
