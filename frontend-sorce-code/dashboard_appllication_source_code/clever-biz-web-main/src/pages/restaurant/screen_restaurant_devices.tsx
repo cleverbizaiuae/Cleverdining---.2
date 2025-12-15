@@ -123,9 +123,10 @@ export const ScreenRestaurantDevices = () => {
       setIsAddModalOpen(false);
       fetchAllDevices();
       fetchDeviceStats();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Create failed", error);
-      toast.error("Failed to create table");
+      const errorMessage = error.response?.data?.detail || error.response?.data?.table_name?.[0] || "Failed to create table";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -142,9 +143,10 @@ export const ScreenRestaurantDevices = () => {
       toast.success("Table updated successfully");
       setIsEditModalOpen(false);
       fetchAllDevices();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Update failed", error);
-      toast.error("Failed to update table");
+      const errorMessage = error.response?.data?.detail || error.response?.data?.table_name?.[0] || "Failed to update table";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

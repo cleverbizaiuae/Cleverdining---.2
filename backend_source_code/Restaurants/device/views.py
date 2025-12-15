@@ -115,9 +115,21 @@ class DeviceViewSet(viewsets.ModelViewSet):
         else:
              raise PermissionDenied("You are not authorized to create devices.")
 
-        username = generate_username(restaurant.resturent_name)
+        # Generate unique username
+        username = None
         password = generate_password()
-        email = f"{username}@example.com"
+        email = None
+        
+        max_retries = 5
+        for _ in range(max_retries):
+            temp_username = generate_username(restaurant.resturent_name)
+            if not User.objects.filter(username=temp_username).exists():
+                username = temp_username
+                email = f"{username}@example.com"
+                break
+        
+        if not username:
+             raise serializers.ValidationError("Failed to generate unique device credentials. Please try again.")
 
         device_user = User.objects.create_user(
             email=email,
@@ -169,7 +181,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         restaurant = instance.restaurant
         device_id = instance.id
+        device_user = instance.user # Capture user before delete
+        
         instance.delete()
+        
+        # Cleanup associated user to free up username/email
+        if device_user:
+            device_user.delete()
 
         # 🔥 WebSocket Broadcast - device deleted
         async_to_sync(channel_layer.group_send)(
