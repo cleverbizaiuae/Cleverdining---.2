@@ -24,7 +24,7 @@ class Device(models.Model):
     @property
     def table_url(self):
         # Centralized logic for table URL
-        base_url = "https://clever-biz2.netlify.app"
+        base_url = "https://officialcleverdiningcustomer.netlify.app"
         return f"{base_url}/table/{self.uuid}"
 
     def save(self, *args, **kwargs):

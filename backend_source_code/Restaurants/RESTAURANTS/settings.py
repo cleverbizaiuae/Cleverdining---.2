@@ -55,6 +55,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5175",
     "http://127.0.0.1:5176",
     "http://127.0.0.1:5177",
+    "https://officialcleverdiningcustomer.netlify.app",
 ]
 
 # Add Render.com URL to CSRF trusted origins
