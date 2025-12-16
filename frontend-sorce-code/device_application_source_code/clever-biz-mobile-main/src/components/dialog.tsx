@@ -179,10 +179,10 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               {/* Add to Cart Button */}
               <button
                 onClick={handleAddToCart}
-                className="flex-1 h-16 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-between px-6 transition-all active:scale-[0.98] shadow-xl shadow-primary/20"
+                className="flex-1 h-16 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-between px-6 gap-4 transition-all active:scale-[0.98] shadow-xl shadow-primary/20"
               >
-                <span className="text-base">Add to Cart</span>
-                <span className="text-base bg-white/20 px-3 py-1 rounded-lg">
+                <span className="text-base font-semibold whitespace-nowrap">Add to Cart</span>
+                <span className="text-base font-bold bg-white/20 px-4 py-1.5 rounded-xl whitespace-nowrap">
                   AED {(Number(item?.price || 0) * quantity).toFixed(2)}
                 </span>
               </button>
