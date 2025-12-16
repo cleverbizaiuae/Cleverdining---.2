@@ -24,7 +24,7 @@ export default function TableLanding() {
             }
 
             if (Object.keys(payload).length === 0) {
-                setError("Invalid link parameters");
+                // No parameters provided -> Show QR Code Scan prompt instead of error
                 return;
             }
 
@@ -82,6 +82,24 @@ export default function TableLanding() {
                 >
                     Retry Connection
                 </button>
+            </div>
+        );
+    }
+
+    // Check if we have params to attempt connection
+    const hasParams = restaurantId || searchParams.get('id');
+
+    if (!hasParams && !error) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-6 text-center">
+                <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mb-6 text-orange-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                </div>
+                <h1 className="text-2xl font-bold mb-2">Welcome!</h1>
+                <p className="text-gray-400 mb-8 max-w-xs">Please scan the QR code on your table to view the menu and order.</p>
+                <div className="text-sm text-gray-500">
+                    Need help? Ask a staff member.
+                </div>
             </div>
         );
     }

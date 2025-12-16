@@ -41,10 +41,9 @@ function App() {
       navigate("/dashboard");
 
     } else {
-      // Case 3: No params and no session - Create default guest session (Bypass Login)
-      // Redirect to the login route with a default device ID to generate a REAL session token via backend.
-      // Using Device ID 14 as default (matches previous hardcoded logic).
-      window.location.href = "/login?id=14&table=Default Table";
+      // Case 3: No params and no session - Redirect to Login/Landing (Wait for QR Scan)
+      // Do NOT use hardcoded ID=14 as it may be invalid/deleted.
+      window.location.href = "/login";
     }
   }, [searchParams, navigate, location.pathname]);
 

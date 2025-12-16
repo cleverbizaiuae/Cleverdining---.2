@@ -225,12 +225,11 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       // Assuming generic endpoint pattern or specific one
       const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/categories/" : "/chef/categories/";
-      // Note: User spec mentioned /api/categories, checking if we should stick to owners pattern. 
-      // Sticking to pattern for consistency unless 404.
       const res = await axiosInstance.get(endpoint);
       setCategories(res.data);
-    } catch (err) {
-      console.error("Failed to load categories.");
+    } catch (err: any) {
+      console.error("Failed to load categories.", err);
+      // toast.error(`Failed to load categories: ${err.response?.status || 'Error'}`);
     }
   }, [userRole, isLoading]);
 
