@@ -192,6 +192,11 @@ const ScreenRestaurantDashboard = () => {
   const [catFormData, setCatFormData] = useState({ name: "", image: null as File | null });
   const [subCatFormData, setSubCatFormData] = useState({ name: "", category: "", image: null as File | null });
 
+  // Add Item State
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", image1: null as File | null });
+
+
   // Effects for initial load
   useEffect(() => {
     fetchCategories();
@@ -239,6 +244,88 @@ const ScreenRestaurantDashboard = () => {
   // Chart Data Preparation
   const chartLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const chartValues = analytics?.current_year ? Object.values(analytics.current_year) as number[] : Array(12).fill(0);
+
+  const ImageUploaderWithAI = ({ label, currentImage, onImageSelected }: any) => {
+    const [mode, setMode] = useState<'upload' | 'ai'>('upload');
+    const [prompt, setPrompt] = useState('');
+    const [generating, setGenerating] = useState(false);
+    const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
+
+    const handleGenerate = async () => {
+      if (!prompt) return toast.error("Please enter a prompt");
+      setGenerating(true);
+      try {
+        const res = await axiosInstance.post('/owners/generate-image/', { prompt });
+        const base64 = res.data.image;
+        setGeneratedPreview(base64);
+
+        // Convert to File
+        const resBlob = await fetch(base64).then(r => r.blob());
+        const file = new File([resBlob], "ai-generated-image.png", { type: "image/png" });
+        onImageSelected(file);
+        toast.success("Image generated!");
+      } catch (e) {
+        console.error(e);
+        toast.error("Generation failed");
+      } finally {
+        setGenerating(false);
+      }
+    };
+
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-1">
+          <label className="block text-xs font-medium text-slate-700">{label}</label>
+          <div className="flex gap-2 text-[10px]">
+            <button onClick={() => setMode('upload')} className={`px-2 py-1 rounded ${mode === 'upload' ? 'bg-slate-100 text-slate-800 font-bold' : 'text-slate-500'}`}>Upload</button>
+            <button onClick={() => setMode('ai')} className={`px-2 py-1 rounded ${mode === 'ai' ? 'bg-[#0055FE]/10 text-[#0055FE] font-bold' : 'text-slate-500'}`}>Generate with AI</button>
+          </div>
+        </div>
+
+        {mode === 'upload' ? (
+          <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
+            <input
+              type="file"
+              accept="image/*"
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              onChange={e => {
+                const file = e.target.files?.[0] || null;
+                onImageSelected(file);
+              }}
+            />
+            <div className="mb-2 text-slate-400"><Upload size={24} /></div>
+            <p className="text-sm font-medium text-slate-700">Upload a File</p>
+            <p className="text-xs text-slate-500">Drag and drop or browse</p>
+            {currentImage && <p className="mt-2 text-xs text-green-600 font-medium">{currentImage.name || "Image Selected"}</p>}
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+            <textarea
+              className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-20 outline-none focus:border-[#0055FE]"
+              placeholder="Describe the image (e.g., 'A delicious pepperoni pizza on a wooden table')..."
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+            />
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="w-full py-1.5 bg-[#0055FE] text-white text-xs rounded hover:bg-[#0047D1] disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {generating ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <TrendingUp size={12} />}
+              Generate Image
+            </button>
+            {generatedPreview && (
+              <div className="mt-3">
+                <p className="text-[10px] text-slate-500 mb-1">Preview:</p>
+                <img src={generatedPreview} alt="AI Generated" className="w-full h-32 object-cover rounded-md border border-slate-200" />
+                <p className="text-[10px] text-green-600 mt-1 text-center font-medium">Image selected automatically</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -319,7 +406,7 @@ const ScreenRestaurantDashboard = () => {
                   <button className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddSubCategory(true)}>
                     <Layers size={14} /> Add Sub-Category
                   </button>
-                  <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors">
+                  <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddItem(true)}>
                     <Plus size={14} /> Add Item
                   </button>
                 </>
@@ -544,25 +631,17 @@ const ScreenRestaurantDashboard = () => {
               onChange={e => showEditCategory ? setEditingCategory({ ...editingCategory, Category_name: e.target.value }) : setCatFormData({ ...catFormData, name: e.target.value })}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Upload image</label>
-            <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
-              <input
-                type="file"
-                accept="image/*"
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                onChange={e => {
-                  const file = e.target.files?.[0] || null;
-                  if (showEditCategory) { /* Handle edit image logic if needed, complex with current state setup */ }
-                  else setCatFormData({ ...catFormData, image: file });
-                }}
-              />
-              <div className="mb-2 text-slate-400"><Upload size={24} /></div>
-              <p className="text-sm font-medium text-slate-700">Upload a File</p>
-              <p className="text-xs text-slate-500">Drag and drop files here or <span className="text-[#0055FE]">browse</span></p>
-              {catFormData.image && <p className="mt-2 text-xs text-green-600 font-medium">{catFormData.image.name}</p>}
-            </div>
-          </div>
+
+          {/* IMAGE UPLOADER WITH AI */}
+          <ImageUploaderWithAI
+            label="Category Image"
+            currentImage={catFormData.image}
+            onImageSelected={(file: File) => {
+              if (showEditCategory) { /* edit logic */ }
+              else setCatFormData({ ...catFormData, image: file })
+            }}
+          />
+
           <button
             onClick={async () => {
               const formData = new FormData();
@@ -629,24 +708,15 @@ const ScreenRestaurantDashboard = () => {
               ))}
             </select>
           </div>
-          {/* Image Upload for SubCategory (Simplified) */}
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Upload image</label>
-            <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
-              <input
-                type="file"
-                accept="image/*"
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                onChange={e => {
-                  const file = e.target.files?.[0] || null;
-                  if (!showEditSubCategory) setSubCatFormData({ ...subCatFormData, image: file });
-                }}
-              />
-              <div className="mb-2 text-slate-400"><Upload size={24} /></div>
-              <p className="text-sm font-medium text-slate-700">Upload a File</p>
-              {subCatFormData.image && <p className="mt-2 text-xs text-green-600 font-medium">{subCatFormData.image.name}</p>}
-            </div>
-          </div>
+          {/* IMAGE UPLOADER WITH AI */}
+          <ImageUploaderWithAI
+            label="SubCategory Image"
+            currentImage={subCatFormData.image}
+            onImageSelected={(file: File) => {
+              if (!showEditSubCategory) setSubCatFormData({ ...subCatFormData, image: file })
+            }}
+          />
+
           <button
             onClick={async () => {
               const formData = new FormData();
@@ -684,8 +754,71 @@ const ScreenRestaurantDashboard = () => {
         </div>
       </Modal>
 
+      {/* ADD ITEM MODAL (NEW) */}
+      <Modal isOpen={showAddItem} onClose={() => setShowAddItem(false)} title="Add New Item">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Item Name</label>
+            <input type="text" placeholder="Burger, Pizza..." className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE]"
+              value={itemFormData.item_name} onChange={e => setItemFormData({ ...itemFormData, item_name: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Price</label>
+              <input type="number" placeholder="0.00" className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE]"
+                value={itemFormData.price} onChange={e => setItemFormData({ ...itemFormData, price: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
+              <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
+                value={itemFormData.category} onChange={e => setItemFormData({ ...itemFormData, category: e.target.value })}>
+                <option value="">Select Category</option>
+                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.Category_name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
+            <textarea className="w-full p-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] h-20"
+              placeholder="Item description..."
+              value={itemFormData.description} onChange={e => setItemFormData({ ...itemFormData, description: e.target.value })} />
+          </div>
+
+          <ImageUploaderWithAI
+            label="Item Image"
+            currentImage={itemFormData.image1}
+            onImageSelected={(file: File) => setItemFormData({ ...itemFormData, image1: file })}
+          />
+
+          <button
+            onClick={async () => {
+              try {
+                const formData = new FormData();
+                formData.append('item_name', itemFormData.item_name);
+                formData.append('price', itemFormData.price);
+                formData.append('description', itemFormData.description);
+                formData.append('category', itemFormData.category);
+                if (itemFormData.image1) formData.append('image1', itemFormData.image1);
+
+                await axiosInstance.post('/owners/items/', formData); // Direct API call
+                toast.success("Item created successfully!");
+                setShowAddItem(false);
+                setItemFormData({ item_name: "", price: "", description: "", category: "", image1: null });
+                fetchFoodItems(1, ""); // Refresh list
+              } catch (e) {
+                toast.error("Failed to create item");
+              }
+            }}
+            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center">
+            Create Item
+          </button>
+        </div>
+      </Modal>
+
     </div >
   );
 };
 
 export default ScreenRestaurantDashboard;
+```

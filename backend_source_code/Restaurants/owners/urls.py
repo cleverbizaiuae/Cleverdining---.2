@@ -12,6 +12,7 @@ from device.views import DeviceViewSetall
 from vapi.views import CreateAssistantView,UpdateAssistantNumber,GetRestaurantAssistanceView
 from payment.views import StripeDetailsViewSet, PaymentGatewayViewSet
 from payment.admin_views import PaymentAdminViewSet
+from .views import GenerateImageView
 
 
 
@@ -41,4 +42,5 @@ urlpatterns = [
     path('update-assistant-number/', UpdateAssistantNumber.as_view(), name='update_assistant_number'),
     path('get-restaurant-assistance/', GetRestaurantAssistanceView.as_view(), name='get_restaurant_assistance'),
     path('sales-report/monthly/', MonthlySalesReportView.as_view(), name='monthly-sales-report'),
+    path('generate-image/', GenerateImageView.as_view(), name='generate-image'),
 ]
