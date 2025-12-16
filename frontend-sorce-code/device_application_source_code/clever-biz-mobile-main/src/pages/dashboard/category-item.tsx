@@ -19,21 +19,24 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        // Layout
-        "relative flex flex-col items-center justify-center p-1 transition-all duration-200 overflow-hidden",
-        // Dimensions
+        // Layout: Flex Column, strict 80x90 size
+        "flex flex-col items-center justify-start p-2 gap-2 transition-all duration-200",
         "w-[80px] h-[90px] shrink-0",
-        // Shape
-        "rounded-2xl border",
-        // Border Styles
+        // Shape & Borders
+        "rounded-xl border",
         isActive
-          ? "border-primary ring-2 ring-primary ring-offset-1"
-          : "border-gray-200 hover:border-primary/50"
+          ? "bg-[#0055FE] text-white border-transparent shadow-[0_10px_15px_rgba(0,85,254,0.3)]"
+          : "bg-white text-slate-700 border-slate-200 hover:border-[#0055FE]/50"
       )}
     >
-      {/* Background Image - Absolute Full Cover */}
-      {cat.image ? (
-        <div className="absolute inset-0 z-0">
+      {/* Icon Container: Strict 40x40px */}
+      <div
+        className={cn(
+          "w-10 h-10 shrink-0 flex items-center justify-center rounded-lg overflow-hidden",
+          isActive ? "bg-white/20" : "bg-slate-100"
+        )}
+      >
+        {cat.image ? (
           <img
             src={(() => {
               let url = cat.image;
@@ -42,40 +45,41 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
               return url;
             })()}
             alt={cat.Category_name}
-            className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-110"
+            className="w-full h-full object-cover object-center"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.classList.add('bg-slate-200');
+              e.currentTarget.parentElement?.classList.remove('bg-slate-100'); // Remove white bg if fallback logic needed
+              // Force fallback icon display if needed, but we used nextSibling logic before
+              // Since we are in strict React, simpler to just hide img and show fallback
             }}
           />
-          {/* Subtle overlay to ensure badge pop */}
-          <div className="absolute inset-0 bg-black/10" />
-        </div>
-      ) : (
-        // Fallback Background
-        <div className={cn("absolute inset-0 z-0 flex items-center justify-center bg-slate-100")}>
-          <span className="text-2xl mb-6">📁</span>
-        </div>
-      )}
-
-      {/* Text Badge - Centered Pill with Multi-line Support */}
-      <span
-        className={cn(
-          "relative z-10 text-[10px] font-bold px-2 py-1 rounded-xl shadow-sm backdrop-blur-md transition-colors duration-200",
-          "w-[90%] text-center leading-[1.1] whitespace-normal break-words", // multi-line support
-          isActive
-            ? "bg-primary text-white"
-            : "bg-white/95 text-gray-800"
+        ) : (
+          <span className="text-[20px]">📁</span>
         )}
-        style={{
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
-      >
-        {cat.Category_name}
-      </span>
+
+        {/* Fallback if Image Fails or is Duplicate - keeping logic simple for now */}
+        {cat.image && (
+          <span className="hidden text-[20px]">📁</span>
+        )}
+      </div>
+
+      {/* Text Container: ~26px height remaining */}
+      <div className="w-full flex-1 flex items-center justify-center overflow-hidden">
+        <span
+          className={cn(
+            "text-[10px] font-medium leading-[1.1] text-center w-full block break-words whitespace-normal",
+            isActive ? "text-white" : "text-slate-700"
+          )}
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {cat.Category_name}
+        </span>
+      </div>
     </button>
   );
 };
