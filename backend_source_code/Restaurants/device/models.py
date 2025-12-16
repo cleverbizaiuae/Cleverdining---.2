@@ -23,9 +23,14 @@ class Device(models.Model):
 
     @property
     def table_url(self):
-        # Centralized logic for table URL
+        # Legacy URL format as requested to restore original functionality
         base_url = "https://officialcleverdiningcustomer.netlify.app"
-        return f"{base_url}/table/{self.uuid}"
+        params = {
+            "table_id": self.id,
+            "table_name": self.table_name,
+            "restaurant_id": self.restaurant.id
+        }
+        return f"{base_url}/?{urllib.parse.urlencode(params)}"
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
