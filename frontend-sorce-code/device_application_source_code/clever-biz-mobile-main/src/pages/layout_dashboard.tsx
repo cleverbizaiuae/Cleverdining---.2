@@ -455,14 +455,40 @@ const LayoutDashboard = () => {
         {/* 6. Bottom Navigation */}
         <BottomNav />
 
-        {/* DEBUG INFO - REMOVE AFTER FIX */}
-        <div className="fixed top-20 right-0 bg-black/80 text-white text-[10px] p-2 max-w-[200px] z-50 pointer-events-none opacity-50 hover:opacity-100">
-          <p>RestID: {restaurantId}</p>
+        {/* DEBUG INFO - INTERACTIVE RESTAURANT SWITCHER */}
+        <div className="fixed top-20 right-0 bg-black/90 text-white text-[10px] p-3 max-w-[200px] z-50 opacity-80 hover:opacity-100 rounded-l-lg shadow-lg">
+          <p className="font-bold border-b border-gray-600 mb-1 pb-1">Debug Menu</p>
+          <div
+            className="flex justify-between items-center bg-blue-600/30 p-1 rounded cursor-pointer hover:bg-blue-600/50 mb-1"
+            onClick={() => {
+              const newId = prompt("Enter Restaurant ID to switch to:", String(restaurantId || ""));
+              if (newId && !isNaN(Number(newId))) {
+                // Update localStorage userInfo to trick the app
+                try {
+                  const current = localStorage.getItem("userInfo");
+                  const parsed = current ? JSON.parse(current) : { user: { restaurants: [{ id: Number(newId), table_name: "Debug Table" }] } };
+                  if (parsed.user?.restaurants?.[0]) {
+                    parsed.user.restaurants[0].id = Number(newId);
+                    localStorage.setItem("userInfo", JSON.stringify(parsed));
+                    window.location.reload();
+                  }
+                } catch (e) { console.error(e); }
+              }
+            }}
+          >
+            <span>RestID: <span className="font-mono font-bold text-yellow-400">{restaurantId}</span></span>
+            <span className="text-[8px] underline ml-2">Change</span>
+          </div>
           <p>Cats: {categories.length}</p>
           <p>Items: {items.length}</p>
           <p>SelCat: {selectedCategory}</p>
           <p>Sub: {selectedSubCategory}</p>
-          <p>User: {JSON.stringify(userInfo?.user?.username)}</p>
+          <button
+            className="mt-2 w-full bg-red-500 text-white p-1 rounded text-[9px]"
+            onClick={() => { localStorage.clear(); window.location.href = '/'; }}
+          >
+            Clear Session
+          </button>
         </div>
       </div>
 
