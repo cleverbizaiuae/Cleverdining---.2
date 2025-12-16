@@ -59,7 +59,9 @@ class ResolveTableView(APIView):
             else:
                 device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
         except Device.DoesNotExist:
-            return Response({'error': 'Invalid table link (Table not found)'}, status=status.HTTP_404_NOT_FOUND)
+            # Construct debug info
+            debug_info = f"ID: {device_id}, RID: {request.data.get('restaurant_id')}, Table: {request.data.get('table_name')}"
+            return Response({'error': f'Invalid table link. (Debug: {debug_info})'}, status=status.HTTP_404_NOT_FOUND)
 
         # Create new guest session
         session_token = str(uuid.uuid4())
