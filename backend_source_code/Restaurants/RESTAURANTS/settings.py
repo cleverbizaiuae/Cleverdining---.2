@@ -402,7 +402,7 @@ OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
 
 
 # Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
-USE_SQLITE = True # env.bool('USE_SQLITE', default=False)
+USE_SQLITE = env.bool('USE_SQLITE', default=False)
 
 if USE_SQLITE:
     DATABASES = {
