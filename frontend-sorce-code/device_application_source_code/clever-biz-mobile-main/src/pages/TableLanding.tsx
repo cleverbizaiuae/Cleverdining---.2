@@ -33,7 +33,7 @@ export default function TableLanding() {
             }
 
             try {
-                const res = await axios.post('/customer/resolve-table/', payload);
+                const res = await axios.post('/api/customer/resolve-table/', payload);
 
                 const { guest_session_id, session_token, table_id, table_name } = res.data;
 

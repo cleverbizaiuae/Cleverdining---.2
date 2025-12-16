@@ -26,7 +26,7 @@ const ScreenOrders = () => {
       try {
         setLoading(true);
         setErr(null);
-        const res = await axiosInstance.get(`/customer/uncomplete/orders/?device_id=${device_id}`);
+        const res = await axiosInstance.get(`/api/customer/uncomplete/orders/?device_id=${device_id}`);
         const d = res?.data;
 
         const list: Order[] = Array.isArray(d)

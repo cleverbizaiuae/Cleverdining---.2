@@ -62,7 +62,7 @@ const ScreenCart = () => {
         guest_session_token: guestSessionToken,
       };
 
-      const response = await axiosInstance.post(`/customer/orders/?guest_token=${guestSessionToken}`, orderData);
+      const response = await axiosInstance.post(`/api/customer/orders/?guest_token=${guestSessionToken}`, orderData);
       toast.success("Order placed successfully!");
       clearCart();
 

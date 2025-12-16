@@ -28,7 +28,7 @@ export default function CheckoutButton({
       console.log("Using Token:", guestToken.slice(0, 10) + "...");
 
       const res = await axiosInstance.post(
-        `/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
+        `/api/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
         {},
         {
           headers: {
@@ -45,7 +45,7 @@ export default function CheckoutButton({
       if (sessionId) {
         try {
           // Razorpay / Other pre-check
-          const probe = await axiosInstance.get(`/customer/payment/success/`, {
+          const probe = await axiosInstance.get(`/api/customer/payment/success/`, {
             params: { session_id: sessionId, order_id: String(orderId) },
           });
           if (probe?.data?.confirmed) {

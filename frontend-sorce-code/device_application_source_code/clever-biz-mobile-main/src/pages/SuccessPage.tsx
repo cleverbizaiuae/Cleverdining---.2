@@ -124,7 +124,7 @@ export default function SuccessPage() {
       if (!sessionId || calledRef.current) return;
       calledRef.current = true;
       try {
-        const res = await axiosInstance.get(`/customer/payment/success/`, {
+        const res = await axiosInstance.get(`/api/customer/payment/success/`, {
           params: {
             session_id: sessionId,
             ...(orderId ? { order_id: orderId } : {}),
@@ -182,7 +182,7 @@ export default function SuccessPage() {
                     {formatMoney(
                       payment.presentment_details.presentment_amount,
                       payment.presentment_details.presentment_currency ||
-                        payment.currency
+                      payment.currency
                     )}
                   </dd>
                 </div>
@@ -206,8 +206,8 @@ export default function SuccessPage() {
                     payment?.payment_status === "paid"
                       ? "ok"
                       : payment?.payment_status
-                      ? "warn"
-                      : "info"
+                        ? "warn"
+                        : "info"
                   }
                 />
               </dd>
@@ -222,8 +222,8 @@ export default function SuccessPage() {
                     payment?.status === "complete"
                       ? "ok"
                       : payment?.status
-                      ? "info"
-                      : "info"
+                        ? "info"
+                        : "info"
                   }
                 />
               </dd>

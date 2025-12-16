@@ -46,7 +46,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       const sessionToken = localStorage.getItem("guest_session_token");
       if (sessionToken) {
         try {
-          const res = await axiosInstance.get("/customer/cart/");
+          const res = await axiosInstance.get("/api/customer/cart/");
           // Transform backend cart items to frontend format
           const backendItems = res.data.map((cartItem: any) => ({
             ...cartItem.item, // Spread item details
@@ -98,7 +98,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     const sessionToken = localStorage.getItem("guest_session_token");
     if (sessionToken) {
       try {
-        await axiosInstance.post("/customer/cart/add_item/", {
+        await axiosInstance.post("/api/customer/cart/add_item/", {
           item_id: item.id,
           quantity: quantity
         });
@@ -127,7 +127,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     const sessionToken = localStorage.getItem("guest_session_token");
     if (sessionToken) {
       try {
-        await axiosInstance.post("/customer/cart/add_item/", {
+        await axiosInstance.post("/api/customer/cart/add_item/", {
           item_id: id,
           quantity: 1
         });
@@ -156,7 +156,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     const sessionToken = localStorage.getItem("guest_session_token");
     if (sessionToken) {
       try {
-        await axiosInstance.post("/customer/cart/clear/");
+        await axiosInstance.post("/api/customer/cart/clear/");
       } catch (error) {
         console.error("Failed to clear server cart", error);
       }

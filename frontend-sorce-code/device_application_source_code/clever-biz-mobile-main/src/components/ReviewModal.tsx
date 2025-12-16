@@ -51,7 +51,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
     try {
       console.log(reviewData);
       const response = await axiosInstance.post(
-        "/customer/reviews/create/",
+        "/api/customer/reviews/create/",
         reviewData,
         {
           timeout: 10000,
@@ -192,8 +192,8 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
                     >
                       <svg
                         className={`w-8 h-8 transition-colors duration-200 ${star <= rating
-                            ? "text-yellow-400 fill-current"
-                            : "text-gray-300 hover:text-yellow-200"
+                          ? "text-yellow-400 fill-current"
+                          : "text-gray-300 hover:text-yellow-200"
                           }`}
                         fill={star <= rating ? "currentColor" : "none"}
                         stroke="currentColor"

@@ -39,7 +39,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
   useEffect(() => {
     if (isOpen && itemId) {
-      axiosInstance.get(`/customer/items/${itemId}/`).then((res) => {
+      axiosInstance.get(`/api/customer/items/${itemId}/`).then((res) => {
         setItem(res.data);
         setShowVideo(false);
         setQuantity(1);
