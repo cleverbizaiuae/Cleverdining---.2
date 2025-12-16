@@ -19,26 +19,21 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        // Layout & Spacing
-        "flex flex-col items-center justify-start p-2 gap-2 transition-all duration-200",
-        // Fixed Dimensions
+        // Layout
+        "relative flex flex-col items-center justify-center p-1 transition-all duration-200 overflow-hidden",
+        // Dimensions
         "w-[80px] h-[90px] shrink-0",
-        // Shape & Border
-        "rounded-xl border",
-        // Dynamic Styles
+        // Shape
+        "rounded-2xl border",
+        // Border Styles
         isActive
-          ? "bg-[#0055FE] text-white border-transparent shadow-[0_10px_15px_rgba(0,85,254,0.3)]"
-          : "bg-white text-slate-700 border-slate-200 hover:border-[#0055FE]/50"
+          ? "border-primary ring-2 ring-primary ring-offset-1"
+          : "border-gray-200 hover:border-primary/50"
       )}
     >
-      {/* Icon Container - Fixed 40x40px */}
-      <div
-        className={cn(
-          "w-10 h-10 shrink-0 flex items-center justify-center rounded-lg overflow-hidden",
-          isActive ? "bg-white/20" : "bg-slate-100"
-        )}
-      >
-        {cat.image ? (
+      {/* Background Image - Absolute Full Cover */}
+      {cat.image ? (
+        <div className="absolute inset-0 z-0">
           <img
             src={(() => {
               let url = cat.image;
@@ -47,41 +42,34 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
               return url;
             })()}
             alt={cat.Category_name}
-            className="w-full h-full object-cover object-center"
+            className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-110"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              e.currentTarget.parentElement?.classList.add('bg-slate-200');
             }}
           />
-        ) : (
-          <span className="text-lg">📁</span>
-        )}
-
-        {/* Fallback Placeholder (Hidden by default) */}
-        <div className={cn("hidden w-full h-full items-center justify-center", !cat.image ? (isActive ? "text-white" : "text-gray-400") : "text-transparent")}>
-          {!cat.image && <span className="text-lg">📁</span>}
+          {/* Subtle overlay to ensure badge pop */}
+          <div className="absolute inset-0 bg-black/10" />
         </div>
-      </div>
+      ) : (
+        // Fallback Background
+        <div className={cn("absolute inset-0 z-0 flex items-center justify-center bg-slate-100")}>
+          <span className="text-2xl mb-6">📁</span>
+        </div>
+      )}
 
-      {/* Text Container - Flexible Height, Max 2 lines */}
-      <div className="w-full flex-1 mt-0 px-1 overflow-hidden">
-        <span
-          className={cn(
-            "text-[10px] font-medium leading-[1.2] text-center w-full block",
-            isActive ? "text-white" : "text-slate-700"
-          )}
-          style={{
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            wordBreak: "break-word",
-          }}
-        >
-          {cat.Category_name}
-        </span>
-      </div>
+      {/* Text Badge - Centered Pill */}
+      <span
+        className={cn(
+          "relative z-10 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-md transition-colors duration-200",
+          "max-w-[90%] truncate", // Ensure it doesn't overflow card width
+          isActive
+            ? "bg-primary text-white"
+            : "bg-white/90 text-gray-800"
+        )}
+      >
+        {cat.Category_name}
+      </span>
     </button>
   );
 };
