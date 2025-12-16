@@ -46,11 +46,13 @@ class ResolveTableView(APIView):
                     restaurant_id = device.restaurant.id
                 except Device.DoesNotExist:
                     # Fallback: Validation if restaurant_id and table_name are present (Self-Healing URL)
+                    device = None
                     table_name = request.data.get('table_name')
                     fallback_rid = request.data.get('restaurant_id')
                     
                     if fallback_rid and table_name:
-                         device = Device.objects.filter(restaurant_id=fallback_rid, table_name=table_name).first()
+                         # Use iexact for robust case-insensitive matching
+                         device = Device.objects.filter(restaurant_id=fallback_rid, table_name__iexact=table_name).first()
                     
                     if not device:
                         raise Device.DoesNotExist 
