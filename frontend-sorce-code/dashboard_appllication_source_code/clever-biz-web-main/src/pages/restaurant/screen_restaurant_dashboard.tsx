@@ -821,4 +821,3 @@ const ScreenRestaurantDashboard = () => {
 };
 
 export default ScreenRestaurantDashboard;
-```
