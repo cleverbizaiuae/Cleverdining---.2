@@ -12,8 +12,9 @@ import toast from "react-hot-toast";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
-import axiosInstance from "../lib/axios";
+import axiosInstance, { API_BASE_URL } from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
+import { HorizontalCategorySelector } from "../components/HorizontalCategorySelector";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
@@ -346,20 +347,46 @@ const LayoutDashboard = () => {
                 </div>
 
                 {/* Categories */}
-                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 snap-x snap-mandatory touch-pan-x">
-                  <div className="flex gap-3 pr-4 min-w-max">
-                    {categories.filter(c => !c.parent_category).map((category) => (
-                      <CategoryItem
-                        key={category.id}
-                        cat={category}
-                        isActive={(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)}
-                        onClick={() => {
-                          setSelectedCategory(categories.indexOf(category));
-                          setSelectedSubCategory(null);
+                {/* Categories */}
+                <div className="w-full mt-2">
+                  {(() => {
+                    const rootCategories = categories.filter(c => !c.parent_category);
+                    // Determine selected ID for the new component
+                    // Logic: If selectedCategory index is set, use that ID.
+                    // Else if null, it usually defaults to first category in the UI logic below (isActive), so we mimic that.
+                    let selectedId: string | undefined;
+                    if (selectedCategory !== null && categories[selectedCategory]) {
+                      selectedId = String(categories[selectedCategory].id);
+                    } else if (rootCategories.length > 0) {
+                      // Default to first category if none selected (matches previous UI behavior)
+                      selectedId = String(rootCategories[0].id);
+                    }
+
+                    return (
+                      <HorizontalCategorySelector
+                        categories={rootCategories.map(c => {
+                          let imageUrl = c.image;
+                          if (imageUrl) {
+                            if (imageUrl.startsWith("http://")) imageUrl = imageUrl.replace("http://", "https://");
+                            if (imageUrl.startsWith("/")) imageUrl = `${API_BASE_URL}${imageUrl}`;
+                          }
+                          return {
+                            id: String(c.id),
+                            name: c.Category_name,
+                            imageUrl: imageUrl
+                          };
+                        })}
+                        selectedId={selectedId}
+                        onSelect={(id) => {
+                          const idx = categories.findIndex(c => String(c.id) === id);
+                          if (idx !== -1) {
+                            setSelectedCategory(idx);
+                            setSelectedSubCategory(null);
+                          }
                         }}
                       />
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Sub-categories */}
