@@ -26,11 +26,11 @@ class Device(models.Model):
         # Legacy URL format as requested to restore original functionality
         base_url = "https://officialcleverdiningcustomer.netlify.app"
         params = {
-            "table_id": self.id,
-            "table_name": self.table_name,
+            "id": self.id,
+            "table": self.table_name,
             "restaurant_id": self.restaurant.id
         }
-        return f"{base_url}/?{urllib.parse.urlencode(params)}"
+        return f"{base_url}/login?{urllib.parse.urlencode(params)}"
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
