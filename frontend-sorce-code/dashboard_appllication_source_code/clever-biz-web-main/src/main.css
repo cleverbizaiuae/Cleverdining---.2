@@ -188,46 +188,55 @@
 
 /* Custom date picker ==================>>>>>>> */
 /* Customize container */
-.react-datepicker {
-  @apply bg-sidebar ! text-primary-text ! border-none ! rounded-md ! p-0 ! relative !;
-  font-family: inherit;
-}
+@apply bg-sidebar text-primary-text border-none rounded-md p-0 relative;
+font-family: inherit !important;
+background-color: var(--color-sidebar) !important;
+color: var(--color-primary-text) !important;
 
 /* Header styling */
 .react-datepicker__header {
-  @apply flex flex-col bg-transparent ! border-b ! border-dashboard;
+  @apply flex flex-col bg-transparent border-b border-dashboard;
+  background-color: transparent !important;
+  border-bottom-color: var(--color-dashboard) !important;
 }
 
 /* Current month label */
 .react-datepicker__current-month {
-  @apply text-primary-text ! text-lg ! font-medium !;
+  @apply text-primary-text text-lg font-medium;
+  color: var(--color-primary-text) !important;
 }
 
 /* Day name labels (Sun, Mon...) */
 .react-datepicker__day-name {
-  @apply w-10 ! h-8 ! mt-4 ! text-primary-text ! text-sm !;
+  @apply w-10 h-8 mt-4 text-primary-text text-sm;
+  color: var(--color-primary-text) !important;
 }
 
 /* Day cells */
 .react-datepicker__day {
-  @apply inline-flex items-center justify-center w-10 h-10 rounded-md text-primary-text !;
+  @apply inline-flex items-center justify-center w-10 h-10 rounded-md text-primary-text;
+  color: var(--color-primary-text) !important;
   transition: background-color 0.2s ease;
 }
 
 /* Hover effect on day */
 .react-datepicker__day:hover {
-  @apply bg-dashboard ! border-none !;
+  @apply bg-dashboard border-none;
+  background-color: var(--color-dashboard) !important;
 }
 
 /* Selected day */
 .react-datepicker__day--selected,
 .react-datepicker__day--keyboard-selected {
-  @apply bg-accent ! text-primary-text !;
+  @apply bg-accent text-primary-text;
+  background-color: var(--color-accent) !important;
+  color: var(--color-primary-text) !important;
 }
 
 /* Today highlight */
 .react-datepicker__day--today {
-  @apply border ! border-accent !;
+  @apply border border-accent;
+  border-color: var(--color-accent) !important;
 }
 
 /* Clear & navigation buttons */
@@ -236,7 +245,8 @@
 }
 
 .react-datepicker__navigation-icon::before {
-  @apply top-0 !;
+  @apply top-0;
+  top: 0 !important;
 }
 
 /* <<<<<===================== Custom date picker*/
@@ -253,7 +263,8 @@
 }
 
 .rsw-editor {
-  @apply border-0 !;
+  @apply border-0;
+  border: 0 !important;
 }
 
 @utility clever-table {
