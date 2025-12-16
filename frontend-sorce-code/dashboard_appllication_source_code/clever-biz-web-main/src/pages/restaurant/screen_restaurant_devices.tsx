@@ -112,10 +112,15 @@ export const ScreenRestaurantDevices = () => {
   };
 
   // API Actions
+  // API Actions
   const handleCreateSubmit = async () => {
     setLoading(true);
     try {
-      await axiosInstance.post("/owners/devices/", {
+      const endpoint = "/owners/devices/"; // Device creation is centralized for owners/staff usually
+      // Ideally should use dynamic endpoint:
+      // const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/devices/" : "/chef/devices/";
+
+      await axiosInstance.post(endpoint, {
         table_name: formData.name,
         region: formData.area
       });
@@ -125,6 +130,13 @@ export const ScreenRestaurantDevices = () => {
       fetchDeviceStats();
     } catch (error: any) {
       console.error("Create failed", error);
+      if (error.response?.status === 401) {
+        toast.error("Session expired. Please login again.");
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1000);
+        return;
+      }
       const errorMessage = error.response?.data?.detail || error.response?.data?.table_name?.[0] || "Failed to create table";
       toast.error(errorMessage);
     } finally {
@@ -145,6 +157,11 @@ export const ScreenRestaurantDevices = () => {
       fetchAllDevices();
     } catch (error: any) {
       console.error("Update failed", error);
+      if (error.response?.status === 401) {
+        toast.error("Session expired. Please login again.");
+        setTimeout(() => { window.location.href = '/login'; }, 1000);
+        return;
+      }
       const errorMessage = error.response?.data?.detail || error.response?.data?.table_name?.[0] || "Failed to update table";
       toast.error(errorMessage);
     } finally {
@@ -161,8 +178,13 @@ export const ScreenRestaurantDevices = () => {
       setIsDeleteModalOpen(false);
       fetchAllDevices();
       fetchDeviceStats();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Delete failed", error);
+      if (error.response?.status === 401) {
+        toast.error("Session expired. Please login again.");
+        setTimeout(() => { window.location.href = '/login'; }, 1000);
+        return;
+      }
       toast.error("Failed to delete table");
     } finally {
       setLoading(false);
