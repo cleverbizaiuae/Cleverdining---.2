@@ -114,9 +114,9 @@ class DeviceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.role == 'owner':
-            try:
-                restaurant = Restaurant.objects.get(owner=user)
-            except Restaurant.DoesNotExist:
+        if user.role == 'owner':
+            restaurant = Restaurant.objects.filter(owner=user).first()
+            if not restaurant:
                 raise serializers.ValidationError("Restaurant not found for this owner.")
         elif user.role in ['chef', 'staff']:
             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
@@ -214,11 +214,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
         user = request.user
         
         if user.role == 'owner':
-            try:
-                restaurant = Restaurant.objects.get(owner=user)
-                all_devices = Device.objects.filter(restaurant=restaurant)
-            except Restaurant.DoesNotExist:
+        if user.role == 'owner':
+            restaurant = Restaurant.objects.filter(owner=user).first()
+            if not restaurant:
                 return Response({"detail": "Restaurant not found."}, status=404)
+            all_devices = Device.objects.filter(restaurant=restaurant)
         elif user.role in ['chef', 'staff']:
             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
             if not chef_staff:

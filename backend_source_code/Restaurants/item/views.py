@@ -52,9 +52,8 @@ class ItemViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role == 'owner':
-            try:
-                restaurant = Restaurant.objects.get(owner=user)
-            except Restaurant.DoesNotExist:
+            restaurant = Restaurant.objects.filter(owner=user).first()
+            if not restaurant:
                 raise ValidationError("You do not own a restaurant.")
         elif user.role in ['chef', 'staff']:
             chef_staff = ChefStaff.objects.filter(
