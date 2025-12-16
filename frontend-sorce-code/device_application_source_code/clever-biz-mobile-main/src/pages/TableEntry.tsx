@@ -17,6 +17,11 @@ const TableEntry = () => {
                 const response = await axiosInstance.get(`/api/customer/devices/${uuid}/`);
                 const device = response.data;
 
+                // Check Device Status (Respect Dashboard Configuration)
+                if (device.action && device.action.toLowerCase() !== 'active') {
+                    throw new Error(`Table is currently ${device.action}. Please contact staff.`);
+                }
+
                 // 2. Resolve Table Session (Get Real Token)
                 const sessionRes = await axiosInstance.post('/api/customer/resolve-table/', {
                     device_id: device.id // Use ID from details
