@@ -52,6 +52,7 @@
   #root {
     @apply min-h-dvh;
   }
+
   a {
     color: var(--color-primary);
     font-weight: 500;
@@ -74,6 +75,7 @@
   button:focus-visible {
     outline: none;
   }
+
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,
@@ -94,10 +96,19 @@
   .unset-all {
     list-style: outside;
   }
+
   .unset-all ol,
   .unset-allul,
   .unset-all menu {
     list-style: outside;
+  }
+
+  /* Gloal Input Text Fix */
+  input,
+  textarea,
+  select {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
   }
 }
 
@@ -113,6 +124,7 @@
   background-image: url("./assets/bg-auth.webp");
   background-repeat: repeat-x;
   background-size: cover;
+
   &::before {
     content: "";
     position: absolute;
@@ -124,7 +136,7 @@
     z-index: 0;
   }
 
-  > * {
+  >* {
     position: relative;
     z-index: 10;
   }
@@ -133,12 +145,15 @@
 @utility button-primary {
   @apply font-medium rounded-md cursor-pointer bg-accent text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
 }
+
 @utility button-landing {
   @apply font-medium rounded-full cursor-pointer bg-accent2 text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
 }
+
 @utility button-primary-outline {
   @apply rounded-md cursor-pointer bg-transparent border border-primary-text/50 text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
 }
+
 @utility button-landing-text {
   @apply rounded-full cursor-pointer bg-transparent text-primary-text text-base px-8 py-3 transition outline-none focus:outline-none active:outline-none;
 }
@@ -150,6 +165,7 @@
 @utility content-gap-start {
   @apply ps-2 md:ps-28;
 }
+
 @utility content-gap-end {
   @apply pe-2 md:pe-28;
 }
@@ -164,6 +180,7 @@
 
 @utility container-header-gradient {
   @apply relative overflow-hidden;
+
   &::before {
     @apply content-[''] absolute top-0 left-0 w-full h-[1025px] z-[48] bg-gradient-to-br from-container-start to-container-end;
   }
@@ -172,45 +189,45 @@
 /* Custom date picker ==================>>>>>>> */
 /* Customize container */
 .react-datepicker {
-  @apply bg-sidebar! text-primary-text! border-none! rounded-md! p-0! relative!;
+  @apply bg-sidebar ! text-primary-text ! border-none ! rounded-md ! p-0 ! relative !;
   font-family: inherit;
 }
 
 /* Header styling */
 .react-datepicker__header {
-  @apply flex flex-col bg-transparent! border-b! border-dashboard;
+  @apply flex flex-col bg-transparent ! border-b ! border-dashboard;
 }
 
 /* Current month label */
 .react-datepicker__current-month {
-  @apply text-primary-text! text-lg! font-medium!;
+  @apply text-primary-text ! text-lg ! font-medium !;
 }
 
 /* Day name labels (Sun, Mon...) */
 .react-datepicker__day-name {
-  @apply w-10! h-8! mt-4! text-primary-text! text-sm!;
+  @apply w-10 ! h-8 ! mt-4 ! text-primary-text ! text-sm !;
 }
 
 /* Day cells */
 .react-datepicker__day {
-  @apply inline-flex items-center justify-center w-10 h-10 rounded-md text-primary-text!;
+  @apply inline-flex items-center justify-center w-10 h-10 rounded-md text-primary-text !;
   transition: background-color 0.2s ease;
 }
 
 /* Hover effect on day */
 .react-datepicker__day:hover {
-  @apply bg-dashboard! border-none!;
+  @apply bg-dashboard ! border-none !;
 }
 
 /* Selected day */
 .react-datepicker__day--selected,
 .react-datepicker__day--keyboard-selected {
-  @apply bg-accent! text-primary-text!;
+  @apply bg-accent ! text-primary-text !;
 }
 
 /* Today highlight */
 .react-datepicker__day--today {
-  @apply border! border-accent!;
+  @apply border ! border-accent !;
 }
 
 /* Clear & navigation buttons */
@@ -219,23 +236,30 @@
 }
 
 .react-datepicker__navigation-icon::before {
-  @apply top-0!;
+  @apply top-0 !;
 }
+
 /* <<<<<===================== Custom date picker*/
 .scrollbar-hide {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
+  /* Chrome, Safari, Opera */
 }
+
 .rsw-editor {
-  @apply border-0!;
+  @apply border-0 !;
 }
+
 @utility clever-table {
   @apply border-separate border-spacing-0;
 }
+
 .clever-table .table-header {
   @apply bg-gradient-to-r from-[#1E2050]/60 to-[#0E0F27]/60 text-primary-text text-sm font-normal;
 }
@@ -251,11 +275,15 @@
 .clever-table .table-header th:last-child {
   @apply rounded-r-md border-r border-[#211E40];
 }
+
 @utility subscription-button {
   @apply relative bg-linear-to-b from-[#9F70FF] to-checkmark;
   box-shadow: 0px 0.97px 1.94px rgba(16, 24, 40, 0.05),
-    /* Drop shadow 1 */ 1.94px 1.94px 2.9px rgba(198, 180, 238, 0.5) inset,
-    /* Inner shadow 1 */ -1.94px -1.94px 3.87px rgba(88, 42, 187, 0.49) inset,
-    /* Inner shadow 2 */ 0px 0px 11.61px rgba(119, 50, 255, 0.2); /* Drop shadow 2 */
+    /* Drop shadow 1 */
+    1.94px 1.94px 2.9px rgba(198, 180, 238, 0.5) inset,
+    /* Inner shadow 1 */
+    -1.94px -1.94px 3.87px rgba(88, 42, 187, 0.49) inset,
+    /* Inner shadow 2 */
+    0px 0px 11.61px rgba(119, 50, 255, 0.2);
+  /* Drop shadow 2 */
 }
-

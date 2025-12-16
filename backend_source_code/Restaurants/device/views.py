@@ -41,12 +41,23 @@ class ResolveTableView(APIView):
 
         try:
             if device_id:
-                device = Device.objects.get(id=device_id)
-                restaurant_id = device.restaurant.id # Infer restaurant
+                try:
+                    device = Device.objects.get(id=device_id)
+                    restaurant_id = device.restaurant.id
+                except Device.DoesNotExist:
+                    # Fallback: Validation if restaurant_id and table_name are present (Self-Healing URL)
+                    table_name = request.data.get('table_name')
+                    fallback_rid = request.data.get('restaurant_id')
+                    
+                    if fallback_rid and table_name:
+                         device = Device.objects.filter(restaurant_id=fallback_rid, table_name=table_name).first()
+                    
+                    if not device:
+                        raise Device.DoesNotExist 
             else:
                 device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
         except Device.DoesNotExist:
-            return Response({'error': 'Invalid table token or device ID'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Invalid table link (Table not found)'}, status=status.HTTP_404_NOT_FOUND)
 
         # Create new guest session
         session_token = str(uuid.uuid4())

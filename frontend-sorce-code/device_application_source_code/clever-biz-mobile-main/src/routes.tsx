@@ -33,7 +33,8 @@ function App() {
 
     if (tableIdParam && restaurantIdParam) {
       // Case 1: URL params present - redirect to real login flow
-      window.location.href = `/login?id=${tableIdParam}&table=${tableNameParam || 'Table'}`;
+      // Pass restaurant_id to allow Self-Healing URLs (fallback lookup)
+      window.location.href = `/login?id=${tableIdParam}&table=${tableNameParam || 'Table'}&restaurant_id=${restaurantIdParam}`;
       return;
 
     } else if (storedUserInfo) {

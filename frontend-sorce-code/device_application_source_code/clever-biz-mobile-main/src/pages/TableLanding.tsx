@@ -13,6 +13,7 @@ export default function TableLanding() {
         const resolveTable = async () => {
             const qrDeviceId = searchParams.get('id');
             const qrTableName = searchParams.get('table');
+            const qrRestaurantId = searchParams.get('restaurant_id'); // Added for fallback
 
             // Payload construction
             const payload: any = {};
@@ -21,6 +22,9 @@ export default function TableLanding() {
                 payload.table_token = tableToken;
             } else if (qrDeviceId) {
                 payload.device_id = qrDeviceId;
+                // Add fallback data for self-healing
+                if (qrTableName) payload.table_name = qrTableName;
+                if (qrRestaurantId) payload.restaurant_id = qrRestaurantId;
             }
 
             if (Object.keys(payload).length === 0) {

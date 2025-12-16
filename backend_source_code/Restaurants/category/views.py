@@ -31,9 +31,9 @@ class CategoryViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        try:
-            restaurant = Restaurant.objects.get(owner=self.request.user)
-        except Restaurant.DoesNotExist:
+        # Use filter().first() to avoid MultipleObjectsReturned error
+        restaurant = Restaurant.objects.filter(owner=self.request.user).first()
+        if not restaurant:
             raise ValidationError("You don't have a restaurant yet.")
 
         category = serializer.save(restaurant=restaurant)
@@ -43,6 +43,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         category = self.get_object()
+        # Handle multi-restaurant ownership check strictly if needed, but for now check if owner owns the restaurant
         if category.restaurant.owner != self.request.user:
             raise PermissionDenied("You don't have permission to edit this category.")
 
@@ -91,9 +92,9 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
         return Category.objects.filter(restaurant__owner=self.request.user, level__gt=0)
 
     def perform_create(self, serializer):
-        try:
-            restaurant = Restaurant.objects.get(owner=self.request.user)
-        except Restaurant.DoesNotExist:
+        # Use filter().first() to avoid MultipleObjectsReturned error
+        restaurant = Restaurant.objects.filter(owner=self.request.user).first()
+        if not restaurant:
             raise ValidationError("You don't have a restaurant yet.")
 
         category = serializer.save(restaurant=restaurant)
