@@ -19,15 +19,25 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2 group shrink-0 transition-all duration-300 rounded-2xl overflow-hidden border px-1",
-        "min-w-[4rem] w-auto h-16 sm:w-20 sm:h-20",
+        // Layout & Spacing
+        "flex flex-col items-center justify-start p-2 gap-2 transition-all duration-200",
+        // Fixed Dimensions
+        "w-[80px] h-[90px] shrink-0",
+        // Shape & Border
+        "rounded-xl border",
+        // Dynamic Styles
         isActive
-          ? "border-primary shadow-lg shadow-primary/25 scale-105"
-          : "border-transparent bg-gray-100 hover:border-primary/30 scale-100"
+          ? "bg-[#0055FE] text-white border-transparent shadow-[0_10px_15px_rgba(0,85,254,0.3)]"
+          : "bg-white text-slate-700 border-slate-200 hover:border-[#0055FE]/50"
       )}
     >
-      {/* Wrapper for Image & Overlay */}
-      <div className="absolute inset-0 bg-gray-100">
+      {/* Icon Container - Fixed 40x40px */}
+      <div
+        className={cn(
+          "w-10 h-10 shrink-0 flex items-center justify-center rounded-lg overflow-hidden",
+          isActive ? "bg-white/20" : "bg-slate-100"
+        )}
+      >
         {cat.image ? (
           <img
             src={(() => {
@@ -37,39 +47,41 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
               return url;
             })()}
             alt={cat.Category_name}
-            className="w-full h-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110"
+            className="w-full h-full object-cover object-center"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.nextElementSibling?.classList.remove('hidden');
             }}
           />
-        ) : null}
+        ) : (
+          <span className="text-lg">📁</span>
+        )}
 
-        {/* Fallback Placeholder */}
-        <div className={cn("absolute inset-0 flex items-center justify-center", cat.image ? "hidden" : "")}>
-          <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+        {/* Fallback Placeholder (Hidden by default) */}
+        <div className={cn("hidden w-full h-full items-center justify-center", !cat.image ? (isActive ? "text-white" : "text-gray-400") : "text-transparent")}>
+          {!cat.image && <span className="text-lg">📁</span>}
         </div>
-
-        {/* Color Overlay */}
-        <div className={cn(
-          "absolute inset-0 transition-colors duration-300",
-          isActive
-            ? "bg-primary/20"
-            : "bg-black/10 group-hover:bg-black/0"
-        )} />
       </div>
 
-      {/* Text Label */}
-      <span className={cn(
-        "relative z-10 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full backdrop-blur-md transition-colors duration-300 shadow-sm whitespace-nowrap",
-        isActive
-          ? "bg-primary text-white"
-          : "bg-white/90 text-gray-800"
-      )}>
-        {cat.Category_name}
-      </span>
+      {/* Text Container - Flexible Height, Max 2 lines */}
+      <div className="w-full flex-1 mt-0 px-1 overflow-hidden">
+        <span
+          className={cn(
+            "text-[10px] font-medium leading-[1.2] text-center w-full block",
+            isActive ? "text-white" : "text-slate-700"
+          )}
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            wordBreak: "break-word",
+          }}
+        >
+          {cat.Category_name}
+        </span>
+      </div>
     </button>
   );
 };
