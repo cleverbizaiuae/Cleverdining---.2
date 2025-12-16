@@ -148,17 +148,22 @@ const LayoutDashboard = () => {
     }
   }, []);
 
+
   useEffect(() => {
     const fetchRestaurantId = () => {
       const userInfo = localStorage.getItem("userInfo");
       if (userInfo) {
-        const parsedUserInfo = JSON.parse(userInfo);
-        if (
-          parsedUserInfo.user &&
-          parsedUserInfo.user.restaurants &&
-          parsedUserInfo.user.restaurants.length > 0
-        ) {
-          setRestaurantId(parsedUserInfo.user.restaurants[0].id);
+        try {
+          const parsedUserInfo = JSON.parse(userInfo);
+          if (
+            parsedUserInfo.user &&
+            parsedUserInfo.user.restaurants &&
+            parsedUserInfo.user.restaurants.length > 0
+          ) {
+            setRestaurantId(parsedUserInfo.user.restaurants[0].id);
+          }
+        } catch (e) {
+          console.error(e);
         }
       }
     };
@@ -168,8 +173,11 @@ const LayoutDashboard = () => {
   const fetchCategories = async () => {
     try {
       const userInfo = localStorage.getItem("userInfo");
-      const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
-      const url = restaurantId ? `/api/customer/categories/?restaurant_id=${restaurantId}` : "/api/customer/categories/";
+      const rId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      // prioritize local ID if state not yet set
+      const targetId = rId || restaurantId;
+
+      const url = targetId ? `/api/customer/categories/?restaurant_id=${targetId}` : "/api/customer/categories/";
       const response = await axiosInstance.get(url);
       const data = response.data;
       setCategories(Array.isArray(data) ? data : data?.results || []);
@@ -186,7 +194,7 @@ const LayoutDashboard = () => {
       fetchCategories();
     }
     fetchCategories();
-  }, [NewUpdate]);
+  }, [NewUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
 
   const fetchItems = async () => {
     try {
@@ -194,10 +202,11 @@ const LayoutDashboard = () => {
       const params = [];
 
       const userInfo = localStorage.getItem("userInfo");
-      const restaurantId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      const rId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      const targetId = rId || restaurantId; // prioritize localStorage
 
-      if (restaurantId) {
-        params.push(`restaurant_id=${restaurantId}`);
+      if (targetId) {
+        params.push(`restaurant_id=${targetId}`);
       }
 
       // If subcategory is selected, filter by subcategory
@@ -238,7 +247,7 @@ const LayoutDashboard = () => {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [search, selectedCategory, categories, NewUpdate]);
+  }, [search, selectedCategory, categories, NewUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -454,42 +463,6 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation */}
         <BottomNav />
-
-        {/* DEBUG INFO - INTERACTIVE RESTAURANT SWITCHER */}
-        <div className="fixed top-20 right-0 bg-black/90 text-white text-[10px] p-3 max-w-[200px] z-50 opacity-80 hover:opacity-100 rounded-l-lg shadow-lg">
-          <p className="font-bold border-b border-gray-600 mb-1 pb-1">Debug Menu</p>
-          <div
-            className="flex justify-between items-center bg-blue-600/30 p-1 rounded cursor-pointer hover:bg-blue-600/50 mb-1"
-            onClick={() => {
-              const newId = prompt("Enter Restaurant ID to switch to:", String(restaurantId || ""));
-              if (newId && !isNaN(Number(newId))) {
-                // Update localStorage userInfo to trick the app
-                try {
-                  const current = localStorage.getItem("userInfo");
-                  const parsed = current ? JSON.parse(current) : { user: { restaurants: [{ id: Number(newId), table_name: "Debug Table" }] } };
-                  if (parsed.user?.restaurants?.[0]) {
-                    parsed.user.restaurants[0].id = Number(newId);
-                    localStorage.setItem("userInfo", JSON.stringify(parsed));
-                    window.location.reload();
-                  }
-                } catch (e) { console.error(e); }
-              }
-            }}
-          >
-            <span>RestID: <span className="font-mono font-bold text-yellow-400">{restaurantId}</span></span>
-            <span className="text-[8px] underline ml-2">Change</span>
-          </div>
-          <p>Cats: {categories.length}</p>
-          <p>Items: {items.length}</p>
-          <p>SelCat: {selectedCategory}</p>
-          <p>Sub: {selectedSubCategory}</p>
-          <button
-            className="mt-2 w-full bg-red-500 text-white p-1 rounded text-[9px]"
-            onClick={() => { localStorage.clear(); window.location.href = '/'; }}
-          >
-            Clear Session
-          </button>
-        </div>
       </div>
 
       {/* Detail modal */}
