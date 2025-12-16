@@ -58,15 +58,21 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
         </div>
       )}
 
-      {/* Text Badge - Centered Pill */}
+      {/* Text Badge - Centered Pill with Multi-line Support */}
       <span
         className={cn(
-          "relative z-10 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-md transition-colors duration-200",
-          "max-w-[90%] truncate", // Ensure it doesn't overflow card width
+          "relative z-10 text-[10px] font-bold px-2 py-1 rounded-xl shadow-sm backdrop-blur-md transition-colors duration-200",
+          "w-[90%] text-center leading-[1.1] whitespace-normal break-words", // multi-line support
           isActive
             ? "bg-primary text-white"
-            : "bg-white/90 text-gray-800"
+            : "bg-white/95 text-gray-800"
         )}
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
       >
         {cat.Category_name}
       </span>
