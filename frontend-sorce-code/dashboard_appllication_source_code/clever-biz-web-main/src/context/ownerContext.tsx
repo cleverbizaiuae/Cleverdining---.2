@@ -547,7 +547,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
           (userRole === "owner" || userRole === "staff")
             ? `/owners/devices/?page=${page}&search=${searchParam}`
-            : `/chef/devices/?page=${page}&search=${searchParam}`;
+            : `/api/chef/devices/?page=${page}&search=${searchParam}`;
 
         const response = await axiosInstance.get(endpoint);
         console.log(response, "response");
@@ -575,7 +575,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       const endpoint =
         (userRole === "owner" || userRole === "staff")
           ? "/owners/devices/stats/"
-          : "/chef/devices/stats/";
+          : "/api/chef/devices/stats/";
 
       const response = await axiosInstance.get(endpoint);
       setDeviceStats(response.data);
@@ -626,7 +626,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         await fetchMembers();
       } catch (error: any) {
         console.error("Failed to create member", error);
-        toast.error(error.response?.data?.email || "Failed to create member.");
+        const errorData = error.response?.data;
+        const errorMessage = errorData?.username?.[0] || errorData?.email?.[0] || errorData?.detail || "Failed to create member.";
+        toast.error(errorMessage);
         throw error;
       }
     },

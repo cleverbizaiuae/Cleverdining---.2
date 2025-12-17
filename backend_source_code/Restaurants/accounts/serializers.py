@@ -181,6 +181,9 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
 
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "A user with this email already exists."})
+            
+        if User.objects.filter(username=username).exists():
+             raise serializers.ValidationError({"username": "This username is already taken. Please choose another."})
 
         # Use provided password or generate a secure random one
         if not password:

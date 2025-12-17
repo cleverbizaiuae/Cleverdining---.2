@@ -20,7 +20,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       onClick={onClick}
       className={cn(
         // Layout: Flex Column, strict 80x90 size
-        "flex flex-col items-center justify-start p-2 gap-2 transition-all duration-200",
+        "flex flex-col items-center justify-start p-1 gap-1 transition-all duration-200", // Reduced padding/gap
         "w-[80px] h-[90px] shrink-0",
         // Shape & Borders
         "rounded-xl border",
@@ -29,10 +29,10 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
           : "bg-white text-slate-700 border-slate-200 hover:border-[#0055FE]/50"
       )}
     >
-      {/* Icon Container: Strict 40x40px */}
+      {/* Icon Container: Increased to 50x50px */}
       <div
         className={cn(
-          "w-10 h-10 shrink-0 flex items-center justify-center rounded-lg overflow-hidden",
+          "w-[50px] h-[50px] shrink-0 flex items-center justify-center rounded-lg overflow-hidden",
           isActive ? "bg-white/20" : "bg-slate-100"
         )}
       >
