@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
+import toast from "react-hot-toast";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -63,13 +64,46 @@ const WebSocketProvider = ({ children }) => {
 
         if (parsedMessage.type === "chat_message") {
           // If message is NOT from me (assuming 'sender' field exists and differs from current user)
-          // For now, just increment. Ideally check sender.
-          // But wait, if I am the sender, I shouldn't increment.
-          // parsedMessage.sender is the username.
-          // parseUser.username is available?
           if (parsedMessage.sender !== parseUser.username) {
             setUnreadCount((prev) => prev + 1);
           }
+        }
+
+        if (parsedMessage.type === "cash_payment_alert") {
+          // Play Sound
+          try {
+            const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"); // Or local/base64
+            // Fallback to a simple beep if external fails? 
+            // Using a reliable URL or base64 is safer. Let's use a short beep base64.
+            // Simple Beep Base64
+            const beepBase64 = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"; // Truncated for brevity, let's use a real URL or ignore if complex.
+            // Let's use the google sound for now, usually safe. Or just a standard browser beep isn't possible from JS.
+            audio.src = "https://www.soundjay.com/buttons/sounds/beep-07.mp3";
+            audio.play().catch(e => console.log("Audio play failed", e));
+          } catch (e) { console.log(e); }
+
+          // Show Toast
+          toast((t) => (
+            <div onClick={() => {
+              toast.dismiss(t.id);
+              // navigate? We can't navigate here easily without useNavigate hook inside provider?
+              // But we can just show the message.
+              window.location.href = "/dashboard/orders"; // Simple redirect
+            }} className="cursor-pointer">
+              <p className="font-bold">🔔 Cash Payment Alert!</p>
+              <p>Table {parsedMessage.table_number}</p>
+              <p>Amount: {parsedMessage.total_amount}</p>
+            </div>
+          ), {
+            duration: 10000, // 10 seconds
+            position: 'top-right',
+            style: {
+              border: '2px solid #EAB308',
+              padding: '16px',
+              color: '#713200',
+              background: '#FEF9C3'
+            },
+          });
         }
 
       } catch (error) {

@@ -181,17 +181,57 @@ class RazorpayAdapter(PaymentAdapter):
 
 class CashAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url):
+        # Update Order Status
+        order.status = 'awaiting_cash'
+        order.payment_status = 'pending_cash'
+        order.save()
+
+        # Broadcast Cash Alert to Restaurant (Dashboard)
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from order.serializers import OrderDetailSerializer
+        
+        channel_layer = get_channel_layer()
+        order_data = OrderDetailSerializer(order).data
+        
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{order.restaurant.id}",
+            {
+                "type": "cash_payment_alert",
+                "order": order_data,
+                "table_number": order.device.table_number or order.device.table_name,
+                "total_amount": str(order.total_price),
+                "timestamp": str(order.created_time)
+            }
+        )
+
         # Cash payments are implicitly "initiated" but require manual confirmation
-        # For this flow, we might just return a success immediately or a "pending" state
+        transaction_id = f"cash_{order.id}"
+        
+        # Append session_id to URL so SuccessPage can pick it up
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        
+        parsed = urlparse(success_url)
+        query = parse_qs(parsed.query)
+        query['session_id'] = [transaction_id]
+        query['order_id'] = [order.id]
+        new_query = urlencode(query, doseq=True)
+        final_url = urlunparse(parsed._replace(query=new_query))
+
         return {
-            'url': success_url, # Redirect directly to success
-            'transaction_id': f"cash_{order.id}",
+            'url': final_url, 
+            'transaction_id': transaction_id,
             'provider': 'cash',
-            'status': 'pending' # Cash is pending until waiter confirms? Or we can mark as completed if "Pay at Counter"
+            'status': 'pending' 
         }
 
     def verify_payment(self, data):
-        return {'status': 'completed'}
+        # Verification for Cash just confirms the order exists, but payment is PENDING.
+        return {
+            'status': 'pending', 
+            'payment_status': 'pending_cash',
+            'transaction_id': data.get('session_id')
+        }
 
     def verify_webhook(self, request):
         return None

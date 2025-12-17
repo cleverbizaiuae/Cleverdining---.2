@@ -17,6 +17,9 @@ class PaymentService:
 
     @staticmethod
     def get_adapter(restaurant, provider=None):
+        if provider == 'cash':
+            return CashAdapter(None) # No gateway needed for cash
+
         if provider:
             gateway = PaymentGateway.objects.filter(restaurant=restaurant, provider=provider, is_active=True).first()
         else:
@@ -44,8 +47,8 @@ class PaymentService:
         return adapter_class(gateway)
 
     @staticmethod
-    def create_payment(order, success_url, cancel_url):
-        adapter = PaymentService.get_adapter(order.restaurant)
+    def create_payment(order, success_url, cancel_url, provider=None):
+        adapter = PaymentService.get_adapter(order.restaurant, provider=provider)
         result = adapter.create_payment_session(order, success_url, cancel_url)
         
         # Create Payment Record

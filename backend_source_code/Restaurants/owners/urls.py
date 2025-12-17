@@ -6,7 +6,7 @@ from category.views import CategoryViewSet, SubCategoryViewSet
 from item.views import ItemViewSet,MostSellingItemsAPIView
 from accounts.views import ChefStaffViewSet
 from device.views import DeviceViewSet,ReservationViewSet
-from order.views import OwnerRestaurantOrdersAPIView,OwnerUpdateOrderStatusAPIView,OrderAnalyticsAPIView,MonthlySalesReportView
+from order.views import OwnerRestaurantOrdersAPIView,OwnerUpdateOrderStatusAPIView,OrderAnalyticsAPIView,MonthlySalesReportView, ConfirmCashPaymentAPIView
 from review.views import OwnerRestaurantReviewListAPIView
 from device.views import DeviceViewSetall
 from vapi.views import CreateAssistantView,UpdateAssistantNumber,GetRestaurantAssistanceView
@@ -35,6 +35,7 @@ urlpatterns = [
     path('registered-restaurants/', OwnerRegisterView.as_view(), name='registered-restaurants'), # New Admin Register Endpoint
     path('orders/', OwnerRestaurantOrdersAPIView.as_view(), name='owner-orders'),
     path('orders/status/<int:pk>/', OwnerUpdateOrderStatusAPIView.as_view(), name='update-order-status'),
+    path('orders/confirm-cash/<int:pk>/', ConfirmCashPaymentAPIView.as_view(), name='confirm-order-cash'), # New Endpoint
     path('reviews/', OwnerRestaurantReviewListAPIView.as_view(), name='owner-reviews'),
     path('most-selling-items/', MostSellingItemsAPIView.as_view(), name='most-selling-items'),
     path('orders/analytics/', OrderAnalyticsAPIView.as_view(), name='owner-order-analytics'),

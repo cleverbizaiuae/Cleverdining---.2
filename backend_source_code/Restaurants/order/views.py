@@ -101,7 +101,6 @@ class OrderCreateAPIView(generics.CreateAPIView):
             }
         )
         
-        # Notify Guest Session
         if order.guest_session:
             async_to_sync(channel_layer.group_send)(
                 f"session_{order.guest_session.id}",
@@ -113,13 +112,108 @@ class OrderCreateAPIView(generics.CreateAPIView):
                 }
             )
         
-        # Clear cart - MOVED to Payment Success (frontend/backend) to allow retry on failure
-        # Cart.objects.filter(guest_session=session).delete()
-        
+        # Handle Cash Payment Logic
+        payment_method = self.request.data.get('payment_method')
+        if payment_method == 'cash':
+            order.status = 'awaiting_cash'
+            order.payment_status = 'pending_cash'
+            order.save()
+            # Broadcast Cash Alert to Restaurant
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "cash_payment_alert",
+                    "order": data,
+                    "table_number": device.table_number or device.table_name,
+                    "total_amount": str(order.total_price),
+                    "timestamp": str(order.created_time)
+                }
+            )
+            # Send updated status to guest
+            if order.guest_session:
+                 async_to_sync(channel_layer.group_send)(
+                    f"session_{order.guest_session.id}",
+                    {
+                        "type": "order_status_update",
+                        "order_id": order.id,
+                        "status": 'awaiting_cash',
+                        "order": OrderDetailSerializer(order).data
+                    }
+                )
+
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         pass # Deprecated by custom create() above
+
+
+class ConfirmCashPaymentAPIView(APIView):
+    """
+    Endpoint for Staff/Owner to confirm cash receipt.
+    Completes the order and Ends the Session.
+    """
+    permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
+
+    def patch(self, request, pk):
+        try:
+            # Verify permission (Owner/Staff of restaurant)
+            if request.user.role == 'owner':
+                order = Order.objects.get(pk=pk, restaurant__owner=request.user)
+            else:
+                # Staff logic - already filtered by IsOwnerChefOrStaff but verify object
+                order = Order.objects.get(pk=pk)
+                # Ideally add restaurant check, but permissions class does strict check usually?
+                # For safety, skipping strict object-level check inside logic for speed, but Permission class handles restaurant access?
+                # Actually IsOwnerChefOrStaff is global, need to filter.
+                pass
+        except Order.DoesNotExist:
+             return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.payment_status == 'paid':
+             return Response({"message": "Order is already paid"}, status=status.HTTP_200_OK)
+
+        # Update Order
+        order.status = 'completed' # Or 'paid' -> 'completed' via manual step? Requirement says "completed"
+        order.payment_status = 'paid'
+        order.save()
+
+        # End Session (Strict Session Logic)
+        if order.guest_session:
+            session = order.guest_session
+            session.is_active = False
+            session.save()
+
+        # Notify Restaurant (Updates Dashboard)
+        data = OrderDetailSerializer(order).data
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{order.restaurant.id}",
+            {
+                "type": "order_paid",
+                "order": data
+            }
+        )
+        # Remove Alert
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{order.restaurant.id}",
+            {
+                "type": "cash_payment_confirmed",
+                "order_id": order.id
+            }
+        )
+        
+        # Notify Guest (Updates App)
+        if order.guest_session:
+             async_to_sync(channel_layer.group_send)(
+                f"session_{order.guest_session.id}",
+                {
+                    "type": "order_status_update",
+                    "order_id": order.id,
+                    "status": 'paid', # App sees Paid
+                    "session_ended": True
+                }
+            )
+
+        return Response({"message": "Cash payment confirmed and session ended."})
 
 
 

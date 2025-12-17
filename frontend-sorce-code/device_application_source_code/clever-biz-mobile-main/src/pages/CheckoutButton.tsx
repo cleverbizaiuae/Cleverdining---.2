@@ -6,9 +6,11 @@ import toast from "react-hot-toast";
 export default function CheckoutButton({
   orderId,
   disabled,
+  provider, // Optional provider override
 }: {
   orderId: number | string;
   disabled?: boolean;
+  provider?: string;
 }) {
   console.log(orderId);
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,10 @@ export default function CheckoutButton({
 
   const handleCheckout = async () => {
     if (loading) return; // Prevent double clicks
+
+    // For Cash, we might want a confirmation dialog here if not handled by parent?
+    // Parent handles confirmation modal as per plan.
+
     try {
       setLoading(true);
 
@@ -29,7 +35,7 @@ export default function CheckoutButton({
 
       const res = await axiosInstance.post(
         `/api/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
-        {},
+        { provider }, // Pass provider
         {
           headers: {
             "X-Guest-Session-Token": guestToken
@@ -37,39 +43,30 @@ export default function CheckoutButton({
         }
       );
       const url: string | undefined = res?.data?.url;
-      const sessionId: string | undefined = res?.data?.sessionId;
+      const sessionId: string | undefined = res?.data?.sessionId; // Stripe session ID
+      const transactionId: string | undefined = res?.data?.transaction_id; // Unified ID
 
-      if (!sessionId && !url)
+      const effectiveSessionId = sessionId || transactionId;
+
+      if (!effectiveSessionId && !url)
         throw new Error("No checkout URL or sessionId returned");
 
-      if (sessionId) {
-        try {
-          // Razorpay / Other pre-check
-          const probe = await axiosInstance.get(`/api/customer/payment/success/`, {
-            params: { session_id: sessionId, order_id: String(orderId) },
-          });
-          if (probe?.data?.confirmed) {
-            window.location.href = `/dashboard/success?session_id=${encodeURIComponent(
-              sessionId
-            )}&order_id=${encodeURIComponent(String(orderId))}`;
-            return;
-          }
-          console.log(probe);
-        } catch {
-          toast.error("Payment failed");
-        }
-      }
-
+      // If URL is provided (Cash or Stripe), follow it
       if (url) {
         window.location.href = url;
         return;
       }
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error("Stripe not loaded");
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: sessionId!,
-      });
-      if (error) throw error;
+
+      // Fallback for Stripe dedicated flow if no URL returned (legacy)
+      if (sessionId) {
+        const stripe = await stripePromise;
+        if (!stripe) throw new Error("Stripe not loaded");
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: sessionId!,
+        });
+        if (error) throw error;
+      }
+
     } catch (e: any) {
       console.error(e);
       const msg = e?.response?.data?.error || e?.message || "Something went wrong";
@@ -85,14 +82,16 @@ export default function CheckoutButton({
         type="button"
         onClick={handleCheckout}
         disabled={disabled || loading}
-        className={`w-full px-4 py-2 rounded-md font-semibold transition-colors duration-300 
+        className={`w-full px-4 py-3 rounded-lg font-bold text-lg shadow-md transition-all duration-300 transform active:scale-95
     ${disabled || loading
             ? "bg-gray-400 cursor-not-allowed"
-            : "bg-green-600 hover:bg-green-700 text-white"
+            : provider === 'cash'
+              ? "bg-yellow-500 hover:bg-yellow-600 text-black border border-yellow-600"
+              : "bg-green-600 hover:bg-green-700 text-white"
           }
   `}
       >
-        {loading ? "Processing Payment..." : "Checkout"}
+        {loading ? "Processing..." : provider === 'cash' ? "Confirm Pay by Cash" : "Pay Now"}
       </button>
     </>
   );

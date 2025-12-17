@@ -111,9 +111,13 @@ const ScreenRestaurantOrderList = () => {
     return true;
   });
 
-  // 2. Ready Orders for Banner
+  // 2. Ready & Cash Orders
   const readyOrders = activeOrders.filter((order: any) =>
     order.status.toLowerCase() === 'ready' || order.status.toLowerCase() === 'served'
+  );
+
+  const cashOrders = activeOrders.filter((order: any) =>
+    order.status === 'awaiting_cash' || order.payment_status === 'pending_cash'
   );
 
   // 3. Actions
@@ -123,6 +127,18 @@ const ScreenRestaurantOrderList = () => {
     setClosedDayDate(now);
     setShowCloseDayConfirm(false);
     toast.success("Day closed successfully. Old orders archived.");
+  };
+
+  const handleConfirmCash = async (orderId: number) => {
+    try {
+      await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
+      toast.success("Cash Received! Session Completed.");
+      // Refresh list
+      fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to confirm cash payment");
+    }
   };
 
   const handleMarkDelivered = async (orderId: number) => {
@@ -154,6 +170,8 @@ const ScreenRestaurantOrderList = () => {
         return 'text-green-700';
       case 'preparing':
         return 'text-orange-600';
+      case 'awaiting_cash':
+        return 'text-yellow-700 font-bold';
       case 'pending':
       default:
         return 'text-yellow-600';
@@ -178,6 +196,43 @@ const ScreenRestaurantOrderList = () => {
 
   return (
     <div className="flex flex-col gap-6">
+
+      {/* PENDING CASH BANNER */}
+      {cashOrders.length > 0 && (
+        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-700 shrink-0 animate-pulse">
+              <span className="text-lg">💵</span>
+            </div>
+            <div>
+              <h3 className="font-bold text-yellow-800 text-sm">Cash Payments Pending</h3>
+              <p className="text-xs text-yellow-700 font-medium">
+                Collect cash from tables to complete sessions.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-auto">
+            {cashOrders.map((order: any) => (
+              <div key={order.id} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[220px] flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-800 font-bold text-xs shrink-0 border border-yellow-200">
+                  {order.device_table_name || "Tab"}
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
+                  <p className="text-[10px] text-slate-500 font-bold">${order.total_price}</p>
+                </div>
+                <button
+                  onClick={() => handleConfirmCash(order.id)}
+                  className="h-7 px-3 bg-yellow-500 hover:bg-yellow-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors"
+                >
+                  Mark Received
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* READY FOR DELIVERY BANNER */}
       {readyOrders.length > 0 && (
@@ -221,7 +276,7 @@ const ScreenRestaurantOrderList = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           title="Ongoing Orders"
-          value={activeOrders.filter((o: any) => ['pending', 'preparing'].includes(o.status.toLowerCase())).length}
+          value={activeOrders.filter((o: any) => ['pending', 'preparing', 'awaiting_cash'].includes(o.status.toLowerCase())).length}
           icon={Clock}
           colorClass="text-[#0055FE]"
           bgClass="bg-white"

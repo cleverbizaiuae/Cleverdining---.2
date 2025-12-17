@@ -128,8 +128,13 @@ class CreateCheckoutSessionView(APIView):
         # User requested redirection to Cart on cancel
         cancel_url = f'{origin}/dashboard/cart/'
 
+        # Get Provider (Optional, defaults to None -> Active Gateway)
+        provider = request.data.get('provider') 
+        if not provider:
+            provider = request.query_params.get('provider')
+
         try:
-            result = PaymentService.create_payment(order, success_url, cancel_url)
+            result = PaymentService.create_payment(order, success_url, cancel_url, provider=provider)
             return Response(result)
         except ValidationError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
