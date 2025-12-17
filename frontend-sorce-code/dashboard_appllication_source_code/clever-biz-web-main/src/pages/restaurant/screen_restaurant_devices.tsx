@@ -66,6 +66,8 @@ export const ScreenRestaurantDevices = () => {
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [isEndSessionModalOpen, setIsEndSessionModalOpen] = useState(false);
+  const [sessionToClose, setSessionToClose] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -191,16 +193,24 @@ export const ScreenRestaurantDevices = () => {
     }
   };
 
-  const handleCloseSession = async (sessionId: number) => {
-    if (!window.confirm("Are you sure you want to close this session? Any active orders should be completed first.")) return;
+  const handleCloseSessionClick = (sessionId: number) => {
+    setSessionToClose(sessionId);
+    setIsEndSessionModalOpen(true);
+  };
 
+  const confirmCloseSession = async () => {
+    if (!sessionToClose) return;
+    setLoading(true);
     try {
-      await axiosInstance.post(`/staff/sessions/${sessionId}/close/`);
+      await axiosInstance.post(`/staff/sessions/${sessionToClose}/close/`);
       toast.success("Session closed successfully");
-      fetchAllDevices(); // Refresh list to remove button
+      fetchAllDevices();
+      setIsEndSessionModalOpen(false);
     } catch (e) {
       console.error(e);
       toast.error("Failed to close session");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -287,7 +297,7 @@ export const ScreenRestaurantDevices = () => {
                       <div className="flex items-center justify-center gap-2">
                         {device.active_session_id && (
                           <button
-                            onClick={() => handleCloseSession(device.active_session_id)}
+                            onClick={() => handleCloseSessionClick(device.active_session_id)}
                             className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold uppercase rounded border border-amber-200 transition-colors mr-2 whitespace-nowrap"
                             title="Manually Close Session"
                           >
@@ -396,6 +406,27 @@ export const ScreenRestaurantDevices = () => {
               className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors shadow-lg shadow-red-500/20 disabled:opacity-70 flex items-center justify-center"
             >
               {loading ? "Deleting..." : "Delete Table"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      {/* End Session Modal */}
+      <Modal isOpen={isEndSessionModalOpen} onClose={() => setIsEndSessionModalOpen(false)} title="End Session" maxWidth="max-w-sm">
+        <div className="space-y-6">
+          <p className="text-slate-600">Are you sure you want to end this session? Any active orders should be completed first.</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setIsEndSessionModalOpen(false)}
+              className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmCloseSession}
+              disabled={loading}
+              className="flex-1 h-10 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-amber-500/20 disabled:opacity-70 flex items-center justify-center"
+            >
+              {loading ? "Ending..." : "End Session"}
             </button>
           </div>
         </div>

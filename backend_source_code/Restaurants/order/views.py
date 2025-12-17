@@ -517,29 +517,110 @@ class OrderAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def get(self, request):
-        user = request.user
-        today = now().date()
-        start_of_week = today - timedelta(days=today.weekday())  # Monday
-        this_year = today.year
-        last_year = this_year - 1
+        try:
+            user = request.user
+            today = now().date()
+            start_of_week = today - timedelta(days=today.weekday())  # Monday
+            this_year = today.year
+            last_year = this_year - 1
 
-        restaurants = []
-        # Check if Owner
-        if getattr(user, 'role', '') == 'owner':
-            restaurants = Restaurant.objects.filter(owner=user)
-        else:
-            # Check ChefStaff (legacy/standard)
-            chef_staff = ChefStaff.objects.filter(user=user).first()
-            if chef_staff:
-                restaurants = [chef_staff.restaurant]
-            
-            # Check Staff (newer implementation if applicable)
-            if not restaurants and hasattr(user, 'staff_profile') and user.staff_profile:
-                restaurants = [user.staff_profile.restaurant]
+            restaurants = []
+            # Check if Owner
+            if getattr(user, 'role', '') == 'owner':
+                restaurants = Restaurant.objects.filter(owner=user)
+            else:
+                # Check ChefStaff (legacy/standard)
+                chef_staff = ChefStaff.objects.filter(user=user).first()
+                if chef_staff:
+                    restaurants = [chef_staff.restaurant]
+                
+                # Check Staff (newer implementation if applicable)
+                # Helper to safely check staff_profile locally
+                try:
+                    if not restaurants and user.staff_profile:
+                        restaurants = [user.staff_profile.restaurant]
+                except:
+                    pass
 
-        if not restaurants:
-             # Return empty data instead of crashing
-             return Response({
+            if not restaurants:
+                 # Return empty data instead of crashing
+                 return Response({
+                    "status": {
+                        "today_total_completed_order_price": "0",
+                        "weekly_growth": 0,
+                        "total_member": 0,
+                        "current_year": this_year,
+                        "last_year": last_year
+                    },
+                    "current_year": {month.lower()[:3]: 0 for month in month_name if month},
+                    "last_year": {month.lower()[:3]: 0 for month in month_name if month}
+                })
+
+            # Get all orders for owner's restaurant
+            orders = Order.objects.filter(restaurant__in=restaurants)
+
+            # Filter completed orders
+            completed_orders = orders.filter(status='completed')
+
+            # ---- TODAY COMPLETED ORDER PRICE ----
+
+            today_total_price = (
+                completed_orders.filter(updated_time__date=today)
+                .aggregate(total=Sum('total_price'))['total'] or 0
+            )
+
+            # ---- WEEKLY GROWTH (compare this week vs last week) ----
+            last_week_start = start_of_week - timedelta(days=7)
+            last_week_end = start_of_week - timedelta(days=1)
+
+            this_week_total = (
+                completed_orders.filter(updated_time__date__gte=start_of_week)
+                .aggregate(total=Sum('total_price'))['total'] or 0
+            )
+            last_week_total = (
+                completed_orders.filter(updated_time__date__range=[last_week_start, last_week_end])
+                .aggregate(total=Sum('total_price'))['total'] or 0
+            )
+
+            weekly_growth = 0
+            if last_week_total > 0:
+                weekly_growth = ((this_week_total - last_week_total) / last_week_total) * 100
+
+            # ---- Monthly Data for Current Year ----
+            current_year_data = {month.lower()[:3]: 0 for month in month_name if month}
+            last_year_data = {month.lower()[:3]: 0 for month in month_name if month}
+
+            for order in completed_orders:
+                month = order.updated_time.month
+                year = order.updated_time.year
+
+                if year == this_year:
+                    key = month_name[month].lower()[:3]
+                    current_year_data[key] += 1
+                elif year == last_year:
+                    key = month_name[month].lower()[:3]
+                    last_year_data[key] += 1
+
+            total_member = ChefStaff.objects.filter(restaurant__in=restaurants).count()
+
+            return Response({
+                "status": {
+                    "today_total_completed_order_price": str(today_total_price),
+                    "weekly_growth": round(weekly_growth, 2),
+                    "total_member": total_member,
+                    "current_year": this_year,
+                    "last_year": last_year
+
+                },
+                "current_year": current_year_data,
+                "last_year": last_year_data
+            })
+        except Exception as e:
+            print(f"Analytics Error: {e}")
+            # Fail gracefully returning 0s
+            this_year = now().year
+            last_year = this_year - 1
+            return Response({
                 "status": {
                     "today_total_completed_order_price": "0",
                     "weekly_growth": 0,
@@ -550,66 +631,6 @@ class OrderAnalyticsAPIView(APIView):
                 "current_year": {month.lower()[:3]: 0 for month in month_name if month},
                 "last_year": {month.lower()[:3]: 0 for month in month_name if month}
             })
-
-        # Get all orders for owner's restaurant
-        orders = Order.objects.filter(restaurant__in=restaurants)
-
-        # Filter completed orders
-        completed_orders = orders.filter(status='completed')
-
-        # ---- TODAY COMPLETED ORDER PRICE ----
-
-        today_total_price = (
-            completed_orders.filter(updated_time__date=today)
-            .aggregate(total=Sum('total_price'))['total'] or 0
-        )
-
-        # ---- WEEKLY GROWTH (compare this week vs last week) ----
-        last_week_start = start_of_week - timedelta(days=7)
-        last_week_end = start_of_week - timedelta(days=1)
-
-        this_week_total = (
-            completed_orders.filter(updated_time__date__gte=start_of_week)
-            .aggregate(total=Sum('total_price'))['total'] or 0
-        )
-        last_week_total = (
-            completed_orders.filter(updated_time__date__range=[last_week_start, last_week_end])
-            .aggregate(total=Sum('total_price'))['total'] or 0
-        )
-
-        weekly_growth = 0
-        if last_week_total > 0:
-            weekly_growth = ((this_week_total - last_week_total) / last_week_total) * 100
-
-        # ---- Monthly Data for Current Year ----
-        current_year_data = {month.lower()[:3]: 0 for month in month_name if month}
-        last_year_data = {month.lower()[:3]: 0 for month in month_name if month}
-
-        for order in completed_orders:
-            month = order.updated_time.month
-            year = order.updated_time.year
-
-            if year == this_year:
-                key = month_name[month].lower()[:3]
-                current_year_data[key] += 1
-            elif year == last_year:
-                key = month_name[month].lower()[:3]
-                last_year_data[key] += 1
-
-        total_member = ChefStaff.objects.filter(restaurant__in=restaurants).count()
-
-        return Response({
-            "status": {
-                "today_total_completed_order_price": str(today_total_price),
-                "weekly_growth": round(weekly_growth, 2),
-                "total_member": total_member,
-                "current_year": this_year,
-                "last_year": last_year
-
-            },
-            "current_year": current_year_data,
-            "last_year": last_year_data
-        })
 
 
 
