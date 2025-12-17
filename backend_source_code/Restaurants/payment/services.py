@@ -103,26 +103,42 @@ class PaymentService:
             payment.status = 'completed'
             payment.save()
             
-            order = payment.order
-            order.status = 'paid'
-            order.payment_status = 'paid'
-            order.save()
+            # Logic for Single vs Bulk
+            main_order = payment.order
             
-            # Notify Restaurant
-            order_data = OrderDetailSerializer(order).data
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{order.restaurant.id}",
-                {
-                    "type": "order_paid",
-                    "order": order_data
-                }
-            )
+            orders_to_update = [main_order]
+            
+            if payment.created_by == 'guest_bulk' and main_order.guest_session:
+                # Find all other unpaid orders for this session
+                # (Logic matches CreateBulkCheckoutSessionView filtering)
+                from order.models import Order
+                bulk_orders = Order.objects.filter(
+                    guest_session=main_order.guest_session,
+                    status__in=['pending', 'preparing', 'served', 'awaiting_cash'],
+                ).exclude(id=main_order.id).exclude(payment_status='paid')
+                
+                orders_to_update.extend(list(bulk_orders))
 
-            # Notify Restaurant of payment update
+            for order in orders_to_update:
+                order.status = 'paid'
+                order.payment_status = 'paid'
+                order.save()
+                
+                # Notify Restaurant
+                order_data = OrderDetailSerializer(order).data
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{order.restaurant.id}",
+                    {
+                        "type": "order_paid",
+                        "order": order_data
+                    }
+                )
+
+            # Notify Restaurant of payment update (just once for the transaction)
             from .serializers import PaymentSerializer
             payment_data = PaymentSerializer(payment).data
             async_to_sync(channel_layer.group_send)(
-                f"restaurant_{order.restaurant.id}",
+                f"restaurant_{payment.restaurant.id}",
                 {
                     "type": "payment_update",
                     "event": "payment:updated",
@@ -131,9 +147,9 @@ class PaymentService:
             )
 
             # Clear Cart on Successful Payment (Backend Cleanup)
-            if order.guest_session:
+            if main_order.guest_session:
                 from order.models import Cart
-                Cart.objects.filter(guest_session=order.guest_session).delete()
+                Cart.objects.filter(guest_session=main_order.guest_session).delete()
             
         return verification_result
 
@@ -199,26 +215,38 @@ class PaymentService:
                 payment.status = 'completed'
                 payment.save()
                 
-                order = payment.order
-                order.status = 'paid'
-                order.payment_status = 'paid'
-                order.save()
+                # Logic for Single vs Bulk
+                main_order = payment.order
+                orders_to_update = [main_order]
                 
-                # Notify Restaurant
-                order_data = OrderDetailSerializer(order).data
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{order.restaurant.id}",
-                    {
-                        "type": "order_paid",
-                        "order": order_data
-                    }
-                )
+                if payment.created_by == 'guest_bulk' and main_order.guest_session:
+                    from order.models import Order
+                    bulk_orders = Order.objects.filter(
+                        guest_session=main_order.guest_session,
+                        status__in=['pending', 'preparing', 'served', 'awaiting_cash'],
+                    ).exclude(id=main_order.id).exclude(payment_status='paid')
+                    orders_to_update.extend(list(bulk_orders))
+                
+                for order in orders_to_update:
+                    order.status = 'paid'
+                    order.payment_status = 'paid'
+                    order.save()
+                    
+                    # Notify Restaurant
+                    order_data = OrderDetailSerializer(order).data
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{order.restaurant.id}",
+                        {
+                            "type": "order_paid",
+                            "order": order_data
+                        }
+                    )
 
                 # Notify Restaurant of payment update
                 from .serializers import PaymentSerializer
                 payment_data = PaymentSerializer(payment).data
                 async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{order.restaurant.id}",
+                    f"restaurant_{payment.restaurant.id}",
                     {
                         "type": "payment_update",
                         "event": "payment:updated",

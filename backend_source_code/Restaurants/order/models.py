@@ -10,7 +10,7 @@ class Order(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='orders')
     status = models.CharField(max_length=20,choices=STATUS,default='pending')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS, default='unpaid',blank=True,null=True)
+    payment_status = models.CharField(max_length=50, choices=PAYMENT_STATUS, default='unpaid',blank=True,null=True)
     tip_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     tip_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     tip_type = models.CharField(max_length=20, choices=[('percentage','Percentage'), ('custom_amount','Custom Amount'), ('custom_percentage','Custom Percentage')], default='custom_amount', null=True, blank=True)

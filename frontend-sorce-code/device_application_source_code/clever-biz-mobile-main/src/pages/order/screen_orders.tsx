@@ -7,6 +7,7 @@ import { GameHub } from "./game-hub";
 import { Gamepad2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
+import { StickyTotalPayBar } from "../../components/StickyTotalPayBar";
 
 const ScreenOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -161,6 +162,9 @@ const ScreenOrders = () => {
         isOpen={isGameHubOpen}
         close={() => setIsGameHubOpen(false)}
       />
+
+      {/* 5. Sticky Total Pay Bar */}
+      <StickyTotalPayBar orders={orders} />
     </div>
   );
 };

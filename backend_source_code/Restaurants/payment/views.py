@@ -90,6 +90,180 @@ class StripeDetailsViewSet(ModelViewSet):
 
 from .services import PaymentService
 
+
+from django.utils.timezone import now
+
+class CreateBulkCheckoutSessionView(APIView):
+    """
+    API View for creating a BULK checkout session for all unpaid orders in a session.
+    """
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        # 1. Resolve Guest Session
+        session_token = request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+            session_token = request.data.get('guest_session_token')
+            
+        if not session_token:
+             return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from device.models import GuestSession
+        try:
+            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+        except GuestSession.DoesNotExist:
+            return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Get Unpaid Orders
+        # Filter for orders that are 'unpaid' AND status is not cancelled
+        unpaid_orders = Order.objects.filter(
+            guest_session=session, 
+            status__in=['pending', 'preparing', 'served'],
+        ).exclude(payment_status__in=['paid', 'pending_cash']) # waiting cash is considered "pending" process, so exclude or allow retry if failed? If pending_cash, user can confirm. Let's exclude.
+        
+        # If user wants to retry failed payment, status might be 'failed'. Including 'failed' in filter implicitly by not excluding it.
+        # But payment_status default is 'unpaid'.
+        
+        if not unpaid_orders.exists():
+             return Response({'error': 'No unpaid orders found'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Aggregation
+        total_amount = sum(order.total_price for order in unpaid_orders)
+        
+        if total_amount == 0:
+            return Response({'error': 'Total amount is 0'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Provider
+        provider = request.data.get('provider') 
+        if not provider:
+            provider = request.query_params.get('provider')
+
+        # URLs
+        origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
+        success_url = f'{origin}/dashboard/success/'
+        cancel_url = f'{origin}/dashboard/orders/'
+
+        # 4. Processing
+        if provider == 'cash':
+            # Mark all as awaiting_cash
+            unpaid_orders.update(status='awaiting_cash', payment_status='pending_cash')
+            
+            # Send ONE Alert
+            first_order = unpaid_orders.first()
+            
+            # Create a comprehensive order representation for the alert
+            items_summary = []
+            for o in unpaid_orders:
+                for item in o.order_items.all():
+                    items_summary.append({
+                        "item_name": f"(Order #{o.id}) {item.item.item_name}", 
+                        "quantity": item.quantity, 
+                        "price": str(item.price)
+                    })
+
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{first_order.restaurant.id}",
+                {
+                    "type": "cash_payment_alert",
+                    "order": {
+                         "id": f"BULK-{session.id}", 
+                         "device_name": session.device.table_number or session.device.table_name,
+                         "items": items_summary,
+                         "tip_amount": sum(o.tip_amount for o in unpaid_orders)
+                    }, 
+                    "table_number": session.device.table_number or session.device.table_name,
+                    "total_amount": str(total_amount),
+                    "timestamp": str(now()),
+                    "is_bulk": True,
+                    "session_id": session.id
+                }
+            )
+            
+            # Notify User Session
+            async_to_sync(channel_layer.group_send)(
+                f"session_{session.id}",
+                {
+                    "type": "order_status_update", 
+                    "status": 'awaiting_cash', 
+                    "bulk": True
+                }
+            )
+            
+            return Response({
+                'url': f"{success_url}?session_id=bulk_cash_{session.id}&amount={total_amount}",
+                'provider': 'cash'
+            })
+
+        else:
+             # Stripe Bulk Session
+             # We use the Primary Order to initialize the Payment record creation in the Adapter
+             # But we need to override the amount.
+             
+             primary_order = unpaid_orders.first() # Attach to latest or first? Latest might be better.
+             primary_order = unpaid_orders.last()
+             
+             # Call Adapter Directly to bypass PaymentService rigidness check if needed, 
+             # OR utilize PaymentService if we modify it.
+             # Let's interact with PaymentService.create_payment BUT we need to support 'amount_override' and 'metadata'.
+             # Since modifying PaymentService might be invasive, let's just do logic here.
+             
+             from .models import PaymentGateway
+             try:
+                 gateway = PaymentGateway.objects.get(restaurant=primary_order.restaurant, provider='stripe', is_active=True)
+             except PaymentGateway.DoesNotExist:
+                 return Response({"error": "Stripe payment not configured for this restaurant"}, status=400)
+
+             stripe.api_key = gateway.get_decrypted_secret()
+             
+             try:
+                # Create Stripe Session
+                checkout_session = stripe.checkout.Session.create(
+                    payment_method_types=['card'],
+                    line_items=[{
+                        'price_data': {
+                            'currency': 'aed',
+                            'product_data': {
+                                'name': f'Bulk Payment - Table {session.device.table_number or session.device.table_name}',
+                                'description': f'Payment for {unpaid_orders.count()} orders'
+                            },
+                            'unit_amount': int(total_amount * 100),
+                        },
+                        'quantity': 1,
+                    }],
+                    mode='payment',
+                    success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
+                    cancel_url=cancel_url,
+                    metadata={
+                        'type': 'bulk_session',
+                        'guest_session_id': session.id,
+                        'restaurant_id': primary_order.restaurant.id,
+                        'primary_order_id': primary_order.id
+                    }
+                )
+                
+                # Create Payment Record
+                # We attach it to the primary order for FK constraints
+                Payment.objects.create(
+                    device=session.device,
+                    restaurant=primary_order.restaurant,
+                    order=primary_order,
+                    provider='stripe',
+                    transaction_id=checkout_session.id,
+                    amount=total_amount,
+                    status='pending',
+                    created_by='guest_bulk'
+                )
+                
+                return Response({
+                    'url': checkout_session.url,
+                    'transaction_id': checkout_session.id,
+                    'provider': 'stripe',
+                })
+                
+             except stripe.error.StripeError as e:
+                return Response({'error': str(e)}, status=400)
+
 class CreateCheckoutSessionView(APIView):
     """API View for creating a checkout session (Unified)"""
     permission_classes = [] # Allow guests (manual token check inside)
