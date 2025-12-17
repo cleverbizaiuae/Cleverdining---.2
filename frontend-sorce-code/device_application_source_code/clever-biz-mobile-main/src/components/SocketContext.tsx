@@ -24,24 +24,30 @@ interface SocketProviderProps {
 const SocketProvider = ({ children }: SocketProviderProps) => {
   // Parse user info from localStorage with fallback to an empty object
   const parseUser = JSON.parse(localStorage.getItem("userInfo") || "{}");
-  const accessToken = localStorage.getItem("accessToken"); // Access token as a string
+  const accessToken = localStorage.getItem("accessToken");
+  const guestSessionToken = localStorage.getItem("guest_session_token");
 
-  // Use optional chaining to safely access the user ID
-  const id = parseUser.user?.restaurants[0]?.id;
+  // Use optional chaining to safely access the user ID. 
+  // For guests, we might not have a typical user ID, but TableLanding sets user.restaurants[0].id
+  const id = parseUser.user?.restaurants?.[0]?.id;
 
-  const [ws, setWs] = useState<WebSocket | null>(null); // Type WebSocket
-  const [messages, setMessages] = useState<Message[]>([]); // Type messages as an array of Message objects
+  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   // Use environment variable or fallback to production WebSocket URL
   const WS_BASE_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
-  const wsUrl = `${WS_BASE_URL}/ws/alldatalive/${id}/?token=${accessToken}`;
-  const [response, setResponse] = useState<Message | {}>({}); // Type response as Message or an empty object
+
+  // Choose token: Access Token (Staff) > Guest Token (Customer)
+  const tokenToUse = accessToken || guestSessionToken;
+  const wsUrl = `${WS_BASE_URL}/ws/alldatalive/${id}/?token=${tokenToUse}`;
+
+  const [response, setResponse] = useState<Message | {}>({});
 
   useEffect(() => {
-    if (!id || !accessToken) {
+    if (!id || !tokenToUse) {
       // User not logged in yet - WebSocket will connect after login
-      // This is normal behavior, not an error
-      return; // Prevent connection if no data
+      console.warn("WebSocket skipped: Missing ID or Token", { id, hasToken: !!tokenToUse });
+      return;
     }
 
     const socket = new WebSocket(wsUrl);

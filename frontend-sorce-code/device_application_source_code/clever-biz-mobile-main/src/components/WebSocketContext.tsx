@@ -36,7 +36,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   };
 
   const connect = () => {
-    const accessToken = localStorage.getItem("accessToken") || "guest_token";
+    const accessToken = localStorage.getItem("accessToken");
+    const guestSessionToken = localStorage.getItem("guest_session_token");
+
+    // Use Guest Token if Access Token is missing. 
+    // Sending "guest_token" string prevents backend from finding the session.
+    const tokenToUse = accessToken || guestSessionToken || "guest_token";
+
     const userInfo = localStorage.getItem("userInfo");
     const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
     const device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
@@ -44,7 +50,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     if (!device_id) return;
 
-    const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/chat/${device_id}/?token=${accessToken}&restaurant_id=${restaurant_id}`;
+    const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/chat/${device_id}/?token=${tokenToUse}&restaurant_id=${restaurant_id}`;
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
