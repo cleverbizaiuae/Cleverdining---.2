@@ -158,31 +158,31 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
           {/* Sticky Action Bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-50 p-4 pt-4 z-30 pb-[env(safe-area-inset-bottom)]">
-            <div className="flex items-center gap-3">
-              {/* Quantity Selector */}
-              <div className="flex items-center bg-gray-50 p-1.5 rounded-full border border-gray-100">
+            <div className="flex items-center gap-2">
+              {/* Quantity Selector - Compact for Mobile */}
+              <div className="flex items-center bg-gray-50 p-1 rounded-full border border-gray-100 shrink-0">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-12 h-12 flex items-center justify-center bg-white text-gray-600 rounded-full shadow-sm hover:bg-gray-50 transition-colors active:scale-95"
+                  className="w-10 h-10 flex items-center justify-center bg-white text-gray-600 rounded-full shadow-sm hover:bg-gray-50 transition-colors active:scale-95"
                 >
-                  <span className="text-xl font-bold mb-1">-</span>
+                  <span className="text-lg font-bold mb-0.5">-</span>
                 </button>
-                <span className="w-12 text-center font-bold text-xl tabular-nums text-foreground">{quantity}</span>
+                <span className="w-8 text-center font-bold text-lg tabular-nums text-foreground">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-12 h-12 flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-black/90 transition-colors active:scale-95"
+                  className="w-10 h-10 flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-black/90 transition-colors active:scale-95"
                 >
-                  <span className="text-xl font-bold mb-1">+</span>
+                  <span className="text-lg font-bold mb-0.5">+</span>
                 </button>
               </div>
 
               {/* Add to Cart Button */}
               <button
                 onClick={handleAddToCart}
-                className="flex-1 h-16 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-between px-6 gap-4 transition-all active:scale-[0.98] shadow-xl shadow-primary/20"
+                className="flex-1 h-12 sm:h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-between px-4 gap-2 transition-all active:scale-[0.98] shadow-xl shadow-primary/20 min-w-0"
               >
-                <span className="text-base font-semibold whitespace-nowrap">Add to Cart</span>
-                <span className="text-base font-bold bg-white/20 px-4 py-1.5 rounded-xl whitespace-nowrap">
+                <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate">Add to Cart</span>
+                <span className="text-sm sm:text-base font-bold bg-white/20 px-3 py-1 rounded-lg whitespace-nowrap">
                   AED {(Number(item?.price || 0) * quantity).toFixed(2)}
                 </span>
               </button>
