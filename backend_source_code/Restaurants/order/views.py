@@ -308,10 +308,13 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        # Get all restaurants where user is active staff/chef
-        chef_staff_qs = ChefStaff.objects.filter(user=user)
-        restaurant_id = chef_staff_qs.first().restaurant_id
+        # Get active accepted restaurant
+        chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+        
+        if not chef_staff:
+            return Order.objects.none()
 
+        restaurant_id = chef_staff.restaurant_id
         return Order.objects.filter(restaurant_id=restaurant_id).order_by('-created_time')
     
 

@@ -51,7 +51,20 @@ const ScreenRestaurantChat = () => {
   useEffect(() => {
     const fetchChats = async () => {
       try {
-        const { data } = await axiosInstance.get("/owners/devicesall/");
+        let endpoint;
+        const role = userInfo?.role; // userInfo from useRole hook
+
+        if (role === "owner") {
+          endpoint = "/owners/devicesall/";
+        } else if (role === "staff") {
+          endpoint = "/api/staff/devicesall/";
+        } else if (role === "chef") {
+          endpoint = "/api/chef/devicesall/";
+        } else {
+          endpoint = "/owners/devicesall/"; // Fallback
+        }
+
+        const { data } = await axiosInstance.get(endpoint);
         setChatList(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to load chat list", error);

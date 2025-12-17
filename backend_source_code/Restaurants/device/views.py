@@ -401,7 +401,7 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
         if user.role == 'owner':
             return Device.objects.filter(restaurant__owner=user)
         elif user.role in ['staff', 'chef']:
-            restaurant_ids = ChefStaff.objects.filter(user=user).values_list('restaurant_id', flat=True)
+            restaurant_ids = ChefStaff.objects.filter(user=user, action='accepted').values_list('restaurant_id', flat=True)
             return Device.objects.filter(restaurant_id__in=restaurant_ids)
 
         return Device.objects.none()
