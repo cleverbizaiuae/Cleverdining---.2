@@ -57,7 +57,9 @@ const ScreenChefOrderList = () => {
             }
             accentColor="#6B8CED"
             gradientStart="#6189FF"
-            gradientEnd="#161F42"
+            gradientEnd="#ffffff"
+            className="bg-white shadow-xl shadow-gray-200 border border-gray-100"
+            textClassName="text-gray-900"
           />
           {/* Card 2 */}
           <OrderlistCard
@@ -65,7 +67,9 @@ const ScreenChefOrderList = () => {
             data={ordersStats?.total_completed_orders?.toString() || "0"}
             accentColor="#48E03A"
             gradientStart="#48E03A"
-            gradientEnd="#161F42"
+            gradientEnd="#ffffff"
+            className="bg-white shadow-xl shadow-gray-200 border border-gray-100"
+            textClassName="text-gray-900"
           />
         </div>
         {/* Dashboard Content */}

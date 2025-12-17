@@ -495,6 +495,8 @@ type OrderlistCardProps = {
   accentColor?: string;
   gradientStart?: string;
   gradientEnd?: string;
+  className?: string;
+  textClassName?: string;
 };
 export const OrderlistCard: React.FC<OrderlistCardProps> = ({
   label,
@@ -502,9 +504,11 @@ export const OrderlistCard: React.FC<OrderlistCardProps> = ({
   accentColor = "#31BB24",
   gradientStart = "#48E03A",
   gradientEnd = "#161F42",
+  className = "bg-sidebar shadow-2xl shadow-black/70",
+  textClassName = "text-primary-text",
 }) => {
   return (
-    <div className="flex-1 bg-sidebar shadow-2xl shadow-black/70 flex flex-row items-start p-6 rounded-xl relative">
+    <div className={`flex-1 flex flex-row items-start p-6 rounded-xl relative ${className}`}>
       <div className="flex-1 flex flex-col h-full justify-between">
         <div className="flex">
           <IconBox color={accentColor} />
@@ -512,11 +516,11 @@ export const OrderlistCard: React.FC<OrderlistCardProps> = ({
             {label}
           </p>
         </div>
-        <p className="text-lg text-primary-text/70 font-light mt-4">Total</p>
+        <p className={`text-lg font-light mt-4 opacity-70 ${textClassName}`}>Total</p>
       </div>
       <div className="relative">
         <ProgressSvg color={accentColor} />
-        <p className="absolute top-1/2 left-1/2 -translate-1/2 text-3xl text-primary-text font-medium">
+        <p className={`absolute top-1/2 left-1/2 -translate-1/2 text-3xl font-medium ${textClassName}`}>
           {data}
         </p>
       </div>
