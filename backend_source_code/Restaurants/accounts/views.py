@@ -183,7 +183,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             except Exception:
                 user_data['owner_id'] = None
             
-            # Only load restaurants for owners
+            # Load restaurants for owners, staff, and chefs
             if user.role == 'owner':
                 try:
                     first_restaurant = user.restaurants.first()
@@ -203,6 +203,28 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                         }]
                 except Exception as rest_error:
                     logger.warning(f"Could not load restaurants for owner {user.email}: {str(rest_error)}")
+            
+            elif user.role in ['staff', 'chef']:
+                try:
+                    # Find accepted employment
+                    employment = ChefStaff.objects.filter(user=user, action='accepted').first()
+                    if employment and employment.restaurant:
+                        restaurant = employment.restaurant
+                        user_data['restaurants'] = [{
+                            'id': restaurant.id,
+                            'resturent_name': getattr(restaurant, 'resturent_name', ''),
+                            'location': getattr(restaurant, 'location', ''),
+                            'source': user.role, # 'staff' or 'chef'
+                            'device_id': None,
+                            'table_name': None,
+                            'subscription': {
+                                'package_name': 'Basic',
+                                'status': 'active',
+                                'current_period_end': None
+                            }
+                        }]
+                except Exception as rest_error:
+                    logger.warning(f"Could not load restaurant for {user.role} {user.email}: {str(rest_error)}")
             
             data['user'] = user_data
             logger.info(f"Login successful for user: {user.email} (role: {user.role})")
