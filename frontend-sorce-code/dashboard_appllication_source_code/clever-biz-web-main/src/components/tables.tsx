@@ -777,10 +777,18 @@ export const TableReviewList: React.FC<TableReviewListProps> = ({ data }) => {
 interface TableFoodOrderListProps {
   data: any[] | { orders: any[] };
   updateOrderStatus?: (id: number, status: string) => Promise<void>;
+  className?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  rowClassName?: string;
 }
 export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
   data,
   updateOrderStatus: propUpdateOrderStatus,
+  className,
+  headerClassName,
+  bodyClassName,
+  rowClassName,
 }) => {
   const { response } = useContext(WebSocketContext) || {};
   const { fetchOrders } = useStaff();
@@ -825,9 +833,9 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
   }, [response, fetchOrders, fetchOwnerOrders]);
 
   return (
-    <div className="overflow-x-auto">
+    <div className={`overflow-x-auto ${className || ""}`}>
       <table className="w-full table-auto text-left clever-table">
-        <thead className="table-header">
+        <thead className={`table-header ${headerClassName || ""}`}>
           <tr>
             <th className="p-2 sm:p-4 text-center ">Table Name</th>
             <th className="p-2 sm:p-4 text-center">Ordered Items</th>
@@ -841,30 +849,30 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
             <th className="p-2 sm:p-4 text-center">Cancel</th>
           </tr>
         </thead>
-        <tbody className="bg-sidebar text-sm">
+        <tbody className={`bg-sidebar text-sm ${bodyClassName || ""}`}>
           {ordersData?.map((item, index) => (
-            <tr key={index} className="border-b border-[#1C1E3C]">
-              <td className="p-2 sm:p-4 text-primary-text truncate text-center">
+            <tr key={index} className={`border-b border-[#1C1E3C] ${rowClassName || ""}`}>
+              <td className="p-2 sm:p-4 text-inherit truncate text-center">
                 {item.device_name.substring(0, 20)}
               </td>
-              <td className="p-2 sm:p-4 text-primary-text truncate text-center">
+              <td className="p-2 sm:p-4 text-inherit truncate text-center">
                 {item.order_items?.[0]?.item_name.substring(0, 20) || "N/A"}
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center ">
+              <td className="p-2 sm:p-4 text-inherit text-center ">
                 {item.order_items.length || "N/A"}
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 {item.total_price || "N/A"}
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 <span className="font-medium">
                   {formatDateTime(item.created_time)}
                 </span>
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 {item.id}
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 {item.status.toLowerCase() === "paid" ? (
                   <ButtonStatus
                     status={item.status}
@@ -911,14 +919,14 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
                   />
                 )}
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 <span className="font-medium">
                   {item.status == "completed"
                     ? "paid"
                     : `${item?.payment_status}`}
                 </span>
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 <button
                   className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => handleStatusChange(item.id, "Served")}
@@ -927,7 +935,7 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
                   Delivered
                 </button>
               </td>
-              <td className="p-2 sm:p-4 text-primary-text text-center">
+              <td className="p-2 sm:p-4 text-inherit text-center">
                 <div className="flex items-center justify-center gap-2">
                   <button
                     className="text-blue-400 hover:text-blue-300 transition-colors"

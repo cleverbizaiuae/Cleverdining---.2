@@ -855,12 +855,14 @@ interface TextSearchBoxProps
   placeholder?: string;
   value?: string;
   onChange?: (value: string) => void;
+  inputContainerClassName?: string;
 }
 export const TextSearchBox = ({
   placeholder = "Search...",
   className,
   value = "",
   onChange,
+  inputContainerClassName,
 }: TextSearchBoxProps) => {
   const [internalValue, setInternalValue] = useState(value);
 
@@ -877,16 +879,16 @@ export const TextSearchBox = ({
 
   return (
     <div className={cn("w-full max-w-sm h-14", className)}>
-      <div className="h-14 flex items-center bg-sidebar text-primary-text rounded-lg overflow-hidden shadow-md">
+      <div className={cn("h-14 flex items-center bg-sidebar text-primary-text rounded-lg overflow-hidden shadow-md", inputContainerClassName)}>
         <input
           type="text"
           value={internalValue}
           onChange={handleChange}
           placeholder={placeholder}
-          className="w-full h-full px-4 text-sm bg-transparent text-primary-text placeholder:text-primary-text/70 focus:outline-none"
+          className="w-full h-full px-4 text-sm bg-transparent text-inherit placeholder:text-inherit focus:outline-none"
         />
         <button className="h-full bg-table-header px-6 flex items-center justify-center hover:bg-[#2B274D]">
-          <FaMagnifyingGlass className="w-4 h-4 text-primary-text" />
+          <FaMagnifyingGlass className="w-4 h-4 text-inherit" />
         </button>
       </div>
     </div>

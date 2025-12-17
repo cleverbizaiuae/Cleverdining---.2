@@ -74,8 +74,9 @@ const ScreenChefOrderList = () => {
         </div>
         {/* Dashboard Content */}
         {/* Header and dropdown */}
+        {/* Header and dropdown */}
         <div className="flex flex-row justify-between items-center gap-y-4 md:gap-y-0 my-3">
-          <h2 className="flex-1 text-2xl text-primary-text">List of items</h2>
+          <h2 className="flex-1 text-2xl text-gray-900 font-bold">List of items</h2>
 
           <div className="flex-1 flex gap-x-4 flex-row-reverse md:flex-row justify-end">
             {/* Search box by id */}
@@ -83,14 +84,19 @@ const ScreenChefOrderList = () => {
               placeholder="Search by Order ID"
               value={ordersSearchQuery}
               onChange={handleSearch}
+              className="w-full max-w-xs"
+              inputContainerClassName="bg-white border border-gray-200 shadow-sm text-gray-900 placeholder:text-gray-400"
             />
           </div>
         </div>
         {/* List of content */}
-        <div className="bg-sidebar p-4 rounded-lg">
+        <div className="bg-white border border-gray-200 shadow-xl shadow-gray-200/50 p-4 rounded-xl">
           <TableFoodOrderList
             data={orders}
             updateOrderStatus={updateOrderStatus}
+            headerClassName="bg-gray-900 text-white rounded-t-lg"
+            bodyClassName="bg-white text-gray-900"
+            rowClassName="border-gray-100 hover:bg-gray-50 transition-colors"
           />
           <div className="mt-4 flex justify-center">
             <Pagination
