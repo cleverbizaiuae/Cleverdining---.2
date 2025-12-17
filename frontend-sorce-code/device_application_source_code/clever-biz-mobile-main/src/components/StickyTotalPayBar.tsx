@@ -73,24 +73,29 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
 
     return (
         <>
-            <div className="fixed bottom-20 left-4 right-4 z-30">
+            <div className="fixed bottom-24 left-4 right-4 z-50 max-w-2xl mx-auto">
                 <motion.div
                     initial={{ y: 50, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    className="bg-gray-900 text-white p-4 rounded-xl shadow-2xl flex justify-between items-center border border-gray-700/50 backdrop-blur-md"
+                    className="bg-white p-4 shadow-xl rounded-2xl border border-gray-100"
                 >
-                    <div>
-                        <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Total to Pay</p>
-                        <p className="text-xl font-bold text-white">AED {totalAmount.toFixed(2)}</p>
-                        <p className="text-xs text-gray-500">{unpaidOrders.length} Orders</p>
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-gray-600 text-sm">Total Orders: <span className="font-bold text-blue-600">{unpaidOrders.length}</span></span>
+                        <span className="text-gray-600 text-sm">Total Cost: <span className="font-bold text-blue-600">AED {totalAmount.toFixed(2)}</span></span>
                     </div>
 
                     <button
                         onClick={() => setShowMethodModal(true)}
                         disabled={loading}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95 flex items-center gap-2"
+                        className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-between group disabled:opacity-70"
                     >
-                        {loading ? <Loader2 className="animate-spin" size={20} /> : "Pay All"}
+                        <span className="flex items-center gap-2">
+                            {loading && <Loader2 className="animate-spin" size={20} />}
+                            Pay All
+                        </span>
+                        <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors text-sm">
+                            AED {totalAmount.toFixed(2)}
+                        </span>
                     </button>
                 </motion.div>
             </div>

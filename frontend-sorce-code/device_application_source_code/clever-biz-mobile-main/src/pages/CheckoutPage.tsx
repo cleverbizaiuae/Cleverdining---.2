@@ -144,7 +144,7 @@ export default function CheckoutPage() {
 
       {/* TIP SECTION */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 transition-all duration-300">
-        <h2 className="text-lg font-semibold mb-3 text-yellow-600 flex items-center gap-2">
+        <h2 className="text-lg font-semibold mb-3 text-blue-600 flex items-center gap-2">
           Add a Tip for the Staff 💛 <span className="text-xs text-gray-400 font-normal">(Optional)</span>
         </h2>
 
@@ -156,8 +156,8 @@ export default function CheckoutPage() {
               onClick={() => handlePresetTip(pct)}
               className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                         ${tipType === 'percentage' && tipValue === pct
-                  ? 'bg-yellow-500 text-white border-yellow-500 shadow-md transform scale-105'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-yellow-300'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
                 }`}
             >
               {pct}%
@@ -167,8 +167,8 @@ export default function CheckoutPage() {
             onClick={() => { setTipType('custom_amount'); setTipValue(''); setCustomInput(''); setTipAmount(0); }}
             className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                     ${(tipType === 'custom_amount' || tipType === 'custom_percentage')
-                ? 'bg-yellow-500 text-white border-yellow-500 shadow-md'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-yellow-300'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
               }`}
           >
             Custom
@@ -184,7 +184,7 @@ export default function CheckoutPage() {
               value={customInput}
               onChange={(e) => handleCustomInput(e.target.value)}
               placeholder="AED 0.00"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-yellow-500 font-semibold text-gray-800"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 font-semibold text-gray-800"
             />
             {(customInput && tipAmount === 0 && customInput !== '') && (
               <p className="text-xs text-red-500 mt-1">Invalid amount (Max 50% of subtotal)</p>
@@ -194,9 +194,9 @@ export default function CheckoutPage() {
 
         {/* Live Tip Display */}
         {tipAmount > 0 && (
-          <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-lg border border-yellow-100">
-            <span className="text-sm font-medium text-yellow-800">Tip Added</span>
-            <span className="text-lg font-bold text-yellow-900">AED {tipAmount.toFixed(2)}</span>
+          <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
+            <span className="text-sm font-medium text-blue-800">Tip Added</span>
+            <span className="text-lg font-bold text-blue-900">AED {tipAmount.toFixed(2)}</span>
           </div>
         )}
       </div>
