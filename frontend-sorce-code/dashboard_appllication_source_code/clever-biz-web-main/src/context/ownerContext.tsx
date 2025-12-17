@@ -559,13 +559,15 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         const searchParam = search || devicesSearchQuery;
-        let endpoint =
-          (userRole === "owner" || userRole === "staff")
-            ? `/owners/devices/?page=${page}&search=${searchParam}`
-            : `/api/chef/devices/?page=${page}&search=${searchParam}`;
-
-        if (userRole === "staff") {
-          endpoint = `/api/staff/devices/?page=${page}&search=${searchParam}`;
+        let endpoint;
+        if (userRole === "owner") {
+          endpoint = `/owners/devices/?page=${page}&search=${searchParam}`;
+        } else if (userRole === "staff" || (userRole as string) === "manager" || userRole === "chef") {
+          // Unify Manager/Staff/Chef to use the robust Chef/Staff API
+          endpoint = `/api/chef/devices/?page=${page}&search=${searchParam}`;
+        } else {
+          // Fallback
+          endpoint = `/owners/devices/?page=${page}&search=${searchParam}`;
         }
 
         const response = await axiosInstance.get(endpoint);
@@ -591,13 +593,13 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-      let endpoint =
-        (userRole === "owner" || userRole === "staff")
-          ? "/owners/devices/stats/"
-          : "/api/chef/devices/stats/";
-
-      if (userRole === "staff") {
-        endpoint = "/api/staff/devices/stats/";
+      let endpoint;
+      if (userRole === "owner") {
+        endpoint = "/owners/devices/stats/";
+      } else if (userRole === "staff" || (userRole as string) === "manager" || userRole === "chef") {
+        endpoint = "/api/chef/devices/stats/";
+      } else {
+        endpoint = "/owners/devices/stats/";
       }
 
       const response = await axiosInstance.get(endpoint);

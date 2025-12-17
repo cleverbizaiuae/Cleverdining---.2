@@ -201,31 +201,54 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        print(f"DEBUG_DEVICES: Fetching devices for {user.email} Role: {getattr(user, 'role', 'N/A')}")
+        
         if user.role == 'owner':
             return Device.objects.filter(restaurant__owner=user).order_by('-id')
-        elif user.role in ['chef', 'staff']:
-            restaurant_ids = ChefStaff.objects.filter(
-                user=user,
-                action='accepted'
-            ).values_list('restaurant_id', flat=True)
-            return Device.objects.filter(restaurant_id__in=restaurant_ids).order_by('-id')
+        
+        # Staff/Chef/Manager Logic
+        # 1. Preferred: ChefStaff model
+        chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+        if chef_staff:
+             print(f"DEBUG_DEVICES: Found ChefStaff for rest {chef_staff.restaurant.id}")
+             return Device.objects.filter(restaurant=chef_staff.restaurant).order_by('-id')
+        
+        # 2. Fallback: Legacy Staff model
+        from staff.models import Staff
+        legacy_staff = Staff.objects.filter(user=user).first()
+        if legacy_staff:
+             print(f"DEBUG_DEVICES: Found Legacy Staff for rest {legacy_staff.restaurant.id}")
+             return Device.objects.filter(restaurant=legacy_staff.restaurant).order_by('-id')
+             
+        # 3. Fallback: Owner check (in case role is mismatched but is actually owner)
+        if user.role == 'owner': # Redundant check but safe
+             return Device.objects.filter(restaurant__owner=user).order_by('-id')
+
+        print("DEBUG_DEVICES: No access found. Returning empty.")
         return Device.objects.none()
 
     def perform_create(self, serializer):
         user = self.request.user
         
+        restaurant = None
         if user.role == 'owner':
-
             restaurant = Restaurant.objects.filter(owner=user).first()
             if not restaurant:
                 raise serializers.ValidationError("Restaurant not found for this owner.")
-        elif user.role in ['chef', 'staff']:
+        else: # Manager/Staff/Chef
+            # Check ChefStaff
             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-            if not chef_staff:
+            if chef_staff:
+                 restaurant = chef_staff.restaurant
+            else:
+                 # Check Legacy Staff
+                 from staff.models import Staff
+                 legacy_staff = Staff.objects.filter(user=user).first()
+                 if legacy_staff:
+                      restaurant = legacy_staff.restaurant
+            
+            if not restaurant:
                 raise serializers.ValidationError("You are not associated with any accepted restaurant.")
-            restaurant = chef_staff.restaurant
-        else:
-             raise PermissionDenied("You are not authorized to create devices.")
 
         # Generate unique username
         username = None
@@ -255,8 +278,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
         # Notify owner if possible, or log it
         if user.role == 'owner':
              owner_email = user.email
-        else:
+        elif restaurant.owner:
              owner_email = restaurant.owner.email
+        else:
+             owner_email = "admin@cleverbiz.ai"
 
         send_mail(
             subject="New Device User Created",
@@ -314,29 +339,31 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def get_device_stats(self, request):
         user = request.user
         
+        restaurant = None
+        
         if user.role == 'owner':
-
             restaurant = Restaurant.objects.filter(owner=user).first()
-            if not restaurant:
-                return Response({"detail": "Restaurant not found."}, status=404)
-            all_devices = Device.objects.filter(restaurant=restaurant)
-        elif user.role in ['chef', 'staff']:
-            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-            if not chef_staff:
-                 # If no restaurant, return empty 0 stats instead of 404 to avoid frontend error noise? 
-                 # Or 403?
-                 # Returning valid empty structure prevents "Failed to load summary" toast.
-                 return Response({
-                    "restaurant": "N/A",
-                    "total_devices": 0,
-                    "active_devices": 0,
-                    "hold_devices": 0,
-                })
-            restaurant = chef_staff.restaurant
-            all_devices = Device.objects.filter(restaurant=restaurant)
         else:
-            return Response({"detail": "Not authorized."}, status=403)
+            # Check ChefStaff
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if chef_staff:
+                restaurant = chef_staff.restaurant
+            else:
+                # Check Legacy Staff
+                from staff.models import Staff
+                legacy_staff = Staff.objects.filter(user=user).first()
+                if legacy_staff:
+                    restaurant = legacy_staff.restaurant
+        
+        if not restaurant:
+             return Response({
+                "restaurant": "N/A",
+                "total_devices": 0,
+                "active_devices": 0,
+                "hold_devices": 0,
+            })
 
+        all_devices = Device.objects.filter(restaurant=restaurant)
         return Response({
             "restaurant": restaurant.resturent_name,
             "total_devices": all_devices.count(),
