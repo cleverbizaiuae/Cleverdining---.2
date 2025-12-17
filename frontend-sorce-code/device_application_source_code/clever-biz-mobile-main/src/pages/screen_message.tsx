@@ -32,12 +32,9 @@ function MessagingUI() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const userInfo = localStorage.getItem("userInfo");
-  const device_id = userInfo
-    ? JSON.parse(userInfo).user.restaurants[0].device_id
-    : null;
-  const restaurant_id = userInfo
-    ? JSON.parse(userInfo).user.restaurants[0].id
-    : null;
+  const userInfoContent = userInfo ? JSON.parse(userInfo) : null;
+  const device_id = userInfoContent?.user?.restaurants?.[0]?.device_id || null;
+  const restaurant_id = userInfoContent?.user?.restaurants?.[0]?.id || null;
 
   // Sync local messages with WebSocket events
   useEffect(() => {
@@ -99,13 +96,13 @@ function MessagingUI() {
           id: number;
           is_from_device: boolean;
           message: string;
-          created_at?: string;
+          timestamp?: string; // Corrected field name
         };
         const mapped = (response.data || []).map((msg: ApiMessage) => ({
           id: msg.id,
           is_from_device: msg.is_from_device,
           text: msg.message,
-          timestamp: msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+          timestamp: msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
           hasActions: !msg.is_from_device && msg.message.includes("Welcome") // Simple heuristic for now
         }));
 
