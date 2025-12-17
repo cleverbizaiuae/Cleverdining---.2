@@ -18,8 +18,24 @@ class ChatMessageViewSet(ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         
+        # 1. Staff/User Authentication (Priority 1)
+        user = self.request.user
+        if user.is_authenticated:
+            # Check role to differentiate between logged-in 'customer' (if any) and staff/owner
+            if hasattr(user, 'role') and user.role in ['owner', 'staff', 'chef', 'manager']:
+                 # Staff logic
+                device_id = self.request.query_params.get('device_id')
+                restaurant_id = self.request.query_params.get('restaurant_id')
+
+                if self.action == 'list':
+                    if device_id and restaurant_id:
+                        return queryset.filter(device_id=device_id, restaurant_id=restaurant_id).order_by('timestamp')
+                    else:
+                        # Maybe return all for restaurant? No, list requires filtering usually.
+                        return queryset.none()
+        
+        # 2. Guest Session Token (Priority 2 - for Customers)
         try:
-            # 1. Check for Guest Session Token
             session_token = self.request.headers.get('X-Guest-Session-Token')
             if session_token:
                 from device.models import GuestSession
@@ -37,20 +53,8 @@ class ChatMessageViewSet(ModelViewSet):
         except Exception as e:
             print(f"Queryset Error: {e}")
             return queryset.none()
-
-        # 2. Fallback to Staff/User Authentication
-        user = self.request.user
-        if user.is_authenticated:
-             # Staff logic (existing or refined)
-            device_id = self.request.query_params.get('device_id')
-            restaurant_id = self.request.query_params.get('restaurant_id')
-
-            if self.action == 'list':
-                if device_id and restaurant_id:
-                    # Filter by Foreign Keys directly for reliability
-                    return queryset.filter(device_id=device_id, restaurant_id=restaurant_id).order_by('timestamp')
-                else:
-                    return queryset.none()
+        
+        return queryset.none()
         
         return queryset.none()
     def perform_update(self, serializer):

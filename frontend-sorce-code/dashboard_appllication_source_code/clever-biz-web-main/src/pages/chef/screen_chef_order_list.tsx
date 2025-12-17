@@ -95,7 +95,7 @@ const ScreenChefOrderList = () => {
           <TableFoodOrderList
             data={orders}
             updateOrderStatus={updateOrderStatus}
-            headerClassName="bg-[#0055FE] text-white rounded-t-lg"
+            headerClassName="!bg-[#0055FE] text-white rounded-t-lg"
             bodyClassName="bg-white text-gray-900"
             rowClassName="border-gray-100 hover:bg-blue-50 transition-colors"
           />

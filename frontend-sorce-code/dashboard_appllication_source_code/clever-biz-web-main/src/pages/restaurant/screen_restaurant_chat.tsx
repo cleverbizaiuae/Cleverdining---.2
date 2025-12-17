@@ -81,7 +81,7 @@ const ScreenRestaurantChat = () => {
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     // WebSocket URL pattern based on utilities.tsx analysis: /ws/call/{device_id}/
-    const wsUrl = `${wsBaseUrl}/ws/call/${selectedChat.id}/?token=${jwt}`;
+    const wsUrl = `${wsBaseUrl}/ws/call/${selectedChat.id}/?token=${jwt}&restaurant_id=${selectedChat.restaurant_id}`;
 
     const ws = new WebSocket(wsUrl);
 
