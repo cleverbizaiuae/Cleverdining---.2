@@ -20,7 +20,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       onClick={onClick}
       className={cn(
         // Layout: Flex Column, strict 80x90 size
-        "flex flex-col items-center justify-start p-1 gap-1 transition-all duration-200", // Reduced padding/gap
+        "flex flex-col items-center justify-start p-2 gap-2 transition-all duration-200", // Revert to standard padding/gap
         "w-[80px] h-[90px] shrink-0",
         // Shape & Borders
         "rounded-xl border",
@@ -29,12 +29,17 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
           : "bg-white text-slate-700 border-slate-200 hover:border-[#0055FE]/50"
       )}
     >
-      {/* Icon Container: Increased to 50x50px */}
+      {/* Icon Container: STRICT 40x40px per user spec */}
       <div
         className={cn(
-          "w-[50px] h-[50px] shrink-0 flex items-center justify-center rounded-lg overflow-hidden",
+          "w-[40px] h-[40px] shrink-0 flex items-center justify-center rounded-lg overflow-hidden", // 40px size, 8px radius
           isActive ? "bg-white/20" : "bg-slate-100"
         )}
+        style={{
+          width: "40px",
+          height: "40px",
+          flexShrink: 0,
+        }}
       >
         {cat.image ? (
           <img
@@ -46,11 +51,15 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
             })()}
             alt={cat.Category_name}
             className="w-full h-full object-cover object-center"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center"
+            }}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.classList.remove('bg-slate-100'); // Remove white bg if fallback logic needed
-              // Force fallback icon display if needed, but we used nextSibling logic before
-              // Since we are in strict React, simpler to just hide img and show fallback
+              e.currentTarget.parentElement?.classList.remove('bg-slate-100');
             }}
           />
         ) : (
