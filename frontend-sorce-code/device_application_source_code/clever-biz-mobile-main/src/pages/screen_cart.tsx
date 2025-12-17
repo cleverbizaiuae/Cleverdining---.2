@@ -62,7 +62,15 @@ const ScreenCart = () => {
         guest_session_token: guestSessionToken,
       };
 
-      const response = await axiosInstance.post(`/api/customer/orders/?guest_token=${guestSessionToken}`, orderData);
+      const response = await axiosInstance.post(
+        `/api/customer/orders/?guest_token=${guestSessionToken}`,
+        orderData,
+        {
+          headers: {
+            'X-Guest-Session-Token': guestSessionToken
+          }
+        }
+      );
       toast.success("Order placed successfully!");
       // clearCart();  <-- Removed: Do not clear cart until payment success
 
@@ -92,9 +100,11 @@ const ScreenCart = () => {
         }
       }
 
-      if (errorMessage.includes("Device not found")) {
+      if (errorMessage.includes("Device not found") || errorMessage.includes("Invalid or expired session")) {
         toast.error("Session expired. Refreshing...");
         localStorage.removeItem("userInfo");
+        localStorage.removeItem("guest_session_token");
+        // Add a small delay to let the toast show
         setTimeout(() => window.location.reload(), 1500);
         return;
       }
