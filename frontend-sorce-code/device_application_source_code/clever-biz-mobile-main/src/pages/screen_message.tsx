@@ -47,16 +47,27 @@ function MessagingUI() {
       try {
         const data = JSON.parse(event.data);
         if (data.message && typeof data.message === "string") {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: prev.length + 1,
-              is_from_device: data.is_from_device,
-              text: data.message,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              hasActions: false // Default to false for incoming messages unless specified
-            },
-          ]);
+          setMessages((prev) => {
+            // Deduplicate: If we already have this message (optimistically added), don't add it again.
+            // Check the last few messages for a match.
+            const isDuplicate = prev.slice(-3).some(m =>
+              m.text === data.message &&
+              m.is_from_device === data.is_from_device
+            );
+
+            if (isDuplicate) return prev;
+
+            return [
+              ...prev,
+              {
+                id: prev.length + 1,
+                is_from_device: data.is_from_device,
+                text: data.message,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                hasActions: false // Default to false for incoming messages unless specified
+              },
+            ];
+          });
         }
       } catch (error) {
         console.error("Error processing message:", event.data);

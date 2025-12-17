@@ -113,8 +113,8 @@ class OrderCreateAPIView(generics.CreateAPIView):
                 }
             )
         
-        # Clear cart
-        Cart.objects.filter(guest_session=session).delete()
+        # Clear cart - MOVED to Payment Success (frontend/backend) to allow retry on failure
+        # Cart.objects.filter(guest_session=session).delete()
         
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 

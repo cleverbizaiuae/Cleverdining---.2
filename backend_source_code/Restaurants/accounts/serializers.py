@@ -166,10 +166,22 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = request.user
 
-        # Get first restaurant safely
-        restaurant = user.restaurants.first()
+        # Logic to determine restaurant
+        # 1. Check if passed in validated_data (from view's perform_create)
+        restaurant = validated_data.pop('restaurant', None)
+        
+        # 2. If not, try to resolve for Owner
+        if not restaurant and user.role == 'owner':
+            restaurant = user.restaurants.first()
+            
+        # 3. If still not, try to resolve for Staff/Chef
+        if not restaurant and user.role in ['chef', 'staff']:
+             employment = ChefStaff.objects.filter(user=user).first()
+             if employment:
+                 restaurant = employment.restaurant
+
         if not restaurant:
-             raise serializers.ValidationError("You do not own a restaurant.")
+             raise serializers.ValidationError("You do not have a valid restaurant association.")
 
         email = validated_data.pop('email')
         username = validated_data.pop('username')

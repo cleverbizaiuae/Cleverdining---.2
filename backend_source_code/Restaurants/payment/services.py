@@ -126,6 +126,11 @@ class PaymentService:
                     "payment": payment_data
                 }
             )
+
+            # Clear Cart on Successful Payment (Backend Cleanup)
+            if order.guest_session:
+                from order.models import Cart
+                Cart.objects.filter(guest_session=order.guest_session).delete()
             
         return verification_result
 

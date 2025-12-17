@@ -2,6 +2,7 @@
 import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import axiosInstance from "../lib/axios";
+import { useCart } from "../context/CartContext";
 
 type StripeLikeCustomerDetails = {
   email?: string | null;
@@ -119,6 +120,8 @@ export default function SuccessPage() {
   };
 
   // auto call success API once
+  const { clearCart } = useCart(); // Access clearCart from context
+
   useEffect(() => {
     const run = async () => {
       if (!sessionId || calledRef.current) return;
@@ -131,12 +134,16 @@ export default function SuccessPage() {
           },
         });
         setPayment(extractPaymentInfo(res?.data));
+        // Clear cart on successful payment verification
+        if (res?.data) {
+          clearCart();
+        }
       } finally {
         setLoading(false);
       }
     };
     run();
-  }, [sessionId, orderId]);
+  }, [sessionId, orderId, clearCart]); // Add clearCart to dep array
 
   return (
     <main className="p-4 sm:p-6 md:p-4 mx-auto max-w-4xl   overflow-y-auto h-[90vh] ">
