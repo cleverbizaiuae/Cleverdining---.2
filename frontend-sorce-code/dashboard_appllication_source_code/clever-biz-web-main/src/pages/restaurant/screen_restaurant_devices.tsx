@@ -298,7 +298,7 @@ export const ScreenRestaurantDevices = () => {
                         {device.active_session_id && (
                           <button
                             onClick={() => handleCloseSessionClick(device.active_session_id)}
-                            className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold uppercase rounded border border-amber-200 transition-colors mr-2 whitespace-nowrap"
+                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-[#0055FE] text-[10px] font-bold uppercase rounded border border-blue-200 transition-colors mr-2 whitespace-nowrap"
                             title="Manually Close Session"
                           >
                             End Session
@@ -424,7 +424,7 @@ export const ScreenRestaurantDevices = () => {
             <button
               onClick={confirmCloseSession}
               disabled={loading}
-              className="flex-1 h-10 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-amber-500/20 disabled:opacity-70 flex items-center justify-center"
+              className="flex-1 h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
             >
               {loading ? "Ending..." : "End Session"}
             </button>
