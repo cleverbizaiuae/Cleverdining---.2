@@ -285,7 +285,7 @@ class CreateReservationAPIView(APIView):
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated, IsOwnerORStaff]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
     pagination_class = ReservationPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     search_fields = ['id']
@@ -296,7 +296,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         if user.role == 'owner':
             queryset = Reservation.objects.filter(restaurant__owner=user)
-        elif user.role == 'staff':
+        elif user.role in ['staff', 'chef']:
+             # Consolidated Staff/Chef lookup
             chef_staff = ChefStaff.objects.filter(user=user).first()
             if chef_staff:
                 queryset = Reservation.objects.filter(restaurant=chef_staff.restaurant)

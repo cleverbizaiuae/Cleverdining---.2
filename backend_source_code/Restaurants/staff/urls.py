@@ -8,6 +8,9 @@ from device.views import DeviceViewSetall
 router = DefaultRouter()
 router.register('items', StaffItemViewSet, basename='staff-items')
 router.register('devicesall', DeviceViewSetall, basename='deviceall')
+# Expose Reservations for Staff
+from device.views import ReservationViewSet
+router.register('reservations', ReservationViewSet, basename='staff-reservations')
 
 urlpatterns = [
     path('', include(router.urls)),

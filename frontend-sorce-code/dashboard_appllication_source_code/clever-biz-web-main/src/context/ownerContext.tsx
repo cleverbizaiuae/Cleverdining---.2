@@ -375,9 +375,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       if (userRole === "owner") {
         endpoint = "/owners/orders/";
       } else if (userRole === "staff") {
-        endpoint = "/owners/orders/";
+        endpoint = "/api/staff/orders/";
       } else if (userRole === "chef") {
-        endpoint = "/chef/orders/";
+        endpoint = "/api/chef/orders/";
       } else {
         // Fallback or error?
         endpoint = "/owners/orders/";
@@ -447,10 +447,16 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       try {
-        let endpoint =
-          (userRole === "owner" || userRole === "staff")
-            ? `/owners/reservations/?page=${page}&search=${search || ""}`
-            : `/chef/reservations/?page=${page}&search=${search || ""}`;
+        let endpoint;
+        if (userRole === "owner") {
+          endpoint = `/owners/reservations/?page=${page}&search=${search || ""}`;
+        } else if (userRole === "staff") {
+          endpoint = `/api/staff/reservations/?page=${page}&search=${search || ""}`;
+        } else if (userRole === "chef") {
+          endpoint = `/api/chef/reservations/?page=${page}&search=${search || ""}`;
+        } else {
+          endpoint = `/owners/reservations/?page=${page}&search=${search || ""}`;
+        }
 
         // Add date parameter if provided
         if (date) {
@@ -501,11 +507,14 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-      const endpoint =
-
+      let endpoint =
         (userRole === "owner" || userRole === "staff")
           ? "/owners/reservations/report-reservation-status/"
-          : "/chef/reservations/report-reservation-status/";
+          : "/api/chef/reservations/report-reservation-status/";
+
+      if (userRole === "staff") {
+        endpoint = "/api/staff/reservations/report-reservation-status/";
+      }
 
       const response = await axiosInstance.get(endpoint);
       setReservationStatusReport(response.data);
@@ -522,9 +531,12 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-      const endpoint =
+      let endpoint =
+        (userRole === "owner" || userRole === "staff") ? "/owners/orders/" : "/api/chef/orders/";
 
-        (userRole === "owner" || userRole === "staff") ? "/owners/orders/" : "/chef/orders/";
+      if (userRole === "staff") {
+        endpoint = "/api/staff/orders/";
+      }
 
       const response = await axiosInstance.get(endpoint);
       setReservationStatusReport(response.data);
@@ -543,11 +555,14 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         const searchParam = search || devicesSearchQuery;
-        const endpoint =
-
+        let endpoint =
           (userRole === "owner" || userRole === "staff")
             ? `/owners/devices/?page=${page}&search=${searchParam}`
             : `/api/chef/devices/?page=${page}&search=${searchParam}`;
+
+        if (userRole === "staff") {
+          endpoint = `/api/staff/devices/?page=${page}&search=${searchParam}`;
+        }
 
         const response = await axiosInstance.get(endpoint);
         console.log(response, "response");
@@ -572,10 +587,14 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-      const endpoint =
+      let endpoint =
         (userRole === "owner" || userRole === "staff")
           ? "/owners/devices/stats/"
           : "/api/chef/devices/stats/";
+
+      if (userRole === "staff") {
+        endpoint = "/api/staff/devices/stats/";
+      }
 
       const response = await axiosInstance.get(endpoint);
       setDeviceStats(response.data);

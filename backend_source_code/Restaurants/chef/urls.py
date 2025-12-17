@@ -9,6 +9,9 @@ from device.views import DeviceViewSetall
 router = DefaultRouter()
 router.register('items', ChefItemViewSet, basename='chef-items')
 router.register('devicesall', DeviceViewSetall, basename='deviceall')
+# Expose Reservations for Chef
+from device.views import ReservationViewSet
+router.register('reservations', ReservationViewSet, basename='chef-reservations')
 
 urlpatterns = [
     path('', include(router.urls)),
