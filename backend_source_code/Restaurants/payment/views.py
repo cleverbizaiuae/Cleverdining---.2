@@ -121,8 +121,12 @@ class CreateCheckoutSessionView(APIView):
         except Order.DoesNotExist:
             return Response({'error': 'Order not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
 
-        success_url = 'https://clever-biz2.netlify.app/dashboard/success/'
-        cancel_url = 'https://clever-biz2.netlify.app/dashboard/cancel/'
+        # Dynamic URL construction based on Origin
+        origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
+        
+        success_url = f'{origin}/dashboard/success/'
+        # User requested redirection to Cart on cancel
+        cancel_url = f'{origin}/dashboard/cart/'
 
         try:
             result = PaymentService.create_payment(order, success_url, cancel_url)
