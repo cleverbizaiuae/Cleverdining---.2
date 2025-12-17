@@ -124,7 +124,12 @@ export default function SuccessPage() {
 
   useEffect(() => {
     const run = async () => {
-      if (!sessionId || calledRef.current) return;
+      if (!sessionId) {
+        setLoading(false); // Stop loading if no session ID
+        return;
+      }
+      if (calledRef.current) return;
+
       calledRef.current = true;
       try {
         const res = await axiosInstance.get(`/api/customer/payment/success/`, {
@@ -138,12 +143,14 @@ export default function SuccessPage() {
         if (res?.data) {
           clearCart();
         }
+      } catch (err) {
+        console.error("Payment verification failed", err);
       } finally {
         setLoading(false);
       }
     };
     run();
-  }, [sessionId, orderId, clearCart]); // Add clearCart to dep array
+  }, [sessionId, orderId, clearCart]);
 
   return (
     <main className="p-4 sm:p-6 md:p-4 mx-auto max-w-4xl   overflow-y-auto h-[90vh] ">
@@ -160,128 +167,138 @@ export default function SuccessPage() {
       <section className="mt-6 grid gap-2 md:grid-cols-1">
         <article className="col-span-2 rounded-2xl border border-gray-200 bg-white shadow-sm p-5 md:mb-25 mb-20">
           <h2 className="text-base font-semibold text-gray-900">Summary</h2>
-          {/* <small className="block mt-1 text-gray-500">
-            Pulled from your payment confirmation.
-          </small> */}
 
-          <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-gray-500">Paid at</dt>
-              <dd className="font-medium flex">
-                {loading ? "…" : formatDate(payment?.created)}
-              </dd>
+          {!payment && !loading ? (
+            <div className="py-8 text-center">
+              <p className="text-gray-500 mb-4">No payment details found or payment was cancelled.</p>
+              <div className="flex gap-4 justify-center">
+                <a href="/dashboard/cart" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Return to Cart</a>
+                <a href="/dashboard/orders" className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300">View Orders</a>
+              </div>
             </div>
-
-            <div className="sm:col-span-2">
-              <dt className="text-gray-500">Amount</dt>
-              <dd className="xl:text-xl text-md font-bold">
-                {loading
-                  ? "…"
-                  : formatMoney(payment?.amount_total, payment?.currency)}
-              </dd>
-            </div>
-
-            {payment?.presentment_details?.presentment_amount != null && (
-              <>
-                <div>
-                  <dt className="text-gray-500">Presentment Amount</dt>
-                  <dd className="font-medium">
-                    {formatMoney(
-                      payment.presentment_details.presentment_amount,
-                      payment.presentment_details.presentment_currency ||
-                      payment.currency
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-gray-500">Presentment Currency</dt>
-                  <dd className="font-medium">
-                    {(
-                      payment.presentment_details.presentment_currency || "—"
-                    )?.toUpperCase?.() ?? "—"}
-                  </dd>
-                </div>
-              </>
-            )}
-
-            <div>
-              <dt className="text-gray-500">Payment Status</dt>
-              <dd className="font-medium">
-                <StatusBadge
-                  text={payment?.payment_status ?? (loading ? "…" : "—")}
-                  tone={
-                    payment?.payment_status === "paid"
-                      ? "ok"
-                      : payment?.payment_status
-                        ? "warn"
-                        : "info"
-                  }
-                />
-              </dd>
-            </div>
-
-            <div>
-              <dt className="text-gray-500">Session Status</dt>
-              <dd className="font-medium">
-                <StatusBadge
-                  text={payment?.status ?? (loading ? "…" : "—")}
-                  tone={
-                    payment?.status === "complete"
-                      ? "ok"
-                      : payment?.status
-                        ? "info"
-                        : "info"
-                  }
-                />
-              </dd>
-            </div>
-
-            <div className="sm:col-span-2">
-              <dt className="text-gray-500">Transaction</dt>
-              <dd className="font-medium">
-                {loading ? "…" : short(payment?.transaction_id)}
-              </dd>
-            </div>
-          </dl>
-          <aside className=" ">
-            <h3 className="text-base font-semibold text-gray-900">Customer</h3>
-            <small className="block mt-1 text-gray-500">Billing details</small>
-
-            <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
+          ) : (
+            <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
-                <dt className="text-gray-500">Name</dt>
-                <dd className="font-medium">
-                  {loading ? "…" : payment?.customer_details?.name || "—"}
+                <dt className="text-gray-500">Paid at</dt>
+                <dd className="font-medium flex">
+                  {loading ? "…" : formatDate(payment?.created)}
                 </dd>
               </div>
+
+              <div className="sm:col-span-2">
+                <dt className="text-gray-500">Amount</dt>
+                <dd className="xl:text-xl text-md font-bold">
+                  {loading
+                    ? "…"
+                    : formatMoney(payment?.amount_total, payment?.currency)}
+                </dd>
+              </div>
+
+              {payment?.presentment_details?.presentment_amount != null && (
+                <>
+                  <div>
+                    <dt className="text-gray-500">Presentment Amount</dt>
+                    <dd className="font-medium">
+                      {formatMoney(
+                        payment.presentment_details.presentment_amount,
+                        payment.presentment_details.presentment_currency ||
+                        payment.currency
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Presentment Currency</dt>
+                    <dd className="font-medium">
+                      {(
+                        payment.presentment_details.presentment_currency || "—"
+                      )?.toUpperCase?.() ?? "—"}
+                    </dd>
+                  </div>
+                </>
+              )}
+
               <div>
-                <dt className="text-gray-500">Email</dt>
+                <dt className="text-gray-500">Payment Status</dt>
                 <dd className="font-medium">
-                  {loading ? "…" : payment?.customer_details?.email || "—"}
+                  <StatusBadge
+                    text={payment?.payment_status ?? (loading ? "…" : "—")}
+                    tone={
+                      payment?.payment_status === "paid"
+                        ? "ok"
+                        : payment?.payment_status
+                          ? "warn"
+                          : "info"
+                    }
+                  />
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-gray-500">Session Status</dt>
+                <dd className="font-medium">
+                  <StatusBadge
+                    text={payment?.status ?? (loading ? "…" : "—")}
+                    tone={
+                      payment?.status === "complete"
+                        ? "ok"
+                        : payment?.status
+                          ? "info"
+                          : "info"
+                    }
+                  />
+                </dd>
+              </div>
+
+              <div className="sm:col-span-2">
+                <dt className="text-gray-500">Transaction</dt>
+                <dd className="font-medium">
+                  {loading ? "…" : short(payment?.transaction_id)}
                 </dd>
               </div>
             </dl>
+          )}
 
-            {/* BUTTON ROW (no flex) */}
-            <div className="mt-2 grid grid-flow-col auto-cols-max gap-3 ">
-              <a
-                href="/dashboard/orders"
-                className="inline-block rounded-lg bg-gray-900 text-white px-2 py-2 hover:bg-black transition"
-              >
-                View Orders
-              </a>
-              {payment?.receipt_url && (
+          {payment && (
+            <aside className=" ">
+              <h3 className="text-base font-semibold text-gray-900">Customer</h3>
+              <small className="block mt-1 text-gray-500">Billing details</small>
+
+              <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
+                <div>
+                  <dt className="text-gray-500">Name</dt>
+                  <dd className="font-medium">
+                    {loading ? "…" : payment?.customer_details?.name || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Email</dt>
+                  <dd className="font-medium">
+                    {loading ? "…" : payment?.customer_details?.email || "—"}
+                  </dd>
+                </div>
+              </dl>
+
+              {/* BUTTON ROW (no flex) */}
+              <div className="mt-2 grid grid-flow-col auto-cols-max gap-3 ">
                 <a
-                  href={payment.receipt_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block rounded-lg border border-gray-300 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition"
+                  href="/dashboard/orders"
+                  className="inline-block rounded-lg bg-gray-900 text-white px-2 py-2 hover:bg-black transition"
                 >
-                  Download Receipt
+                  View Orders
                 </a>
-              )}
-            </div>
-          </aside>
+                {payment?.receipt_url && (
+                  <a
+                    href={payment.receipt_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block rounded-lg border border-gray-300 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    Download Receipt
+                  </a>
+                )}
+              </div>
+            </aside>
+          )}
         </article>
       </section>
     </main>
