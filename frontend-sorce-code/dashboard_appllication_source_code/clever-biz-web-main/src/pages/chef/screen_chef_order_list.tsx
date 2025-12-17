@@ -1,9 +1,8 @@
 import { TableFoodOrderList } from "@/components/tables";
 import { TextSearchBox } from "../../components/input";
 import { OrderlistCard, Pagination } from "../../components/utilities";
-import { useStaff } from "@/context/staffContext";
 import { useEffect, useState } from "react";
-import axiosInstance from "@/lib/axios";
+import { useStaff } from "@/context/staffContext";
 
 const ScreenChefOrderList = () => {
   const {
@@ -17,9 +16,10 @@ const ScreenChefOrderList = () => {
     setOrdersCurrentPage,
     setOrdersSearchQuery,
   } = useStaff();
+  console.log(ordersCurrentPage, " ordersCurrentPage");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
-
+  // Debounced search effect
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(ordersSearchQuery);
@@ -36,12 +36,12 @@ const ScreenChefOrderList = () => {
   const handlePageChange = (page: number) => {
     setOrdersCurrentPage(page);
   };
-  console.log(orders, "orders");
 
   const handleSearch = (query: string) => {
     setOrdersSearchQuery(query);
     setOrdersCurrentPage(1); // Reset to first page when searching
   };
+
   return (
     <>
       <div className="flex flex-col">
@@ -50,7 +50,11 @@ const ScreenChefOrderList = () => {
           {/* Card 1 */}
           <OrderlistCard
             label="Ongoing Order"
-            data={ordersStats?.total_ongoing_orders?.toString() || "0"}
+            data={
+              ordersStats?.ongoing_orders?.toString() ||
+              ordersStats?.total_ongoing_orders?.toString() ||
+              "0"
+            }
             accentColor="#6B8CED"
             gradientStart="#6189FF"
             gradientEnd="#161F42"
@@ -71,7 +75,6 @@ const ScreenChefOrderList = () => {
 
           <div className="flex-1 flex gap-x-4 flex-row-reverse md:flex-row justify-end">
             {/* Search box by id */}
-
             <TextSearchBox
               placeholder="Search by Order ID"
               value={ordersSearchQuery}
