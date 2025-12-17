@@ -108,7 +108,7 @@ const ScreenChefOrderList = () => {
         />
         <MetricCard
           title="Completed Today"
-          value={ordersStats?.today_completed_order_count || ordersStats?.total_completed_orders || 0}
+          value={ordersStats?.total_completed_orders || 0}
           icon={CheckCircle2}
           colorClass="text-[#0055FE]"
           bgClass="bg-white"
