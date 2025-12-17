@@ -19,29 +19,20 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        // Layout: Flex Column, strict 80x90 size
-        "flex flex-col items-center justify-start p-2 gap-2 transition-all duration-200", // Revert to standard padding/gap
+        // Layout: Relative for absolute positioning
+        "relative flex flex-col items-center justify-center p-1 transition-all duration-200 overflow-hidden",
         "w-[80px] h-[90px] shrink-0",
-        // Shape & Borders
-        "rounded-xl border",
+        // Shape
+        "rounded-2xl border", // More rounded for modern look
+        // Border Styles
         isActive
-          ? "bg-[#0055FE] text-white border-transparent shadow-[0_10px_15px_rgba(0,85,254,0.3)]"
-          : "bg-white text-slate-700 border-slate-200 hover:border-[#0055FE]/50"
+          ? "border-primary ring-2 ring-primary ring-offset-1"
+          : "border-gray-200 hover:border-primary/50"
       )}
     >
-      {/* Icon Container: STRICT 40x40px per user spec */}
-      <div
-        className={cn(
-          "w-[40px] h-[40px] shrink-0 flex items-center justify-center rounded-lg overflow-hidden", // 40px size, 8px radius
-          isActive ? "bg-white/20" : "bg-slate-100"
-        )}
-        style={{
-          width: "40px",
-          height: "40px",
-          flexShrink: 0,
-        }}
-      >
-        {cat.image ? (
+      {/* Background Image - Absolute Full Cover */}
+      {cat.image ? (
+        <div className="absolute inset-0 z-0">
           <img
             src={(() => {
               let url = cat.image;
@@ -50,45 +41,40 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
               return url;
             })()}
             alt={cat.Category_name}
-            className="w-full h-full object-cover object-center"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "center"
-            }}
+            className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-110"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.classList.remove('bg-slate-100');
+              e.currentTarget.parentElement?.classList.add('bg-slate-200');
             }}
           />
-        ) : (
-          <span className="text-[20px]">📁</span>
-        )}
+          {/* Subtle overlay */}
+          <div className="absolute inset-0 bg-black/5" />
+        </div>
+      ) : (
+        // Fallback Background
+        <div className={cn("absolute inset-0 z-0 flex items-center justify-center bg-slate-100")}>
+          <span className="text-2xl mb-6">📁</span>
+        </div>
+      )}
 
-        {/* Fallback if Image Fails or is Duplicate - keeping logic simple for now */}
-        {cat.image && (
-          <span className="hidden text-[20px]">📁</span>
+      {/* Text Badge - Centered Pill */}
+      <span
+        className={cn(
+          "relative z-10 text-[10px] font-bold px-2 py-1.5 rounded-xl shadow-sm backdrop-blur-md transition-colors duration-200",
+          "w-[90%] text-center leading-[1.1] whitespace-normal break-words", // Multi-line support
+          isActive
+            ? "bg-primary/95 text-white"
+            : "bg-white/90 text-gray-800"
         )}
-      </div>
-
-      {/* Text Container: ~26px height remaining */}
-      <div className="w-full flex-1 flex items-center justify-center overflow-hidden">
-        <span
-          className={cn(
-            "text-[10px] font-medium leading-[1.1] text-center w-full block break-words whitespace-normal",
-            isActive ? "text-white" : "text-slate-700"
-          )}
-          style={{
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {cat.Category_name}
-        </span>
-      </div>
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {cat.Category_name}
+      </span>
     </button>
   );
 };
