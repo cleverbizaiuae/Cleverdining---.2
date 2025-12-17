@@ -104,6 +104,7 @@ const ScreenChefOrderList = () => {
               page={ordersCurrentPage}
               total={ordersCount}
               onPageChange={handlePageChange}
+              buttonClassName="!bg-[#0055FE] text-white hover:!bg-[#0047D1]"
             />
           </div>
         </div>

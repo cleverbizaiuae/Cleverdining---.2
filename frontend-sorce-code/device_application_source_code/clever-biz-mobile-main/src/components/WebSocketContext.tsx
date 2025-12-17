@@ -39,9 +39,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const accessToken = localStorage.getItem("accessToken");
     const guestSessionToken = localStorage.getItem("guest_session_token");
 
-    // Use Guest Token if Access Token is missing. 
-    // Sending "guest_token" string prevents backend from finding the session.
-    const tokenToUse = accessToken || guestSessionToken || "guest_token";
+    // Use Guest Token if Access Token is "guest_token" marker or missing
+    let tokenToUse = accessToken;
+    if (!accessToken || accessToken === "guest_token") {
+      tokenToUse = guestSessionToken || "";
+    }
 
     const userInfo = localStorage.getItem("userInfo");
     const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;

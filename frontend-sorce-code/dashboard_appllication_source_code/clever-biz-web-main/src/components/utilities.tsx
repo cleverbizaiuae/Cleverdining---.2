@@ -551,7 +551,8 @@ export const Pagination: React.FC<PaginationProps> = ({
   pageSize = 10, // <-- no more hardcoded 10 in math
   onPageChange,
   className = "",
-}) => {
+  buttonClassName = "", // New prop
+}: PaginationProps & { buttonClassName?: string }) => {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const canGoPrev = page > 1;
   const canGoNext = page < totalPages;
@@ -584,17 +585,17 @@ export const Pagination: React.FC<PaginationProps> = ({
     <div className={`inline-flex gap-x-2 mt-2 xs:mt-0 ${className}`}>
       {/* Prev */}
       <button
-        className={`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${!canGoPrev ? "opacity-50 cursor-not-allowed" : ""
-          }`}
+        className={cn(`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${!canGoPrev ? "opacity-50 cursor-not-allowed" : ""
+          }`, buttonClassName)}
         onClick={() => canGoPrev && onPageChange(page - 1)}
         disabled={!canGoPrev}
       >
-        <GrFormPrevious className="fill-primary-text me-4" /> Prev
+        <GrFormPrevious className="fill-current me-4" /> Prev
       </button>
 
       {/* Page input / display */}
       <div
-        className="flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md cursor-pointer hover:bg-dashboard"
+        className={cn("flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md cursor-pointer hover:bg-dashboard", buttonClassName)}
         onClick={() => !isEditing && setIsEditing(true)}
       >
         {isEditing ? (
@@ -606,7 +607,7 @@ export const Pagination: React.FC<PaginationProps> = ({
             onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))} // digits only
             onKeyDown={(e) => e.key === "Enter" && commit()}
             onBlur={commit}
-            className="bg-transparent w-full outline-none text-primary-text text-center"
+            className="bg-transparent w-full outline-none text-inherit text-center"
           />
         ) : (
           <>
@@ -618,12 +619,12 @@ export const Pagination: React.FC<PaginationProps> = ({
 
       {/* Next */}
       <button
-        className={`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${!canGoNext ? "opacity-50 cursor-not-allowed" : ""
-          }`}
+        className={cn(`flex items-center justify-center px-4 h-12 text-base font-medium text-primary-text bg-table-header rounded-md hover:bg-dashboard ${!canGoNext ? "opacity-50 cursor-not-allowed" : ""
+          }`, buttonClassName)}
         onClick={() => canGoNext && onPageChange(page + 1)}
         disabled={!canGoNext}
       >
-        Next <GrFormNext className="fill-primary-text ms-4" />
+        Next <GrFormNext className="fill-current ms-4" />
       </button>
     </div>
   );
