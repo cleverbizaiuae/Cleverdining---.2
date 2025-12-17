@@ -86,16 +86,19 @@ const WebSocketProvider = ({ children }) => {
           toast((t) => (
             <div onClick={() => {
               toast.dismiss(t.id);
-              // navigate? We can't navigate here easily without useNavigate hook inside provider?
-              // But we can just show the message.
-              window.location.href = "/dashboard/orders"; // Simple redirect
+              window.location.href = "/dashboard/orders";
             }} className="cursor-pointer">
               <p className="font-bold">🔔 Cash Payment Alert!</p>
               <p>Table {parsedMessage.table_number}</p>
-              <p>Amount: {parsedMessage.total_amount}</p>
+              <p>Total: {parsedMessage.total_amount}</p>
+              {Number(parsedMessage.order?.tip_amount) > 0 && (
+                <p className="text-sm text-yellow-800 font-semibold">
+                  Includes Tip: AED {parsedMessage.order.tip_amount}
+                </p>
+              )}
             </div>
           ), {
-            duration: 10000, // 10 seconds
+            duration: 10000,
             position: 'top-right',
             style: {
               border: '2px solid #EAB308',

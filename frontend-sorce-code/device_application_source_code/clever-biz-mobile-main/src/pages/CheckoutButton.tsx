@@ -7,10 +7,16 @@ export default function CheckoutButton({
   orderId,
   disabled,
   provider, // Optional provider override
+  tipAmount,
+  tipType,
+  tipValue,
 }: {
   orderId: number | string;
   disabled?: boolean;
   provider?: string;
+  tipAmount?: number;
+  tipType?: string | null;
+  tipValue?: number | string;
 }) {
   console.log(orderId);
   const [loading, setLoading] = useState(false);
@@ -35,7 +41,12 @@ export default function CheckoutButton({
 
       const res = await axiosInstance.post(
         `/api/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
-        { provider }, // Pass provider
+        {
+          provider,
+          tip_amount: tipAmount,
+          tip_type: tipType,
+          tip_value: tipValue
+        },
         {
           headers: {
             "X-Guest-Session-Token": guestToken

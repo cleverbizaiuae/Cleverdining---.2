@@ -69,7 +69,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'payments']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'tip_amount', 'tip_type', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'payments']
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)
     price = serializers.DecimalField(source='item.price', max_digits=10, decimal_places=2, read_only=True)

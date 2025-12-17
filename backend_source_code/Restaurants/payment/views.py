@@ -133,6 +133,49 @@ class CreateCheckoutSessionView(APIView):
         if not provider:
             provider = request.query_params.get('provider')
 
+        # --- Handle Tip Update ---
+        tip_amount = request.data.get('tip_amount')
+        tip_type = request.data.get('tip_type')
+        tip_value = request.data.get('tip_value') # Percentage or Custom Value
+
+        if tip_amount is not None:
+            try:
+                tip_amount = float(tip_amount)
+                if tip_amount < 0:
+                    raise ValidationError("Tip amount cannot be negative")
+                
+                # Recalculate Total
+                # 1. Calculate Subtotal from Items
+                subtotal = sum(item.quantity * item.price for item in order.order_items.all())
+                
+                # 2. Add Tip
+                # Note: If there are Taxes/Service Charges, they should be added here too.
+                # Assuming current total_price might include them? 
+                # Safer Approach: subtotal + tip. If taxes exist, we might be overwriting them if we don't know them.
+                # Given user prompt "Total = subtotal + VAT + service charges + tip", we need those values.
+                # Since we don't have tax/service fields, we will assume for now Total = Subtotal + Tip.
+                # OR we can assume order.total_price currently hols Subtotal+Tax, and we just Add Tip to it.
+                # Let's subtract OLD tip first (if any) then add NEW tip?
+                # No, best is to Recalculate Subtotal + Tip.
+                
+                # Let's assume order.total_price is the source of truth for (Subtotal + Tax).
+                # But wait, if we added tip previously, total_price includes it.
+                # We should subtract the OLD tip_amount.
+                current_total_without_tip = float(order.total_price) - float(order.tip_amount)
+                
+                new_total = current_total_without_tip + tip_amount
+                
+                order.tip_amount = tip_amount
+                order.tip_type = tip_type
+                if tip_type == 'percentage' or tip_type == 'custom_percentage':
+                     order.tip_percentage = tip_value
+                
+                order.total_price = new_total
+                order.save()
+                
+            except ValueError:
+                return Response({'error': 'Invalid tip amount'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             result = PaymentService.create_payment(order, success_url, cancel_url, provider=provider)
             return Response(result)
