@@ -111,6 +111,13 @@ class OrderCreateAPIView(generics.CreateAPIView):
                     "order": data
                 }
             )
+
+            # CLEAR CART after successful order placement
+            try:
+                # Assuming One Cart per Session
+                Cart.objects.filter(guest_session=order.guest_session).delete()
+            except Exception as e:
+                print(f"Error clearing cart: {e}")
         
         # Handle Cash Payment Logic
         payment_method = self.request.data.get('payment_method')

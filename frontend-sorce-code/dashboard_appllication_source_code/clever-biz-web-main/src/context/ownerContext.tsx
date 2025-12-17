@@ -489,12 +489,16 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     [reservationsCurrentPage, userRole, isLoading]
   );
   useEffect(() => {
-    if (response.type == "reservation_created") {
+    if (response.type === "reservation_created") {
       fetchReservations();
     } else if (
       response.type === "order_created" ||
-      response.type === "order_updated"
+      response.type === "order_updated" ||
+      response.type === "order_status_update" ||
+      response.type === "order_paid" ||
+      response.type === "cash_payment_alert"
     ) {
+      console.log("WebSocket Order Event Received:", response.type);
       fetchOrders();
     }
   }, [fetchReservations, fetchOrders, response]);
