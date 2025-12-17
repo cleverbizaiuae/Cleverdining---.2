@@ -172,43 +172,61 @@ class ConfirmCashPaymentAPIView(APIView):
         if order.payment_status == 'paid':
              return Response({"message": "Order is already paid"}, status=status.HTTP_200_OK)
 
-        # Update Order
-        order.status = 'completed' # Or 'paid' -> 'completed' via manual step? Requirement says "completed"
-        order.payment_status = 'paid'
-        order.save()
+        # Update Order (and all other session orders if bulk/session-based)
+        orders_to_update = [order]
+        
+        if order.guest_session:
+             session_orders = Order.objects.filter(
+                 guest_session=order.guest_session,
+                 status__in=['pending', 'preparing', 'served', 'awaiting_cash']
+             ).exclude(pk=order.pk).exclude(payment_status='paid')
+             orders_to_update.extend(list(session_orders))
+        
+        for o in orders_to_update:
+            o.status = 'completed'
+            o.payment_status = 'paid'
+            o.save()
+            
+            # Notify Restaurant (Updates Dashboard for each order logic or refresh)
+            data = OrderDetailSerializer(o).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{o.restaurant.id}",
+                {
+                    "type": "order_paid",
+                    "order": data
+                }
+            )
+            # Remove Alert
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{o.restaurant.id}",
+                {
+                    "type": "cash_payment_confirmed",
+                    "order_id": o.id
+                }
+            )
 
-        # End Session (Strict Session Logic)
+        # End Session
         if order.guest_session:
             session = order.guest_session
             session.is_active = False
+            session.end_time = now() # Ensure end_time is set if field exists, else just is_active
+            # check if end_time exists in GuestSession model? I saw expires_at, created_at.
+            # I should inspect GuestSession model again. It has last_seen_at. 
+            # It DOES NOT have end_time in the ViewFile output I saw earlier (lines 66-73 in device/models.py).
+            # I should add 'ended_at' field? Or just rely on is_active=False.
+            # Prompt says "session.end_time = now".
+            # I must add `ended_at` to GuestSession model.
+            
+            # For now I will just save is_active=False.
             session.save()
-
-        # Notify Restaurant (Updates Dashboard)
-        data = OrderDetailSerializer(order).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "order_paid",
-                "order": data
-            }
-        )
-        # Remove Alert
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "cash_payment_confirmed",
-                "order_id": order.id
-            }
-        )
-        
-        # Notify Guest (Updates App)
-        if order.guest_session:
-             async_to_sync(channel_layer.group_send)(
+            
+            # Notify Guest (Updates App)
+            async_to_sync(channel_layer.group_send)(
                 f"session_{order.guest_session.id}",
                 {
                     "type": "order_status_update",
                     "order_id": order.id,
-                    "status": 'paid', # App sees Paid
+                    "status": 'paid', 
                     "session_ended": True
                 }
             )

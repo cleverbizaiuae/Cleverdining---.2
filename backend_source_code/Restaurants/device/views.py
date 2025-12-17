@@ -63,6 +63,27 @@ class ResolveTableView(APIView):
             debug_info = f"ID: {device_id}, RID: {request.data.get('restaurant_id')}, Table: {request.data.get('table_name')}"
             return Response({'error': f'Invalid table link. (Debug: {debug_info})'}, status=status.HTTP_404_NOT_FOUND)
 
+        
+        # Check for existing ACTIVE session
+        existing_session = GuestSession.objects.filter(device=device, is_active=True).first()
+        
+        if existing_session:
+            # Check if session should be expired? (e.g. > 24 hours inactive?)
+            # For now, we trust is_active and just return it.
+            # We can update last_seen_at automatically due to auto_now=True if we save?
+            existing_session.save() # Update last_seen
+            
+            return Response({
+                'guest_session_id': existing_session.id,
+                'session_token': existing_session.session_token,
+                'table_id': device.id,
+                'table_name': device.table_name,
+                'restaurant_id': device.restaurant.id,
+                'restaurant_name': device.restaurant.resturent_name,
+                'expires_at': existing_session.expires_at.isoformat() if existing_session.expires_at else None,
+                'is_resumed': True
+            })
+
         # Create new guest session
         session_token = str(uuid.uuid4())
         expires_at = now() + timedelta(hours=24) # 24 hour session
@@ -72,6 +93,18 @@ class ResolveTableView(APIView):
             expires_at=expires_at
         )
 
+        # Broadcast New Session Started (Optional, for Dashboard)
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{device.restaurant.id}",
+            {
+                "type": "session_started",
+                "table_id": device.id,
+                "table_name": device.table_name,
+                "session_id": session.id,
+                "timestamp": str(now())
+            }
+        )
+
         return Response({
             'guest_session_id': session.id,
             'session_token': session_token,
@@ -79,8 +112,72 @@ class ResolveTableView(APIView):
             'table_name': device.table_name,
             'restaurant_id': device.restaurant.id,
             'restaurant_name': device.restaurant.resturent_name,
-            'expires_at': expires_at.isoformat()
+            'expires_at': expires_at.isoformat(),
+            'is_resumed': False
         })
+
+
+class CloseTableSessionView(APIView):
+    """
+    Manual Session Closure by Staff.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
+
+    def post(self, request, session_id):
+        # 1. Validation
+        try:
+             session = GuestSession.objects.get(id=session_id)
+        except GuestSession.DoesNotExist:
+             return Response({'error': 'Session not found'}, status=404)
+             
+        # Check permissions (Hotel ownership)
+        user = request.user
+        restaurant = session.device.restaurant
+        
+        if user.role == 'owner':
+             if restaurant.owner != user:
+                 return Response({'error': 'Unauthorized'}, status=403)
+        # Add staff checks if needed (IsOwnerChefOrStaff covers it mostly but need to ensure 'accepted')
+        
+        # 2. Close Session
+        if not session.is_active:
+             return Response({'message': 'Session already closed'}, status=200)
+             
+        session.is_active = False
+        session.save()
+        
+        # 3. Handle Active Orders?
+        # Requirement: "Clear any open orders tied to session (mark as cancelled or completed based on rules)."
+        # Rule: If 'pending'/'preparing' -> Cancel? If 'served' -> Completed?
+        # Safe default: Mark unpaid as 'cancelled' if no food made, but usually manual close implies "Done".
+        # Let's Mark all UNPAID orders as 'cancelled' or just let them be?
+        # Prompt says: "Any active orders must be completed or cancelled."
+        
+        from order.models import Order
+        unpaid_orders = Order.objects.filter(guest_session=session, payment_status__in=['unpaid', 'pending', 'pending_cash'])
+        # We'll cancel them to be safe/clean
+        unpaid_orders.update(status='cancelled', payment_status='cancelled')
+        
+        # 4. Notify Dashboard & Customer
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{restaurant.id}",
+            {
+                "type": "session_closed", 
+                "session_id": session.id,
+                "table_id": session.device.id
+            }
+        )
+        
+        # Notify Customer Device to reset
+        async_to_sync(channel_layer.group_send)(
+            f"session_{session.id}",
+            {
+                "type": "session_closed",
+                "message": "Session closed by staff"
+            }
+        )
+        
+        return Response({'message': 'Session closed successfully'})
 
 def generate_username(restaurant_name):
     number = random.randint(1000, 9999)

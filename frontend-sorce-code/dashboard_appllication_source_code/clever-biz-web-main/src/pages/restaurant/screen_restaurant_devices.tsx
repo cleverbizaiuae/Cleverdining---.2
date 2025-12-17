@@ -191,6 +191,19 @@ export const ScreenRestaurantDevices = () => {
     }
   };
 
+  const handleCloseSession = async (sessionId: number) => {
+    if (!window.confirm("Are you sure you want to close this session? Any active orders should be completed first.")) return;
+
+    try {
+      await axiosInstance.post(`/staff/sessions/${sessionId}/close/`);
+      toast.success("Session closed successfully");
+      fetchAllDevices(); // Refresh list to remove button
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to close session");
+    }
+  };
+
   // Helper to generate full URL (Previously used, now using API-provided table_url)
   // const getTableUrl = (uid: string) => {
   //   return `${window.location.origin}/menu/${uid}`;
@@ -272,6 +285,15 @@ export const ScreenRestaurantDevices = () => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        {device.active_session_id && (
+                          <button
+                            onClick={() => handleCloseSession(device.active_session_id)}
+                            className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold uppercase rounded border border-amber-200 transition-colors mr-2 whitespace-nowrap"
+                            title="Manually Close Session"
+                          >
+                            End Session
+                          </button>
+                        )}
                         <button onClick={() => openEditModal(device)} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors" title="Edit">
                           <Pencil size={16} />
                         </button>
