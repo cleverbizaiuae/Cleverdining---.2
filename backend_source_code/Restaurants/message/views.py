@@ -18,21 +18,25 @@ class ChatMessageViewSet(ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         
-        # 1. Check for Guest Session Token
-        session_token = self.request.headers.get('X-Guest-Session-Token')
-        if session_token:
-            from device.models import GuestSession
-            try:
-                session = GuestSession.objects.get(session_token=session_token, is_active=True)
-                # Filter messages for this table (support chat is usually table-wide)
-                # OR filter by guest_session if private. 
-                # Requirement: "Messages may be broadcast to table:{table_id}... but messages must store guest_session_id and table_id"
-                # For listing, we'll show table messages to allow staff communication context.
-                
-                # STRICT VALIDATION: Ensure we only return messages for the session's table
-                return queryset.filter(device=session.device)
-            except GuestSession.DoesNotExist:
-                return queryset.none()
+        try:
+            # 1. Check for Guest Session Token
+            session_token = self.request.headers.get('X-Guest-Session-Token')
+            if session_token:
+                from device.models import GuestSession
+                try:
+                    # Filter for active session, or just session by token
+                    session = GuestSession.objects.filter(session_token=session_token, is_active=True).first()
+                    if session:
+                        # STRICT VALIDATION: Ensure we only return messages for the session's device
+                        return queryset.filter(device=session.device).order_by('timestamp')
+                    else:
+                        return queryset.none()
+                except Exception as e:
+                    print(f"Guest Auth Error: {e}")
+                    return queryset.none()
+        except Exception as e:
+            print(f"Queryset Error: {e}")
+            return queryset.none()
 
         # 2. Fallback to Staff/User Authentication
         user = self.request.user
@@ -43,9 +47,8 @@ class ChatMessageViewSet(ModelViewSet):
 
             if self.action == 'list':
                 if device_id and restaurant_id:
-                    # TODO: Add strict check that staff belongs to this restaurant
-                    room_name = f"room_{device_id}_{restaurant_id}"
-                    return queryset.filter(room_name=room_name)
+                    # Filter by Foreign Keys directly for reliability
+                    return queryset.filter(device_id=device_id, restaurant_id=restaurant_id).order_by('timestamp')
                 else:
                     return queryset.none()
         
