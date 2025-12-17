@@ -85,7 +85,8 @@ const ScreenChefOrderList = () => {
               value={ordersSearchQuery}
               onChange={handleSearch}
               className="w-full max-w-xs"
-              inputContainerClassName="bg-white border border-gray-200 shadow-sm text-gray-900 placeholder:text-gray-400"
+              inputContainerClassName="bg-white border border-blue-100 shadow-sm text-gray-900 placeholder:text-gray-400"
+              buttonClassName="bg-[#0055FE] hover:bg-[#0047D1] text-white"
             />
           </div>
         </div>
@@ -94,9 +95,9 @@ const ScreenChefOrderList = () => {
           <TableFoodOrderList
             data={orders}
             updateOrderStatus={updateOrderStatus}
-            headerClassName="bg-gray-900 text-white rounded-t-lg"
+            headerClassName="bg-[#0055FE] text-white rounded-t-lg"
             bodyClassName="bg-white text-gray-900"
-            rowClassName="border-gray-100 hover:bg-gray-50 transition-colors"
+            rowClassName="border-gray-100 hover:bg-blue-50 transition-colors"
           />
           <div className="mt-4 flex justify-center">
             <Pagination
