@@ -374,12 +374,12 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       let endpoint;
       if (userRole === "owner") {
         endpoint = "/owners/orders/";
-      } else if (userRole === "staff") {
+      } else if (userRole === "staff" || (userRole as string) === "manager" || userRole === "chef") {
+        // Route managers and chefs/staff to the Staff/Chef API
+        // Note: The backend ChefStaffOrdersAPIView should handle 'manager' if they are ChefStaff
         endpoint = "/api/staff/orders/";
-      } else if (userRole === "chef") {
-        endpoint = "/api/chef/orders/";
       } else {
-        // Fallback or error?
+        // Fallback
         endpoint = "/owners/orders/";
       }
 
@@ -402,7 +402,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       console.error("Failed to load orders", error);
       // Only show toast for non-auth errors since interceptor handles auth
     }
-  }, []);
+  }, [userRole, isLoading]);
   // const fetchOrders = useCallback(async (page?: number, search?: string) => {
   //   try {
   //     const endpoint = `/owners/orders/`;

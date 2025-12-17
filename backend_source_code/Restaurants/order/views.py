@@ -427,36 +427,47 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        print(f"DEBUG_ORDERS: Fetching orders for user {user.email} (ID: {user.id})")
+        print(f"DEBUG_ORDERS: Fetching orders for user {user.email} (ID: {user.id}) Role: {getattr(user, 'role', 'N/A')}")
         
-        # Get active accepted restaurant
+        # 1. Primary Check: ChefStaff Model (Standard for Staff/Chefs/Managers)
+        # We perform a robust check for any active association.
         chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
         
-        if not chef_staff:
-            print(f"DEBUG_ORDERS: No accepted ChefStaff record found for user {user.id}")
-            # Debug: Check if any record exists
-            any_staff = ChefStaff.objects.filter(user=user).first()
-            if any_staff:
-                print(f"DEBUG_ORDERS: Found ChefStaff record but status is {any_staff.action} (Rest: {any_staff.restaurant_id})")
-            else:
-                print("DEBUG_ORDERS: No ChefStaff record found at all.")
+        restaurant_id = None
 
-            # Fallback: Check for Legact Staff model
-            # This ensures that if the user logged in as a legacy Staff (via AdminLoginView pre-fix or just legacy data),
-            # they can still see orders.
+        if chef_staff:
+            restaurant_id = chef_staff.restaurant_id
+            print(f"DEBUG_ORDERS: Found accepted ChefStaff record. Restaurant ID: {restaurant_id}")
+        else:
+            print(f"DEBUG_ORDERS: No accepted ChefStaff record found.")
+            
+            # 2. Fallback: Legacy Staff Model
+            # Useful for older accounts masked as 'staff'
             from staff.models import Staff
-            legacy_staff = Staff.objects.filter(user=user).first()
-            if legacy_staff:
-                print(f"DEBUG_ORDERS: Found Legacy Staff record for Restaurant {legacy_staff.restaurant.id}")
-                return Order.objects.filter(restaurant_id=legacy_staff.restaurant.id).order_by('-created_time')
-                
-            return Order.objects.none()
+            try:
+                legacy_staff = Staff.objects.filter(user=user).first()
+                if legacy_staff:
+                    restaurant_id = legacy_staff.restaurant.id if legacy_staff.restaurant else None
+                    print(f"DEBUG_ORDERS: Found Legacy Staff record. Restaurant ID: {restaurant_id}")
+            except Exception as e:
+                print(f"DEBUG_ORDERS: Legacy staff check failed: {e}")
 
-        restaurant_id = chef_staff.restaurant_id
-        print(f"DEBUG_ORDERS: Found ChefStaff for Restaurant {restaurant_id}. Fetching orders...")
-        qs = Order.objects.filter(restaurant_id=restaurant_id).order_by('-created_time')
-        print(f"DEBUG_ORDERS: Found {qs.count()} orders.")
-        return qs
+            # 3. Fallback: Check if user is OWNER (Edge case if Owner uses this view)
+            if not restaurant_id and user.role == 'owner':
+                 # Try to find their restaurant
+                 from restaurant.models import Restaurant
+                 rest = Restaurant.objects.filter(owner=user).first()
+                 if rest:
+                     restaurant_id = rest.id
+                     print(f"DEBUG_ORDERS: User is Owner. Found Restaurant ID: {restaurant_id}")
+
+        if restaurant_id:
+             qs = Order.objects.filter(restaurant_id=restaurant_id).order_by('-created_time')
+             print(f"DEBUG_ORDERS: Returning {qs.count()} orders for Rest {restaurant_id}")
+             return qs
+        
+        print("DEBUG_ORDERS: Could not determine restaurant. Returning empty.")
+        return Order.objects.none()
     
 
     def list(self, request, *args, **kwargs):
