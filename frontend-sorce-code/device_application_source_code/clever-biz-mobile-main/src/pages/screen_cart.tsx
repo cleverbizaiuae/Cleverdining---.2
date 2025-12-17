@@ -64,7 +64,7 @@ const ScreenCart = () => {
 
       const response = await axiosInstance.post(`/api/customer/orders/?guest_token=${guestSessionToken}`, orderData);
       toast.success("Order placed successfully!");
-      clearCart();
+      // clearCart();  <-- Removed: Do not clear cart until payment success
 
       // Navigate to checkout with the new Order ID
       if (response.data && response.data.id) {
