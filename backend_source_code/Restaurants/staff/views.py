@@ -24,47 +24,50 @@ class AdminLoginView(APIView):
             return Response({'error': 'Invalid role selected.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Find staff member with matching email and role
+            # First try Legacy Staff model
             staff_member = Staff.objects.get(email=email, role=role)
+            user = staff_member.user
+            db_password = staff_member.password
+            shop_id = staff_member.restaurant.id if staff_member.restaurant else None
         except Staff.DoesNotExist:
-            return Response({'error': 'Invalid credentials or role.'}, status=status.HTTP_401_UNAUTHORIZED)
+            # Fallback to ChefStaff model (New Standard)
+            from accounts.models import ChefStaff
+            try:
+                # ChefStaff links User. Role is in User or handled via action='accepted'. 
+                # But here we filter by email and role.
+                # User model has role. 
+                # We need to find a ChefStaff entry where user.email = email and user.role = role
+                # AND action='accepted' (optional but recommended)
+                chef_staff = ChefStaff.objects.get(user__email=email, user__role=role, action='accepted')
+                staff_member = chef_staff
+                user = chef_staff.user
+                db_password = user.password # ChefStaff uses User password
+                shop_id = chef_staff.restaurant.id
+            except ChefStaff.DoesNotExist:
+                 return Response({'error': 'Invalid credentials or role.'}, status=status.HTTP_401_UNAUTHORIZED)
         
         # Verify password
-        # Note: We assume password is plain text for now if not using setUserPassword, 
-        # but standard practice is check_password with hashed value.
-        # If user was created via Django Admin, password is in User model.
-        # But here we added password to Staff model. 
-        # For security, we should check use check_password if it's hashed, 
-        # or simple comparison if testing (User request implies new custom password field).
+        # For ChefStaff, password is user.password (hashed).
+        # For Staff, it might be plain text or hashed.
         
-        # Let's assume hashed for security
-        if not check_password(password, staff_member.password):
-             # Fallback check if it's plain text (during transition/testing)
-            if password != staff_member.password:
+        if not check_password(password, db_password):
+             # Fallback check if it's plain text (legacy Staff)
+            if password != db_password:
                 return Response({'error': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         # Generate Token
-        # We can manually create a token for the associated User if it exists, or a custom token.
-        # Best approach: Use SimpleJWT to generate token for the *User* linked to this Staff, 
-        # OR if User is null (legacy), we might have an issue.
-        # Let's assume we link to the User model for JWT generation if possible.
-        
-        user = staff_member.user
         if user:
             refresh = RefreshToken.for_user(user)
             # Add custom claims
-            refresh['role'] = staff_member.role
-            refresh['restaurant_id'] = staff_member.restaurant.id if staff_member.restaurant else None
+            refresh['role'] = role
+            refresh['restaurant_id'] = shop_id
             
             return Response({
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
-                'role': staff_member.role,
-                'name': user.username, # Or add name field to Staff
-                'restaurant_id': staff_member.restaurant.id
+                'role': role,
+                'name': user.username,
+                'restaurant_id': shop_id
             }, status=status.HTTP_200_OK)
         else:
-            # Fallback for staff without Django User (shim) - though model enforces OneToOne usually, we made it nullable.
-            # If so, we can't easily use SimpleJWT standard User tokens.
-            # For now, we return a mock token or fail.
              return Response({'error': 'System misconfiguration: Staff has no linked user.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

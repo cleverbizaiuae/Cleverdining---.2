@@ -427,14 +427,36 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        print(f"DEBUG_ORDERS: Fetching orders for user {user.email} (ID: {user.id})")
+        
         # Get active accepted restaurant
         chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
         
         if not chef_staff:
+            print(f"DEBUG_ORDERS: No accepted ChefStaff record found for user {user.id}")
+            # Debug: Check if any record exists
+            any_staff = ChefStaff.objects.filter(user=user).first()
+            if any_staff:
+                print(f"DEBUG_ORDERS: Found ChefStaff record but status is {any_staff.action} (Rest: {any_staff.restaurant_id})")
+            else:
+                print("DEBUG_ORDERS: No ChefStaff record found at all.")
+
+            # Fallback: Check for Legact Staff model
+            # This ensures that if the user logged in as a legacy Staff (via AdminLoginView pre-fix or just legacy data),
+            # they can still see orders.
+            from staff.models import Staff
+            legacy_staff = Staff.objects.filter(user=user).first()
+            if legacy_staff:
+                print(f"DEBUG_ORDERS: Found Legacy Staff record for Restaurant {legacy_staff.restaurant.id}")
+                return Order.objects.filter(restaurant_id=legacy_staff.restaurant.id).order_by('-created_time')
+                
             return Order.objects.none()
 
         restaurant_id = chef_staff.restaurant_id
-        return Order.objects.filter(restaurant_id=restaurant_id).order_by('-created_time')
+        print(f"DEBUG_ORDERS: Found ChefStaff for Restaurant {restaurant_id}. Fetching orders...")
+        qs = Order.objects.filter(restaurant_id=restaurant_id).order_by('-created_time')
+        print(f"DEBUG_ORDERS: Found {qs.count()} orders.")
+        return qs
     
 
     def list(self, request, *args, **kwargs):
