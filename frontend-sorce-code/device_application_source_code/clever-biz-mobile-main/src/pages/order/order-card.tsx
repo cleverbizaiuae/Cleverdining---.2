@@ -139,13 +139,6 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                     >
                         Review
                     </button>
-                    <button
-                        onClick={() => onCheckout(order)}
-                        className="flex-[2] py-3 rounded-xl bg-green-600 text-white font-semibold text-sm shadow-md hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <Receipt size={16} />
-                        Checkout
-                    </button>
                 </div>
             </div>
 
