@@ -329,6 +329,8 @@ type DashboardCardProps = {
   accentColor?: string;
   gradientStart?: string;
   gradientEnd?: string;
+  className?: string; // New prop
+  textClassName?: string; // New prop
 };
 export const DashboardCard: React.FC<DashboardCardProps> = ({
   label,
@@ -338,18 +340,20 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
   accentColor = "#31BB24",
   gradientStart = "#48E03A",
   gradientEnd = "#161F42",
+  className = "bg-sidebar shadow-2xl shadow-black/70", // Default
+  textClassName = "text-primary-text", // Default
 }) => {
   return (
-    <div className="flex-1 bg-sidebar shadow-2xl shadow-black/70 flex flex-col items-start p-6 rounded-xl relative">
+    <div className={`flex-1 flex flex-col items-start p-6 rounded-xl relative ${className}`}>
       <p
-        className="text-lg flex items-center gap-x-2"
+        className="text-lg flex items-center gap-x-2 font-semibold"
         style={{ color: accentColor, fill: accentColor }}
       >
         {icon && icon}
         {label}
       </p>
-      <p className="text-3xl text-primary-text font-medium mt-4">{data}</p>
-      <p className="text-lg text-primary-text/70 font-light mt-4">{tail}</p>
+      <p className={`text-3xl font-bold mt-4 ${textClassName}`}>{data}</p>
+      <p className={`text-lg font-light mt-4 ${textClassName}`}>{tail}</p>
 
       <div className="absolute bottom-0 right-0 flex justify-end items-end">
         <CurveSvg

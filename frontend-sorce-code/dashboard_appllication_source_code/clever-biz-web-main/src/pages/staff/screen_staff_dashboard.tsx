@@ -82,7 +82,9 @@ const ScreenStaffDashboard = () => {
             data={statusSummary?.available_items_count?.toString() || "0"}
             accentColor="#31BB24"
             gradientStart="#48E03A"
-            gradientEnd="#161F42"
+            gradientEnd="#ffffff"
+            className="bg-white shadow-xl shadow-gray-200 border border-gray-100"
+            textClassName="text-gray-900"
           />
           {/* Card 2 */}
           <DashboardCard
@@ -90,7 +92,9 @@ const ScreenStaffDashboard = () => {
             data={statusSummary?.processing_orders_count?.toString() || "0"}
             accentColor="#FFB056"
             gradientStart="#FFB056"
-            gradientEnd="#161F42"
+            gradientEnd="#ffffff"
+            className="bg-white shadow-xl shadow-gray-200 border border-gray-100"
+            textClassName="text-gray-900"
           />
           {/* Card 3 */}
           <DashboardCard
@@ -98,7 +102,9 @@ const ScreenStaffDashboard = () => {
             data={statusSummary?.pending_orders_count?.toString() || "0"}
             accentColor="#FF6561"
             gradientStart="#EB342E"
-            gradientEnd="#161F42"
+            gradientEnd="#ffffff"
+            className="bg-white shadow-xl shadow-gray-200 border border-gray-100"
+            textClassName="text-gray-900"
           />
         </div>
         {/* Dashboard Content */}
