@@ -157,7 +157,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Sticky Action Bar */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-50 p-4 pt-4 z-30 pb-[env(safe-area-inset-bottom)]">
+          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-50 p-4 pt-4 z-30 pb-8 sm:pb-[env(safe-area-inset-bottom)]">
             <div className="flex items-center gap-2">
               {/* Quantity Selector - Compact for Mobile */}
               <div className="flex items-center bg-gray-50 p-1 rounded-full border border-gray-100 shrink-0">
@@ -176,13 +176,12 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 </button>
               </div>
 
-              {/* Add to Cart Button */}
               <button
                 onClick={handleAddToCart}
-                className="flex-1 h-12 sm:h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-between px-4 gap-2 transition-all active:scale-[0.98] shadow-xl shadow-primary/20 min-w-0"
+                className="flex-1 h-12 sm:h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-xl shadow-primary/20 min-w-0"
               >
                 <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate">Add to Cart</span>
-                <span className="text-sm sm:text-base font-bold bg-white/20 px-3 py-1 rounded-lg whitespace-nowrap">
+                <span className="text-sm sm:text-base font-bold whitespace-nowrap">
                   AED {(Number(item?.price || 0) * quantity).toFixed(2)}
                 </span>
               </button>
