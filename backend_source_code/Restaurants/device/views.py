@@ -420,11 +420,17 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         if user.role == 'owner':
             queryset = Reservation.objects.filter(restaurant__owner=user)
-        elif user.role in ['staff', 'chef']:
-             # Consolidated Staff/Chef lookup
+        elif user.role in ['staff', 'chef', 'manager']:
+             # Consolidated Staff/Chef lookup with Fallback
             chef_staff = ChefStaff.objects.filter(user=user).first()
             if chef_staff:
                 queryset = Reservation.objects.filter(restaurant=chef_staff.restaurant)
+            else:
+                # Legacy Staff Fallback
+                from staff.models import Staff
+                legacy_staff = Staff.objects.filter(user=user).first()
+                if legacy_staff and legacy_staff.restaurant:
+                     queryset = Reservation.objects.filter(restaurant=legacy_staff.restaurant)
 
         date_str = self.request.query_params.get('date')
         if date_str:
@@ -473,9 +479,18 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # Determine restaurant based on role
         if user.role == 'owner':
             restaurants = user.restaurants.all()
-        elif user.role == 'staff':
+        elif user.role in ['staff', 'chef', 'manager']:
             chef_staff = ChefStaff.objects.filter(user=user)
-            restaurants = [cs.restaurant for cs in chef_staff]
+            if chef_staff.exists():
+                restaurants = [cs.restaurant for cs in chef_staff]
+            else:
+                 # Legacy Staff Fallback
+                from staff.models import Staff
+                legacy_staff = Staff.objects.filter(user=user).first()
+                if legacy_staff and legacy_staff.restaurant:
+                    restaurants = [legacy_staff.restaurant]
+                else:
+                    return Response({"error": "You are not authorized."}, status=403)
         else:
             return Response({"error": "You are not authorized."}, status=403)
 
@@ -524,8 +539,17 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.role == 'owner':
             return Device.objects.filter(restaurant__owner=user)
-        elif user.role in ['staff', 'chef']:
-            restaurant_ids = ChefStaff.objects.filter(user=user, action='accepted').values_list('restaurant_id', flat=True)
+        elif user.role in ['staff', 'chef', 'manager']:
+            # Relaxed check
+            restaurant_ids = list(ChefStaff.objects.filter(user=user).values_list('restaurant_id', flat=True))
+            
+            if not restaurant_ids:
+                # Legacy Staff Fallback
+                from staff.models import Staff
+                legacy_staff = Staff.objects.filter(user=user).first()
+                if legacy_staff and legacy_staff.restaurant:
+                    restaurant_ids = [legacy_staff.restaurant.id]
+            
             return Device.objects.filter(restaurant_id__in=restaurant_ids)
 
         return Device.objects.none()

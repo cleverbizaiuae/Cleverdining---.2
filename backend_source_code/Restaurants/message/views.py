@@ -119,11 +119,17 @@ class ChatMessageViewSet(ModelViewSet):
         if not restaurant_ids:
              return Response({'unread_count': 0})
 
+        # Logic: Unread messages FROM device TO restaurant
+        # Use restaurant__id__in for safety
         count = ChatMessage.objects.filter(
-            device__restaurant_id__in=restaurant_ids, 
+            restaurant_id__in=restaurant_ids, 
             is_read=False, 
             is_from_device=True
         ).count()
+        
+        # Debugging
+        if count == 0:
+             print(f"DEBUG_UNREAD: User {user.email} (Restaurants: {restaurant_ids}) has 0 unread messages.")
         
         # Update or create the UnreadCount record (Optional/Legacy support)
         UnreadCount.objects.update_or_create(
