@@ -131,7 +131,7 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { response } = useContext(WebSocketContext);
+  const { response, unreadCount } = useContext(WebSocketContext) || {};
   console.log(response);
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/chef" },
@@ -170,6 +170,11 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.title === "Messages" && unreadCount > 0 && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}

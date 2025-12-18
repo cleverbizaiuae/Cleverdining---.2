@@ -98,10 +98,34 @@ class ChatMessageViewSet(ModelViewSet):
         if not user.is_authenticated:
             return Response({'unread_count': 0})
             
-        # Calculate directly from messages to ensure accuracy
-        count = ChatMessage.objects.filter(receiver=user, is_read=False).count()
+        # Calculate unread messages from Customers (is_from_device=True) for this user's restaurant(s)
+        restaurant_ids = []
+        if user.role == 'owner':
+            restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+        elif user.role in ['staff', 'chef', 'manager']:
+            # Check ChefStaff
+            from accounts.models import ChefStaff
+             # Relaxed check as per order/views.py fix
+            cs = ChefStaff.objects.filter(user=user).first()
+            if cs:
+                restaurant_ids = [cs.restaurant_id]
+            else:
+                 # Legacy Staff Fallback
+                from staff.models import Staff
+                ls = Staff.objects.filter(user=user).first()
+                if ls and ls.restaurant:
+                    restaurant_ids = [ls.restaurant.id]
         
-        # Update or create the UnreadCount record for consistency if needed elsewhere
+        if not restaurant_ids:
+             return Response({'unread_count': 0})
+
+        count = ChatMessage.objects.filter(
+            device__restaurant_id__in=restaurant_ids, 
+            is_read=False, 
+            is_from_device=True
+        ).count()
+        
+        # Update or create the UnreadCount record (Optional/Legacy support)
         UnreadCount.objects.update_or_create(
             user=user,
             defaults={'unread_count': count, 'user_role': user.role}
