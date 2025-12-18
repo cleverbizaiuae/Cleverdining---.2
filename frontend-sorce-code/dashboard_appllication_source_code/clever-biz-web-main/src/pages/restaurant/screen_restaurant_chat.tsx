@@ -23,6 +23,7 @@ interface ChatRoomItem {
   user_id: string;
   restaurant_id: string;
   restaurant?: string | number;
+  unread_count?: number;
 }
 
 interface Message {
@@ -126,6 +127,9 @@ const ScreenRestaurantChat = () => {
           const res = await axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`);
           if (res.data.count > 0 && setUnreadCount) {
             setUnreadCount((prev: number) => Math.max(0, prev - res.data.count));
+
+            // Update local chat list to clear badge
+            setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
           }
         } catch (err) {
           console.error("Failed to mark messages read", err);
@@ -232,10 +236,17 @@ const ScreenRestaurantChat = () => {
                       <span className={cn("text-xs font-bold truncate", isActive ? "text-[#0055FE]" : "text-slate-900")}>
                         {chat.table_name}
                       </span>
-                      {/* Mock Time */}
+                      {/* Unread Badge */}
+                      {!!chat.unread_count && chat.unread_count > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                          {chat.unread_count}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] text-slate-500 truncate">Tap to view conversation</p>
                       <span className="text-[10px] text-slate-400">12:30 PM</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 truncate">Tap to view conversation</p>
                   </div>
                 </button>
               );
