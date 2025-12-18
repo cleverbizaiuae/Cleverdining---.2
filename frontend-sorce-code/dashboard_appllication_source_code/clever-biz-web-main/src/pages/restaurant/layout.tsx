@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router';
+import { WebSocketContext } from '@/hooks/WebSocketProvider';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -41,6 +42,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const RestaurantLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { unreadCount } = useContext(WebSocketContext) || {};
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -163,6 +165,11 @@ const RestaurantLayout = () => {
                   className={`${active ? "text-white" : "text-slate-400 group-hover:text-[#0055FE]"}`}
                 />
                 {item.label}
+                {item.label === "Messages" && unreadCount > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}
