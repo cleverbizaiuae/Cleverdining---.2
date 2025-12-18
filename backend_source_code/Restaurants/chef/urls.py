@@ -3,12 +3,13 @@ from rest_framework.routers import DefaultRouter
 from item.views import ChefItemViewSet
 from order.views import ChefStaffOrdersAPIView, ChefStaffUpdateOrderStatusAPIView
 from category.views import ChefOrStaffRestaurantCategoriesView
-from device.views import DeviceViewSetall
+from device.views import DeviceViewSetall, DeviceViewSet
 
 
 router = DefaultRouter()
 router.register('items', ChefItemViewSet, basename='chef-items')
 router.register('devicesall', DeviceViewSetall, basename='deviceall')
+router.register('devices', DeviceViewSet, basename='chef-devices')
 # Expose Reservations for Chef
 from device.views import ReservationViewSet
 router.register('reservations', ReservationViewSet, basename='chef-reservations')
