@@ -17,11 +17,12 @@ import {
 import { cn } from "@/lib/utils";
 
 // Types
-id: string;
-table_name: string;
-user_id: string;
-restaurant_id: string;
-restaurant ?: string | number;
+interface ChatRoomItem {
+  id: string;
+  table_name: string;
+  user_id: string;
+  restaurant_id: string;
+  restaurant?: string | number;
 }
 
 interface Message {
