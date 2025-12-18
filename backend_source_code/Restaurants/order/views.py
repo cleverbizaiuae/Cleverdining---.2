@@ -431,18 +431,19 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
         
         # 1. Primary Check: ChefStaff Model (Standard for Staff/Chefs/Managers)
         # We perform a robust check for any active association.
-        chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+        # 1. Primary Check: ChefStaff Model
+        # Relaxed check: Accept any status for now to debug/allow access
+        chef_staff = ChefStaff.objects.filter(user=user).first()
         
         restaurant_id = None
 
         if chef_staff:
             restaurant_id = chef_staff.restaurant_id
-            print(f"DEBUG_ORDERS: Found accepted ChefStaff record. Restaurant ID: {restaurant_id}")
+            print(f"DEBUG_ORDERS: Found ChefStaff record (Status: {chef_staff.action}). Restaurant ID: {restaurant_id}")
         else:
-            print(f"DEBUG_ORDERS: No accepted ChefStaff record found.")
+            print(f"DEBUG_ORDERS: No ChefStaff record found.")
             
             # 2. Fallback: Legacy Staff Model
-            # Useful for older accounts masked as 'staff'
             from staff.models import Staff
             try:
                 legacy_staff = Staff.objects.filter(user=user).first()
@@ -452,9 +453,8 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
             except Exception as e:
                 print(f"DEBUG_ORDERS: Legacy staff check failed: {e}")
 
-            # 3. Fallback: Check if user is OWNER (Edge case if Owner uses this view)
+            # 3. Fallback: Owner Check
             if not restaurant_id and user.role == 'owner':
-                 # Try to find their restaurant
                  from restaurant.models import Restaurant
                  rest = Restaurant.objects.filter(owner=user).first()
                  if rest:

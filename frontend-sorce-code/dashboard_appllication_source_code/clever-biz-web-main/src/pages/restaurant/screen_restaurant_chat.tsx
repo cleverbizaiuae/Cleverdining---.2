@@ -17,11 +17,11 @@ import {
 import { cn } from "@/lib/utils";
 
 // Types
-interface ChatRoomItem {
-  id: string;
-  table_name: string;
-  user_id: string;
-  restaurant_id: string;
+id: string;
+table_name: string;
+user_id: string;
+restaurant_id: string;
+restaurant ?: string | number;
 }
 
 interface Message {
@@ -81,7 +81,8 @@ const ScreenRestaurantChat = () => {
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     // WebSocket URL pattern based on utilities.tsx analysis: /ws/chat/{device_id}/
-    const wsUrl = `${wsBaseUrl}/ws/chat/${selectedChat.id}/?token=${jwt}&restaurant_id=${selectedChat.restaurant_id}`;
+    const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
+    const wsUrl = `${wsBaseUrl}/ws/chat/${selectedChat.id}/?token=${jwt}&restaurant_id=${restaurantId}`;
 
     const ws = new WebSocket(wsUrl);
 
