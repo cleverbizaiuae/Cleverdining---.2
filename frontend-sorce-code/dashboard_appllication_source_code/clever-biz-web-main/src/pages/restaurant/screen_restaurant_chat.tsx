@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useContext } from "react";
 import { useRole } from "@/hooks/useRole";
+import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 import {
@@ -40,6 +40,7 @@ const formatTime = (ts: string | number) => {
 
 const ScreenRestaurantChat = () => {
   const { userInfo } = useRole();
+  const { setUnreadCount } = useContext(WebSocketContext) || {};
   const [chatList, setChatList] = useState<ChatRoomItem[]>([]);
   const [selectedChat, setSelectedChat] = useState<ChatRoomItem | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -119,6 +120,16 @@ const ScreenRestaurantChat = () => {
         const restaurantId = selectedChat.restaurant_id;
         const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
         setMessages(Array.isArray(data) ? data : []);
+
+        // Mark all as read when opening chat
+        try {
+          const res = await axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`);
+          if (res.data.count > 0 && setUnreadCount) {
+            setUnreadCount((prev: number) => Math.max(0, prev - res.data.count));
+          }
+        } catch (err) {
+          console.error("Failed to mark messages read", err);
+        }
       } catch (error) {
         console.error("Failed to fetch history", error);
       }
