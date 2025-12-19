@@ -7,12 +7,13 @@ import toast from "react-hot-toast";
 
 const ScreenAdminRegister = () => {
     const navigate = useNavigate();
-    const [isVerified, setIsVerified] = useState(false);
+    const [isUnlocked, setIsUnlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
     // Gate State
     const [accessCode, setAccessCode] = useState("");
+    const [accessError, setAccessError] = useState(""); // Spec requirement
 
     // Registration State
     const [formData, setFormData] = useState({
@@ -34,12 +35,14 @@ const ScreenAdminRegister = () => {
         if (!/^\d*$/.test(value)) return;
         if (value.length > 4) return;
         setAccessCode(value);
+        if (accessError) setAccessError(""); // Clear error on retry
     };
 
     const verifyCode = () => {
         if (accessCode === "2468") {
-            setIsVerified(true);
+            setIsUnlocked(true);
         } else {
+            setAccessError("Invalid access code. Please try again.");
             toast.error("Invalid access code. Please try again.");
             // Don't clear code per spec ("Input remains populated")
         }
@@ -103,9 +106,13 @@ const ScreenAdminRegister = () => {
                         value={accessCode}
                         onChange={handleCodeChange}
                         maxLength={4}
-                        className="w-full h-12 bg-slate-50 border border-slate-200 rounded-lg px-3 text-lg text-center tracking-[0.25em] text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
+                        className={`w-full h-12 bg-slate-50 border rounded-lg px-3 text-lg text-center tracking-[0.25em] text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all ${accessError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-[#0055FE]"
+                            }`}
                         placeholder="Enter 4-digit code"
                     />
+                    {accessError && (
+                        <p className="text-sm text-red-500 text-center mt-2">{accessError}</p>
+                    )}
                 </div>
 
                 {/* Verify Button */}
@@ -226,9 +233,9 @@ const ScreenAdminRegister = () => {
                                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all appearance-none cursor-pointer hover:bg-slate-100"
                             >
                                 <option value="" disabled>Select...</option>
-                                <option value="Stripe">Stripe</option>
-                                <option value="PayTabs">PayTabs</option>
-                                <option value="Checkout.com">Checkout.com</option>
+                                <option value="stripe">Stripe</option>
+                                <option value="paytabs">PayTabs</option>
+                                <option value="checkout">Checkout.com</option>
                             </select>
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -314,7 +321,7 @@ const ScreenAdminRegister = () => {
         </div>
     );
 
-    if (!isVerified) {
+    if (!isUnlocked) {
         return renderGate();
     }
 
