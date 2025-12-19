@@ -82,11 +82,11 @@ function App() {
 
       <Route path="login" element={<ScreenAdminLogin />} />
       <Route path="adminlogin" element={<ScreenAdminLogin />} />
+      <Route path="adminregister" element={<ScreenAdminRegister />} />
 
       {/* Entry screens */}
       <Route element={<Layout />}>
 
-        <Route path="adminregister" element={<ScreenAdminRegister />} />
         <Route path="register" element={<ScreenRegister />} />
         <Route path="verify-email" element={<ScreenEmailVerification />} />
         <Route path="create-password" element={<ScreenPassword />} />
