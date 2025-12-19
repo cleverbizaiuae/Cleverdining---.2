@@ -21,7 +21,7 @@ const ScreenAdminRegister = () => {
         location: "",
         phoneNumber: "",
         numberOfTables: 10,
-        paymentProcessor: "Stripe",
+        paymentProcessor: "",
         logo: null as File | null,
         email: "",
         password: "",
@@ -222,8 +222,10 @@ const ScreenAdminRegister = () => {
                                 name="paymentProcessor"
                                 value={formData.paymentProcessor}
                                 onChange={handleInputChange}
+                                required
                                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all appearance-none cursor-pointer hover:bg-slate-100"
                             >
+                                <option value="" disabled>Select...</option>
                                 <option value="Stripe">Stripe</option>
                                 <option value="PayTabs">PayTabs</option>
                                 <option value="Checkout.com">Checkout.com</option>
