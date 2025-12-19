@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { Store, MapPin, Upload, Phone as PhoneIcon, Lock, Loader2, User, Eye, EyeOff, CheckCircle } from "lucide-react";
 import logo from "../../assets/cleverbiz_full_logo.png";
+import registerBg from "../../assets/register-bg.jpg";
 import toast from "react-hot-toast";
 
 const ScreenAdminRegister = () => {
@@ -11,7 +12,7 @@ const ScreenAdminRegister = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     // Gate State
-    const [accessCode, setAccessCode] = useState(["", "", "", ""]);
+    const [accessCode, setAccessCode] = useState("");
 
     // Registration State
     const [formData, setFormData] = useState({
@@ -28,29 +29,19 @@ const ScreenAdminRegister = () => {
     });
 
     // Access Code Logic
-    const handleCodeChange = (index: number, value: string) => {
+    const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
         if (!/^\d*$/.test(value)) return;
-        if (value.length > 1) return;
-        const newCode = [...accessCode];
-        newCode[index] = value;
-        setAccessCode(newCode);
-
-        // Auto-focus next
-        if (value && index < 3) {
-            const nextInput = document.getElementById(`code-${index + 1}`);
-            nextInput?.focus();
-        }
+        if (value.length > 4) return;
+        setAccessCode(value);
     };
 
     const verifyCode = () => {
-        const code = accessCode.join("");
-        if (code === "2468") {
-            // toast.success("Access Granted");
+        if (accessCode === "2468") {
             setIsVerified(true);
         } else {
             toast.error("Invalid access code. Please try again.");
-            setAccessCode(["", "", "", ""]);
-            document.getElementById("code-0")?.focus();
+            // Don't clear code per spec ("Input remains populated")
         }
     };
 
@@ -83,118 +74,135 @@ const ScreenAdminRegister = () => {
     // --- RENDER STEPS ---
 
     const renderGate = () => (
-        <div className="max-w-md w-full mx-auto text-center animate-fadeIn flex flex-col items-center">
-            {/* Logo */}
-            <img src={logo} alt="CleverBiz" className="h-8 mb-8 cursor-pointer" onClick={() => navigate('/')} />
+        <div className="min-h-screen w-full flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-blue-50 font-inter">
+            <div className="w-full max-w-md bg-white rounded-3xl border border-slate-100 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] p-8 text-center animate-fadeIn">
+                {/* Logo */}
+                <div className="flex justify-center mb-6">
+                    <img
+                        src={logo}
+                        alt="CleverBiz"
+                        className="h-10 w-auto object-contain cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                        onClick={() => navigate('/')}
+                    />
+                </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 w-full">
-                <div className="bg-[#0055FE]/5 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                {/* Lock Icon */}
+                <div className="w-16 h-16 rounded-full bg-[#0055FE]/10 flex items-center justify-center mx-auto mb-4">
                     <Lock className="w-8 h-8 text-[#0055FE]" />
                 </div>
-                <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Required</h1>
-                <p className="text-slate-500 mb-8 text-sm">Enter the access code to register a new account.</p>
 
-                <div className="mb-2 text-left w-full">
-                    <label className="text-xs font-semibold text-slate-900 ml-1">Access Code</label>
-                </div>
-                <div className="flex gap-3 justify-center mb-6">
-                    {accessCode.map((digit, idx) => (
-                        <input
-                            key={idx}
-                            id={`code-${idx}`}
-                            type="password" // "masked for security" per spec
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleCodeChange(idx, e.target.value)}
-                            className="w-full h-12 text-center text-xl font-bold border border-slate-200 rounded-lg text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/10 outline-none transition-all placeholder:text-slate-200"
-                            placeholder="•"
-                        />
-                    ))}
+                {/* Heading */}
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-3">Access Required</h1>
+                <p className="text-sm text-slate-500 font-normal">Enter the access code to register a new account.</p>
+
+                {/* Input */}
+                <div className="mt-8 mb-4 text-left">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">Access Code</label>
+                    <input
+                        type="password"
+                        value={accessCode}
+                        onChange={handleCodeChange}
+                        maxLength={4}
+                        className="w-full h-12 bg-slate-50 border border-slate-200 rounded-lg px-3 text-lg text-center tracking-[0.25em] text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
+                        placeholder="Enter 4-digit code"
+                    />
                 </div>
 
+                {/* Verify Button */}
                 <button
                     onClick={verifyCode}
-                    className="w-full h-11 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-lg shadow-blue-500/20 transition-all text-sm"
+                    className="w-full h-12 mt-4 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-[0_10px_15px_rgba(0,85,254,0.2)] transition-all flex items-center justify-center"
                 >
                     Verify Access
                 </button>
-            </div>
 
-            <button onClick={() => navigate('/')} className="mt-8 text-slate-500 hover:text-[#0055FE] text-sm font-medium">
-                Back to Home
-            </button>
+                {/* Back Link */}
+                <div className="mt-6">
+                    <button
+                        onClick={() => navigate('/')}
+                        className="text-sm font-medium text-[#0055FE] hover:underline"
+                    >
+                        Back to Home
+                    </button>
+                </div>
+            </div>
         </div>
     );
 
     const renderForm = () => (
-        <div className="max-w-[480px] w-full mx-auto animate-fadeIn pb-12">
-            <div className="text-center mb-8">
-                <img src={logo} alt="CleverBiz" className="h-8 mx-auto mb-6 cursor-pointer" onClick={() => navigate('/')} />
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">Enter your information</h1>
-                <p className="text-slate-500">Create your admin account to get started.</p>
+        <div className="w-full max-w-md mx-auto py-8">
+            <div className="text-center mb-6">
+                <img
+                    src={logo}
+                    alt="CleverBiz"
+                    className="h-10 mx-auto mb-6 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => navigate('/')}
+                />
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Enter your information</h1>
+                <p className="text-base text-slate-500">Create your admin account to get started.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Customer Name */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Customer Name</label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Customer Name</label>
                     <input
                         type="text"
                         name="customerName"
                         required
                         value={formData.customerName}
                         onChange={handleInputChange}
-                        className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
                         placeholder="Kawsar Hossain"
                     />
                 </div>
 
                 {/* Restaurant Name */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Restaurant Name</label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Restaurant Name</label>
                     <input
                         type="text"
                         name="restaurantName"
                         required
                         value={formData.restaurantName}
                         onChange={handleInputChange}
-                        className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
-                        placeholder="Bistro 55"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
+                        placeholder="Restaurant Name"
                     />
                 </div>
 
                 {/* Location */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Location</label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Location</label>
                     <input
                         type="text"
                         name="location"
                         required
                         value={formData.location}
                         onChange={handleInputChange}
-                        className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
                         placeholder="City, Country"
                     />
                 </div>
 
                 {/* Phone Number */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Phone Number</label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Phone Number</label>
                     <input
                         type="tel"
                         name="phoneNumber"
                         required
                         value={formData.phoneNumber}
                         onChange={handleInputChange}
-                        className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
                         placeholder="+1234567890"
                     />
                 </div>
 
                 {/* Tables & Payment */}
-                <div className="flex gap-4">
-                    <div className="space-y-1.5 flex-1">
-                        <label className="text-sm font-medium text-slate-700">Number of Tables</label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-900">Number of Tables</label>
                         <input
                             type="number"
                             name="numberOfTables"
@@ -203,58 +211,66 @@ const ScreenAdminRegister = () => {
                             required
                             value={formData.numberOfTables}
                             onChange={handleInputChange}
-                            className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
+                            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
+                            placeholder="10"
                         />
                     </div>
-                    <div className="space-y-1.5 flex-1">
-                        <label className="text-sm font-medium text-slate-700">Payment Processor</label>
-                        <select
-                            name="paymentProcessor"
-                            value={formData.paymentProcessor}
-                            onChange={handleInputChange}
-                            className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors appearance-none"
-                        >
-                            <option value="Stripe">Stripe</option>
-                            <option value="PayTabs">PayTabs</option>
-                            <option value="Checkout.com">Checkout.com</option>
-                        </select>
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-900">Payment Processor</label>
+                        <div className="relative">
+                            <select
+                                name="paymentProcessor"
+                                value={formData.paymentProcessor}
+                                onChange={handleInputChange}
+                                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all appearance-none cursor-pointer hover:bg-slate-100"
+                            >
+                                <option value="Stripe">Stripe</option>
+                                <option value="PayTabs">PayTabs</option>
+                                <option value="Checkout.com">Checkout.com</option>
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 {/* Logo Upload */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Restaurant Logo (Optional)</label>
-                    <div className="relative border-2 border-dashed border-slate-200 rounded-lg h-24 flex flex-col items-center justify-center hover:border-[#0055FE]/50 transition-colors bg-slate-50 hover:bg-white cursor-pointer group">
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Restaurant Logo (Optional)</label>
+                    <div className="w-full border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-colors group relative">
                         <input
                             type="file"
                             accept="image/*"
                             onChange={(e) => setFormData({ ...formData, logo: e.target.files?.[0] || null })}
                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
                         />
-                        <div className="group-hover:scale-110 transition-transform duration-200">
-                            <Upload className="text-slate-400 group-hover:text-[#0055FE] mb-2 mx-auto" size={24} />
+                        <div className="w-12 h-12 rounded-full bg-[#0055FE]/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
+                            <Upload className="w-5 h-5 text-[#0055FE]" />
                         </div>
-                        <span className="text-xs text-slate-500 font-medium">{formData.logo ? formData.logo.name : "Upload Custom Logo (Optional)"}</span>
+                        <span className="text-sm font-medium text-slate-500">{formData.logo ? formData.logo.name : "Upload Custom Logo (Optional)"}</span>
                     </div>
                 </div>
 
                 {/* Email */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Email</label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Email</label>
                     <input
                         type="email"
                         name="email"
                         required
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="w-full h-11 px-4 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
                         placeholder="your@email.com"
                     />
                 </div>
 
                 {/* Password */}
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Password</label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Password</label>
                     <div className="relative">
                         <input
                             type={showPassword ? "text" : "password"}
@@ -262,29 +278,31 @@ const ScreenAdminRegister = () => {
                             required
                             value={formData.password}
                             onChange={handleInputChange}
-                            className="w-full h-11 pl-4 pr-10 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] outline-none bg-slate-50/50 focus:bg-white transition-colors"
+                            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-10 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
                             placeholder="Minimum 6 characters"
                         />
                         <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 outline-none"
                         >
                             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
                     </div>
                 </div>
 
+                {/* Sign Up Button */}
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full h-11 mt-4 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center gap-2 transition-all text-sm"
+                    className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-[0_10px_15px_rgba(0,85,254,0.2)] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all text-lg"
                 >
-                    {isLoading ? <Loader2 className="animate-spin" size={18} /> : null}
-                    {isLoading ? "Processing..." : "Sign Up"}
+                    {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : null}
+                    {!isLoading && "Sign Up"}
                 </button>
 
-                <div className="text-center pt-4">
+                {/* Login Link */}
+                <div className="text-center pt-2 pb-6">
                     <span className="text-slate-500 text-sm">Already have an account? </span>
                     <Link to="/adminlogin" className="text-[#0055FE] font-bold text-sm hover:underline">
                         Login
@@ -294,25 +312,32 @@ const ScreenAdminRegister = () => {
         </div>
     );
 
+    if (!isVerified) {
+        return renderGate();
+    }
+
     return (
-        <div className="flex min-h-screen bg-white font-inter">
+        <div className="flex h-screen bg-white font-inter overflow-hidden">
             {/* Left Panel */}
-            <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 lg:px-16 py-8 relative overflow-y-auto">
-                {!isVerified ? renderGate() : renderForm()}
+            <div className="w-full lg:w-1/2 h-full overflow-y-auto px-6">
+                {renderForm()}
             </div>
 
             {/* Right Panel */}
-            <div className="hidden lg:flex w-1/2 relative bg-slate-900 overflow-hidden">
-                <div className="absolute inset-0 bg-[url('/src/assets/hero-image-1.webp')] bg-cover bg-center opacity-80 mix-blend-overlay"></div>
+            <div className="hidden lg:flex w-1/2 h-full relative bg-slate-900 overflow-hidden">
+                <div
+                    className="absolute inset-0 bg-cover bg-center opacity-80 mix-blend-overlay"
+                    style={{ backgroundImage: `url(${registerBg})` }}
+                ></div>
                 {/* Blue tint overlay */}
-                <div className="absolute inset-0 bg-blue-900/30 mix-blend-multiply"></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-transparent to-transparent"></div>
+                <div className="absolute inset-0 bg-[#0055FE]/20 mix-blend-multiply z-10"></div>
 
-                <div className="relative z-10 w-full h-full flex flex-col justify-end p-20">
-                    <h2 className="text-[40px] font-bold text-white mb-2 leading-tight">
+                {/* Promotional Text */}
+                <div className="absolute bottom-12 left-12 right-12 z-20">
+                    <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
                         Join thousands of restaurants.
                     </h2>
-                    <p className="text-white/90 text-lg font-light">
+                    <p className="text-white/80 text-lg">
                         Start your journey with the most advanced restaurant management OS.
                     </p>
                 </div>
