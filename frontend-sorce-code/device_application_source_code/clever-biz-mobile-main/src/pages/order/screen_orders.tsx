@@ -1,4 +1,5 @@
 import axiosInstance from "@/lib/axios";
+import toast from "react-hot-toast";
 import { useEffect, useState } from "react";
 import { Order } from "./order-types";
 import { OrderCard } from "./order-card";
@@ -79,6 +80,21 @@ const ScreenOrders = () => {
       newSoket.close();
     };
   }, [device_id, accessToken]);
+
+  // Handle Payment Cancellation Redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "cancelled") {
+      // Clear the param to prevent toast on reload
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => {
+        toast.error("Payment was cancelled. Please try again.", {
+          duration: 4000,
+          icon: '⚠️',
+        });
+      }, 500);
+    }
+  }, []);
 
   const handleCheckout = (order: Order) => {
     // Navigate to checkout with robust ID passing

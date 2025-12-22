@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework import viewsets, permissions
 from rest_framework.exceptions import PermissionDenied, ValidationError, AuthenticationFailed
 from rest_framework import filters
+from rest_framework.decorators import action
 from .permissions import IsOwnerRole, IsOwnerChefOrStaff
 from .pagination import ChefAndStaffPagination
 from django.core.mail import send_mail
@@ -473,6 +474,23 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
                 "chefstaff_id": instance_id
             }
         )
+
+    @action(detail=True, methods=['post'], url_path='change-password')
+    def change_password(self, request, pk=None):
+        instance = self.get_object()
+        
+        # Permission check: Only Owner
+        if instance.restaurant.owner != request.user:
+             return Response({"error": "You do not have permission to change this password."}, status=status.HTTP_403_FORBIDDEN)
+
+        new_password = request.data.get('new_password')
+        if not new_password:
+             return Response({"error": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        instance.user.set_password(new_password)
+        instance.user.save()
+        return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
+
 
 
 class SendOTPView(APIView):

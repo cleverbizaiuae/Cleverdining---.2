@@ -122,7 +122,7 @@ const SalesChart = ({ data, labels }: { data: number[], labels: string[] }) => {
         bodyFont: { size: 13 },
         displayColors: false,
         callbacks: {
-          label: (context: any) => `$${context.parsed.y}`
+          label: (context: any) => `AED ${context.parsed.y}`
         }
       },
     },
@@ -133,7 +133,7 @@ const SalesChart = ({ data, labels }: { data: number[], labels: string[] }) => {
       },
       y: {
         grid: { color: '#f1f5f9', borderDash: [4, 4] },
-        ticks: { color: '#94a3b8', font: { size: 11 }, callback: (val: any) => `$${val}` },
+        ticks: { color: '#94a3b8', font: { size: 11 }, callback: (val: any) => `AED ${val}` },
         min: 0,
       },
     },
@@ -203,6 +203,11 @@ const ScreenRestaurantDashboard = () => {
     fetchSubCategories();
   }, [fetchCategories, fetchSubCategories]);
 
+  // Edit/Delete State
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [showDeleteItem, setShowDeleteItem] = useState(false);
+
   // Handlers
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 500);
@@ -264,9 +269,10 @@ const ScreenRestaurantDashboard = () => {
         const file = new File([resBlob], "ai-generated-image.png", { type: "image/png" });
         onImageSelected(file);
         toast.success("Image generated!");
-      } catch (e) {
+        toast.success("Image generated!");
+      } catch (e: any) {
         console.error(e);
-        toast.error("Generation failed");
+        toast.error("Generation failed: " + (e.response?.data?.error || e.message));
       } finally {
         setGenerating(false);
       }
@@ -335,7 +341,7 @@ const ScreenRestaurantDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Total Revenue"
-            value={analyticsLoading ? "..." : `$${analytics?.status?.today_total_completed_order_price || 0}`}
+            value={analyticsLoading ? "..." : `AED ${analytics?.status?.today_total_completed_order_price || 0}`}
             trend={`${analytics?.status?.weekly_growth || 0}%`}
             isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
             subtext="vs last week"
@@ -444,7 +450,7 @@ const ScreenRestaurantDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">${item.price}</td>
+                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">AED {item.price}</td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${item.availability ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
                           }`}>
@@ -455,8 +461,31 @@ const ScreenRestaurantDashboard = () => {
                         <div className="flex justify-end gap-3 text-xs font-medium">
                           {userRole === 'owner' && (
                             <>
-                              <button className="text-[#0055FE] hover:underline">Edit</button>
-                              <button className="text-red-500 hover:underline">Delete</button>
+                              <button
+                                onClick={() => {
+                                  setEditingItem(item);
+                                  setItemFormData({
+                                    item_name: item.item_name,
+                                    price: item.price,
+                                    description: item.description || "",
+                                    category: item.category_id || item.category || "", // Adjusted to handle potential data variations
+                                    image1: null
+                                  });
+                                  setShowAddItem(true);
+                                }}
+                                className="text-[#0055FE] hover:underline"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setItemToDelete(item);
+                                  setShowDeleteItem(true);
+                                }}
+                                className="text-red-500 hover:underline"
+                              >
+                                Delete
+                              </button>
                             </>
                           )}
                         </div>
@@ -754,8 +783,37 @@ const ScreenRestaurantDashboard = () => {
         </div>
       </Modal>
 
-      {/* ADD ITEM MODAL (NEW) */}
-      <Modal isOpen={showAddItem} onClose={() => setShowAddItem(false)} title="Add New Item">
+      <Modal isOpen={showDeleteItem} onClose={() => setShowDeleteItem(false)} title="Delete Item">
+        <div className="space-y-6">
+          <p className="text-slate-600 text-sm">
+            Are you sure you want to delete <span className="font-bold text-slate-900">{itemToDelete?.item_name}</span>? This action cannot be undone.
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => setShowDeleteItem(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+            <button onClick={async () => {
+              try {
+                await axiosInstance.delete(`/owners/items/${itemToDelete.id}/`);
+                toast.success("Item deleted");
+                setShowDeleteItem(false);
+                fetchFoodItems(currentPage, debouncedSearchQuery);
+              } catch (e: any) {
+                toast.error("Failed to delete item: " + (e.response?.data?.error || e.message));
+              }
+            }}
+              className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showAddItem}
+        onClose={() => {
+          setShowAddItem(false);
+          setEditingItem(null);
+          setItemFormData({ item_name: "", price: "", description: "", category: "", image1: null });
+        }}
+        title={editingItem ? "Edit Item" : "Add New Item"}
+      >
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Item Name</label>
@@ -801,13 +859,25 @@ const ScreenRestaurantDashboard = () => {
                 formData.append('category', itemFormData.category);
                 if (itemFormData.image1) formData.append('image1', itemFormData.image1);
 
-                await axiosInstance.post('/owners/items/', formData); // Direct API call
-                toast.success("Item created successfully!");
+                if (editingItem) {
+                  await axiosInstance.patch(`/owners/items/${editingItem.id}/`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                  });
+                  toast.success("Item updated successfully");
+                } else {
+                  await axiosInstance.post('/owners/items/', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                  });
+                  toast.success("Item created successfully");
+                }
+
                 setShowAddItem(false);
+                setEditingItem(null);
                 setItemFormData({ item_name: "", price: "", description: "", category: "", image1: null });
-                fetchFoodItems(1, ""); // Refresh list
-              } catch (e) {
-                toast.error("Failed to create item");
+                fetchFoodItems(currentPage, debouncedSearchQuery);
+              } catch (e: any) {
+                console.error(e);
+                toast.error("Failed to save item: " + (e.response?.data?.error || e.message));
               }
             }}
             className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center">

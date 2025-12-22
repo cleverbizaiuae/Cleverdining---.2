@@ -78,8 +78,8 @@ const ScreenCart = () => {
       if (response.data && response.data.id) {
         // Robust Persistence
         localStorage.setItem("pending_order_id", String(response.data.id));
-        // Navigate to Checkout Page (User lands here first)
-        navigate(`/dashboard/checkout?orderId=${response.data.id}`, { state: { orderId: response.data.id } });
+        // Navigate to Orders Page (User requests this flow)
+        navigate(`/dashboard/orders`);
       } else {
         // Fallback if ID is missing (should not happen with backend fix)
         console.error("Order ID missing in response", response.data);

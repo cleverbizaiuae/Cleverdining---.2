@@ -16,10 +16,11 @@ const ScreenStaffDashboard = () => {
     searchQuery,
     fetchFoodItems,
     setCurrentPage,
-  } = useOwner();
+    statusSummary,
+    fetchStatusSummary
+  } = useStaff();
 
-  const { statusSummary, fetchStatusSummary } = useStaff();
-  console.log(statusSummary, "status summary");
+  // console.log(statusSummary, "status summary");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +111,7 @@ const ScreenStaffDashboard = () => {
         {/* Dashboard Content */}
         {/* Header and dropdown */}
         <div className="flex flex-row justify-between items-center my-3">
-          <h2 className="text-2xl text-primary-text">List of items</h2>
+          <h2 className="text-2xl font-bold text-black">List of items</h2>
           {/* <DashboardDropDown
             options={["All", "Fruits", "Vegetables", "Dairy", "Meat", "Snacks"]}
           /> */}

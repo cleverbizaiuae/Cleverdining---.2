@@ -28,15 +28,8 @@ interface DeviceItem {
   username: string;
 }
 
-// Define food item type
-interface FoodItem {
-  id: number;
-  image: string;
-  name: string;
-  price: number;
-  category: string;
-  available: boolean;
-}
+// FoodItem imported from @/types
+import { FoodItem } from "@/types";
 
 // Define order item type
 interface OrderItem {
@@ -114,6 +107,7 @@ interface StaffContextType {
   fetchFoodItems: (page?: number, search?: string) => Promise<void>;
   fetchOrders: (page?: number, search?: string) => Promise<void>;
   updateOrderStatus: (id: number, status: string) => Promise<void>;
+  updateAvailability: (id: number, availability: boolean) => Promise<void>;
   setCurrentPage: (page: number) => void;
   setSearchQuery: (query: string) => void;
   setOrdersCurrentPage: (page: number) => void;
@@ -201,6 +195,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         const formattedItems = results.map((item: any) => ({
           id: item.id,
           image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
+          // Mapping for global FoodItem type
+          image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
+          item_name: item.item_name,
           name: item.item_name,
           price: parseFloat(item.price),
           category: item.category_name,
@@ -306,6 +303,40 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
       // fetchAllDevices(devicesCurrentPage, devicesSearchQuery);
     }
   }, [response, ordersCurrentPage, ordersSearchQuery, fetchOrders]);
+
+  const updateAvailability = useCallback(
+    async (id: number, availability: boolean) => {
+      if (!userRole) return;
+      let endpoint = "";
+      if (userRole === "staff") {
+        endpoint = `/api/staff/items/${id}/`;
+      } else if (userRole === "chef") {
+        endpoint = `/api/chef/items/${id}/`;
+      } else {
+        return;
+      }
+      try {
+        const response = await axiosInstance.patch(endpoint, {
+          availability: availability,
+        });
+        toast.success("Item availability updated successfully!");
+
+        // Update local state
+        setFoodItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, available: availability } : item
+          )
+        );
+        fetchStatusSummary();
+      } catch (error: any) {
+        console.error("Failed to update item availability", error);
+        toast.error("Failed to update item availability.");
+        throw error;
+      }
+    },
+    [userRole, fetchStatusSummary]
+  );
+
   const value: StaffContextType = {
     categories,
     foodItems,
@@ -331,6 +362,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
     fetchFoodItems,
     fetchOrders,
     updateOrderStatus,
+    updateAvailability,
     setCurrentPage,
     setSearchQuery,
     setOrdersCurrentPage,

@@ -2,6 +2,9 @@ export type FoodItem = {
   id: number;
   image1: string;
   image?: string;
+  item_name: string; // Updated from 'name' to match typical backend usage, or keep name if frontend uses that. 
+  // Checking usage in context: context uses 'name', but API returns 'item_name'. 
+  // Context mapping: name: item.item_name. So 'name' is correct for Frontend type.
   name: string;
   category: string;
   price: number;

@@ -420,10 +420,17 @@ class OrderConsumer(AsyncWebsocketConsumer):
         status = event['status']
 
         # Send the status update to WebSocket
-        await self.send(text_data=json.dumps({
-            'order_id': order_id,
-            'status': status
-        }))
+        response = {
+            'order_id': event.get('order_id'),
+            'status': event.get('status'),
+            'type': 'order_status_update',  # Explicit type for frontend routing
+        }
+        if 'session_ended' in event:
+            response['session_ended'] = event['session_ended']
+        if 'bulk' in event:
+            response['bulk'] = event['bulk']
+            
+        await self.send(text_data=json.dumps(response))
 
     # Receive cart update from the session group
     async def cart_updated(self, event):

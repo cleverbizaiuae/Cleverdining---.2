@@ -220,7 +220,7 @@ const ScreenRestaurantOrderList = () => {
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
-                  <p className="text-[10px] text-slate-500 font-bold">${order.total_price}</p>
+                  <p className="text-[10px] text-slate-500 font-bold">AED {order.total_price}</p>
                 </div>
                 <button
                   onClick={() => handleConfirmCash(order.id)}
@@ -258,7 +258,7 @@ const ScreenRestaurantOrderList = () => {
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
-                  <p className="text-[10px] text-slate-500">${order.total_price}</p>
+                  <p className="text-[10px] text-slate-500">AED {order.total_price}</p>
                 </div>
                 <button
                   onClick={() => handleMarkDelivered(order.id)}
@@ -387,7 +387,7 @@ const ScreenRestaurantOrderList = () => {
                     <td className="px-5 py-3 text-xs text-slate-500">
                       {new Date(order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="px-5 py-3 text-sm font-medium text-slate-900">${order.total_price}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">AED {order.total_price}</td>
                     <td className="px-5 py-3">
                       {/* STATUS DROPDOWN */}
                       <select
@@ -521,7 +521,7 @@ const ScreenRestaurantOrderList = () => {
                         <p className="text-sm font-medium text-slate-900 line-clamp-1">{item.item_name || "Item"}</p>
                         <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
                       </div>
-                      <p className="text-sm font-semibold text-[#0055FE]">${item.price}</p>
+                      <p className="text-sm font-semibold text-[#0055FE]">AED {item.price}</p>
                     </div>
                   ))
                 ) : (
@@ -542,7 +542,7 @@ const ScreenRestaurantOrderList = () => {
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <p className="text-xs text-slate-400">Total Amount</p>
-                <p className="text-xl font-bold">${selectedOrder.total_price}</p>
+                <p className="text-xl font-bold">AED {selectedOrder.total_price}</p>
               </div>
               <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                 Close

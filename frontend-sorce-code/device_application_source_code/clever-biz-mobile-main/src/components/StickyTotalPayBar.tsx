@@ -103,12 +103,12 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
             {/* Payment Method Modal */}
             <AnimatePresence>
                 {showMethodModal && (
-                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 pb-12">
                         <motion.div
                             initial={{ y: '100%' }}
                             animate={{ y: 0 }}
                             exit={{ y: '100%' }}
-                            className="bg-white w-full max-w-md rounded-2xl p-6 relative"
+                            className="bg-white w-full max-w-md rounded-2xl p-6 pb-10 relative"
                         >
                             <button
                                 onClick={() => setShowMethodModal(false)}

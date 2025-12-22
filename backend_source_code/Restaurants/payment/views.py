@@ -142,7 +142,7 @@ class CreateBulkCheckoutSessionView(APIView):
         # URLs
         origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
         success_url = f'{origin}/dashboard/success/'
-        cancel_url = f'{origin}/dashboard/orders/'
+        cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
 
         # 4. Processing
         if provider == 'cash':
@@ -299,8 +299,8 @@ class CreateCheckoutSessionView(APIView):
         origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
         
         success_url = f'{origin}/dashboard/success/'
-        # User requested redirection to Cart on cancel
-        cancel_url = f'{origin}/dashboard/cart/'
+        # User requested redirection to Orders on cancel with status
+        cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
 
         # Get Provider (Optional, defaults to None -> Active Gateway)
         provider = request.data.get('provider') 

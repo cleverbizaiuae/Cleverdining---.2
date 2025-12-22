@@ -115,7 +115,7 @@ const ScreenRestaurantManagement = () => {
 
       await createMember(data);
 
-      toast.success("Member created successfully");
+      // toast.success("Member created successfully"); // Handled in context
       setIsAddModalOpen(false);
       setFormData({
         name: "",
@@ -163,8 +163,7 @@ const ScreenRestaurantManagement = () => {
     }
     setLoading(true);
     try {
-      await axiosInstance.post(`/owners/team/${selectedMember.id}/change-password/`, {
-        old_password: passwordData.oldPassword,
+      await axiosInstance.post(`/owners/chef-staff/${selectedMember.id}/change-password/`, {
         new_password: passwordData.newPassword
       });
       toast.success("Password changed successfully");
@@ -181,7 +180,7 @@ const ScreenRestaurantManagement = () => {
     if (!selectedMember) return;
     setLoading(true);
     try {
-      await axiosInstance.delete(`/owners/team/${selectedMember.id}/delete/`);
+      await axiosInstance.delete(`/owners/chef-staff/${selectedMember.id}/`);
       toast.success("Member deleted successfully");
       setIsDeleteModalOpen(false);
       fetchMembers();

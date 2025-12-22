@@ -61,6 +61,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      if (data.type === 'order_status_update' && data.session_ended) {
+        console.log("Session Ended via WebSocket");
+        localStorage.removeItem("userInfo");
+        localStorage.removeItem("guest_session_token");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("pending_order_id");
+        window.location.href = "/dashboard/success";
+        return;
+      }
+
       if (data.message && typeof data.message === "string") {
         // Set the newMessage flag when a new message arrives
         setNewMessageFlag(true);
