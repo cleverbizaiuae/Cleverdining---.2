@@ -1087,7 +1087,27 @@ export const ChatSection: React.FC = () => {
     ws.onopen = () => setIsConnected(true);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      setMessages((prev) => [...prev, data]);
+      if (data.message) {
+        // Fix: Use backend flag. If undefined, assume true (customer).
+        const isFromDevice = data.is_from_device !== undefined ? data.is_from_device : true;
+
+        setMessages((prev) => {
+          // Deduplication (Optimistic UI Fix)
+          const lastMsg = prev[prev.length - 1];
+          if (lastMsg && !isFromDevice && lastMsg.message === data.message) {
+            const lastTime = new Date(lastMsg.timestamp).getTime();
+            // If duplicates within 2s, ignore
+            if (!isNaN(lastTime) && (Date.now() - lastTime < 2000)) {
+              return prev;
+            }
+          }
+          return [...prev, {
+            ...data,
+            is_from_device: isFromDevice,
+            timestamp: data.timestamp || Date.now()
+          }];
+        });
+      }
 
       // call events
       if (data.type === "answer") setCallStatus("in_call");

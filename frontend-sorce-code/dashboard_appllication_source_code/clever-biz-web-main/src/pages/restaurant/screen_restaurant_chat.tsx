@@ -103,12 +103,32 @@ const ScreenRestaurantChat = () => {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.message) {
-        setMessages(prev => [...prev, {
-          message: data.message,
-          sender: data.sender || "unknown",
-          timestamp: Date.now(),
-          is_from_device: true // Received messages are from device
-        }]);
+        // Fix: Use the flag from backend (which is accurate) instead of hardcoding 'true'
+        // If undefined, default to true (customer)
+        let isFromDevice = data.is_from_device !== undefined ? data.is_from_device : true;
+
+        // Deduplication/Optimistic UI Fix:
+        // If it's from US (isFromDevice=false), we might have already added it optimistically.
+        // Simple strategy: Trust the backend event. 
+        // If we want to avoid double-rendering, we should filter or match.
+        // For now, let's just use the correct flag so even if duplicated, it's on the RIGHT side.
+
+        setMessages(prev => {
+          // Optional: Avoid adding if exact message exists at end (simple debounce)
+          const lastMsg = prev[prev.length - 1];
+          if (lastMsg && !isFromDevice && lastMsg.message === data.message) {
+            const lastTime = new Date(lastMsg.timestamp).getTime();
+            if (!isNaN(lastTime) && (Date.now() - lastTime < 2000)) {
+              return prev; // Ignore echo of our own message sent < 2s ago
+            }
+          }
+          return [...prev, {
+            message: data.message,
+            sender: data.sender || "unknown",
+            timestamp: Date.now(),
+            is_from_device: isFromDevice
+          }];
+        });
       }
     };
 
