@@ -190,7 +190,7 @@ const ScreenRestaurantDashboard = () => {
 
   // Generic Form Data
   const [catFormData, setCatFormData] = useState({ name: "", image: null as File | null });
-  const [subCatFormData, setSubCatFormData] = useState({ name: "", category: "", image: null as File | null });
+  const [subCatFormData, setSubCatFormData] = useState({ Category_name: "", parent_category: "", image: null as File | null });
 
   // Add Item State
   const [showAddItem, setShowAddItem] = useState(false);
@@ -618,11 +618,11 @@ const ScreenRestaurantDashboard = () => {
                           <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                             {sub.image ? <img src={sub.image} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] text-slate-400">No Image</span>}
                           </div>
-                          <span className="text-xs font-medium text-slate-900">{sub.name}</span>
+                          <span className="text-xs font-medium text-slate-900">{sub.Category_name}</span>
                         </div>
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-500">
-                        {categories.find(c => c.id === sub.category)?.Category_name || '-'}
+                        {categories.find(c => c.id === sub.parent_category)?.Category_name || '-'}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-2">
@@ -710,7 +710,7 @@ const ScreenRestaurantDashboard = () => {
       {/* ADD/EDIT SUB-CATEGORY MODAL */}
       <Modal
         isOpen={showAddSubCategory || showEditSubCategory}
-        onClose={() => { setShowAddSubCategory(false); setShowEditSubCategory(false); setSubCatFormData({ name: "", category: "", image: null }); }}
+        onClose={() => { setShowAddSubCategory(false); setShowEditSubCategory(false); setSubCatFormData({ Category_name: "", parent_category: "", image: null }); }}
         title={showEditSubCategory ? "Edit Sub-Category" : "Add Sub-Category"}
       >
         <div className="space-y-4">
@@ -720,16 +720,16 @@ const ScreenRestaurantDashboard = () => {
               type="text"
               placeholder="Sub-Category Name"
               className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-              value={showEditSubCategory ? editingSubCategory?.name : subCatFormData.name}
-              onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, name: e.target.value }) : setSubCatFormData({ ...subCatFormData, name: e.target.value })}
+              value={showEditSubCategory ? editingSubCategory?.Category_name : subCatFormData.Category_name}
+              onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, Category_name: e.target.value }) : setSubCatFormData({ ...subCatFormData, Category_name: e.target.value })}
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Parent Category</label>
             <select
               className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
-              value={showEditSubCategory ? editingSubCategory?.category : subCatFormData.category}
-              onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, category: e.target.value }) : setSubCatFormData({ ...subCatFormData, category: e.target.value })}
+              value={showEditSubCategory ? editingSubCategory?.parent_category : subCatFormData.parent_category}
+              onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, parent_category: e.target.value }) : setSubCatFormData({ ...subCatFormData, parent_category: e.target.value })}
             >
               <option value="">Select Parent Category</option>
               {categories.map((cat: any) => (
@@ -750,17 +750,17 @@ const ScreenRestaurantDashboard = () => {
             onClick={async () => {
               const formData = new FormData();
               if (showEditSubCategory) {
-                formData.append('name', editingSubCategory.name);
-                formData.append('category', editingSubCategory.category);
+                formData.append('Category_name', editingSubCategory.Category_name);
+                formData.append('parent_category', editingSubCategory.parent_category);
                 await updateSubCategory(editingSubCategory.id, formData);
                 setShowEditSubCategory(false);
               } else {
-                formData.append('name', subCatFormData.name);
-                formData.append('category', subCatFormData.category);
+                formData.append('Category_name', subCatFormData.Category_name);
+                formData.append('parent_category', subCatFormData.parent_category);
                 if (subCatFormData.image) formData.append('image', subCatFormData.image);
                 await createSubCategory(formData);
                 setShowAddSubCategory(false);
-                setSubCatFormData({ name: "", category: "", image: null });
+                setSubCatFormData({ Category_name: "", parent_category: "", image: null });
               }
             }}
             className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
@@ -774,7 +774,7 @@ const ScreenRestaurantDashboard = () => {
       <Modal isOpen={showDeleteSubCategory} onClose={() => setShowDeleteSubCategory(false)} title="Delete Sub-Category">
         <div className="space-y-6">
           <p className="text-slate-600 text-sm">
-            Are you sure you want to delete <span className="font-bold text-slate-900">{subCategoryToDelete?.name}</span>? This action cannot be undone.
+            Are you sure you want to delete <span className="font-bold text-slate-900">{subCategoryToDelete?.Category_name}</span>? This action cannot be undone.
           </p>
           <div className="flex gap-3">
             <button onClick={() => setShowDeleteSubCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
@@ -851,6 +851,12 @@ const ScreenRestaurantDashboard = () => {
 
           <button
             onClick={async () => {
+              if (!itemFormData.category) {
+                return toast.error("Please select a category");
+              }
+              if (!itemFormData.price) {
+                return toast.error("Please enter a price");
+              }
               try {
                 const formData = new FormData();
                 formData.append('item_name', itemFormData.item_name);
