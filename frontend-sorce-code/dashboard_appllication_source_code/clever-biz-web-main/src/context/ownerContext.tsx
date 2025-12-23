@@ -652,7 +652,32 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       } catch (error: any) {
         console.error("Failed to create member", error);
         const errorData = error.response?.data;
-        const errorMessage = errorData?.username?.[0] || errorData?.email?.[0] || errorData?.detail || "Failed to create member.";
+
+        let errorMessage = "Failed to create member.";
+
+        // Robust Error Parsing
+        if (errorData) {
+          if (typeof errorData === "string") {
+            errorMessage = errorData;
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.error) { // some custom error
+            errorMessage = errorData.error;
+          } else {
+            // DRF Validation Error: Object of arrays { field: ["error"] }
+            const keys = Object.keys(errorData);
+            if (keys.length > 0) {
+              const firstKey = keys[0];
+              const firstError = errorData[firstKey];
+              // Format: "Field: Error" or just "Error"
+              const errorStr = Array.isArray(firstError) ? firstError[0] : firstError;
+              errorMessage = `${firstKey}: ${errorStr}`;
+              // If key is 'non_field_errors', just show string
+              if (firstKey === 'non_field_errors') errorMessage = errorStr;
+            }
+          }
+        }
+
         toast.error(errorMessage);
         throw error;
       }

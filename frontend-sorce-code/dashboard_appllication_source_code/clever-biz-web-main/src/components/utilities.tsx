@@ -1064,8 +1064,14 @@ export const ChatSection: React.FC = () => {
   useEffect(() => {
     if (!selectedChat) return;
     const accessToken = localStorage.getItem("accessToken");
-    if (!accessToken) {
-      toast.error("No access token found");
+    if (!accessToken || accessToken === "guest_token") {
+      console.error("Invalid access token for dashboard chat");
+      // Optional: Redirect to login or show error
+      if (accessToken === "guest_token") {
+        toast.error("Invalid session. Please re-login.");
+        // Potentially clear it
+        // localStorage.removeItem("accessToken");
+      }
       return;
     }
     if (socket.current) {

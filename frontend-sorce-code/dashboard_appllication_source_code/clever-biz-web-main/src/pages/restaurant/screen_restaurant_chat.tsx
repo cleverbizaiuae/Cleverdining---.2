@@ -81,6 +81,15 @@ const ScreenRestaurantChat = () => {
     if (!selectedChat) return;
 
     const jwt = localStorage.getItem("accessToken");
+
+    // Safety check: Don't connect if we have a "guest_token" (from mobile app testing)
+    // This prevents the "Message Glitch" where staff appear as customers.
+    if (!jwt || jwt === "guest_token") {
+      console.warn("Invalid JWT for staff chat (guest_token detected). Aborting connection.");
+      // toast.error("Invalid session. please re-login.");
+      return;
+    }
+
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     // WebSocket URL pattern based on utilities.tsx analysis: /ws/chat/{device_id}/
