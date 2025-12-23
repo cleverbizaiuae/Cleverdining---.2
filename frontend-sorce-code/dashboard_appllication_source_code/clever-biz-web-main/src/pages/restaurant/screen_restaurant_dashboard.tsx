@@ -468,7 +468,7 @@ const ScreenRestaurantDashboard = () => {
                                     item_name: item.item_name,
                                     price: item.price,
                                     description: item.description || "",
-                                    category: item.category_id || item.category || "", // Adjusted to handle potential data variations
+                                    category: item.category_id || "",
                                     image1: null
                                   });
                                   setShowAddItem(true);

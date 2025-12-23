@@ -350,10 +350,13 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           id: item.id,
           image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
           image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
-          name: item.item_name,
+          item_name: item.item_name,
           price: parseFloat(item.price),
-          category: item.category_name,
+          category: item.category_name, // Display Name
+          category_id: item.category,   // ID for editing
+          category_name: item.category_name, // Explicit Name
           available: item.availability,
+          description: item.description
         }));
 
         setFoodItems(formattedItems);
