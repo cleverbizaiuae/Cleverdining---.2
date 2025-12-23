@@ -615,9 +615,6 @@ const ScreenRestaurantDashboard = () => {
                     <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                            {sub.image ? <img src={sub.image} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] text-slate-400">No Image</span>}
-                          </div>
                           <span className="text-xs font-medium text-slate-900">{sub.Category_name}</span>
                         </div>
                       </td>
@@ -737,14 +734,7 @@ const ScreenRestaurantDashboard = () => {
               ))}
             </select>
           </div>
-          {/* IMAGE UPLOADER WITH AI */}
-          <ImageUploaderWithAI
-            label="SubCategory Image"
-            currentImage={subCatFormData.image}
-            onImageSelected={(file: File) => {
-              if (!showEditSubCategory) setSubCatFormData({ ...subCatFormData, image: file })
-            }}
-          />
+
 
           <button
             onClick={async () => {
@@ -757,7 +747,6 @@ const ScreenRestaurantDashboard = () => {
               } else {
                 formData.append('Category_name', subCatFormData.Category_name);
                 formData.append('parent_category', subCatFormData.parent_category);
-                if (subCatFormData.image) formData.append('image', subCatFormData.image);
                 await createSubCategory(formData);
                 setShowAddSubCategory(false);
                 setSubCatFormData({ Category_name: "", parent_category: "", image: null });
