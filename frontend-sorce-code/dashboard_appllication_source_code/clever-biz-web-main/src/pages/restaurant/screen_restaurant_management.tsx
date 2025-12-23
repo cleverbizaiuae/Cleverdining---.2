@@ -126,8 +126,9 @@ const ScreenRestaurantManagement = () => {
       fetchMembers();
     } catch (error: any) {
       console.error(error);
-      const msg = error.response?.data?.error || "Failed to create member";
-      toast.error(msg);
+      console.error(error);
+      // toast handled in context
+
     } finally {
       setLoading(false);
     }

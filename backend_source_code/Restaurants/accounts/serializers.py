@@ -167,16 +167,13 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
         user = request.user
 
         # Logic to determine restaurant
-        # 1. Check if passed in validated_data (from view's perform_create)
         restaurant = validated_data.pop('restaurant', None)
         
-        # 2. If not, try to resolve for Owner
         if not restaurant and user.role == 'owner':
             restaurant = user.restaurants.first()
             
-        # 3. If still not, try to resolve for Staff/Chef
         if not restaurant and user.role in ['chef', 'staff']:
-             employment = ChefStaff.objects.filter(user=user).first()
+             employment = ChefStaff.objects.filter(user=user, action='accepted').first()
              if employment:
                  restaurant = employment.restaurant
 
@@ -184,24 +181,33 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
              raise serializers.ValidationError("You do not have a valid restaurant association.")
 
         email = validated_data.pop('email')
-        username = validated_data.pop('username')
+        username = validated_data.pop('username', email) # Default to email if not provided
         first_name = validated_data.pop('first_name', '')
         last_name = validated_data.pop('last_name', '')
         role = validated_data.pop('role')
         image = validated_data.pop('image', None)
         password = validated_data.pop('password', None) # Get password if provided
 
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError({"email": "A user with this email already exists."})
+        # Check if user already exists
+        existing_user = User.objects.filter(email=email).first()
+        is_new_user = False
+
+        if existing_user:
+            # Check if already linked to THIS restaurant
+            if ChefStaff.objects.filter(user=existing_user, restaurant=restaurant).exists():
+                 raise serializers.ValidationError({"email": "This user is already a member of your team."})
             
-        if User.objects.filter(username=username).exists():
-             raise serializers.ValidationError({"username": "This username is already taken. Please choose another."})
-
-        # Use provided password or generate a secure random one
-        if not password:
-            password = secrets.token_urlsafe(10)
-
-        with transaction.atomic():
+            # Use the existing user
+            new_user = existing_user
+        else:
+            # Check username uniqueness for NEW users only
+            if User.objects.filter(username=username).exists():
+                 raise serializers.ValidationError({"username": "This username is already taken. Please choose another."})
+            
+            if not password:
+                password = secrets.token_urlsafe(10)
+                
+            is_new_user = True
             new_user = User.objects.create_user(
                 email=email,
                 username=username,
@@ -209,32 +215,46 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
                 role=role,
                 image=image
             )
+
+        with transaction.atomic():
+            # Update fields for existing user too? 
+            # Ideally yes, update name/role if they are being added as staff
             if first_name:
                 new_user.first_name = first_name
             if last_name:
                 new_user.last_name = last_name
+            # If existing user was 'customer', upgrade them to staff/chef? 
+            # Yes, if they are being added to a team, their role should reflect that context or at least be compatible.
+            # But changing global role might affect other associations. 
+            # For now, let's update it to ensure they have dashboard access.
+            if role:
+                 new_user.role = role
+                 
             new_user.save()
 
             staff_member = ChefStaff.objects.create(
                 user=new_user,
                 restaurant=restaurant,
-                action='accepted',  # Force accepted status so they can access items immediately
-                **{k: v for k, v in validated_data.items() if k != 'action'} # Avoid duplicate arg if action is in validated_data
+                action='accepted',
+                **{k: v for k, v in validated_data.items() if k != 'action'}
             )
 
-        # Send password to user via email (outside atomic block usually fine, or inside)
-        # Verify email settings are correct or catch error so it doesn't rollback
-        try:
-            send_mail(
-                subject='Your account has been created',
-                message=f"Hello {username},\n\nYour account has been created.\nEmail: {email}\nPassword: {password}\n\nPlease login and change your password.",
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-        except Exception as e:
-            # Log error but don't fail the creation
-            print(f"Failed to send email: {e}")
+        # Send email only if it's a new user OR if we want to notify them they've been added
+        if is_new_user:
+            try:
+                send_mail(
+                    subject='Your account has been created',
+                    message=f"Hello {username},\n\nYour account has been created.\nEmail: {email}\nPassword: {password}\n\nPlease login and change your password.",
+                    from_email=settings.EMAIL_HOST_USER,
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                print(f"Failed to send email: {e}")
+        else:
+            # Maybe send a "You've been added to X" email?
+            # Optional, for now let's just skip to avoid spam or confusion if they already know.
+            pass
 
         return staff_member
     def to_representation(self, instance):
