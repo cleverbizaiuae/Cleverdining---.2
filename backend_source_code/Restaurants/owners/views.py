@@ -8,38 +8,35 @@ class GenerateImageView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        import base64
+        from urllib.parse import quote
+
         prompt = request.data.get('prompt')
         if not prompt:
             return Response({"error": "Prompt is required"}, status=400)
 
-        api_key = settings.OPENAI_API_KEY
-        if not api_key:
-            return Response({"error": "OpenAI API key not configured"}, status=500)
-
-        # Call OpenAI DALL-E 3
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "dall-e-3",
-            "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024",
-            "response_format": "b64_json" # Request base64 directly from OpenAI!
-        }
-
+        # Free Version: Pollinations.ai
+        # No API Key required.
+        
         try:
-            response = requests.post("https://api.openai.com/v1/images/generations", json=payload, headers=headers)
+            encoded_prompt = quote(prompt)
+            # Add random seed to ensure freshness if needed, or just prompt
+            # Pollinations returns the image binary directly
+            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+            
+            response = requests.get(image_url)
             response.raise_for_status()
             
-            data = response.json()
-            b64_data = data['data'][0]['b64_json']
+            # Convert binary to base64
+            b64_data = base64.b64encode(response.content).decode('utf-8')
+            
+            # Detrmine mime type (usually jpeg from pollinations, but safe to default)
+            content_type = response.headers.get('Content-Type', 'image/jpeg')
             
             # Return as data URI
-            return Response({"image": f"data:image/png;base64,{b64_data}"})
+            return Response({"image": f"data:{content_type};base64,{b64_data}"})
             
-        except requests.exceptions.HTTPError as e:
-            return Response({"error": f"OpenAI Error: {e.response.text}"}, status=400)
+        except requests.exceptions.RequestException as e:
+            return Response({"error": f"Generation Error: {str(e)}"}, status=500)
         except Exception as e:
             return Response({"error": str(e)}, status=500)

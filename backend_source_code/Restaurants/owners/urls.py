@@ -18,7 +18,7 @@ from .views import GenerateImageView
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet, basename='category')
-router.register('subcategories', SubCategoryViewSet, basename='subcategory')
+router.register('sub-categories', SubCategoryViewSet, basename='subcategory')
 router.register('items', ItemViewSet, basename='item')
 router.register('chef-staff', ChefStaffViewSet, basename='chef-staff')
 router.register('devices', DeviceViewSet, basename='device')

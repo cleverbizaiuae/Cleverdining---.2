@@ -11,7 +11,11 @@ router.register('devicesall', DeviceViewSetall, basename='deviceall')
 router.register('devices', DeviceViewSet, basename='staff-devices')
 # Expose Reservations for Staff
 from device.views import ReservationViewSet
+from category.views import SubCategoryViewSet, CategoryViewSet
+
 router.register('reservations', ReservationViewSet, basename='staff-reservations')
+router.register('sub-categories', SubCategoryViewSet, basename='staff-subcategories')
+router.register('categories', CategoryViewSet, basename='staff-categories')
 
 urlpatterns = [
     path('', include(router.urls)),
