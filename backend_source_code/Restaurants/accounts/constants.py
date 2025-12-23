@@ -3,6 +3,7 @@ ROLE_CHOICES = (
         ('owner', 'Owner'),
         ('chef', 'Chef'),
         ('staff', 'Staff'),
+        ('manager', 'Manager'),
         ('customer', 'Customer'),
 )
 
