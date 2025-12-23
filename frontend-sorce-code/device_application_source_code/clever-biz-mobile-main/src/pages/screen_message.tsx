@@ -125,10 +125,8 @@ function MessagingUI() {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      toast.error("Connection lost. Please refresh the page.");
-      return;
-    }
+    // If socket is closed, sendMessage (context) will try to reconnect.
+    // We remove the blocking toast here to prevent "Please refresh" loops.
 
     try {
       sendMessage(inputValue);
