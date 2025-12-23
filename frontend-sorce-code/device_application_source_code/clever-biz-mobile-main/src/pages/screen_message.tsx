@@ -316,7 +316,7 @@ function MessagingUI() {
               <input
                 type="text"
                 placeholder="Type a message..."
-                className="flex-1 bg-transparent border-none focus:ring-0 text-sm px-2 py-2 placeholder:text-gray-400"
+                className="flex-1 bg-transparent border-none focus:ring-0 text-base px-2 py-2 placeholder:text-gray-400"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
               />
