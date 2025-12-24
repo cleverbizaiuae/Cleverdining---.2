@@ -53,7 +53,8 @@ const ScreenAdminLogin = () => {
 
             // Validate against selected Portal
             let isValidRole = false;
-            if (selectedRole === "manager" && dbRole === "owner") isValidRole = true;
+            // Allow both "owner" and "manager" roles for the Manager Portal
+            if (selectedRole === "manager" && (dbRole === "owner" || dbRole === "manager")) isValidRole = true;
             if (selectedRole === "staff" && dbRole === "staff") isValidRole = true;
             if (selectedRole === "chef" && dbRole === "chef") isValidRole = true;
 
@@ -87,7 +88,7 @@ const ScreenAdminLogin = () => {
 
             // Role Validation & Redirection
             // We strictly redirect based on the ACTUAL role from DB
-            if (dbRole === "owner") {
+            if (dbRole === "owner" || dbRole === "manager") {
                 navigate("/restaurant"); // Manager Admin Dashboard
             } else if (dbRole === "chef") {
                 navigate("/chefadmindashboard");

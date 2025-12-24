@@ -199,7 +199,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       const fetchCategoriesDirectly = async () => {
         try {
           let endpoint;
-          if (userRole === "owner") {
+          if (userRole === "owner" || userRole === "manager") {
             endpoint = "/owners/categories/";
           } else if (userRole === "staff") {
             endpoint = "/owners/categories/";
@@ -224,7 +224,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     if (isLoading || !userRole) return;
     try {
       // Assuming generic endpoint pattern or specific one
-      const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/categories/" : "/chef/categories/";
+      const endpoint = (userRole === "owner" || userRole === "manager" || userRole === "staff") ? "/owners/categories/" : "/chef/categories/";
       const res = await axiosInstance.get(endpoint);
       setCategories(res.data);
     } catch (err: any) {
@@ -236,7 +236,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const fetchSubCategories = useCallback(async () => {
     if (isLoading || !userRole) return;
     try {
-      const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/sub-categories/" : "/chef/sub-categories/";
+      const endpoint = (userRole === "owner" || userRole === "manager" || userRole === "staff") ? "/owners/sub-categories/" : "/chef/sub-categories/";
       const res = await axiosInstance.get(endpoint);
       setSubCategories(res.data);
     } catch (err) {
@@ -247,7 +247,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   // CATEGORY CRUD
   const createCategory = useCallback(async (formData: FormData) => {
     try {
-      const endpoint = userRole === "owner" ? "/owners/categories/" : "/staff/categories/";
+      const endpoint = (userRole === "owner" || userRole === "manager") ? "/owners/categories/" : "/staff/categories/";
       await axiosInstance.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Category created successfully");
       fetchCategories();
@@ -260,7 +260,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
   const updateCategory = useCallback(async (id: number, formData: FormData) => {
     try {
-      const endpoint = userRole === "owner" ? `/owners/categories/${id}/` : `/staff/categories/${id}/`;
+      const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/categories/${id}/` : `/staff/categories/${id}/`;
       await axiosInstance.patch(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Category updated successfully");
       fetchCategories();
@@ -273,7 +273,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
   const deleteCategory = useCallback(async (id: number) => {
     try {
-      const endpoint = userRole === "owner" ? `/owners/categories/${id}/` : `/staff/categories/${id}/`;
+      const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/categories/${id}/` : `/staff/categories/${id}/`;
       await axiosInstance.delete(endpoint);
       toast.success("Category deleted successfully");
       fetchCategories();
@@ -288,7 +288,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   // SUBCATEGORY CRUD
   const createSubCategory = useCallback(async (formData: FormData) => {
     try {
-      const endpoint = userRole === "owner" ? "/owners/sub-categories/" : "/staff/sub-categories/";
+      const endpoint = (userRole === "owner" || userRole === "manager") ? "/owners/sub-categories/" : "/staff/sub-categories/";
       await axiosInstance.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Sub-Category created successfully");
       fetchSubCategories();
@@ -301,7 +301,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
   const updateSubCategory = useCallback(async (id: number, formData: FormData) => {
     try {
-      const endpoint = userRole === "owner" ? `/owners/sub-categories/${id}/` : `/staff/sub-categories/${id}/`;
+      const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/sub-categories/${id}/` : `/staff/sub-categories/${id}/`;
       await axiosInstance.patch(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Sub-Category updated successfully");
       fetchSubCategories();
@@ -314,7 +314,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
   const deleteSubCategory = useCallback(async (id: number) => {
     try {
-      const endpoint = userRole === "owner" ? `/owners/sub-categories/${id}/` : `/staff/sub-categories/${id}/`;
+      const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/sub-categories/${id}/` : `/staff/sub-categories/${id}/`;
       await axiosInstance.delete(endpoint);
       toast.success("Sub-Category deleted successfully");
       fetchSubCategories();
@@ -334,7 +334,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || (userRole as string) === "manager") {
           endpoint = `/owners/items/?page=${page}&search=${search || ""}`;
         } else if (userRole === "staff") {
           endpoint = `/owners/items/?page=${page}&search=${search || ""}`;
@@ -375,9 +375,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       // Choose endpoint based on role
       let endpoint;
-      if (userRole === "owner") {
+      if (userRole === "owner" || (userRole as string) === "manager") {
         endpoint = "/owners/orders/";
-      } else if (userRole === "staff" || (userRole as string) === "manager" || userRole === "chef") {
+      } else if (userRole === "staff" || userRole === "chef") {
         // Route managers and chefs/staff to the Staff/Chef API
         // Note: The backend ChefStaffOrdersAPIView should handle 'manager' if they are ChefStaff
         endpoint = "/api/staff/orders/";
@@ -451,7 +451,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || (userRole as string) === "manager") {
           endpoint = `/owners/reservations/?page=${page}&search=${search || ""}`;
         } else if (userRole === "staff") {
           endpoint = `/api/staff/reservations/?page=${page}&search=${search || ""}`;
@@ -515,7 +515,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       let endpoint =
-        (userRole === "owner" || userRole === "staff")
+        (userRole === "owner" || (userRole as string) === "manager" || userRole === "staff")
           ? "/owners/reservations/report-reservation-status/"
           : "/api/chef/reservations/report-reservation-status/";
 
@@ -539,7 +539,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       let endpoint =
-        (userRole === "owner" || userRole === "staff") ? "/owners/orders/" : "/api/chef/orders/";
+        (userRole === "owner" || (userRole as string) === "manager" || userRole === "staff") ? "/owners/orders/" : "/api/chef/orders/";
 
       if (userRole === "staff") {
         endpoint = "/api/staff/orders/";
@@ -563,9 +563,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const searchParam = search || devicesSearchQuery;
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || (userRole as string) === "manager") {
           endpoint = `/owners/devices/?page=${page}&search=${searchParam}`;
-        } else if (userRole === "staff" || (userRole as string) === "manager" || userRole === "chef") {
+        } else if (userRole === "staff" || userRole === "chef") {
           // Unify Manager/Staff/Chef to use the robust Chef/Staff API
           endpoint = `/api/chef/devices/?page=${page}&search=${searchParam}`;
         } else {
@@ -597,9 +597,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
       let endpoint;
-      if (userRole === "owner") {
+      if (userRole === "owner" || (userRole as string) === "manager") {
         endpoint = "/owners/devices/stats/";
-      } else if (userRole === "staff" || (userRole as string) === "manager" || userRole === "chef") {
+      } else if (userRole === "staff" || userRole === "chef") {
         endpoint = "/api/chef/devices/stats/";
       } else {
         endpoint = "/owners/devices/stats/";
@@ -725,7 +725,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       console.log(userRole, "user role in update food item");
       try {
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || (userRole as string) === "manager") {
           endpoint = `/owners/items/${id}/`;
         } else if (userRole === "staff") {
           endpoint = `/staff/items/${id}/`;
@@ -759,7 +759,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         const endpoint =
-          userRole === "owner" ? "/owners/items/" : "/staff/items/";
+          (userRole === "owner" || (userRole as string) === "manager") ? "/owners/items/" : "/staff/items/";
 
         await axiosInstance.post(endpoint, formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -786,7 +786,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       try {
         // Use role-based API endpoint
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || (userRole as string) === "manager") {
           endpoint = `/owners/items/${id}/`;
         } else if (userRole === "staff") {
           endpoint = `/staff/items/${id}/`;

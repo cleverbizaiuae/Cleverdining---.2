@@ -8,6 +8,7 @@ export type UserRole =
   | "owner"
   | "admin"
   | "customer"
+  | "manager"
   | null;
 
 interface UserInfo {
@@ -38,6 +39,7 @@ const safeParse = <T,>(raw: string | null, fallback: T): T => {
 const roleDashboardMap: Record<Exclude<UserRole, null>, string> = {
   admin: "/admin",
   owner: "/restaurant",
+  manager: "/restaurant", // Manager shares Owner Dashboard
   chef: "/chef",
   staff: "/staff",
   customer: "/",

@@ -34,7 +34,7 @@ class IsOwnerRole(BasePermission):
 
     def has_permission(self, request, view):
         print("Role:", getattr(request.user, 'role', None))
-        return request.user.is_authenticated and getattr(request.user, 'role', None) == 'owner'
+        return request.user.is_authenticated and getattr(request.user, 'role', None) in ['owner', 'manager']
     
 
 
