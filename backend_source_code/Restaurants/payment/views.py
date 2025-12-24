@@ -22,17 +22,33 @@ channel_layer = get_channel_layer()
 
 class PaymentGatewayViewSet(ModelViewSet):
     serializer_class = PaymentGatewaySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated] # Logic handled in get_queryset
 
     def get_queryset(self):
         user = self.request.user
-        return PaymentGateway.objects.filter(restaurant__owner=user)
+        if getattr(user, 'role', '') == 'owner':
+            return PaymentGateway.objects.filter(restaurant__owner=user)
+        elif getattr(user, 'role', '') in ['manager']: # Staff/Chef usually shouldn't edit Gateways? User said "Manager Portal".
+            # Allow manager to VIEW/EDIT gateways
+            from accounts.models import ChefStaff
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if chef_staff:
+                return PaymentGateway.objects.filter(restaurant=chef_staff.restaurant)
+        return PaymentGateway.objects.none()
 
     def perform_create(self, serializer):
         user = self.request.user
-        restaurant = user.restaurants.first()
+        restaurant = None
+        if getattr(user, 'role', '') == 'owner':
+            restaurant = user.restaurants.first()
+        elif getattr(user, 'role', '') in ['manager']:
+            from accounts.models import ChefStaff
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if chef_staff:
+                restaurant = chef_staff.restaurant
+        
         if not restaurant:
-            raise ValidationError("User does not own any restaurants.")
+            raise ValidationError("You do not have a valid restaurant association.")
         
         # If setting as active, deactivate others
         if serializer.validated_data.get('is_active', False):
@@ -42,9 +58,20 @@ class PaymentGatewayViewSet(ModelViewSet):
 
     def perform_update(self, serializer):
         user = self.request.user
-        restaurant = user.restaurants.first()
+        restaurant = None
+        if getattr(user, 'role', '') == 'owner':
+            restaurant = user.restaurants.first()
+        elif getattr(user, 'role', '') in ['manager']:
+             from accounts.models import ChefStaff
+             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+             if chef_staff:
+                 restaurant = chef_staff.restaurant
+
+        if not restaurant:
+             raise ValidationError("You do not have a valid restaurant association.")
+
         if serializer.instance.restaurant != restaurant:
-            raise ValidationError("You cannot update settings for a restaurant that you do not own.")
+            raise ValidationError("You cannot update settings for a restaurant that you do not own/manage.")
             
         if serializer.validated_data.get('is_active', False):
              PaymentGateway.objects.filter(restaurant=restaurant).exclude(id=serializer.instance.id).update(is_active=False)

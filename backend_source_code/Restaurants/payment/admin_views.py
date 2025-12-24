@@ -48,12 +48,22 @@ class PaymentAdminViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Filter by user's restaurants
-        # Assuming user is owner or staff
-        if hasattr(user, 'restaurants'):
-            return Payment.objects.filter(restaurant__in=user.restaurants.all())
-        elif hasattr(user, 'staff_profile'):
-             return Payment.objects.filter(restaurant=user.staff_profile.restaurant)
+        if getattr(user, 'role', '') == 'owner':
+             # Assuming user has 'restaurants' relation or we query Restaurant
+             from restaurant.models import Restaurant
+             return Payment.objects.filter(restaurant__owner=user)
+        
+        elif getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
+             from accounts.models import ChefStaff
+             # Check ChefStaff
+             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+             if chef_staff:
+                  return Payment.objects.filter(restaurant=chef_staff.restaurant)
+             
+             # Fallback Legacy
+             if hasattr(user, 'staff_profile') and user.staff_profile:
+                  return Payment.objects.filter(restaurant=user.staff_profile.restaurant)
+                  
         return Payment.objects.none()
 
     @action(detail=False, methods=['get'])

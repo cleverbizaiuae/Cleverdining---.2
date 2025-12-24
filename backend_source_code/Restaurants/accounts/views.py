@@ -381,7 +381,7 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role == 'owner':
             return ChefStaff.objects.filter(restaurant__owner=user)
-        elif user.role in ['chef', 'staff']:
+        elif user.role in ['chef', 'staff', 'manager']:
             # Allow staff/chef to see members of their own restaurant
             employment = ChefStaff.objects.filter(user=user, action='accepted').first()
             if employment:
@@ -399,7 +399,7 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
         
         if user.role == 'owner':
              restaurant = user.restaurants.first()
-        elif user.role in ['chef', 'staff']:
+        elif user.role in ['chef', 'staff', 'manager']:
              employment = ChefStaff.objects.filter(user=user, action='accepted').first()
              if employment:
                  restaurant = employment.restaurant
@@ -430,7 +430,7 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
         
         if user.role == 'owner' and instance.restaurant.owner == user:
             can_update = True
-        elif user.role in ['chef', 'staff']:
+        elif user.role in ['chef', 'staff', 'manager']:
              employment = ChefStaff.objects.filter(user=user, action='accepted').first()
              if employment and employment.restaurant == instance.restaurant:
                  can_update = True

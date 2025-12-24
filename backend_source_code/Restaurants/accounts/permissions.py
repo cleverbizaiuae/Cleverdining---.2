@@ -132,7 +132,7 @@ class IsOwnerChefOrStaff(BasePermission):
     Allows access only to users with role 'owner', 'chef', or 'staff'.
     """
 
-    allowed_roles = ['owner', 'chef', 'staff']
+    allowed_roles = ['owner', 'chef', 'staff', 'manager']
 
     def has_permission(self, request, view):
         user_role = getattr(request.user, 'role', None)
