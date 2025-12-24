@@ -275,10 +275,9 @@ class PayTabsAdapter(PaymentAdapter):
             "tran_class": "ecom",
             "cart_id": unique_cart_id,
             "cart_description": desc,
-            "cart_currency": "AED",
             "cart_amount": float(amount if amount is not None else order.total_price),
             "callback": "https://cleverdining-2.onrender.com/api/payment/webhook/paytabs/",
-            "return": success_url, 
+            "return": "https://cleverdining-2.onrender.com/api/customer/payment/paytabs/return/", 
             "hide_shipping": True
         }
 

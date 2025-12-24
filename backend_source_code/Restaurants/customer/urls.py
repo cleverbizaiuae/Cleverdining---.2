@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from item.views import CustomerItemViewSet
 from order.views import OrderCreateAPIView, OrderCancelAPIView,MyOrdersAPIView,MySingleOrderAPIView, CartViewSet
 from review.views import CreateReviewAPIView
-from payment.views import CreateCheckoutSessionView, CreateBulkCheckoutSessionView, PaymentSuccessView, PaymentCancelView, VerifyRazorpayPaymentView, VerifyPaymentView, PaymentWebhookView
+from payment.views import CreateCheckoutSessionView, CreateBulkCheckoutSessionView, PaymentSuccessView, PaymentCancelView, VerifyRazorpayPaymentView, VerifyPaymentView, PaymentWebhookView, PayTabsReturnView
 from restaurant.views import PublicRestaurantListView
 from device.views import PublicDeviceListView, PublicDeviceByUUIDView, ResolveTableView
 
@@ -33,4 +33,5 @@ urlpatterns = [
     path('payment/verify-razorpay/', VerifyRazorpayPaymentView.as_view(), name='verify_razorpay'), # Keep for backward compat
     path('create-checkout-session/<int:order_id>/', CreateCheckoutSessionView.as_view(), name='create_checkout_session'),
     path('create-bulk-checkout-session/', CreateBulkCheckoutSessionView.as_view(), name='create_bulk_checkout_session'),
+    path('payment/paytabs/return/', PayTabsReturnView.as_view(), name='paytabs_return'),
 ]

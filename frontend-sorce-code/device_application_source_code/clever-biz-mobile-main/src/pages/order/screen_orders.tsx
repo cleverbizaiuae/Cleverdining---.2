@@ -84,12 +84,18 @@ const ScreenOrders = () => {
   // Handle Payment Cancellation Redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "cancelled") {
+    const paymentStatus = params.get("payment");
+    const reason = params.get("reason");
+
+    if (paymentStatus === "cancelled" || paymentStatus === "failed") {
       // Clear the param to prevent toast on reload
       window.history.replaceState({}, '', window.location.pathname);
+
+      const msg = reason ? `Payment failed: ${decodeURIComponent(reason)}` : "Payment was not completed. Please try again.";
+
       setTimeout(() => {
-        toast.error("Payment was cancelled. Please try again.", {
-          duration: 4000,
+        toast.error(msg, {
+          duration: 5000,
           icon: '⚠️',
         });
       }, 500);

@@ -466,6 +466,58 @@ class VerifyRazorpayPaymentView(APIView):
      def post(self, request):
          return VerifyPaymentView().post(request)
 
+class PayTabsReturnView(APIView):
+    """
+    Handles the POST redirect from PayTabs (Return URL).
+    Verifies payment and redirects user to Frontend.
+    """
+    permission_classes = []
+    authentication_classes = []
 
+    def post(self, request):
+        data = request.data
+        # PayTabs sends status in POST body: response_status, tran_ref, etc.
+        
+        # 1. Identify Transaction
+        tran_ref = data.get('tran_ref')
+        resp_status = data.get('respStatus') # A=Authorized, C=Cancelled, E=Error, D=Declined
+        resp_message = data.get('respMessage', '')
+        
+        if not tran_ref:
+             # Fallback: Redirect to Cancelled if no data
+             from django.shortcuts import redirect
+             return redirect('https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason=unknown')
 
+        # 2. Verify/Update Payment Status in DB
+        # We can reuse PaymentService logic if we can find the payment object.
+        payment = Payment.objects.filter(transaction_id=tran_ref).first()
+        
+        if payment:
+            if resp_status == 'A':
+                 # Successful!
+                 # Call Service to finalize (update status, notify, clear cart)
+                 # We can mock a verification data packet
+                 verification_data = {'payment_result': {'response_status': 'A'}, 'tran_ref': tran_ref}
+                 PaymentService.verify_payment(payment, verification_data)
+                 
+                 # Redirect to Success
+                 from django.shortcuts import redirect
+                 return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/success/?session_id={tran_ref}')
+            
+            else:
+                 # Failed/Cancelled
+                 payment.status = 'failed' if resp_status == 'E' else 'cancelled'
+                 payment.save()
+                 from django.shortcuts import redirect
+                 return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason={resp_message}')
+        
+        else:
+             # Payment not found?
+             from django.shortcuts import redirect
+             return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason=checkout_not_found')
 
+    def get(self, request):
+        # Allow GET access just in case PayTabs does a GET redirect (config dependent)
+        # Handle query params instead of post data
+        return self.post(request)
+```
