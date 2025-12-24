@@ -47,9 +47,9 @@ class PaymentService:
         return adapter_class(gateway)
 
     @staticmethod
-    def create_payment(order, success_url, cancel_url, provider=None):
+    def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None):
         adapter = PaymentService.get_adapter(order.restaurant, provider=provider)
-        result = adapter.create_payment_session(order, success_url, cancel_url)
+        result = adapter.create_payment_session(order, success_url, cancel_url, amount=amount, metadata=metadata)
         
         # Create Payment Record
         payment = Payment.objects.create(

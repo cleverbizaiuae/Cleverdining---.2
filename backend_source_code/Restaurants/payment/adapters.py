@@ -10,7 +10,7 @@ class PaymentAdapter(ABC):
         self.gateway = gateway
 
     @abstractmethod
-    def create_payment_session(self, order, success_url, cancel_url):
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         pass
 
     @abstractmethod
@@ -25,8 +25,20 @@ class PaymentAdapter(ABC):
         pass
 
 class StripeAdapter(PaymentAdapter):
-    def create_payment_session(self, order, success_url, cancel_url):
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         stripe.api_key = self.gateway.get_decrypted_secret()
+        
+        # Calculate Amount
+        final_amount = amount if amount is not None else order.total_price
+        
+        # Merge Metadata
+        final_metadata = {
+            'order_id': order.id,
+            'restaurant_id': order.restaurant.id
+        }
+        if metadata:
+            final_metadata.update(metadata)
+
         try:
             session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
@@ -36,17 +48,14 @@ class StripeAdapter(PaymentAdapter):
                         'product_data': {
                             'name': f'Order #{order.id} Payment',
                         },
-                        'unit_amount': int(order.total_price * 100),
+                        'unit_amount': int(final_amount * 100),
                     },
                     'quantity': 1,
                 }],
                 mode='payment',
                 success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
                 cancel_url=cancel_url,
-                metadata={
-                    'order_id': order.id,
-                    'restaurant_id': order.restaurant.id
-                }
+                metadata=final_metadata
             )
             return {
                 'url': session.url,
@@ -110,11 +119,12 @@ class StripeAdapter(PaymentAdapter):
             raise ValidationError("Invalid signature")
 
 class RazorpayAdapter(PaymentAdapter):
-    def create_payment_session(self, order, success_url, cancel_url):
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         try:
             client = razorpay.Client(auth=(self.gateway.key_id, self.gateway.get_decrypted_secret()))
+            final_amount = amount if amount is not None else order.total_price
             data = {
-                "amount": int(order.total_price * 100),
+                "amount": int(final_amount * 100),
                 "currency": "AED",
                 "receipt": f"order_{order.id}",
                 "notes": {
@@ -180,7 +190,7 @@ class RazorpayAdapter(PaymentAdapter):
              raise ValidationError(str(e))
 
 class CashAdapter(PaymentAdapter):
-    def create_payment_session(self, order, success_url, cancel_url):
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         # Update Order Status
         order.status = 'awaiting_cash'
         order.payment_status = 'pending_cash'
@@ -246,7 +256,7 @@ class PayTabsAdapter(PaymentAdapter):
     # - https://secure-egypt.paytabs.com (Egypt)
     BASE_URL = "https://secure.paytabs.com/payment/request"
 
-    def create_payment_session(self, order, success_url, cancel_url):
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         # 1. Input Vectors
         profile_id = self.gateway.key_id       # "Profile ID" from Dashboard
         server_key = self.gateway.get_decrypted_secret() # "Server Key" from Dashboard
@@ -266,7 +276,7 @@ class PayTabsAdapter(PaymentAdapter):
             "cart_id": unique_cart_id,
             "cart_description": desc,
             "cart_currency": "AED",
-            "cart_amount": float(order.total_price),
+            "cart_amount": float(amount if amount is not None else order.total_price),
             "callback": "https://cleverdining-2.onrender.com/api/payment/webhook/paytabs/",
             "return": success_url, 
             "hide_shipping": True
