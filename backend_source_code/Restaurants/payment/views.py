@@ -520,4 +520,3 @@ class PayTabsReturnView(APIView):
         # Allow GET access just in case PayTabs does a GET redirect (config dependent)
         # Handle query params instead of post data
         return self.post(request)
-```
