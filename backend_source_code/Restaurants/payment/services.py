@@ -20,6 +20,17 @@ class PaymentService:
         if provider == 'cash':
             return CashAdapter(None) 
 
+        # Handle generic 'card' alias
+        if provider == 'card':
+            # 1. Respect currently active gateway if exists
+            active = PaymentGateway.objects.filter(restaurant=restaurant, is_active=True).first()
+            if active:
+                provider = active.provider
+                gateway = active
+            else:
+                # 2. Default to PayTabs if nothing is active (User Preference)
+                provider = 'paytabs'
+
         # 1. Try exact match (Active)
         if provider:
             gateway = PaymentGateway.objects.filter(restaurant=restaurant, provider=provider, is_active=True).first()
