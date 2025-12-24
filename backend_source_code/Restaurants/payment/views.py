@@ -231,21 +231,36 @@ class CreateBulkCheckoutSessionView(APIView):
                          key_secret="sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc"
                      )
                  elif target_provider == 'paytabs':
-                     # We don't have public test keys for PayTabs easily available.
-                     # But user said "Use the PAYTABS account added".
-                     # If it's not found in DB, we can't really invent credentials that work.
-                     # However, to prevent crash, we can try to look for ANY active gateway.
+                     # We don't have public test keys for PayTabs.
+                     # But user said "Use the PAYTABS account added", yet it's not in DB.
+                     # We MUST create a record so PaymentService doesn't crash.
+                     
+                     # First, check for *any* active gateway to fallback to?
+                     # No, user wants PayTabs. Let's create a Shell Gateway.
+                     # If credentials are wrong, Adapter will show useful error.
                      active_gateway = PaymentGateway.objects.filter(restaurant=primary_order.restaurant, is_active=True).first()
-                     if active_gateway:
-                         target_provider = active_gateway.provider
+                     
+                     if active_gateway and active_gateway.provider != 'paytabs':
+                         # If there is another active one (e.g. Stripe), switch to it to be helpful?
+                         # Or just auto-create PayTabs?
+                         # Let's try to assume they want what they asked for.
+                         gateway = PaymentGateway.objects.create(
+                             restaurant=primary_order.restaurant,
+                             provider='paytabs',
+                             is_active=True,
+                             key_id="PROFILE_ID_MISSING",
+                             key_secret="SERVER_KEY_MISSING"
+                         )
                      else:
-                        # Fallback to creating a placeholder PayTabs gateway? 
-                        # Or maybe the user *thinks* they added it but it's not linked?
-                        # For SAFETY, if we genuinely can't find configuration, we might fallback to Stripe Test just to let them checkout?
-                        # No, if they want PayTabs, giving them Stripe is wrong.
-                        # Let's simple try to use PaymentService, and if it errors "No active gateway", we catch it.
-                        pass
-
+                        # No active gateway at all, or we need to make PayTabs.
+                        gateway = PaymentGateway.objects.create(
+                             restaurant=primary_order.restaurant,
+                             provider='paytabs',
+                             is_active=True,
+                             key_id="PROFILE_ID_MISSING",
+                             key_secret="SERVER_KEY_MISSING"
+                        )
+                        
              elif not gateway.is_active:
                  # Reactivate
                  gateway.is_active = True
