@@ -1,4 +1,5 @@
 import { useOwner } from "@/context/ownerContext";
+import { useRole } from "@/hooks/useRole";
 import { useEffect, useState, useRef } from "react";
 import StripeConnectModal from "../model/StripeConnectModal";
 import PaymentGatewayModal from "../model/PaymentGatewayModal";
@@ -32,6 +33,7 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass
 );
 
 const ScreenRestaurantOrderList = () => {
+  const { userRole } = useRole();
   const {
     orders = [],
     ordersStats,
@@ -313,31 +315,35 @@ const ScreenRestaurantOrderList = () => {
               <Moon size={14} /> Close Day
             </button>
 
-            {/* Payment Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="h-8 px-3 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
-              >
-                Add Payment Account <ChevronDown size={14} />
-              </button>
-              {showDropdown && (
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-20">
-                  <button onClick={() => handleAddGateway("stripe")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Stripe</button>
-                  <button onClick={() => handleAddGateway("checkout")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Checkout.com</button>
-                  <button onClick={() => handleAddGateway("paytabs")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add PayTabs</button>
+            {/* Payment Dropdown - Only for Owner/Manager */}
+            {(userRole === 'owner' || userRole === 'manager') && (
+              <>
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowDropdown(!showDropdown)}
+                    className="h-8 px-3 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+                  >
+                    Add Payment Account <ChevronDown size={14} />
+                  </button>
+                  {showDropdown && (
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-20">
+                      <button onClick={() => handleAddGateway("stripe")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Stripe</button>
+                      <button onClick={() => handleAddGateway("checkout")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Checkout.com</button>
+                      <button onClick={() => handleAddGateway("paytabs")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add PayTabs</button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Connected Chips */}
-            <div className="flex gap-2">
-              {connectedGateways.slice(0, 2).map((gw: any) => (
-                <span key={gw.id} className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${gw.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                  {gw.provider}
-                </span>
-              ))}
-            </div>
+                {/* Connected Chips */}
+                <div className="flex gap-2">
+                  {connectedGateways.slice(0, 2).map((gw: any) => (
+                    <span key={gw.id} className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${gw.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                      {gw.provider}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Search */}
