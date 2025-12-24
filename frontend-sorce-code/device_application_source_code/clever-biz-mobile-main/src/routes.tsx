@@ -44,11 +44,8 @@ function App() {
 
     } else {
       // Case 3: No params and no session - Redirect to Scan Table
-      // Do NOT use hardcoded ID=14 as it may be invalid/deleted.
-      // If we are already at scan-table, do nothing.
-      if (location.pathname !== "/scan-table" && location.pathname !== "/login") {
-        navigate("/scan-table");
-      }
+      // We are at root "/", so just redirect.
+      navigate("/scan-table");
     }
   }, [searchParams, navigate, location.pathname]);
 
