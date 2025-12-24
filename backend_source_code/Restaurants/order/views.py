@@ -327,14 +327,22 @@ class MySingleOrderAPIView(generics.RetrieveAPIView):
 
 class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
     serializer_class = OrderDetailSerializer
-    permission_classes = [IsAuthenticated,IsOwnerRole]
+    permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
     pagination_class = TenPerPagePagination
     filter_backends = [filters.SearchFilter]
     search_fields = ['id']
 
     def get_queryset(self):
         user = self.request.user
-        return Order.objects.filter(restaurant__owner=user).order_by('-created_time')
+        if user.role == 'owner':
+             return Order.objects.filter(restaurant__owner=user).order_by('-created_time')
+        elif user.role in ['manager', 'staff', 'chef']:
+             restaurant_ids = ChefStaff.objects.filter(
+                user=user, 
+                action='accepted'
+             ).values_list('restaurant_id', flat=True)
+             return Order.objects.filter(restaurant_id__in=restaurant_ids).order_by('-created_time')
+        return Order.objects.none()
     
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())  # ✅ apply search filtering
@@ -363,12 +371,25 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
 
 
 class OwnerUpdateOrderStatusAPIView(APIView):
-    permission_classes = [IsAuthenticated,IsOwnerRole]
+    permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
 
     def patch(self, request, pk):
         user = request.user
         try:
-            order = Order.objects.get(pk=pk, restaurant__owner=user)
+            if user.role == 'owner':
+                order = Order.objects.get(pk=pk, restaurant__owner=user)
+            elif user.role in ['manager', 'staff', 'chef']:
+                # Verify user belongs to the restaurant of the order
+                order = Order.objects.get(pk=pk)
+                has_access = ChefStaff.objects.filter(
+                    user=user, 
+                    restaurant=order.restaurant, 
+                    action='accepted'
+                ).exists()
+                if not has_access:
+                     return Response({"error": "Unauthorized access to this order"}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                 return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
         except Order.DoesNotExist:
             return Response({"error": "Order not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
 

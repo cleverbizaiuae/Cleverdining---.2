@@ -16,7 +16,7 @@ channel_layer = get_channel_layer()
 
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
     pagination_class = None
 
     def get_serializer_class(self):
@@ -25,7 +25,18 @@ class CategoryViewSet(viewsets.ModelViewSet):
         return CategorySerializer
 
     def get_queryset(self):
-        queryset = Category.objects.filter(restaurant__owner=self.request.user)
+        user = self.request.user
+        if user.role == 'owner':
+            queryset = Category.objects.filter(restaurant__owner=user)
+        elif user.role in ['chef', 'staff', 'manager']:
+            restaurant_ids = ChefStaff.objects.filter(
+                user=user,
+                action='accepted'
+            ).values_list('restaurant_id', flat=True)
+            queryset = Category.objects.filter(restaurant_id__in=restaurant_ids)
+        else:
+            queryset = Category.objects.none()
+
         if self.request.query_params.get('hierarchy') == 'true':
             return queryset.filter(level=0)
         return queryset
@@ -84,12 +95,22 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 class SubCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = SubCategorySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
     pagination_class = None
 
     def get_queryset(self):
+        user = self.request.user
         # Return only subcategories (level > 0)
-        return Category.objects.filter(restaurant__owner=self.request.user, level__gt=0)
+        if user.role == 'owner':
+            return Category.objects.filter(restaurant__owner=user, level__gt=0)
+        elif user.role in ['chef', 'staff', 'manager']:
+            restaurant_ids = ChefStaff.objects.filter(
+                user=user,
+                action='accepted'
+            ).values_list('restaurant_id', flat=True)
+            return Category.objects.filter(restaurant_id__in=restaurant_ids, level__gt=0)
+        
+        return Category.objects.none()
 
     def perform_create(self, serializer):
         # Use filter().first() to avoid MultipleObjectsReturned error

@@ -40,7 +40,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role == 'owner':
             return Item.objects.filter(restaurant__owner=user)
-        elif user.role in ['chef', 'staff']:
+        elif user.role in ['chef', 'staff', 'manager']:
             restaurant_ids = ChefStaff.objects.filter(
                 user=user,
                 action='accepted'
@@ -55,7 +55,7 @@ class ItemViewSet(viewsets.ModelViewSet):
             restaurant = Restaurant.objects.filter(owner=user).first()
             if not restaurant:
                 raise ValidationError("You do not own a restaurant.")
-        elif user.role in ['chef', 'staff']:
+        elif user.role in ['chef', 'staff', 'manager']:
             chef_staff = ChefStaff.objects.filter(
                 user=user,
                 action='accepted'
@@ -73,7 +73,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if item.restaurant.owner == user:
             return True
-        elif user.role in ['chef', 'staff']:
+        elif user.role in ['chef', 'staff', 'manager']:
             return ChefStaff.objects.filter(
                 user=user,
                 restaurant=item.restaurant,
@@ -306,11 +306,19 @@ class CustomerItemViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class MostSellingItemsAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
 
     def get(self, request):
         user = request.user
-        restaurants = Restaurant.objects.filter(owner=user)
+        restaurants = []
+        if getattr(user, 'role', '') == 'owner':
+            restaurants = Restaurant.objects.filter(owner=user)
+        elif getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
+            restaurant_ids = ChefStaff.objects.filter(
+                user=user,
+                action='accepted'
+            ).values_list('restaurant_id', flat=True)
+            restaurants = Restaurant.objects.filter(id__in=restaurant_ids)
 
         # Step 2: Get all items in those restaurants
         items = Item.objects.filter(restaurant__in=restaurants)
