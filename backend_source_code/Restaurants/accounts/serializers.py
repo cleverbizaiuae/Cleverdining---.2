@@ -153,7 +153,7 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(write_only=True, required=False) # Add first_name
     last_name = serializers.CharField(write_only=True, required=False) # Add last_name
     password = serializers.CharField(write_only=True, required=False) # Add password field
-    role = serializers.ChoiceField(choices=[('chef', 'Chef'), ('staff', 'Staff')], write_only=True)
+    role = serializers.ChoiceField(choices=[('chef', 'Chef'), ('staff', 'Staff'), ('manager', 'Manager')], write_only=True)
     image = serializers.ImageField(write_only=True, required=False)
 
     class Meta:
