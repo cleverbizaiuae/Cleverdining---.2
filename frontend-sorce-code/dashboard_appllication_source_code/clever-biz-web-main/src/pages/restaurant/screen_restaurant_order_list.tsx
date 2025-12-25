@@ -106,7 +106,7 @@ const ScreenRestaurantOrderList = () => {
 
     // Filter by Close Day
     if (closedDayDate) {
-      const orderDate = new Date(order.created_at); // API uses created_at
+      const orderDate = new Date(order.timeOfOrder || order.created_time || order.created_at); // API uses created_at
       const closedDate = new Date(closedDayDate);
       return orderDate > closedDate;
     }
@@ -381,7 +381,7 @@ const ScreenRestaurantOrderList = () => {
                 activeOrders.map((order: any) => (
                   <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-5 py-3 text-sm font-medium text-slate-900">#{order.id}</td>
-                    <td className="px-5 py-3 text-xs text-slate-600">{order.device_table_name || "N/A"}</td>
+                    <td className="px-5 py-3 text-xs text-slate-600">{order.tableNo || "N/A"}</td>
                     <td className="px-5 py-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
                         ? 'bg-green-50 text-green-700'
@@ -391,7 +391,7 @@ const ScreenRestaurantOrderList = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-xs text-slate-500">
-                      {new Date(order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(order.timeOfOrder || order.created_time || order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-5 py-3 text-sm font-medium text-slate-900">AED {order.total_price}</td>
                     <td className="px-5 py-3">

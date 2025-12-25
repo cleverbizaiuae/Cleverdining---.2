@@ -6,7 +6,7 @@ export default function CancelPage() {
 
   return (
     <main className="mx-auto max-w-lg p-6">
-      <h1 className="text-2xl font-bold text-gray-900">Payment Canceled</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Payment Cancelled</h1>
       <small className="block mt-1 text-gray-500">No charges were made.</small>
 
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm p-5">

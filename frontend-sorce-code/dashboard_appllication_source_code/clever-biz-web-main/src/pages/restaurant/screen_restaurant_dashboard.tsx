@@ -517,7 +517,14 @@ const ScreenRestaurantDashboard = () => {
           </div>
           <div className="p-3 border-t border-slate-200 text-center">
             <button
-              onClick={() => setCurrentPage(currentPage + 1)} // Corrected call
+              onClick={() => {
+                // Assuming we want to show all, maybe redirect or load all?
+                // For now, let's fix the pagination if that was the intent,
+                // or if "View All" means something else.
+                // Actually, "View All Items" usually implies navigating to a full list view.
+                // Let's assume pagination is what's desired for now.
+                setCurrentPage(currentPage + 1);
+              }}
               className="text-xs text-[#0055FE] font-medium hover:underline"
             >
               View All Items
@@ -873,6 +880,10 @@ const ScreenRestaurantDashboard = () => {
                 formData.append('price', itemFormData.price);
                 formData.append('description', itemFormData.description);
                 formData.append('category', itemFormData.category);
+                // Default availability to true for new items
+                if (!editingItem) {
+                  formData.append('availability', 'true');
+                }
                 if (itemFormData.image1) formData.append('image1', itemFormData.image1);
 
                 if (editingItem) {

@@ -355,7 +355,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           category: item.category_name, // Display Name
           category_id: item.category,   // ID for editing
           category_name: item.category_name, // Explicit Name
-          available: item.availability,
+          availability: item.availability,
           description: item.description
         }));
 
@@ -398,7 +398,13 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         ? results
         : results?.orders || [];
 
-      setOrders(ordersData);
+      const formattedOrders = ordersData.map((order: any) => ({
+        ...order,
+        tableNo: order.device_name || 'N/A',
+        timeOfOrder: order.created_time
+      }));
+
+      setOrders(formattedOrders);
       setOrdersCount(count || 0);
       setOrdersCurrentPage(page || 1);
     } catch (error: any) {
