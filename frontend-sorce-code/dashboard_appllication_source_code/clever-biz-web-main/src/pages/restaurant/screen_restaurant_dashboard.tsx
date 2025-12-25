@@ -140,9 +140,16 @@ const ScreenRestaurantDashboard = () => {
       setAnalyticsLoading(true);
       const response = await axiosInstance.get(`/owners/orders/analytics/?time_range=${timeRange}&compare=${compareEnabled}`);
       setAnalytics(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching analytics:", error);
-      toast.error("Failed to load analytics");
+      const msg = error.response?.data?.error || error.response?.data?.detail || "Failed to load analytics";
+      const trace = error.response?.data?.traceback || "";
+      toast.error(
+        <div>
+          <p className="font-bold">{msg}</p>
+          {trace && <p className="text-[10px] mt-1 whitespace-pre-wrap">{trace.substring(0, 100)}...</p>}
+        </div>
+      );
     } finally {
       setAnalyticsLoading(false);
     }
