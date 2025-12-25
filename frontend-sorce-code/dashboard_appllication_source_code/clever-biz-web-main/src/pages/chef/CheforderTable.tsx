@@ -136,7 +136,7 @@ const OrderTable = () => {
                 {item.order_items.length || "N/A"}
               </td>
               <td className="p-4 text-primary-text">
-                {item.total_price || "N/A"}
+                AED {item.total_price || "N/A"}
               </td>
               <td className="p-4 text-primary-text">
                 <span className="font-medium">

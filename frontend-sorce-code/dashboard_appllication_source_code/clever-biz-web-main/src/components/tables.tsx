@@ -862,7 +862,7 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
                 {item.order_items.length || "N/A"}
               </td>
               <td className="p-2 sm:p-4 text-inherit text-center">
-                {item.total_price || "N/A"}
+                AED {item.total_price || "N/A"}
               </td>
               <td className="p-2 sm:p-4 text-inherit text-center">
                 <span className="font-medium">

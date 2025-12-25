@@ -181,7 +181,7 @@ const ScreenChefOrderList = () => {
                     <td className="px-5 py-3 text-xs text-slate-500">
                       {order.created_at ? new Date(order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "N/A"}
                     </td>
-                    <td className="px-5 py-3 text-sm font-medium text-slate-900">${order.total_price}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">AED {order.total_price}</td>
                     <td className="px-5 py-3">
                       {/* STATUS DROPDOWN */}
                       <select

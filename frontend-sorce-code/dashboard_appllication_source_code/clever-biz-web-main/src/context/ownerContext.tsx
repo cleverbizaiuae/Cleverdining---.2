@@ -818,7 +818,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || (userRole as string) === "manager") {
           endpoint = `/owners/items/${id}/`;
         } else if (userRole === "staff") {
           endpoint = `/staff/items/${id}/`;

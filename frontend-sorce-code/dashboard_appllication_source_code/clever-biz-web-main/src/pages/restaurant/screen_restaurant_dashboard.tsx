@@ -149,7 +149,8 @@ const ScreenRestaurantDashboard = () => {
     setCurrentPage,
     searchQuery,
     setSearchQuery,
-    fetchFoodItems, // Added
+    fetchFoodItems,
+    updateAvailability, // Added
 
     categories,
     subCategories,
@@ -452,10 +453,25 @@ const ScreenRestaurantDashboard = () => {
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-600 font-medium">AED {item.price}</td>
                       <td className="px-5 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${item.availability ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                          }`}>
-                          {item.availability ? 'Available' : 'Unavailable'}
-                        </span>
+                        <select
+                          className={`h-7 pl-2 pr-6 text-[10px] font-medium rounded border appearance-none outline-none cursor-pointer bg-no-repeat bg-[right_0.4rem_center] transition-colors ${item.availability
+                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                            : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                            }`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+                          value={item.availability ? "true" : "false"}
+                          onChange={(e) => {
+                            if (userRole === 'owner' || (userRole as string) === 'manager') {
+                              updateAvailability(item.id, e.target.value === "true");
+                            } else {
+                              toast.error("You don't have permission to change status");
+                            }
+                          }}
+                          disabled={userRole !== 'owner' && (userRole as string) !== 'manager'}
+                        >
+                          <option value="true">Available</option>
+                          <option value="false">Unavailable</option>
+                        </select>
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-3 text-xs font-medium">
