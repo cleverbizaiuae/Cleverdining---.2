@@ -415,3 +415,8 @@ else:
     DATABASES = {
         'default': env.db('DATABASE_URL', default='postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db')
     }
+
+    # Auto-fix: If using internal Render hostname (not resolvable locally or in build), switch to external
+    if DATABASES['default']['HOST'] == 'dpg-d4ivnueuk2gs73bh11i0-a':
+        print("  ! Detected internal Render hostname. Switching to external for connectivity...")
+        DATABASES['default']['HOST'] = 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com'
