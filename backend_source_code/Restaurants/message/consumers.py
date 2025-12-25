@@ -40,12 +40,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
             # For anonymous users (guests), we might want to restrict them to their device room only
             # But for now, let's allow them to join the group to enable messaging
             await self.channel_layer.group_add(self.restaurant_group_name, self.channel_name)
+            
+            # Join the restaurant-wide group to receive item/menu updates
+            if self.restaurant_id:
+                self.restaurant_general_group = f"restaurant_{self.restaurant_id}"
+                await self.channel_layer.group_add(self.restaurant_general_group, self.channel_name)
+            
             await self.accept()
         else:
             await self.close()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.restaurant_group_name, self.channel_name)
+        if hasattr(self, 'restaurant_general_group'):
+            await self.channel_layer.group_discard(self.restaurant_general_group, self.channel_name)
 
     async def receive(self, text_data):
         try:
@@ -157,6 +165,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return restaurant.owner
         except Restaurant.DoesNotExist:
             return None
+
+    # --- Item Event Handlers for Real-time Menu via Chat Socket ---
+    async def item_created(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "item_created",
+            "item": event["item"]
+        }))
+
+    async def item_updated(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "item_updated",
+            "item": event["item"]
+        }))
+
+    async def item_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "item_deleted",
+            "item_id": event["item_id"]
+        }))
 
 
     @database_sync_to_async
