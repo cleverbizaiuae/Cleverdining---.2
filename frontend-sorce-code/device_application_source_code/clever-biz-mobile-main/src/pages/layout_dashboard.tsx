@@ -52,14 +52,38 @@ const LayoutDashboard = () => {
     return [];
   }, [selectedCategory, categories]);
 
-  const socketContext = useContext(SocketContext) as any;
-  const NewUpdate = useMemo(
-    () => socketContext?.response ?? {},
-    [socketContext?.response]
-  );
-
   // Access WebSocket context to use setNewMessageFlag and sendMessage
-  const { setNewMessageFlag, sendMessage } = useWebSocket();
+  const { ws, setNewMessageFlag, sendMessage } = useWebSocket();
+  const [lastUpdate, setLastUpdate] = useState<number>(0);
+
+  // Listen for WebSocket messages to trigger refetch
+  useEffect(() => {
+    if (!ws) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (
+          data.type === 'item_created' ||
+          data.type === 'item_updated' ||
+          data.type === 'item_deleted' ||
+          data.type === 'category_created' ||
+          data.type === 'category_updated' ||
+          data.type === 'category_deleted'
+        ) {
+          // Trigger a re-fetch
+          setLastUpdate(Date.now());
+        }
+      } catch (e) {
+        console.error("Error parsing websocket message", e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws]);
 
   // Check localStorage for newMessage flag when component mounts
   useEffect(() => {
@@ -186,15 +210,8 @@ const LayoutDashboard = () => {
     }
   };
   useEffect(() => {
-    if (
-      NewUpdate.type === "category_created" ||
-      NewUpdate.type === "category_updated" ||
-      NewUpdate.type === "category_deleted"
-    ) {
-      fetchCategories();
-    }
     fetchCategories();
-  }, [NewUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
 
   const fetchItems = async () => {
     try {
@@ -231,14 +248,6 @@ const LayoutDashboard = () => {
   useEffect(() => {
     fetchItems();
 
-    if (
-      NewUpdate.type === "item_created" ||
-      NewUpdate.type === "item_updated" ||
-      NewUpdate.type === "item_deleted"
-    ) {
-      fetchItems();
-    }
-
     // Debounced search effect
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
@@ -247,7 +256,7 @@ const LayoutDashboard = () => {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [search, selectedCategory, categories, NewUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, selectedCategory, categories, lastUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -388,7 +397,7 @@ const LayoutDashboard = () => {
               {/* Main Content (Menu Feed) */}
               <main className="px-4 py-4 flex flex-col gap-4 flex-1">
                 {(() => {
-                  let filteredItems = items;
+                  let filteredItems = items.filter(item => item.availability); // Only show available items
 
                   // Determine active main category
                   let activeCategoryIndex = selectedCategory;
