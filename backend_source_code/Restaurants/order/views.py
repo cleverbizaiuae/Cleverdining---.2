@@ -757,7 +757,8 @@ class OrderAnalyticsAPIView(APIView):
             if last_week_rev > 0:
                 growth = ((this_week_rev - last_week_rev) / last_week_rev) * 100
 
-            active_staff = ChefStaff.objects.filter(restaurant=restaurant, action='accepted', is_active=True).count() # Approx
+            # Active staff count - using action='accepted' as proxy for active
+            active_staff = ChefStaff.objects.filter(restaurant=restaurant, action='accepted').count()
             
             
             return Response({
