@@ -270,7 +270,6 @@ const ScreenRestaurantDashboard = () => {
         const file = new File([resBlob], "ai-generated-image.png", { type: "image/png" });
         onImageSelected(file);
         toast.success("Image generated!");
-        toast.success("Image generated!");
       } catch (e: any) {
         console.error(e);
         toast.error("Generation failed: " + (e.response?.data?.error || e.message));
