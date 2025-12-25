@@ -413,5 +413,5 @@ if USE_SQLITE:
     }
 else:
     DATABASES = {
-        'default': env.db('DATABASE_URL', default='postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a/cleverdining_db')
+        'default': env.db('DATABASE_URL', default='postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db')
     }
