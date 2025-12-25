@@ -627,40 +627,48 @@ class OrderAnalyticsAPIView(APIView):
             compare = request.query_params.get('compare', 'true') == 'true'
 
             from django.utils import timezone
+            import calendar
+            from django.db.models import Sum
+            
             now_dt = timezone.now()
+            print(f"DEBUG_ANALYTICS: Range={time_range} Agg={aggregation} Compare={compare} Now={now_dt}")
             
             # Helper to get data for a specific range
             def get_data_for_range(start_d, end_d, agg_type):
-                l, r_data, o_data = [], [], []
-                curr_q = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_d, end_d])
-                
-                if agg_type == 'daily':
-                    curr = start_d.date()
-                    end = end_d.date()
-                    while curr <= end:
-                        l.append(curr.strftime("%d %b"))
-                        day_orders = curr_q.filter(created_time__date=curr)
-                        rev = day_orders.aggregate(r=Sum('total_price'))['r'] or 0
-                        cnt = day_orders.count()
-                        r_data.append(float(rev))
-                        o_data.append(cnt)
-                        curr += timedelta(days=1)
-                elif agg_type == 'monthly':
-                     # Simplified: If year, show 12 months. If month/week, show days usually. 
-                     # But keeping existing logic for 'year' -> monthly aggregation.
-                     if time_range == 'year':
-                        for m in range(1, 13):
-                             l.append(month_name[m][:3])
-                             # Note: This logic assumes 'start_d' is beginning of year or we strictly filter by year
-                             # For comparison (last year), we need to be careful with years.
-                             target_year = start_d.year
-                             month_orders = curr_q.filter(created_time__month=m, created_time__year=target_year)
-                             rev = month_orders.aggregate(r=Sum('total_price'))['r'] or 0
-                             cnt = month_orders.count()
-                             r_data.append(float(rev))
-                             o_data.append(cnt)
-                
-                return l, r_data, o_data
+                try:
+                    l, r_data, o_data = [], [], []
+                    curr_q = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_d, end_d])
+                    
+                    if agg_type == 'daily':
+                        curr = start_d.date()
+                        end = end_d.date()
+                        while curr <= end:
+                            l.append(curr.strftime("%d %b"))
+                            day_orders = curr_q.filter(created_time__date=curr)
+                            rev = day_orders.aggregate(r=Sum('total_price'))['r'] or 0
+                            cnt = day_orders.count()
+                            r_data.append(float(rev))
+                            o_data.append(cnt)
+                            curr += timedelta(days=1)
+                    elif agg_type == 'monthly':
+                         # Simplified: If year, show 12 months. If month/week, show days usually. 
+                         # But keeping existing logic for 'year' -> monthly aggregation.
+                         if time_range == 'year':
+                            for m in range(1, 13):
+                                 l.append(calendar.month_name[m][:3])
+                                 # Note: This logic assumes 'start_d' is beginning of year or we strictly filter by year
+                                 # For comparison (last year), we need to be careful with years.
+                                 target_year = start_d.year
+                                 month_orders = curr_q.filter(created_time__month=m, created_time__year=target_year)
+                                 rev = month_orders.aggregate(r=Sum('total_price'))['r'] or 0
+                                 cnt = month_orders.count()
+                                 r_data.append(float(rev))
+                                 o_data.append(cnt)
+                    
+                    return l, r_data, o_data
+                except Exception as help_err:
+                     print(f"DEBUG_ANALYTICS: Helper Error: {help_err}")
+                     return [], [], []
 
             # 1. Determine Current Date Range
             start_date = now_dt
