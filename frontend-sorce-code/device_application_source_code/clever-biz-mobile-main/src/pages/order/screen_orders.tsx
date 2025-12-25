@@ -91,7 +91,9 @@ const ScreenOrders = () => {
       // Clear the param to prevent toast on reload
       window.history.replaceState({}, '', window.location.pathname);
 
-      const msg = reason ? `Payment failed: ${decodeURIComponent(reason)}` : "Payment was not completed. Please try again.";
+      const msg = paymentStatus === 'cancelled'
+        ? "Payment Cancelled, Try Again"
+        : (reason ? `Payment failed: ${decodeURIComponent(reason)}` : "Payment was not completed. Please try again.");
 
       setTimeout(() => {
         toast.error(msg, {
