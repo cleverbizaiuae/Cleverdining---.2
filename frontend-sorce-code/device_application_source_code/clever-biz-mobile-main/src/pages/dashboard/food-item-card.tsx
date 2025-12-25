@@ -9,11 +9,22 @@ interface FoodItemCardProps {
 }
 
 export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
+    const price = parseFloat(item.price);
+    const discount = item.discount_percentage || 0;
+    const discountedPrice = discount > 0 ? price - (price * discount / 100) : price;
+
     return (
         <div
             onClick={onAdd}
             className="group relative grid grid-cols-[auto_1fr] gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden min-h-[7rem]"
         >
+            {/* Discount Badge */}
+            {discount > 0 && (
+                <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
+                    {discount}% OFF
+                </div>
+            )}
+
             {/* Image Section - Fixed Width */}
             <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-gray-50 flex items-center justify-center self-center">
                 {item.image1 ? (
@@ -54,9 +65,16 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                 </div>
 
                 <div className="flex items-center justify-between mt-2">
-                    <span className="text-base sm:text-lg font-bold text-primary">
-                        AED {item.price}
-                    </span>
+                    <div className="flex flex-col">
+                        <span className="text-base sm:text-lg font-bold text-primary">
+                            AED {discountedPrice.toFixed(2)}
+                        </span>
+                        {discount > 0 && (
+                            <span className="text-[10px] sm:text-xs text-gray-400 line-through">
+                                AED {price.toFixed(2)}
+                            </span>
+                        )}
+                    </div>
 
                     <button
                         onClick={(e) => {

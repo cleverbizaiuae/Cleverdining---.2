@@ -18,6 +18,9 @@ class Item(models.Model):
     
     image1 = models.ImageField(upload_to='media/item_images/', null=True, blank=True)
 
+    # Discount Feature
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+
     availability = models.BooleanField(default=True)
     video = models.FileField(upload_to='media/item_videos/', null=True, blank=True)
 

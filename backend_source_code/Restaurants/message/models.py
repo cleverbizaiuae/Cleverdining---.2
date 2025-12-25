@@ -12,6 +12,7 @@ class ChatMessage(models.Model):
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages', null=True, blank=True)
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
+    business_day = models.ForeignKey('restaurant.BusinessDay', on_delete=models.SET_NULL, null=True, blank=True, related_name='messages')
 
     message = models.TextField()
     is_from_device = models.BooleanField(default=False)

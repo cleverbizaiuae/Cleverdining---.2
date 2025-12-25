@@ -1,6 +1,7 @@
 import { cn } from "clsx-for-tailwind";
 import { useRef } from "react";
 import { useWebSocket } from "@/components/WebSocketContext";
+
 export type FoodItemTypes = {
   id: number;
   item_name: string;
@@ -15,6 +16,7 @@ export type FoodItemTypes = {
   video: string;
   restaurant_name: string;
   sub_category?: number;
+  discount_percentage?: number; // Added
 };
 
 type Props = {
@@ -22,19 +24,30 @@ type Props = {
   showFood: (id: number) => void;
 };
 
-import { Plus } from "lucide-react";
+import { Plus, Tag } from "lucide-react"; // Added Tag icon
 
 export const FoodItems = ({ item, showFood }: Props) => {
+  const price = parseFloat(item.price);
+  const discount = item.discount_percentage || 0;
+  const discountedPrice = discount > 0 ? price - (price * discount / 100) : price;
+
   return (
     <>
       {item.availability && (
         <div
           onClick={() => showFood(item.id)}
           className={cn(
-            "bg-white flex flex-row items-center justify-between rounded-2xl shadow-sm p-3 select-none cursor-pointer transition-all duration-300 hover:shadow-md border border-gray-100",
+            "bg-white flex flex-row items-center justify-between rounded-2xl shadow-sm p-3 select-none cursor-pointer transition-all duration-300 hover:shadow-md border border-gray-100 relative overflow-hidden", // Added relative/overflow for badge
             "w-full h-auto min-h-[110px] gap-x-4"
           )}
         >
+          {/* Discount Badge */}
+          {discount > 0 && (
+            <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
+              {discount}% OFF
+            </div>
+          )}
+
           {/* Left Side: Image */}
           <div className="w-[100px] h-[100px] flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
             <img
@@ -69,9 +82,17 @@ export const FoodItems = ({ item, showFood }: Props) => {
             <p className="text-gray-500 text-xs leading-relaxed line-clamp-2">
               {item.description || "Prepared with fresh ingredients."}
             </p>
-            <span className="text-blue-600 font-bold text-base mt-1">
-              AED {item.price}
-            </span>
+
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-blue-600 font-bold text-base">
+                AED {discountedPrice.toFixed(2)}
+              </span>
+              {discount > 0 && (
+                <span className="text-gray-400 text-xs line-through">
+                  AED {price.toFixed(2)}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Right Side: Add Button */}

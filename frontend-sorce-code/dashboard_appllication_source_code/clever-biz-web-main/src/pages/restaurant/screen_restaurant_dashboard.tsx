@@ -19,24 +19,11 @@ import {
   Pencil,
   Trash2,
   X,
-  Upload
+  Upload,
+  Lock
 } from "lucide-react";
-import { Line } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Filler,
-  Legend,
-  ScriptableContext
-} from "chart.js";
-
-// Register ChartJS components
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler, Legend);
+import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
+import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
 
 const Modal = ({ isOpen, onClose, title, children }: any) => {
   if (!isOpen) return null;
@@ -82,65 +69,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = tru
 
 // 2. REVENUE CHART
 // Spec: Gradient #0055FE (8% -> 0%), Line stroke 1.5px, Dashed grid
-const SalesChart = ({ data, labels }: { data: number[], labels: string[] }) => {
-  const chartData = {
-    labels: labels,
-    datasets: [
-      {
-        label: 'Revenue',
-        data: data,
-        borderColor: '#0055FE',
-        borderWidth: 1.5,
-        backgroundColor: (context: ScriptableContext<"line">) => {
-          const ctx = context.chart.ctx;
-          const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-          gradient.addColorStop(0, 'rgba(0, 85, 254, 0.08)'); // 8% opacity
-          gradient.addColorStop(1, 'rgba(0, 85, 254, 0)');
-          return gradient;
-        },
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0, // Clean look
-        pointHoverRadius: 4,
-      },
-    ],
-  };
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#FFFFFF',
-        titleColor: '#0F172A',
-        bodyColor: '#475569',
-        borderColor: '#E2E8F0',
-        borderWidth: 1,
-        padding: 12,
-        titleFont: { size: 13, weight: 'bold' as const },
-        bodyFont: { size: 13 },
-        displayColors: false,
-        callbacks: {
-          label: (context: any) => `AED ${context.parsed.y}`
-        }
-      },
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        ticks: { color: '#94a3b8', font: { size: 11 } }
-      },
-      y: {
-        grid: { color: '#f1f5f9', borderDash: [4, 4] },
-        ticks: { color: '#94a3b8', font: { size: 11 }, callback: (val: any) => `AED ${val}` },
-        min: 0,
-      },
-    },
-  };
-
-  return <Line data={chartData} options={options} />;
-};
 
 const ScreenRestaurantDashboard = () => {
   const {
@@ -169,8 +98,11 @@ const ScreenRestaurantDashboard = () => {
   // State
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [sellingItemData, setSellingItemData] = useState([]);
+  // Analytics State
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState("year");
+  const [compareEnabled, setCompareEnabled] = useState(true);
 
   const [isEdit, setIsEdit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -192,10 +124,32 @@ const ScreenRestaurantDashboard = () => {
   // Generic Form Data
   const [catFormData, setCatFormData] = useState({ name: "", image: null as File | null });
   const [subCatFormData, setSubCatFormData] = useState({ Category_name: "", parent_category: "", image: null as File | null });
+  // Close Day State
+  const [showCloseDay, setShowCloseDay] = useState(false);
+  const [isClosingDay, setIsClosingDay] = useState(false);
 
   // Add Item State
   const [showAddItem, setShowAddItem] = useState(false);
-  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", image1: null as File | null });
+  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", discount_percentage: "" as string | number, image1: null as File | null });
+  const [isViewAll, setIsViewAll] = useState(false);
+
+  // Fetch Analytics
+  const fetchAnalytics = useCallback(async () => {
+    // if (userRole !== 'owner' && (userRole as string) !== 'manager') return;
+    try {
+      setAnalyticsLoading(true);
+      const response = await axiosInstance.get(`/owners/orders/analytics/?time_range=${timeRange}&compare=${compareEnabled}`);
+      setAnalytics(response.data);
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      toast.error("Failed to load analytics");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [timeRange, compareEnabled]);
+
+  // Add Item State
+
 
 
   // Effects for initial load
@@ -228,17 +182,45 @@ const ScreenRestaurantDashboard = () => {
     }
   }, []);
 
-  const fetchAnalytics = useCallback(async () => {
-    setAnalyticsLoading(true);
+
+
+  const handleCloseDay = async () => {
+    setIsClosingDay(true);
     try {
-      const response = await axiosInstance.get("/owners/orders/analytics/");
-      setAnalytics(response.data);
-    } catch (error) {
-      toast.error("Failed to load analytics data.");
+      const res = await axiosInstance.post('/owners/business-days/close_day/');
+      toast.success(res.data.message || "Business Day Closed Successfully");
+      setShowCloseDay(false);
+      // Refresh analytics and maybe force reload as order list will clear?
+      fetchAnalytics();
+      fetchMostSellingItems();
+    } catch (error: any) {
+      console.error(error);
+      const errorMsg = error.response?.data?.error || "Failed to close day";
+
+      if (error.response?.data?.blocking_orders) {
+        toast.error(
+          <div>
+            <p className="font-bold">{errorMsg}</p>
+            <ul className="list-disc pl-4 mt-1 text-xs">
+              {error.response.data.blocking_orders.slice(0, 3).map((o: any) => <li key={o.id}>Table {o.device__table_name} - {o.status}</li>)}
+              {error.response.data.blocking_orders.length > 3 && <li>...and more</li>}
+            </ul>
+          </div>
+          , { duration: 5000 });
+      } else if (error.response?.data?.blocking_tables) {
+        toast.error(
+          <div>
+            <p className="font-bold">{errorMsg}</p>
+            <p className="text-xs mt-1">Active tables: {error.response.data.blocking_tables.map((t: any) => t.device__table_name).join(", ")}</p>
+          </div>
+          , { duration: 5000 });
+      } else {
+        toast.error(errorMsg);
+      }
     } finally {
-      setAnalyticsLoading(false);
+      setIsClosingDay(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     if (userRole === 'owner') {
@@ -366,24 +348,31 @@ const ScreenRestaurantDashboard = () => {
         </div>
       )}
 
-      {/* REVENUE CHART - OWNER ONLY */}
-      {userRole === 'owner' && (
-        <div className="bg-white p-5 rounded-lg border border-slate-200">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Revenue Analytics</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Monthly revenue performance</p>
-            </div>
-            <button className="flex items-center gap-2 h-8 px-3 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50">
-              <Calendar size={14} className="text-[#0055FE]" />
-              This Year
+      {/* CLOSE DAY BUTTON & MODAL (Header area ideally, but for now putting it near top logic) */}
+      <Modal isOpen={showCloseDay} onClose={() => setShowCloseDay(false)} title="Close Business Day">
+        <div className="space-y-4">
+          <div className="p-4 bg-orange-50 text-orange-800 rounded-lg text-xs">
+            <strong>Warning:</strong> This will finalize today's revenue and reset the dashboard for the next day. This cannot be undone.
+          </div>
+
+          {/* Summary (if available) - usually we fetch preview, but simplicity first */}
+          <p className="text-sm text-slate-600">
+            Ensure all active orders are completed and tables are cleared before closing.
+            Sessions and active chats will be archived.
+          </p>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowCloseDay(false)} className="flex-1 h-10 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50">Cancel</button>
+            <button
+              onClick={handleCloseDay}
+              disabled={isClosingDay}
+              className="flex-1 h-10 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isClosingDay ? 'Closing...' : 'Confirm Close Day'}
             </button>
           </div>
-          <div className="h-[280px]">
-            <SalesChart data={chartValues} labels={chartLabels} />
-          </div>
         </div>
-      )}
+      </Modal>
 
       {/* CONTENT GRID */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -415,6 +404,9 @@ const ScreenRestaurantDashboard = () => {
                   <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddItem(true)}>
                     <Plus size={14} /> Add Item
                   </button>
+                  <button className="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowCloseDay(true)}>
+                    <Lock size={14} /> Close Day
+                  </button>
                 </>
               )}
             </div>
@@ -433,7 +425,7 @@ const ScreenRestaurantDashboard = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {foodItems.length > 0 ? (
-                  foodItems.slice(0, 5).map((item: any) => (
+                  foodItems.slice(0, isViewAll ? foodItems.length : 5).map((item: any) => (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
@@ -484,6 +476,7 @@ const ScreenRestaurantDashboard = () => {
                                     price: item.price,
                                     description: item.description || "",
                                     category: item.category_id || "",
+                                    discount_percentage: item.discount_percentage || 0,
                                     image1: null
                                   });
                                   setShowAddItem(true);
@@ -517,17 +510,10 @@ const ScreenRestaurantDashboard = () => {
           </div>
           <div className="p-3 border-t border-slate-200 text-center">
             <button
-              onClick={() => {
-                // Assuming we want to show all, maybe redirect or load all?
-                // For now, let's fix the pagination if that was the intent,
-                // or if "View All" means something else.
-                // Actually, "View All Items" usually implies navigating to a full list view.
-                // Let's assume pagination is what's desired for now.
-                setCurrentPage(currentPage + 1);
-              }}
+              onClick={() => setIsViewAll(!isViewAll)}
               className="text-xs text-[#0055FE] font-medium hover:underline"
             >
-              View All Items
+              {isViewAll ? "View Less" : "View All Items"}
             </button>
           </div>
         </div>
@@ -800,10 +786,11 @@ const ScreenRestaurantDashboard = () => {
         </div>
       </Modal>
 
+      {/* DELETE ITEM MODAL */}
       <Modal isOpen={showDeleteItem} onClose={() => setShowDeleteItem(false)} title="Delete Item">
         <div className="space-y-6">
           <p className="text-slate-600 text-sm">
-            Are you sure you want to delete <span className="font-bold text-slate-900">{itemToDelete?.item_name}</span>? This action cannot be undone.
+            Are you sure you want to delete <span className="font-bold text-slate-900">{itemToDelete?.item_name}</span>?
           </p>
           <div className="flex gap-3">
             <button onClick={() => setShowDeleteItem(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
@@ -822,12 +809,13 @@ const ScreenRestaurantDashboard = () => {
         </div>
       </Modal>
 
+      {/* ADD/EDIT ITEM MODAL */}
       <Modal
         isOpen={showAddItem}
         onClose={() => {
           setShowAddItem(false);
           setEditingItem(null);
-          setItemFormData({ item_name: "", price: "", description: "", category: "", image1: null });
+          setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null });
         }}
         title={editingItem ? "Edit Item" : "Add New Item"}
       >
@@ -844,13 +832,20 @@ const ScreenRestaurantDashboard = () => {
                 value={itemFormData.price} onChange={e => setItemFormData({ ...itemFormData, price: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
-              <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
-                value={itemFormData.category} onChange={e => setItemFormData({ ...itemFormData, category: e.target.value })}>
-                <option value="">Select Category</option>
-                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.Category_name}</option>)}
-              </select>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Discount (%)</label>
+              <input type="number" placeholder="0" max="100" className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE]"
+                value={(itemFormData as any).discount_percentage || ''}
+                onChange={e => setItemFormData({ ...itemFormData, discount_percentage: e.target.value } as any)} />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
+            <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
+              value={itemFormData.category} onChange={e => setItemFormData({ ...itemFormData, category: e.target.value })}>
+              <option value="">Select Category</option>
+              {categories.map((c: any) => <option key={c.id} value={c.id}>{c.Category_name}</option>)}
+            </select>
           </div>
 
           <div>
@@ -868,24 +863,21 @@ const ScreenRestaurantDashboard = () => {
 
           <button
             onClick={async () => {
-              if (!itemFormData.category) {
-                return toast.error("Please select a category");
-              }
-              if (!itemFormData.price) {
-                return toast.error("Please enter a price");
-              }
-              try {
-                const formData = new FormData();
-                formData.append('item_name', itemFormData.item_name);
-                formData.append('price', itemFormData.price);
-                formData.append('description', itemFormData.description);
-                formData.append('category', itemFormData.category);
-                // Default availability to true for new items
-                if (!editingItem) {
-                  formData.append('availability', 'true');
-                }
-                if (itemFormData.image1) formData.append('image1', itemFormData.image1);
+              if (!itemFormData.category) return toast.error("Please select a category");
+              if (!itemFormData.price) return toast.error("Please enter a price");
 
+              const formData = new FormData();
+              formData.append('item_name', itemFormData.item_name);
+              formData.append('price', itemFormData.price);
+              formData.append('description', itemFormData.description);
+              formData.append('category', itemFormData.category);
+              if ((itemFormData as any).discount_percentage) formData.append('discount_percentage', (itemFormData as any).discount_percentage);
+              if (itemFormData.image1) formData.append('image1', itemFormData.image1);
+
+              // Default availability for new items
+              if (!editingItem) formData.append('availability', 'true');
+
+              try {
                 if (editingItem) {
                   await axiosInstance.patch(`/owners/items/${editingItem.id}/`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
@@ -900,7 +892,7 @@ const ScreenRestaurantDashboard = () => {
 
                 setShowAddItem(false);
                 setEditingItem(null);
-                setItemFormData({ item_name: "", price: "", description: "", category: "", image1: null });
+                setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null });
                 fetchFoodItems(currentPage, debouncedSearchQuery);
               } catch (e: any) {
                 console.error(e);
@@ -908,12 +900,12 @@ const ScreenRestaurantDashboard = () => {
               }
             }}
             className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center">
-            Create Item
+            {editingItem ? "Update Item" : "Create Item"}
           </button>
         </div>
       </Modal>
 
-    </div >
+    </div>
   );
 };
 

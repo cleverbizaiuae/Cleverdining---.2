@@ -8,6 +8,7 @@ class Order(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='orders')
     guest_session = models.ForeignKey('device.GuestSession', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='orders')
+    business_day = models.ForeignKey('restaurant.BusinessDay', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     status = models.CharField(max_length=20,choices=STATUS,default='pending')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_status = models.CharField(max_length=50, choices=PAYMENT_STATUS, default='unpaid',blank=True,null=True)

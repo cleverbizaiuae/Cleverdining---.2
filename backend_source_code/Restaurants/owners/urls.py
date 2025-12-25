@@ -28,6 +28,10 @@ router.register(r'stripe', StripeDetailsViewSet, basename='stripe-details')
 router.register(r'payment-gateways', PaymentGatewayViewSet, basename='payment-gateways')
 router.register('payments', PaymentAdminViewSet, basename='admin-payments')
 
+# Business Day
+from restaurant.views import BusinessDayViewSet
+router.register('business-days', BusinessDayViewSet, basename='business-days')
+
 urlpatterns = [
     path('', include(router.urls)),
     path('register/', SimpleOwnerRegisterView.as_view(), name='ownerRegister'),  # Bulletproof simple registration

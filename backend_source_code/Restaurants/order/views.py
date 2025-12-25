@@ -84,9 +84,20 @@ class OrderCreateAPIView(generics.CreateAPIView):
 
         device = session.device
         restaurant = device.restaurant
+        
+        # --- BUSINESS DAY LOGIC ---
+        from restaurant.models import BusinessDay
+        business_day = BusinessDay.objects.filter(restaurant=restaurant, is_active=True).last()
+        
+        # Auto-open logic (if missing)
+        # "Logic to Open/Close day (manual or auto?). *assumption: Auto-create on first order*"
+        # Actually simplest to just CREATE one if none exists?
+        # But we only want ONE active day.
+        if not business_day:
+            business_day = BusinessDay.objects.create(restaurant=restaurant, is_active=True)
 
         # Save via serializer
-        order = serializer.save(device=device, restaurant=restaurant, guest_session=session)
+        order = serializer.save(device=device, restaurant=restaurant, guest_session=session, business_day=business_day)
         
         # Serialize Response
         headers = self.get_success_headers(serializer.data)
@@ -334,15 +345,24 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        queryset = Order.objects.none()
+        
         if user.role == 'owner':
-             return Order.objects.filter(restaurant__owner=user).order_by('-created_time')
+             queryset = Order.objects.filter(restaurant__owner=user)
         elif user.role in ['manager', 'staff', 'chef']:
              restaurant_ids = ChefStaff.objects.filter(
                 user=user, 
                 action='accepted'
              ).values_list('restaurant_id', flat=True)
-             return Order.objects.filter(restaurant_id__in=restaurant_ids).order_by('-created_time')
-        return Order.objects.none()
+             queryset = Order.objects.filter(restaurant_id__in=restaurant_ids)
+        
+        # BUSINESS DAY FILTER: Show only orders for the active business day(s)
+        # Assuming we want to show orders for ALL restaurants the user has access to, but filtered by THEIR respective active days.
+        # This is complex in a single query if multiple restaurants.
+        # But usually a user dashboard focuses on ONE restaurant context.
+        # However, for now, let's filter orders where order.business_day.is_active = True
+        
+        return queryset.filter(business_day__is_active=True).order_by('-created_time')
     
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())  # ✅ apply search filtering
@@ -580,13 +600,8 @@ class OrderAnalyticsAPIView(APIView):
     def get(self, request):
         try:
             user = request.user
-            today = now().date()
-            start_of_week = today - timedelta(days=today.weekday())  # Monday
-            this_year = today.year
-            last_year = this_year - 1
-
             restaurants = []
-            # Check if Owner
+            # Check Owner
             if getattr(user, 'role', '') == 'owner':
                 restaurants = Restaurant.objects.filter(owner=user)
             else:
@@ -594,9 +609,6 @@ class OrderAnalyticsAPIView(APIView):
                 chef_staff = ChefStaff.objects.filter(user=user).first()
                 if chef_staff:
                     restaurants = [chef_staff.restaurant]
-                
-                # Check Staff (newer implementation if applicable)
-                # Helper to safely check staff_profile locally
                 try:
                     if not restaurants and user.staff_profile:
                         restaurants = [user.staff_profile.restaurant]
@@ -604,94 +616,163 @@ class OrderAnalyticsAPIView(APIView):
                     pass
 
             if not restaurants:
-                 # Return empty data instead of crashing
-                 return Response({
-                    "status": {
-                        "today_total_completed_order_price": "0",
-                        "weekly_growth": 0,
-                        "total_member": 0,
-                        "current_year": this_year,
-                        "last_year": last_year
-                    },
-                    "current_year": {month.lower()[:3]: 0 for month in month_name if month},
-                    "last_year": {month.lower()[:3]: 0 for month in month_name if month}
-                })
+                 return Response({"status": {}, "chart_data": {}})
 
-            # Get all orders for owner's restaurant
-            orders = Order.objects.filter(restaurant__in=restaurants)
+            restaurant = restaurants[0] # Focus on single restaurant for analytics for now
+            
+            # --- FILTERS ---
+            time_range = request.query_params.get('time_range', 'year') # today, week, month, year
+            aggregation = request.query_params.get('aggregation', 'monthly') # daily, monthly
+            compare = request.query_params.get('compare', 'true') == 'true'
 
-            # Filter completed orders
-            completed_orders = orders.filter(status='completed')
+            from django.utils import timezone
+            now_dt = timezone.now()
+            
+            # Helper to get data for a specific range
+            def get_data_for_range(start_d, end_d, agg_type):
+                l, r_data, o_data = [], [], []
+                curr_q = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_d, end_d])
+                
+                if agg_type == 'daily':
+                    curr = start_d.date()
+                    end = end_d.date()
+                    while curr <= end:
+                        l.append(curr.strftime("%d %b"))
+                        day_orders = curr_q.filter(created_time__date=curr)
+                        rev = day_orders.aggregate(r=Sum('total_price'))['r'] or 0
+                        cnt = day_orders.count()
+                        r_data.append(float(rev))
+                        o_data.append(cnt)
+                        curr += timedelta(days=1)
+                elif agg_type == 'monthly':
+                     # Simplified: If year, show 12 months. If month/week, show days usually. 
+                     # But keeping existing logic for 'year' -> monthly aggregation.
+                     if time_range == 'year':
+                        for m in range(1, 13):
+                             l.append(month_name[m][:3])
+                             # Note: This logic assumes 'start_d' is beginning of year or we strictly filter by year
+                             # For comparison (last year), we need to be careful with years.
+                             target_year = start_d.year
+                             month_orders = curr_q.filter(created_time__month=m, created_time__year=target_year)
+                             rev = month_orders.aggregate(r=Sum('total_price'))['r'] or 0
+                             cnt = month_orders.count()
+                             r_data.append(float(rev))
+                             o_data.append(cnt)
+                
+                return l, r_data, o_data
 
-            # ---- TODAY COMPLETED ORDER PRICE ----
+            # 1. Determine Current Date Range
+            start_date = now_dt
+            if time_range == 'today':
+                start_date = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                aggregation = 'hourly' # Override aggregation for Today to be meaningful? 
+                # Wait, existing code didn't handle hourly. Let's stick to daily (1 point) or implement hourly?
+                # Request says: "Day -> Hour-wise revenue". Let's implement hourly for 'today'.
+            elif time_range == 'week':
+                start_date = now_dt - timedelta(days=7)
+                aggregation = 'daily'
+            elif time_range == 'month':
+                start_date = now_dt - timedelta(days=30)
+                aggregation = 'daily'
+            elif time_range == 'year':
+                start_date = now_dt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                aggregation = 'monthly'
 
-            today_total_price = (
-                completed_orders.filter(updated_time__date=today)
-                .aggregate(total=Sum('total_price'))['total'] or 0
-            )
+            # 2. Comparison Date Range
+            comp_start = None
+            comp_end = None
+            
+            if compare:
+                if time_range == 'today':
+                    comp_start = start_date - timedelta(days=1)
+                    comp_end = comp_start.replace(hour=23, minute=59, second=59)
+                elif time_range == 'week':
+                    comp_start = start_date - timedelta(days=7)
+                    comp_end = start_date # Up to start of current period
+                elif time_range == 'month':
+                    comp_start = start_date - timedelta(days=30)
+                    comp_end = start_date
+                elif time_range == 'year':
+                    comp_start = start_date.replace(year=start_date.year - 1)
+                    comp_end = now_dt.replace(year=now_dt.year - 1)
 
-            # ---- WEEKLY GROWTH (compare this week vs last week) ----
-            last_week_start = start_of_week - timedelta(days=7)
-            last_week_end = start_of_week - timedelta(days=1)
 
-            this_week_total = (
-                completed_orders.filter(updated_time__date__gte=start_of_week)
-                .aggregate(total=Sum('total_price'))['total'] or 0
-            )
-            last_week_total = (
-                completed_orders.filter(updated_time__date__range=[last_week_start, last_week_end])
-                .aggregate(total=Sum('total_price'))['total'] or 0
-            )
+            # 3. Fetch Data (Refactored logic)
+            labels = []
+            revenue_data = []
+            orders_count_data = []
+            
+            # Special handling for Hourly (Today)
+            if time_range == 'today':
+                 # Hourly Logic
+                 for h in range(0, 24): # 0 to 23
+                     labels.append(f"{h}:00")
+                     # Current
+                     orders_h = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_date, now_dt], created_time__hour=h, created_time__date=start_date.date())
+                     rev = orders_h.aggregate(r=Sum('total_price'))['r'] or 0
+                     revenue_data.append(float(rev))
+                     orders_count_data.append(orders_h.count())
+            else:
+                labels, revenue_data, orders_count_data = get_data_for_range(start_date, now_dt, aggregation)
 
-            weekly_growth = 0
-            if last_week_total > 0:
-                weekly_growth = ((this_week_total - last_week_total) / last_week_total) * 100
 
-            # ---- Monthly Data for Current Year ----
-            current_year_data = {month.lower()[:3]: 0 for month in month_name if month}
-            last_year_data = {month.lower()[:3]: 0 for month in month_name if month}
+            # 4. Fetch Comparison Data
+            comp_revenue = []
+            comp_orders = []
+            
+            if compare and comp_start:
+                 if time_range == 'today':
+                     for h in range(0, 24):
+                         orders_h = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[comp_start, comp_end], created_time__hour=h, created_time__date=comp_start.date())
+                         rev = orders_h.aggregate(r=Sum('total_price'))['r'] or 0
+                         comp_revenue.append(float(rev))
+                         comp_orders.append(orders_h.count())
+                 else:
+                     _, comp_revenue, comp_orders = get_data_for_range(comp_start, comp_end or now_dt, aggregation)
 
-            for order in completed_orders:
-                month = order.updated_time.month
-                year = order.updated_time.year
 
-                if year == this_year:
-                    key = month_name[month].lower()[:3]
-                    current_year_data[key] += 1
-                elif year == last_year:
-                    key = month_name[month].lower()[:3]
-                    last_year_data[key] += 1
+            # ---- METRIC CARDS (Using strict Today/Week logic) ----
+            # Total Revenue (Filtered)
+            total_revenue = sum(revenue_data)
+            total_orders_count = sum(orders_count_data)
+            
+            # Weekly Growth (Compare this week vs last week)
+            start_week = now_dt.date() - timedelta(days=now_dt.weekday())
+            this_week_rev = Order.objects.filter(restaurant=restaurant, status='completed', created_time__date__gte=start_week).aggregate(s=Sum('total_price'))['s'] or 0
+            
+            last_week_start = start_week - timedelta(days=7)
+            last_week_end = start_week - timedelta(days=1)
+            last_week_rev = Order.objects.filter(restaurant=restaurant, status='completed', created_time__date__range=[last_week_start, last_week_end]).aggregate(s=Sum('total_price'))['s'] or 0
+            
+            growth = 0
+            if last_week_rev > 0:
+                growth = ((this_week_rev - last_week_rev) / last_week_rev) * 100
 
-            total_member = ChefStaff.objects.filter(restaurant__in=restaurants).count()
-
+            active_staff = ChefStaff.objects.filter(restaurant=restaurant, action='accepted', is_active=True).count() # Approx
+            
+            
             return Response({
                 "status": {
-                    "today_total_completed_order_price": str(today_total_price),
-                    "weekly_growth": round(weekly_growth, 2),
-                    "total_member": total_member,
-                    "current_year": this_year,
-                    "last_year": last_year
-
+                    "total_revenue": total_revenue, # Filtered sum
+                    "total_orders": total_orders_count, # Filtered sum
+                    "weekly_growth": round(growth, 2),
+                    "active_staff": active_staff
                 },
-                "current_year": current_year_data,
-                "last_year": last_year_data
+                "chart": {
+                    "labels": labels,
+                    "revenue": revenue_data,
+                    "orders": orders_count_data
+                },
+                "comparison": {
+                    "enabled": compare,
+                    "revenue": comp_revenue,
+                    "orders": comp_orders
+                }
             })
+
         except Exception as e:
             print(f"Analytics Error: {e}")
-            # Fail gracefully returning 0s
-            this_year = now().year
-            last_year = this_year - 1
-            return Response({
-                "status": {
-                    "today_total_completed_order_price": "0",
-                    "weekly_growth": 0,
-                    "total_member": 0,
-                    "current_year": this_year,
-                    "last_year": last_year
-                },
-                "current_year": {month.lower()[:3]: 0 for month in month_name if month},
-                "last_year": {month.lower()[:3]: 0 for month in month_name if month}
-            })
+            return Response({"error": str(e)}, status=500)
 
 
 
