@@ -129,7 +129,7 @@ const ReviewDetailModal = ({ isOpen, onClose, review }: { isOpen: boolean, onClo
                         <span className="font-bold text-slate-500 text-xs">x{item.quantity}</span>
                         <span className="font-medium text-slate-900">{item.item_name}</span>
                       </div>
-                      <span className="font-bold text-slate-700">${item.price}</span>
+                      <span className="font-bold text-slate-700">AED {item.price}</span>
                     </div>
                   ))
                 ) : (
