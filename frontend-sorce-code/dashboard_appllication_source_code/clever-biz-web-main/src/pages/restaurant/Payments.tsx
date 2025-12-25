@@ -125,7 +125,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                     </div>
                     <div>
                         <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Order Amount</p>
-                        <p className="text-sm font-bold text-slate-900">${payment.amount}</p>
+                        <p className="text-sm font-bold text-slate-900">AED {payment.amount}</p>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6">
@@ -150,7 +150,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                                         <p className="text-sm font-medium text-slate-900">{item.item_name}</p>
                                         <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
                                     </div>
-                                    <p className="text-sm font-bold text-slate-700">${item.price}</p>
+                                    <p className="text-sm font-bold text-slate-700">AED {item.price}</p>
                                 </div>
                             ))}
                         </div>
@@ -244,7 +244,7 @@ export const Payments = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <MetricCard
                     title="Total Revenue"
-                    value={`$${totalRevenue.toFixed(2)}`}
+                    value={`AED ${totalRevenue.toFixed(2)}`}
                     icon={DollarSign}
                     colorClass="text-[#0055FE]"
                     bgClass="bg-white"
@@ -252,7 +252,7 @@ export const Payments = () => {
                 />
                 <MetricCard
                     title="Received Amount"
-                    value={`$${totalRevenue.toFixed(2)}`} // Assuming received = completed revenue for now
+                    value={`AED ${totalRevenue.toFixed(2)}`} // Assuming received = completed revenue for now
                     icon={Wallet}
                     colorClass="text-green-600"
                     bgClass="bg-white"
@@ -260,7 +260,7 @@ export const Payments = () => {
                 />
                 <MetricCard
                     title="Pending Amount"
-                    value={`$${pendingAmount.toFixed(2)}`}
+                    value={`AED ${pendingAmount.toFixed(2)}`}
                     icon={AlertCircle}
                     colorClass="text-orange-600"
                     bgClass="bg-white"
@@ -326,7 +326,7 @@ export const Payments = () => {
                                             {p.provider.replace('_', ' ')}
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-sm font-bold text-slate-900">${p.amount}</td>
+                                    <td className="px-5 py-3 text-sm font-bold text-slate-900">AED {p.amount}</td>
                                     <td className="px-5 py-3">
                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getStatusColor(p.status)}`}>{p.status}</span>
                                     </td>
