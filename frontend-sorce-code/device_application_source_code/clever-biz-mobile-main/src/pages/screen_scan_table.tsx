@@ -7,30 +7,33 @@ const ScreenScanTable = () => {
                 <QrCode size={40} className="text-blue-600" />
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to CleverBiz</h1>
-            <p className="text-gray-500 mb-8 max-w-xs mx-auto">
-                Please scan the QR code on your table to view the menu and place your order.
-            </p>
+            <div className="text-center mb-8">
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Clever Dining</h1>
+                <p className="text-slate-500">
+                    Please scan the QR code on your table to view the menu and place your order.
+                </p>
+            </div>
 
-            <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm max-w-sm w-full">
-                <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-2">How it works</p>
-                <ol className="text-left text-sm text-gray-600 space-y-3">
-                    <li className="flex gap-2">
-                        <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">1</span>
-                        Open your phone camera
-                    </li>
-                    <li className="flex gap-2">
-                        <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">2</span>
-                        Point at the QR code on table
-                    </li>
-                    <li className="flex gap-2">
-                        <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">3</span>
-                        Start ordering!
-                    </li>
-                </ol>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 mb-8">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mb-4">How it Works</h3>
+                <div className="space-y-4">
+                    <div className="flex gap-3 items-start">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 text-[#0055FE] font-bold flex items-center justify-center text-sm shrink-0">1</div>
+                        <p className="text-sm text-slate-600">Open your phone’s Camera (or QR scanner)</p>
+                    </div>
+                    <div className="flex gap-3 items-start">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 text-[#0055FE] font-bold flex items-center justify-center text-sm shrink-0">2</div>
+                        <p className="text-sm text-slate-600">Hold it over the table QR code until a link appears</p>
+                    </div>
+                    <div className="flex gap-3 items-start">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 text-[#0055FE] font-bold flex items-center justify-center text-sm shrink-0">3</div>
+                        <p className="text-sm text-slate-600">Tap the link to start ordering</p>
+                    </div>
+                </div>
             </div>
         </div>
     );
 };
 
 export default ScreenScanTable;
+```
