@@ -355,6 +355,45 @@ const ScreenRestaurantDashboard = () => {
         </div>
       )}
 
+
+      {/* REVENUE CHART SECTION */}
+      {userRole === 'owner' && (
+        <div className="bg-white p-6 rounded-lg border border-slate-200">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Revenue Analytics</h3>
+              <p className="text-sm text-slate-500">Track your restaurant performance over time</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Compare Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors select-none bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                <input
+                  type="checkbox"
+                  checked={compareEnabled}
+                  onChange={(e) => setCompareEnabled(e.target.checked)}
+                  className="accent-[#0055FE] w-3.5 h-3.5"
+                />
+                Compare
+              </label>
+
+              <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+              <TimeRangeToggle value={timeRange} onChange={setTimeRange} />
+            </div>
+          </div>
+
+          <div className="h-80 w-full">
+            <RevenueAnalyticsChart
+              labels={analytics?.chart?.labels || []}
+              data={analytics?.chart?.revenue || []}
+              comparisonData={analytics?.comparison?.revenue}
+              showComparison={compareEnabled}
+            />
+          </div>
+        </div>
+      )}
+
       {/* CLOSE DAY BUTTON & MODAL (Header area ideally, but for now putting it near top logic) */}
       <Modal isOpen={showCloseDay} onClose={() => setShowCloseDay(false)} title="Close Business Day">
         <div className="space-y-4">
