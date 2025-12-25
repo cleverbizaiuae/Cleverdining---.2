@@ -36,4 +36,4 @@ const ScreenScanTable = () => {
 };
 
 export default ScreenScanTable;
-```
+

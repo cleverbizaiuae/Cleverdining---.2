@@ -77,11 +77,7 @@ export const ReviewModal = ({ isOpen, close, onSubmit }: ReviewModalProps) => {
                                 />
                             </div>
 
-                            {/* Audio Record Mockup */}
-                            <button className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors">
-                                <Mic size={18} />
-                                <span className="text-sm font-medium">Record Audio Message</span>
-                            </button>
+
 
                             {/* Actions */}
                             <div className="flex gap-3 mt-2">
