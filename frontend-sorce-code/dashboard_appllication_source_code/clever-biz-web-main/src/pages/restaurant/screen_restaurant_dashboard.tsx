@@ -387,7 +387,9 @@ const ScreenRestaurantDashboard = () => {
             <RevenueAnalyticsChart
               labels={analytics?.chart?.labels || []}
               data={analytics?.chart?.revenue || []}
+              orders={analytics?.chart?.orders || []}
               comparisonData={analytics?.comparison?.revenue}
+              comparisonOrders={analytics?.comparison?.orders || []}
               showComparison={compareEnabled}
             />
           </div>

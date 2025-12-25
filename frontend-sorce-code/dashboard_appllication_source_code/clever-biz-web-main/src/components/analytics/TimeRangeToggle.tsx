@@ -7,8 +7,7 @@ interface TimeRangeToggleProps {
 
 export const TimeRangeToggle = ({ value, onChange }: TimeRangeToggleProps) => {
     const options = [
-        { label: "Day", value: "today" },
-        { label: "Week", value: "week" },
+        { label: "Day", value: "day" },
         { label: "Month", value: "month" },
         { label: "Year", value: "year" },
     ];

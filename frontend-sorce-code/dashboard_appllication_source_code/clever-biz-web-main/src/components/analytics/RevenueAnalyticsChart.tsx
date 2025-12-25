@@ -22,37 +22,60 @@ interface RevenueAnalyticsChartProps {
     showComparison?: boolean;
 }
 
-export const RevenueAnalyticsChart = ({ data, labels, comparisonData, showComparison = true }: RevenueAnalyticsChartProps) => {
+export const RevenueAnalyticsChart = ({ data, labels, orders, comparisonData, showComparison = true }: any) => {
+    // Basic defaults if data is missing (prevent crash)
+    const safeLabels = (labels && labels.length > 0) ? labels : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const safeRevenue = (data && data.length > 0) ? data : Array(safeLabels.length).fill(0);
+    const safeOrders = (orders && orders.length > 0) ? orders : Array(safeLabels.length).fill(0);
+
     const chartData = {
-        labels: labels,
+        labels: safeLabels,
         datasets: [
+            // 1. Revenue Dataset (Left Axis)
             {
-                label: 'Current Period',
-                data: data,
+                label: 'Revenue',
+                data: safeRevenue,
                 borderColor: '#0055FE',
                 borderWidth: 2,
                 backgroundColor: (context: ScriptableContext<"line">) => {
                     const ctx = context.chart.ctx;
                     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-                    gradient.addColorStop(0, 'rgba(0, 85, 254, 0.15)'); // Slightly more visible
+                    gradient.addColorStop(0, 'rgba(0, 85, 254, 0.15)');
                     gradient.addColorStop(1, 'rgba(0, 85, 254, 0)');
                     return gradient;
                 },
                 fill: true,
-                tension: 0.4, // Smooth curves
+                tension: 0.4,
                 pointRadius: 0,
                 pointHoverRadius: 6,
                 pointHoverBackgroundColor: '#0055FE',
                 pointHoverBorderColor: '#FFFFFF',
                 pointHoverBorderWidth: 2,
                 yAxisID: 'y',
-                order: 1 // Top layer
+                order: 2
             },
-            // Comparison Line
+            // 2. Orders Dataset (Right Axis)
+            {
+                label: 'Orders',
+                data: safeOrders,
+                borderColor: '#8B5CF6', // Purple-500
+                borderWidth: 2,
+                borderDash: [0, 0], // Solid line
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: '#8B5CF6',
+                pointHoverBorderColor: '#FFFFFF',
+                pointHoverBorderWidth: 2,
+                tension: 0.4,
+                yAxisID: 'y1', // Secondary Axis
+                order: 1 // Top z-index
+            },
+            // 3. Comparison Revenue (Optional)
             ...(showComparison && comparisonData ? [{
-                label: 'Previous Period',
+                label: 'Prev. Revenue',
                 data: comparisonData,
-                borderColor: '#94a3b8', // Slate 400
+                borderColor: '#94a3b8',
                 borderWidth: 2,
                 borderDash: [5, 5],
                 backgroundColor: 'transparent',
@@ -60,7 +83,7 @@ export const RevenueAnalyticsChart = ({ data, labels, comparisonData, showCompar
                 pointHoverRadius: 4,
                 tension: 0.4,
                 yAxisID: 'y',
-                order: 2 // Behind
+                order: 3
             }] : [])
         ],
     };
@@ -98,7 +121,10 @@ export const RevenueAnalyticsChart = ({ data, labels, comparisonData, showCompar
                     label: (context: any) => {
                         const label = context.dataset.label || '';
                         const value = context.parsed.y;
-                        return `${label}: AED ${value.toLocaleString()}`;
+                        if (context.dataset.yAxisID === 'y') {
+                            return `${label}: AED ${value.toLocaleString()}`;
+                        }
+                        return `${label}: ${value} orders`;
                     },
                 }
             },
@@ -108,7 +134,7 @@ export const RevenueAnalyticsChart = ({ data, labels, comparisonData, showCompar
                 grid: { display: false },
                 ticks: { color: '#94a3b8', font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }
             },
-            y: {
+            y: { // Revenue Axis (Left)
                 type: 'linear' as const,
                 display: true,
                 position: 'left' as const,
@@ -120,31 +146,29 @@ export const RevenueAnalyticsChart = ({ data, labels, comparisonData, showCompar
                 },
                 min: 0,
             },
+            y1: { // Orders Axis (Right)
+                type: 'linear' as const,
+                display: true,
+                position: 'right' as const,
+                grid: { display: false }, // Hide grid for secondary axis to reduce clutter
+                ticks: {
+                    color: '#8B5CF6',
+                    font: { size: 11 },
+                    callback: (val: any) => `${val}`
+                },
+                min: 0,
+            },
         },
-    };
-
-    // Ensure data is never null to satisfy "Always Visible" rule
-    const displayData = (data && data.length > 0) ? data : Array(labels.length || 12).fill(0);
-    const displayLabels = (labels && labels.length > 0) ? labels : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]; // Default fallback
-
-    // Update chartData to use checked variables
-    const safeChartData = {
-        ...chartData,
-        labels: displayLabels,
-        datasets: chartData.datasets.map(ds => {
-            if (ds.label === 'Current Period') return { ...ds, data: displayData };
-            return ds;
-        })
     };
 
     return (
         <div className="relative w-full h-full">
-            {(!data || data.length === 0) && (
+            {(!data || data.length === 0) && (!orders || orders.length === 0) && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <p className="text-xs text-slate-400 bg-white/80 px-2 py-1 rounded">No revenue data yet</p>
+                    <p className="text-xs text-slate-400 bg-white/80 px-2 py-1 rounded">No data yet</p>
                 </div>
             )}
-            <Line data={safeChartData} options={options} />
+            <Line data={chartData} options={options} />
         </div>
     );
 };
