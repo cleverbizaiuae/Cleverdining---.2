@@ -639,7 +639,18 @@ class OrderAnalyticsAPIView(APIView):
                     l, r_data, o_data = [], [], []
                     curr_q = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_d, end_d])
                     
-                    if agg_type == 'daily':
+                    if agg_type == 'hourly':
+                        query_date = start_d.date()
+                        # Iterate 0 to 23 hours
+                        for h in range(0, 24):
+                            l.append(f"{h:02d}:00")
+                            hour_orders = curr_q.filter(created_time__hour=h, created_time__date=query_date)
+                            rev = hour_orders.aggregate(r=Sum('total_price'))['r'] or 0
+                            cnt = hour_orders.count()
+                            r_data.append(float(rev))
+                            o_data.append(cnt)
+
+                    elif agg_type == 'daily':
                         curr = start_d.date()
                         end = end_d.date()
                         while curr <= end:
@@ -650,20 +661,16 @@ class OrderAnalyticsAPIView(APIView):
                             r_data.append(float(rev))
                             o_data.append(cnt)
                             curr += timedelta(days=1)
+                            
                     elif agg_type == 'monthly':
-                         # Simplified: If year, show 12 months. If month/week, show days usually. 
-                         # But keeping existing logic for 'year' -> monthly aggregation.
-                         if time_range == 'year':
-                            for m in range(1, 13):
-                                 l.append(calendar.month_name[m][:3])
-                                 # Note: This logic assumes 'start_d' is beginning of year or we strictly filter by year
-                                 # For comparison (last year), we need to be careful with years.
-                                 target_year = start_d.year
-                                 month_orders = curr_q.filter(created_time__month=m, created_time__year=target_year)
-                                 rev = month_orders.aggregate(r=Sum('total_price'))['r'] or 0
-                                 cnt = month_orders.count()
-                                 r_data.append(float(rev))
-                                 o_data.append(cnt)
+                         target_year = start_d.year
+                         for m in range(1, 13):
+                             l.append(calendar.month_name[m][:3])
+                             month_orders = curr_q.filter(created_time__month=m, created_time__year=target_year)
+                             rev = month_orders.aggregate(r=Sum('total_price'))['r'] or 0
+                             cnt = month_orders.count()
+                             r_data.append(float(rev))
+                             o_data.append(cnt)
                     
                     return l, r_data, o_data
                 except Exception as help_err:
@@ -672,11 +679,12 @@ class OrderAnalyticsAPIView(APIView):
 
             # 1. Determine Current Date Range
             start_date = now_dt
-            if time_range == 'today':
+            if time_range == 'day':
                 start_date = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                aggregation = 'hourly' # Override aggregation for Today to be meaningful? 
-                # Wait, existing code didn't handle hourly. Let's stick to daily (1 point) or implement hourly?
-                # Request says: "Day -> Hour-wise revenue". Let's implement hourly for 'today'.
+                aggregation = 'hourly'
+            elif time_range == 'today': # Legacy support
+                start_date = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                aggregation = 'hourly'
             elif time_range == 'week':
                 start_date = now_dt - timedelta(days=7)
                 aggregation = 'daily'
@@ -707,22 +715,7 @@ class OrderAnalyticsAPIView(APIView):
 
 
             # 3. Fetch Data (Refactored logic)
-            labels = []
-            revenue_data = []
-            orders_count_data = []
-            
-            # Special handling for Hourly (Today)
-            if time_range == 'today':
-                 # Hourly Logic
-                 for h in range(0, 24): # 0 to 23
-                     labels.append(f"{h}:00")
-                     # Current
-                     orders_h = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_date, now_dt], created_time__hour=h, created_time__date=start_date.date())
-                     rev = orders_h.aggregate(r=Sum('total_price'))['r'] or 0
-                     revenue_data.append(float(rev))
-                     orders_count_data.append(orders_h.count())
-            else:
-                labels, revenue_data, orders_count_data = get_data_for_range(start_date, now_dt, aggregation)
+            labels, revenue_data, orders_count_data = get_data_for_range(start_date, now_dt, aggregation)
 
 
             # 4. Fetch Comparison Data
@@ -730,14 +723,7 @@ class OrderAnalyticsAPIView(APIView):
             comp_orders = []
             
             if compare and comp_start:
-                 if time_range == 'today':
-                     for h in range(0, 24):
-                         orders_h = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[comp_start, comp_end], created_time__hour=h, created_time__date=comp_start.date())
-                         rev = orders_h.aggregate(r=Sum('total_price'))['r'] or 0
-                         comp_revenue.append(float(rev))
-                         comp_orders.append(orders_h.count())
-                 else:
-                     _, comp_revenue, comp_orders = get_data_for_range(comp_start, comp_end or now_dt, aggregation)
+                 _, comp_revenue, comp_orders = get_data_for_range(comp_start, comp_end or now_dt, aggregation)
 
 
             # ---- METRIC CARDS (Using strict Today/Week logic) ----
