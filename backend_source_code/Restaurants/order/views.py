@@ -598,6 +598,7 @@ class OrderAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def get(self, request):
+        import traceback
         try:
             user = request.user
             restaurants = []
@@ -771,8 +772,12 @@ class OrderAnalyticsAPIView(APIView):
             })
 
         except Exception as e:
-            print(f"Analytics Error: {e}")
-            return Response({"error": str(e)}, status=500)
+            print("Analytics Error:")
+            traceback.print_exc()
+            return Response({
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }, status=500)
 
 
 
@@ -787,6 +792,7 @@ class MonthlySalesReportView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def get(self, request):
+        import traceback
         try:
             # Get current month and year
             today = datetime.now()
