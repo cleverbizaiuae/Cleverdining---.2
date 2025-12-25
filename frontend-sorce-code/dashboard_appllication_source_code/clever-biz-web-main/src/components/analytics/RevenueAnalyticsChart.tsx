@@ -123,13 +123,28 @@ export const RevenueAnalyticsChart = ({ data, labels, comparisonData, showCompar
         },
     };
 
-    if (!data || data.length === 0) {
-        return (
-            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
-                <p className="text-sm">No revenue data available</p>
-            </div>
-        )
-    }
+    // Ensure data is never null to satisfy "Always Visible" rule
+    const displayData = (data && data.length > 0) ? data : Array(labels.length || 12).fill(0);
+    const displayLabels = (labels && labels.length > 0) ? labels : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]; // Default fallback
 
-    return <Line data={chartData} options={options} />;
+    // Update chartData to use checked variables
+    const safeChartData = {
+        ...chartData,
+        labels: displayLabels,
+        datasets: chartData.datasets.map(ds => {
+            if (ds.label === 'Current Period') return { ...ds, data: displayData };
+            return ds;
+        })
+    };
+
+    return (
+        <div className="relative w-full h-full">
+            {(!data || data.length === 0) && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <p className="text-xs text-slate-400 bg-white/80 px-2 py-1 rounded">No revenue data yet</p>
+                </div>
+            )}
+            <Line data={safeChartData} options={options} />
+        </div>
+    );
 };

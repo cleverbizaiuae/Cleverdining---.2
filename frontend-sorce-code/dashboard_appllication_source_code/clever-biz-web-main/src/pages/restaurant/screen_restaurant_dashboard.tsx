@@ -357,7 +357,7 @@ const ScreenRestaurantDashboard = () => {
 
 
       {/* REVENUE CHART SECTION */}
-      {userRole === 'owner' && (
+      {(userRole === 'owner' || (userRole as string) === 'manager') && (
         <div className="bg-white p-6 rounded-lg border border-slate-200">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
