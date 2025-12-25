@@ -420,3 +420,5 @@ else:
     if DATABASES['default']['HOST'] == 'dpg-d4ivnueuk2gs73bh11i0-a':
         print("  ! Detected internal Render hostname. Switching to external for connectivity...")
         DATABASES['default']['HOST'] = 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com'
+        DATABASES['default'].setdefault('OPTIONS', {})
+        DATABASES['default']['OPTIONS']['sslmode'] = 'require'
