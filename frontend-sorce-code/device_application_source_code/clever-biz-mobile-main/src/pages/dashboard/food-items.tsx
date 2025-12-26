@@ -48,30 +48,45 @@ export const FoodItems = ({ item, showFood }: Props) => {
             </div>
           )}
 
-          {/* Left Side: Image */}
-          <div className="w-[100px] h-[100px] flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
-            <img
-              src={(() => {
-                if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
-                let url = item.image1;
-                // Fix double media path
-                // url = url.replace("/media/media/", "/media/");
-                // Force HTTPS
-                if (url.startsWith("http://")) {
-                  url = url.replace("http://", "https://");
-                }
-                // Handle relative paths
-                if (url.startsWith("/")) {
-                  url = `https://cleverdining-2.onrender.com${url}`;
-                }
-                return url;
-              })()}
-              alt={item.item_name}
-              className="object-cover w-full h-full"
-              onError={(e) => {
-                e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-              }}
-            />
+          {/* Left Side: Image or Video Thumbnail */}
+          <div className="w-[100px] h-[100px] flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center relative">
+            {(!item.image1 && item.video) ? (
+              <video
+                src={(() => {
+                  let url = item.video;
+                  if (url.startsWith("http://")) url = url.replace("http://", "https://");
+                  if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+                  return url + "#t=0.5"; // seek to 0.5s for thumbnail
+                })()}
+                muted
+                playsInline
+                preload="metadata"
+                className="object-cover w-full h-full"
+                about="Video Thumbnail"
+              />
+            ) : (
+              <img
+                src={(() => {
+                  if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
+                  let url = item.image1;
+                  if (url.startsWith("http://")) url = url.replace("http://", "https://");
+                  if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
+                  return url;
+                })()}
+                alt={item.item_name}
+                className="object-cover w-full h-full"
+                onError={(e) => {
+                  e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
+                }}
+              />
+            )}
+
+            {/* Tiny Video Icon Overlay if video exists */}
+            {item.video && item.image1 && (
+              <div className="absolute bottom-1 right-1 bg-black/50 p-1 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+              </div>
+            )}
           </div>
 
           {/* Center: Details */}
