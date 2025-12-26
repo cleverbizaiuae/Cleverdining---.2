@@ -68,7 +68,7 @@ SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False) # Set to Tr
 SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
 CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "https://abc.winaclaim.com",
     "https://clever-biz.netlify.app",
@@ -411,11 +411,10 @@ if USE_SQLITE:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+else:
     # Universal DB Fix: Pre-process DATABASE_URL to guarantee External + SSL
     # We intercept the URL string before Django parses it to ensure consistent behavior.
     
-    # 1. Get the raw URL (from Env or Default)
-    default_db_url = 'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
     # 1. Get the raw URL (from Env or Default)
     default_db_url = 'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
     raw_db_url = os.environ.get('DATABASE_URL') or default_db_url
