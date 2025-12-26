@@ -161,11 +161,30 @@ const ScreenCart = () => {
                 className="flex items-center p-4 bg-white rounded-lg shadow-sm"
               >
                 {/* Image */}
-                <img
-                  src={item.image1}
-                  alt={item.item_name}
-                  className="w-20 h-20 object-cover rounded-xl border border-gray-100 bg-gray-50"
-                />
+                {/* Image or Video Cover */}
+                <div className="w-20 h-20 shrink-0 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden relative">
+                  {(item.video && !item.image1) ? (
+                    <video
+                      src={item.video.startsWith("http") ? item.video : `https://cleverdining-2.onrender.com${item.video}`}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      webkit-playsinline="true"
+                      loop
+                      autoPlay
+                    />
+                  ) : (
+                    <img
+                      src={item.image1}
+                      alt={item.item_name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        // Could show a generic fallback icon here if needed
+                      }}
+                    />
+                  )}
+                </div>
                 {/* Text & Price */}
                 <div className="ml-4 flex-1">
                   <h2 className="text-primary">{item.item_name}</h2>
