@@ -140,14 +140,54 @@ const ScreenRestaurantChat = () => {
     return () => ws.close();
   }, [selectedChat]);
 
-  // 3. Fetch History on Selection
+  // 3. Global WebSocket Listener for Real-time List Updates
+  const { messages: globalMessages } = useContext(WebSocketContext) || {};
+
+  useEffect(() => {
+    if (!globalMessages || globalMessages.length === 0) return;
+
+    const lastMsg = globalMessages[globalMessages.length - 1];
+
+    if (lastMsg && lastMsg.type === 'chat_message') {
+      // Update Chat List logic
+      setChatList(prevList => {
+        return prevList.map(chat => {
+          // Identify if this message belongs to this chat room/device
+          // The backend event sends 'device_id'. We should match on that.
+          // Note: chat.id is the device/table ID.
+
+          if (String(chat.id) === String(lastMsg.device_id)) {
+            const isCurrentlyOpen = selectedChat?.id === chat.id;
+
+            // If currently open, we don't increment badge (logic handled by chat window generally, or we mark read instantly)
+            // But usually, if window is open, we might want to temporarily show or auto-read.
+            // For now, let's increment if NOT open.
+            const newUnread = isCurrentlyOpen ? 0 : (chat.unread_count || 0) + 1;
+
+            return {
+              ...chat,
+              unread_count: newUnread,
+              // Optional: Update preview snippet if we had one
+            };
+          }
+          return chat;
+        });
+      });
+
+      // Also, if this message belongs to the CURRENT OPEN chat, apppend it to 'messages' locally
+      // (This handles the case where we don't rely solely on the dedicated socket, or if dedicated socket is redundant)
+      // However, we have a dedicated socket for the open chat (Lines 80-141).
+      // So we generally rely on that for the open conversation. 
+      // BUT, the 'Global' listener is CRITICAL for the "Left table" (Sidebar List) badges.
+    }
+  }, [globalMessages, selectedChat]); // Re-run when globalMessages changes
+
+  // 4. Fetch History on Selection
   useEffect(() => {
     if (!selectedChat) return;
     const fetchHistory = async () => {
       try {
-        // Endpoint pattern from utilities.tsx: /message/chat/?device_id=...&restaurant_id=...
-        // Use selectedChat.restaurant_id which is available for all roles (Owner/Staff/Chef)
-        const restaurantId = selectedChat.restaurant_id;
+        const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
         const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
         setMessages(Array.isArray(data) ? data : []);
 
@@ -155,9 +195,10 @@ const ScreenRestaurantChat = () => {
         try {
           const res = await axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`);
           if (res.data.count > 0 && setUnreadCount) {
+            // Decrease global count
             setUnreadCount((prev: number) => Math.max(0, prev - res.data.count));
 
-            // Update local chat list to clear badge
+            // Update local chat list to clear badge immediately
             setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
           }
         } catch (err) {
@@ -168,7 +209,7 @@ const ScreenRestaurantChat = () => {
       }
     };
     fetchHistory();
-  }, [selectedChat, userInfo]);
+  }, [selectedChat, userInfo, setUnreadCount]);
 
   // 4. Auto-scroll to bottom
   useEffect(() => {
