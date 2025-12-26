@@ -158,8 +158,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             is_from_device=is_from_device,
             room_name=room_name,
             new_message=True,
-            room_name=room_name,
-            new_message=True,
+
             business_day=restaurant.business_days.filter(is_active=True).last(), # Link to active business day
             guest_session=guest_session # Link to specific session
         )
