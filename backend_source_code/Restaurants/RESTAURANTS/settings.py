@@ -416,7 +416,9 @@ if USE_SQLITE:
     
     # 1. Get the raw URL (from Env or Default)
     default_db_url = 'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
-    raw_db_url = os.environ.get('DATABASE_URL', default_db_url)
+    # 1. Get the raw URL (from Env or Default)
+    default_db_url = 'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
+    raw_db_url = os.environ.get('DATABASE_URL') or default_db_url
 
     # 2. Check and Rewrite
     final_db_url = raw_db_url
