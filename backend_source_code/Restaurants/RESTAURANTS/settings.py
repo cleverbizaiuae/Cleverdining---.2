@@ -409,9 +409,9 @@ if USE_SQLITE:
         }
     }
 else:
-    # HARDCODED EXTERNAL DATABASE CONNECTION (Reverting to Public URL)
-    # Internal failed (DNS), so we must use Public + SSL
-    print("!!! USING HARDCODED EXTERNAL DATABASE CONFIG !!!")
+    # HARDCODED EXTERNAL DATABASE CONNECTION (Public URL)
+    # Using 'prefer' to attempt SSL but allow fallback/negotiation
+    print("!!! USING HARDCODED EXTERNAL DATABASE CONFIG (SSL PREFER) !!!")
     
     DATABASES = {
         'default': {
@@ -419,10 +419,11 @@ else:
             'NAME': 'cleverdining_db',
             'USER': 'cleverdining_db_user',
             'PASSWORD': '41ETCSVh25R43IG4vJrL0FHaFOcUoClV',
-            'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com', # External Hostname
+            'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com',
             'PORT': '5432',
             'OPTIONS': {
-                'sslmode': 'require',
+                'sslmode': 'prefer',
+                'connect_timeout': 10,
             },
         }
     }
