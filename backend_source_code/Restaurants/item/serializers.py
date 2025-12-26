@@ -12,7 +12,7 @@ class ItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Item
-        fields = ['id', 'item_name', 'price', 'description', 'slug', 'category', 'sub_category', 'restaurant','category_name', 'image1','availability','video','restaurant_name']
+        fields = ['id', 'item_name', 'price', 'description', 'slug', 'category', 'sub_category', 'restaurant','category_name', 'image1','availability','video','restaurant_name', 'discount_percentage']
         read_only_fields = ['slug', 'restaurant']
 
     def create(self, validated_data):
