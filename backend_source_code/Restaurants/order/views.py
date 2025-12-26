@@ -104,29 +104,36 @@ class OrderCreateAPIView(generics.CreateAPIView):
         data = OrderDetailSerializer(order).data
         
         # Notify Restaurant
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "order_created",
-                "order": data
-            }
-        )
-        
-        if order.guest_session:
+        try:
             async_to_sync(channel_layer.group_send)(
-                f"session_{order.guest_session.id}",
+                f"restaurant_{order.restaurant.id}",
                 {
-                    "type": "order_status_update", 
-                    "order_id": order.id,
-                    "status": order.status,
+                    "type": "order_created",
                     "order": data
                 }
             )
+        except Exception as e:
+            print(f"Error sending restaurant notification: {e}")
+        
+        if order.guest_session:
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"session_{order.guest_session.id}",
+                    {
+                        "type": "order_status_update", 
+                        "order_id": order.id,
+                        "status": order.status,
+                        "order": data
+                    }
+                )
+            except Exception as e:
+                 print(f"Error sending guest notification: {e}")
 
             # CLEAR CART after successful order placement
             try:
                 # Assuming One Cart per Session
-                Cart.objects.filter(guest_session=order.guest_session).delete()
+                deleted_count, _ = Cart.objects.filter(guest_session=order.guest_session).delete()
+                print(f"DEBUG_CART: Deleted {deleted_count} carts for session {order.guest_session.id}")
             except Exception as e:
                 print(f"Error clearing cart: {e}")
         
