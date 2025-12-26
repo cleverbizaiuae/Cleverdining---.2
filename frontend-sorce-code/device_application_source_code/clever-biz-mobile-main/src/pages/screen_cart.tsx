@@ -72,7 +72,11 @@ const ScreenCart = () => {
         }
       );
       toast.success("Order placed successfully!");
-      clearCart();
+      await clearCart();
+      // Double check cleanup
+      if (guestSessionToken) {
+        localStorage.removeItem(`cb:cart:${guestSessionToken}`);
+      }
 
       // Navigate to checkout with the new Order ID
       if (response.data && response.data.id) {
