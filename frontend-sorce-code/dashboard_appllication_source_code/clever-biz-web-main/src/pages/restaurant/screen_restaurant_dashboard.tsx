@@ -20,7 +20,8 @@ import {
   Trash2,
   X,
   Upload,
-  Lock
+  Lock,
+  Video
 } from "lucide-react";
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
@@ -128,7 +129,7 @@ const ScreenRestaurantDashboard = () => {
 
   // Add Item State
   const [showAddItem, setShowAddItem] = useState(false);
-  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", discount_percentage: "" as string | number, image1: null as File | null });
+  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
   const [isViewAll, setIsViewAll] = useState(false);
 
   // Fetch Analytics
@@ -460,7 +461,10 @@ const ScreenRestaurantDashboard = () => {
                                     description: item.description || "",
                                     category: item.category_id || "",
                                     discount_percentage: item.discount_percentage || 0,
-                                    image1: null
+                                    category: item.category_id || "",
+                                    discount_percentage: item.discount_percentage || 0,
+                                    image1: null,
+                                    video: null
                                   });
                                   setShowAddItem(true);
                                 }}
@@ -798,7 +802,7 @@ const ScreenRestaurantDashboard = () => {
         onClose={() => {
           setShowAddItem(false);
           setEditingItem(null);
-          setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null });
+          setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null, video: null });
         }}
         title={editingItem ? "Edit Item" : "Add New Item"}
       >
@@ -844,6 +848,47 @@ const ScreenRestaurantDashboard = () => {
             onImageSelected={(file: File) => setItemFormData({ ...itemFormData, image1: file })}
           />
 
+          {/* VIDEO UPLOADER */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-medium text-slate-700">Item Video (Optional)</label>
+              <span className="text-[10px] text-slate-400">Max 30MB, MP4/WebM</span>
+            </div>
+            <div className="border border-slate-200 rounded-lg p-3 flex items-center gap-3 bg-slate-50">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
+                <Video size={20} />
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm"
+                  className="hidden"
+                  id="video-upload"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 30 * 1024 * 1024) return toast.error("Video too large (Max 30MB)");
+                      setItemFormData({ ...itemFormData, video: file });
+                    }
+                  }}
+                />
+                <label htmlFor="video-upload" className="block cursor-pointer">
+                  <p className="text-xs font-medium text-slate-700 truncate">
+                    {itemFormData.video ? itemFormData.video.name : (editingItem?.video ? "Existing Video (Upload to Replace)" : "Click to Upload Video")}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {itemFormData.video ? `${(itemFormData.video.size / 1024 / 1024).toFixed(1)} MB` : "No video selected"}
+                  </p>
+                </label>
+              </div>
+              {itemFormData.video && (
+                <button onClick={() => setItemFormData({ ...itemFormData, video: null })} className="p-1 hover:bg-slate-200 rounded text-slate-500">
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+
           <button
             onClick={async () => {
               if (!itemFormData.category) return toast.error("Please select a category");
@@ -856,6 +901,7 @@ const ScreenRestaurantDashboard = () => {
               formData.append('category', itemFormData.category);
               if ((itemFormData as any).discount_percentage) formData.append('discount_percentage', (itemFormData as any).discount_percentage);
               if (itemFormData.image1) formData.append('image1', itemFormData.image1);
+              if (itemFormData.video) formData.append('video', itemFormData.video);
 
               // Default availability for new items
               if (!editingItem) formData.append('availability', 'true');
@@ -875,7 +921,7 @@ const ScreenRestaurantDashboard = () => {
 
                 setShowAddItem(false);
                 setEditingItem(null);
-                setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null });
+                setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null, video: null });
                 fetchFoodItems(currentPage, debouncedSearchQuery);
               } catch (e: any) {
                 console.error(e);
