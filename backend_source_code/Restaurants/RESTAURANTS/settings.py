@@ -34,6 +34,368 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-change-in-p
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
+ALLOWED_HOSTS = ["*"]
+
+# Add Render.com URL if available
+RENDER_EXTERNAL_HOSTNAME = env('RENDER_EXTERNAL_HOSTNAME', default=None)
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://abc.winaclaim.com",
+    "https://clever-biz.netlify.app",
+    "https://clever-biz2.netlify.app",
+    "https://officialcleverdining.netlify.app",
+    "https://cleverdining-2.onrender.com",
+    "https://cleverdining-backend.onrender.com",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:5177",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:5176",
+    "http://127.0.0.1:5177",
+    "https://officialcleverdiningcustomer.netlify.app",
+]
+
+# Add Render.com URL to CSRF trusted origins
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+
+# Security Settings for Render (SSL Termination)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False) # Set to True in prod via Env
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "https://abc.winaclaim.com",
+    "https://clever-biz.netlify.app",
+    "https://clever-biz2.netlify.app",
+    "https://officialcleverdining.netlify.app",
+    "https://officialcleverdiningcustomer.netlify.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:5177",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:5176",
+    "http://127.0.0.1:5177",
+]
+
+# Allow credentials for authenticated requests
+CORS_ALLOW_CREDENTIALS = True
+
+# Explicitly allow OPTIONS method for CORS preflight
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+    'POST',
+]
+
+# Allow common headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-guest-session-token',
+]
+
+
+# Application definition
+
+INSTALLED_APPS = [
+    'daphne',
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'corsheaders',
+    'django_filters',
+    'accounts',
+    'owners',
+    'chef',
+    'staff',
+    'customer',
+    'category',
+    'item',
+    'restaurant',
+    'device',
+    'order',
+    'review',
+    'message',
+    'policy',
+    'adminapi',
+    'vapi',
+    'subscription',
+    'payment'
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS must be early, before CommonMiddleware
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON
+]
+
+ROOT_URLCONF = 'RESTAURANTS.urls'
+AUTH_USER_MODEL = 'accounts.User'
+
+
+
+# access token time 
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=365),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=3650),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+# Channels
+ASGI_APPLICATION = 'RESTAURANTS.asgi.application'
+WSGI_APPLICATION = 'RESTAURANTS.wsgi.application'
+
+
+# Channel layers - use in-memory for now, add Redis later if needed
+REDIS_HOST = env('REDIS_HOST', default=None)
+
+if REDIS_HOST and REDIS_HOST != 'localhost':
+    # Use Redis if available
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [(REDIS_HOST, 6379)],
+            },
+        },
+    }
+else:
+    # Use in-memory channel layer (simpler, works without Redis)
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        },
+    }
+
+
+# Database
+# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],  
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend"
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 10,
+    'DEFAULT_PERMISSION_CLASSES': [
+    'rest_framework.permissions.IsAuthenticated',
+],
+    'EXCEPTION_HANDLER': 'restaurant.exceptions.custom_exception_handler',
+}
+
+LOGIN_REDIRECT_URL = "/profile/"
+
+
+AUTHENTICATION_BACKENDS = [
+    'accounts.auth_backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',  # keep for admin and fallback
+]
+
+
+# Password validation
+# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
+LANGUAGE_CODE = 'en-us'
+
+TIME_ZONE = 'UTC'
+
+USE_I18N = True
+
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
+
+STATIC_URL = '/static/'
+# Media Files (Uploads)
+GS_BUCKET_NAME = env('GS_BUCKET_NAME', default=None)
+
+if GS_BUCKET_NAME:
+    # Google Cloud Storage Configuration
+    DEFAULT_FILE_STORAGE = "storages.backends.gcloud.GoogleCloudStorage"
+    GS_PROJECT_ID = env('GS_PROJECT_ID', default=None) # Optional if in creds
+    
+    # Load Credentials from JSON string in Env Var
+    import json
+    from google.oauth2 import service_account
+    GS_CREDENTIALS_JSON = env('GS_CREDENTIALS', default='{}')
+    try:
+        GS_CREDENTIALS = service_account.Credentials.from_service_account_info(
+            json.loads(GS_CREDENTIALS_JSON)
+        )
+    except Exception as e:
+        print(f"Warning: Failed to load GS_CREDENTIALS: {e}")
+        GS_CREDENTIALS = None
+
+    MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/"
+else:
+    # Local Storage (or Render Disk)
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = env('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'media'))
+
+STATICFILES_DIRS = [
+        os.path.join(BASE_DIR, 'static'),
+]
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# WhiteNoise configuration for serving static files in production
+# Use basic storage for ASGI compatibility
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+# Ensure WhiteNoise serves files correctly
+WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_USE_TLS = True
+# EMAIL_PORT = 587
+# EMAIL_HOST_USER = env("EMAIL", default='')
+# EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default='')
+
+# Use console backend for development to avoid SMTP errors
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': env('LOG_LEVEL', default='INFO'),
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': env('LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+        'accounts': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'restaurant': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+
+STRIPE_PUBLISHABLE_KEY = env('STRIPE_PUBLISHABLE_KEY', default='')
+
+
+#env
+
+VAPI_API=env('VAPI_API', default='')
+STRIPE_SECRET_KEY=env('STRIPE_SECRET_KEY', default='')
+STRIPE_WEBHOOK_SECRET=env('STRIPE_WEBHOOK_SECRET', default='')
+
+# OpenAI Configuration
+OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
 # Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
 USE_SQLITE = env.bool('USE_SQLITE', default=False)
 # --- CRITICAL DEBUG MODE ---
