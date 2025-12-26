@@ -923,7 +923,7 @@ const ScreenRestaurantDashboard = () => {
                 fetchFoodItems(currentPage, debouncedSearchQuery);
               } catch (e: any) {
                 console.error(e);
-                toast.error("Failed to save item: " + (e.response?.data?.error || e.message));
+                toast.error("Failed to save item: " + (e.response?.data?.detail || e.response?.data?.error || JSON.stringify(e.response?.data) || e.message));
               }
             }}
             className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center">
