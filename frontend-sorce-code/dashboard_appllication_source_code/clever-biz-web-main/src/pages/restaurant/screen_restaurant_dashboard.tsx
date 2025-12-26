@@ -320,7 +320,7 @@ const ScreenRestaurantDashboard = () => {
 
 
       {/* REVENUE CHART SECTION */}
-      {(userRole === 'owner' || (userRole as string) === 'manager') && (
+      {(userRole === 'owner' || userRole === 'manager') && (
         <div className="bg-white p-6 rounded-lg border border-slate-200">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
@@ -380,7 +380,7 @@ const ScreenRestaurantDashboard = () => {
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
-              {userRole === 'owner' && (
+              {(userRole === 'owner' || userRole === 'manager') && (
                 <>
                   <button className="h-8 px-3 ml-2 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddCategory(true)}>
                     <FolderPlus size={14} /> Add Category
@@ -450,7 +450,7 @@ const ScreenRestaurantDashboard = () => {
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-3 text-xs font-medium">
-                          {userRole === 'owner' && (
+                          {(userRole === 'owner' || userRole === 'manager') && (
                             <>
                               <button
                                 onClick={() => {
@@ -552,7 +552,7 @@ const ScreenRestaurantDashboard = () => {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-5 py-3 text-xs font-medium text-slate-600">Category</th>
-                  {userRole === 'owner' && <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>}
+                  {(userRole === 'owner' || userRole === 'manager') && <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -572,7 +572,7 @@ const ScreenRestaurantDashboard = () => {
                         </div>
                       </td>
 
-                      {userRole === 'owner' && (
+                      {(userRole === 'owner' || userRole === 'manager') && (
                         <td className="px-5 py-3 text-right">
                           <div className="flex justify-end gap-2">
                             {/* Edit/Delete Actions - Wiring up to Modals later */}
@@ -602,7 +602,7 @@ const ScreenRestaurantDashboard = () => {
                 <tr>
                   <th className="px-5 py-3 text-xs font-medium text-slate-600">Sub-Category</th>
                   <th className="px-5 py-3 text-xs font-medium text-slate-600">Parent Category</th>
-                  {userRole === 'owner' && <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>}
+                  {(userRole === 'owner' || userRole === 'manager') && <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -618,7 +618,7 @@ const ScreenRestaurantDashboard = () => {
                         {categories.find(c => c.id === sub.parent_category)?.Category_name || '-'}
                       </td>
 
-                      {userRole === 'owner' && (
+                      {(userRole === 'owner' || userRole === 'manager') && (
                         <td className="px-5 py-3 text-right">
                           <div className="flex justify-end gap-2">
                             <button onClick={() => { setEditingSubCategory(sub); setShowEditSubCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
