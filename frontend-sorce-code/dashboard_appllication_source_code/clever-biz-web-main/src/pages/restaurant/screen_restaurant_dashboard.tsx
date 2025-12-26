@@ -124,9 +124,7 @@ const ScreenRestaurantDashboard = () => {
   // Generic Form Data
   const [catFormData, setCatFormData] = useState({ name: "", image: null as File | null });
   const [subCatFormData, setSubCatFormData] = useState({ Category_name: "", parent_category: "", image: null as File | null });
-  // Close Day State
-  const [showCloseDay, setShowCloseDay] = useState(false);
-  const [isClosingDay, setIsClosingDay] = useState(false);
+
 
   // Add Item State
   const [showAddItem, setShowAddItem] = useState(false);
@@ -191,43 +189,7 @@ const ScreenRestaurantDashboard = () => {
 
 
 
-  const handleCloseDay = async () => {
-    setIsClosingDay(true);
-    try {
-      const res = await axiosInstance.post('/owners/business-days/close_day/');
-      toast.success(res.data.message || "Business Day Closed Successfully");
-      setShowCloseDay(false);
-      // Refresh analytics and maybe force reload as order list will clear?
-      fetchAnalytics();
-      fetchMostSellingItems();
-    } catch (error: any) {
-      console.error(error);
-      const errorMsg = error.response?.data?.error || "Failed to close day";
 
-      if (error.response?.data?.blocking_orders) {
-        toast.error(
-          <div>
-            <p className="font-bold">{errorMsg}</p>
-            <ul className="list-disc pl-4 mt-1 text-xs">
-              {error.response.data.blocking_orders.slice(0, 3).map((o: any) => <li key={o.id}>Table {o.device__table_name} - {o.status}</li>)}
-              {error.response.data.blocking_orders.length > 3 && <li>...and more</li>}
-            </ul>
-          </div>
-          , { duration: 5000 });
-      } else if (error.response?.data?.blocking_tables) {
-        toast.error(
-          <div>
-            <p className="font-bold">{errorMsg}</p>
-            <p className="text-xs mt-1">Active tables: {error.response.data.blocking_tables.map((t: any) => t.device__table_name).join(", ")}</p>
-          </div>
-          , { duration: 5000 });
-      } else {
-        toast.error(errorMsg);
-      }
-    } finally {
-      setIsClosingDay(false);
-    }
-  };
 
   useEffect(() => {
     if (userRole === 'owner') {
@@ -396,31 +358,7 @@ const ScreenRestaurantDashboard = () => {
         </div>
       )}
 
-      {/* CLOSE DAY BUTTON & MODAL (Header area ideally, but for now putting it near top logic) */}
-      <Modal isOpen={showCloseDay} onClose={() => setShowCloseDay(false)} title="Close Business Day">
-        <div className="space-y-4">
-          <div className="p-4 bg-orange-50 text-orange-800 rounded-lg text-xs">
-            <strong>Warning:</strong> This will finalize today's revenue and reset the dashboard for the next day. This cannot be undone.
-          </div>
 
-          {/* Summary (if available) - usually we fetch preview, but simplicity first */}
-          <p className="text-sm text-slate-600">
-            Ensure all active orders are completed and tables are cleared before closing.
-            Sessions and active chats will be archived.
-          </p>
-
-          <div className="flex gap-3 pt-2">
-            <button onClick={() => setShowCloseDay(false)} className="flex-1 h-10 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50">Cancel</button>
-            <button
-              onClick={handleCloseDay}
-              disabled={isClosingDay}
-              className="flex-1 h-10 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isClosingDay ? 'Closing...' : 'Confirm Close Day'}
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* CONTENT GRID */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -451,9 +389,6 @@ const ScreenRestaurantDashboard = () => {
                   </button>
                   <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddItem(true)}>
                     <Plus size={14} /> Add Item
-                  </button>
-                  <button className="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowCloseDay(true)}>
-                    <Lock size={14} /> Close Day
                   </button>
                 </>
               )}

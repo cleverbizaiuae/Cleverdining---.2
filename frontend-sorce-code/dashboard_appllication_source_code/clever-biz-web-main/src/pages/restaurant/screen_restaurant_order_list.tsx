@@ -123,12 +123,53 @@ const ScreenRestaurantOrderList = () => {
   );
 
   // 3. Actions
-  const handleCloseDay = () => {
-    const now = new Date().toISOString();
-    localStorage.setItem('closedDayDate', now);
-    setClosedDayDate(now);
-    setShowCloseDayConfirm(false);
-    toast.success("Day closed successfully. Old orders archived.");
+  const [isClosingDay, setIsClosingDay] = useState(false);
+
+  const handleCloseDay = async () => {
+    setIsClosingDay(true);
+    try {
+      const res = await axiosInstance.post('/owners/business-days/close_day/');
+      toast.success(res.data.message || "Business Day Closed Successfully");
+
+      const now = new Date().toISOString();
+      localStorage.setItem('closedDayDate', now);
+      setClosedDayDate(now);
+      setShowCloseDayConfirm(false);
+
+      // Refresh Orders
+      fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+
+    } catch (error: any) {
+      console.error(error);
+      const errorMsg = error.response?.data?.error || "Failed to close day";
+
+      if (error.response?.data?.blocking_orders) {
+        toast.error(
+          <div>
+            <p className="font-bold text-sm">Cannot Close Day</p>
+            <p className="text-xs mt-1 mb-1">{errorMsg}</p>
+            <ul className="list-disc pl-4 text-[10px] bg-red-50 p-2 rounded">
+              {error.response.data.blocking_orders.slice(0, 3).map((o: any) => <li key={o.id}>Table {o.device__table_name} - {o.status}</li>)}
+              {error.response.data.blocking_orders.length > 3 && <li>...and more</li>}
+            </ul>
+          </div>
+          , { duration: 6000 });
+      } else if (error.response?.data?.blocking_tables) {
+        toast.error(
+          <div>
+            <p className="font-bold text-sm">Cannot Close Day</p>
+            <p className="text-xs mt-1 mb-1">{errorMsg}</p>
+            <p className="text-[10px] bg-red-50 p-2 rounded">Active tables: {error.response.data.blocking_tables.map((t: any) => t.device__table_name).join(", ")}</p>
+          </div>
+          , { duration: 6000 });
+      } else {
+        toast.error(errorMsg);
+      }
+      // If validation failed, do NOT close the modal, let them fix it
+      // setShowCloseDayConfirm(false); 
+    } finally {
+      setIsClosingDay(false);
+    }
   };
 
   const handleConfirmCash = async (orderId: number) => {
@@ -482,10 +523,10 @@ const ScreenRestaurantOrderList = () => {
                 Cancel
               </button>
               <button
-                onClick={handleCloseDay}
-                className="flex-1 h-9 bg-[#0055FE] hover:bg-[#0047D1] rounded-lg text-sm text-white font-medium shadow-lg shadow-blue-500/20"
+                disabled={isClosingDay}
+                className="flex-1 h-9 bg-[#0055FE] hover:bg-[#0047D1] rounded-lg text-sm text-white font-medium shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                Confirm
+                {isClosingDay ? 'Closing...' : 'Confirm'}
               </button>
             </div>
           </div>
