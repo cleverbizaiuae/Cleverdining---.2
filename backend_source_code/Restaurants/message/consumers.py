@@ -23,6 +23,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.device_id = self.scope['url_route']['kwargs']['device_id']
         self.user = self.scope['user']
+        self.guest_session = self.scope.get('guest_session') # Capture session from scope (set by Middleware)
         self.user_info = self.scope.get('user_info', {})
         
         # Get restaurant_id from user_info or query params
@@ -84,7 +85,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             device_id=self.device_id,
             restaurant_id=self.restaurant_id,
             is_from_device=is_from_device,
-            room_name=self.restaurant_group_name
+            is_from_device=is_from_device,
+            room_name=self.restaurant_group_name,
+            guest_session=self.guest_session # Pass session
         )
 
         if not chat_message:
@@ -130,7 +133,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         }))
 
     @database_sync_to_async
-    def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device,room_name):
+    def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device,room_name, guest_session=None):
         try:
             device = Device.objects.get(id=device_id)
         except Device.DoesNotExist:
@@ -156,7 +159,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
             is_from_device=is_from_device,
             room_name=room_name,
             new_message=True,
-            business_day=restaurant.business_days.filter(is_active=True).last() # Link to active business day
+            room_name=room_name,
+            new_message=True,
+            business_day=restaurant.business_days.filter(is_active=True).last(), # Link to active business day
+            guest_session=guest_session # Link to specific session
         )
 
     @database_sync_to_async

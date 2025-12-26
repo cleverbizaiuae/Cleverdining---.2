@@ -48,8 +48,8 @@ class ChatMessageViewSet(ModelViewSet):
                     # Filter for active session, or just session by token
                     session = GuestSession.objects.filter(session_token=session_token, is_active=True).first()
                     if session:
-                        # STRICT VALIDATION: Ensure we only return messages for the session's device
-                        return queryset.filter(device=session.device).order_by('timestamp')
+                        # STRICT VALIDATION: Return messages for this specific session
+                        return queryset.filter(guest_session=session).order_by('timestamp')
                     else:
                         return queryset.none()
                 except Exception as e:
