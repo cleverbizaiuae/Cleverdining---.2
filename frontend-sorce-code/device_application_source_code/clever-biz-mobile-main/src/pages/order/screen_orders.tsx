@@ -93,8 +93,12 @@ const ScreenOrders = () => {
 
       let msg = "Payment was not completed. Please try again.";
 
-      if (paymentStatus === 'cancelled' || (paymentStatus === 'failed' && reason === 'unknown')) {
-        msg = "Payment Cancelled! Try Again";
+      if (
+        paymentStatus === 'cancelled' ||
+        reason === 'user_cancelled' ||
+        (paymentStatus === 'failed' && (reason === 'unknown' || !reason))
+      ) {
+        msg = "Payment cancelled by user.";
       } else if (reason) {
         msg = `Payment failed: ${decodeURIComponent(reason)}`;
       }
