@@ -85,7 +85,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             device_id=self.device_id,
             restaurant_id=self.restaurant_id,
             is_from_device=is_from_device,
-            is_from_device=is_from_device,
             room_name=self.restaurant_group_name,
             guest_session=self.guest_session # Pass session
         )
