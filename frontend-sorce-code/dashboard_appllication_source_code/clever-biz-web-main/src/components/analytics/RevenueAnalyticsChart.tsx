@@ -130,47 +130,45 @@ export const RevenueAnalyticsChart = ({ data, labels, orders, comparisonData, sh
             },
         },
         scales: {
-            scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: {
-                        color: '#94a3b8',
-                        font: { size: 11, family: 'Inter' },
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 12
-                    }
+            x: {
+                grid: { display: false },
+                ticks: {
+                    color: '#94a3b8',
+                    font: { size: 11, family: 'Inter' },
+                    maxRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 12
+                }
+            },
+            y: { // Revenue Axis (Left)
+                type: 'linear' as const,
+                display: true,
+                position: 'left' as const,
+                grid: { color: '#f1f5f9', borderDash: [4, 4] },
+                border: { display: false },
+                ticks: {
+                    color: '#64748b',
+                    font: { size: 11, family: 'Inter', weight: 500 },
+                    padding: 8,
+                    callback: (val: any) => `AED ${val >= 1000 ? val / 1000 + 'k' : val}`
                 },
-                y: { // Revenue Axis (Left)
-                    type: 'linear' as const,
-                    display: true,
-                    position: 'left' as const,
-                    grid: { color: '#f1f5f9', borderDash: [4, 4] },
-                    border: { display: false },
-                    ticks: {
-                        color: '#64748b',
-                        font: { size: 11, family: 'Inter', weight: 500 },
-                        padding: 8,
-                        callback: (val: any) => `AED ${val >= 1000 ? val / 1000 + 'k' : val}`
-                    },
-                    beginAtZero: true,
+                beginAtZero: true,
+            },
+            y1: { // Orders Axis (Right)
+                type: 'linear' as const,
+                display: true,
+                position: 'right' as const,
+                grid: { display: false },
+                border: { display: false },
+                ticks: {
+                    color: '#8B5CF6',
+                    font: { size: 11, family: 'Inter', weight: 600 },
+                    padding: 8,
+                    callback: (val: any) => `${val}`
                 },
-                y1: { // Orders Axis (Right)
-                    type: 'linear' as const,
-                    display: true,
-                    position: 'right' as const,
-                    grid: { display: false },
-                    border: { display: false },
-                    ticks: {
-                        color: '#8B5CF6',
-                        font: { size: 11, family: 'Inter', weight: 600 },
-                        padding: 8,
-                        callback: (val: any) => `${val}`
-                    },
-                    beginAtZero: true,
-                    // Ensure orders don't look squashed if numbers are small
-                    suggestedMax: safeOrders.length > 0 ? Math.max(...safeOrders) * 1.5 : 5
-                },
+                beginAtZero: true,
+                // Ensure orders don't look squashed if numbers are small
+                suggestedMax: safeOrders.length > 0 ? Math.max(...safeOrders) * 1.5 : 5
             },
         },
     };
