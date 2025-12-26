@@ -13,7 +13,7 @@ export type FoodItemTypes = {
   category_name: string;
   image1: string;
   availability: boolean;
-  video: string;
+  video?: string | null;
   restaurant_name: string;
   sub_category?: number;
   discount_percentage?: number; // Added
