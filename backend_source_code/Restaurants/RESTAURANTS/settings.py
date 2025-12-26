@@ -409,9 +409,9 @@ if USE_SQLITE:
         }
     }
 else:
-    # HARDCODED INTERNAL DATABASE CONNECTION (Render Internal Network)
-    # Using Internal Hostname to avoid SSL/Public Internet issues
-    print("!!! USING HARDCODED INTERNAL DATABASE CONFIG !!!")
+    # HARDCODED EXTERNAL DATABASE CONNECTION (Reverting to Public URL)
+    # Internal failed (DNS), so we must use Public + SSL
+    print("!!! USING HARDCODED EXTERNAL DATABASE CONFIG !!!")
     
     DATABASES = {
         'default': {
@@ -419,12 +419,12 @@ else:
             'NAME': 'cleverdining_db',
             'USER': 'cleverdining_db_user',
             'PASSWORD': '41ETCSVh25R43IG4vJrL0FHaFOcUoClV',
-            'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a', # Internal Hostname
+            'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com', # External Hostname
             'PORT': '5432',
+            'OPTIONS': {
+                'sslmode': 'require',
+            },
         }
     }
-    # Internal connections on Render usually work best without forcing SSL mode 'require'
-    # But we can leave OPTIONS empty or set to 'prefer' if needed.
-    # Trying clean connection first.
-    
+
     print(f"  ! Active Host: {DATABASES['default']['HOST']}")
