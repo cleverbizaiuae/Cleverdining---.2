@@ -96,16 +96,26 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               </motion.div>
             ) : (
               <>
-                <img
-                  src={getImageUrl(item?.image1)}
-                  alt={item?.item_name || "Food Item"}
-                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    // Show a fallback div if image fails
-                    e.currentTarget.parentElement?.querySelector('.fallback-placeholder')?.classList.remove('hidden');
-                  }}
-                />
+                {(item?.video && !item?.image1) ? (
+                  <video
+                    src={item.video.startsWith("http") ? item.video : `https://cleverdining-2.onrender.com${item.video}`}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img
+                    src={getImageUrl(item?.image1)}
+                    alt={item?.item_name || "Food Item"}
+                    className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      // Show a fallback div if image fails
+                      e.currentTarget.parentElement?.querySelector('.fallback-placeholder')?.classList.remove('hidden');
+                    }}
+                  />
+                )}
                 {/* Fallback Div (Hidden by default, shown on error) */}
                 <div className="fallback-placeholder hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400">
                   <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
