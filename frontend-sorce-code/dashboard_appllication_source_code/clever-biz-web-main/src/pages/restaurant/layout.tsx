@@ -30,14 +30,14 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['manager', 'staff', 'chef'] },
-  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['manager', 'staff', 'chef'] },
-  { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['manager', 'staff'] },
-  { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['manager', 'staff', 'chef'] },
-  { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['manager'] },
-  { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['manager'] },
-  { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['manager'] },
-  { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['manager', 'staff'] },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['owner', 'manager', 'staff', 'chef'] },
+  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
+  { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
+  { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
+  { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
 ];
 
 const RestaurantLayout = () => {
