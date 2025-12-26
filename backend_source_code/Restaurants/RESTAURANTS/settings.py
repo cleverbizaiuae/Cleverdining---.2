@@ -409,15 +409,22 @@ if USE_SQLITE:
         }
     }
 else:
-    # HARDCODED EXTERNAL DATABASE CONNECTION (Explicit Options)
-    print("!!! USING HARDCODED EXTERNAL DATABASE CONFIG (WITH OPTIONS) !!!")
+    # HARDCODED INTERNAL DATABASE CONNECTION (Render Internal Network)
+    # Using Internal Hostname to avoid SSL/Public Internet issues
+    print("!!! USING HARDCODED INTERNAL DATABASE CONFIG !!!")
     
     DATABASES = {
-        'default': env.db_url_config(
-             'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
-        )
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'cleverdining_db',
+            'USER': 'cleverdining_db_user',
+            'PASSWORD': '41ETCSVh25R43IG4vJrL0FHaFOcUoClV',
+            'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a', # Internal Hostname
+            'PORT': '5432',
+        }
     }
-    # Explicitly force SSL in Options
-    DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
-
+    # Internal connections on Render usually work best without forcing SSL mode 'require'
+    # But we can leave OPTIONS empty or set to 'prefer' if needed.
+    # Trying clean connection first.
+    
     print(f"  ! Active Host: {DATABASES['default']['HOST']}")
