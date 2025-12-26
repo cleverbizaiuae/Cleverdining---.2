@@ -409,14 +409,15 @@ if USE_SQLITE:
         }
     }
 else:
-    # HARDCODED EXTERNAL DATABASE CONNECTION
-    # Bypassing all environment variables to ensure connectivity
-    print("!!! USING HARDCODED EXTERNAL DATABASE CONFIG !!!")
+    # HARDCODED EXTERNAL DATABASE CONNECTION (Explicit Options)
+    print("!!! USING HARDCODED EXTERNAL DATABASE CONFIG (WITH OPTIONS) !!!")
     
     DATABASES = {
         'default': env.db_url_config(
-             'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db?sslmode=require'
+             'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
         )
     }
+    # Explicitly force SSL in Options
+    DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 
     print(f"  ! Active Host: {DATABASES['default']['HOST']}")
