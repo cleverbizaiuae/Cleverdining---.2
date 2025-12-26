@@ -411,23 +411,33 @@ if USE_SQLITE:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-else:
+    # Universal DB Fix: Pre-process DATABASE_URL to guarantee External + SSL
+    # We intercept the URL string before Django parses it to ensure consistent behavior.
+    
+    # 1. Get the raw URL (from Env or Default)
+    default_db_url = 'postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db'
+    raw_db_url = os.environ.get('DATABASE_URL', default_db_url)
+
+    # 2. Check and Rewrite
+    final_db_url = raw_db_url
+    
+    # If it points to the internal hostname (which fails DNS), force External
+    if 'dpg-d4ivnueuk2gs73bh11i0-a' in final_db_url and 'render.com' not in final_db_url:
+        print(f"  ! Rewriting DB URL: Switching Internal -> External")
+        final_db_url = final_db_url.replace('dpg-d4ivnueuk2gs73bh11i0-a', 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com')
+    
+    # If it is External (contains render.com), FORCE SSL mode
+    if 'render.com' in final_db_url and 'sslmode=require' not in final_db_url:
+        print(f"  ! Rewriting DB URL: Appending ?sslmode=require")
+        if '?' in final_db_url:
+             final_db_url += '&sslmode=require'
+        else:
+             final_db_url += '?sslmode=require'
+
+    # 3. Configure Databases
+    # We pass the final string directly to env.db_url_config to parse it exactly as is
     DATABASES = {
-        'default': env.db('DATABASE_URL', default='postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db')
+        'default': env.db_url_config(final_db_url)
     }
 
-    # Universal DB Fix: Force External Connection & SSL
-    
-    current_host = DATABASES['default'].get('HOST', '')
-    
-    # 1. Switch Internal -> External if needed (for stability)
-    if 'dpg-d4ivnueuk2gs73bh11i0-a' in current_host and 'render.com' not in current_host:
-        print(f"  ! Auto-Switching DB from Internal '{current_host}' to External URL.")
-        DATABASES['default']['HOST'] = 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com'
-        current_host = DATABASES['default']['HOST'] # Update for next check
-
-    # 2. Enforce SSL for External Render Connections (Critical!)
-    if 'render.com' in current_host:
-        print("  ! Enforcing SSL for External Render Database Connection.")
-        DATABASES['default'].setdefault('OPTIONS', {})
-        DATABASES['default']['OPTIONS']['sslmode'] = 'require'
+    print(f"  ! Final Active DB Host: {DATABASES['default']['HOST']}")
