@@ -461,8 +461,6 @@ const ScreenRestaurantDashboard = () => {
                                     description: item.description || "",
                                     category: item.category_id || "",
                                     discount_percentage: item.discount_percentage || 0,
-                                    category: item.category_id || "",
-                                    discount_percentage: item.discount_percentage || 0,
                                     image1: null,
                                     video: null
                                   });
