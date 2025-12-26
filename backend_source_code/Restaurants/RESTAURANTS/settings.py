@@ -416,19 +416,18 @@ else:
         'default': env.db('DATABASE_URL', default='postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db')
     }
 
-    # Universal DB Fix: Force External Connection for Stability
-    # This ensures both Local and Render environments connect successfully.
-    # While Internal URL is preferred for Render, the DNS resolution is currently failing.
-    # Using External URL is a safe fallback.
+    # Universal DB Fix: Force External Connection & SSL
     
     current_host = DATABASES['default'].get('HOST', '')
     
-    # Check for the specific internal hostname causing issues
+    # 1. Switch Internal -> External if needed (for stability)
     if 'dpg-d4ivnueuk2gs73bh11i0-a' in current_host and 'render.com' not in current_host:
-        print(f"  ! Universal Fix: Switching DB from internal host '{current_host}' to External URL.")
-        # Force External URL
+        print(f"  ! Auto-Switching DB from Internal '{current_host}' to External URL.")
         DATABASES['default']['HOST'] = 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com'
-        
-        # Enforce SSL (Required for External Render connections)
+        current_host = DATABASES['default']['HOST'] # Update for next check
+
+    # 2. Enforce SSL for External Render Connections (Critical!)
+    if 'render.com' in current_host:
+        print("  ! Enforcing SSL for External Render Database Connection.")
         DATABASES['default'].setdefault('OPTIONS', {})
         DATABASES['default']['OPTIONS']['sslmode'] = 'require'
