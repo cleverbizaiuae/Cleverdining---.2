@@ -156,7 +156,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON
+    # 'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON (DISABLED FOR DEBUGGING)
 ]
 
 ROOT_URLCONF = 'RESTAURANTS.urls'
