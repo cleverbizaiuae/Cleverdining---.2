@@ -89,6 +89,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                   src={item.video}
                   controls
                   autoPlay
+                  playsInline
+                  webkit-playsinline="true"
                   className="w-full h-full object-cover"
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -102,6 +104,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                     className="w-full h-full object-cover"
                     muted
                     playsInline
+                    webkit-playsinline="true"
+                    loop
+                    autoPlay
                     preload="metadata"
                   />
                 ) : (
