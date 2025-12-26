@@ -96,10 +96,16 @@ function App() {
       </Route>
       {/* Staff screens - Unified with Restaurant Layout */}
       <Route path="/staff" element={<RestaurantLayout />}>
-        <Route index={true} element={<ScreenStaffDashboard />} />
+        {/* Manager gets Full Dashboard, Staff gets limited view (handled by Layout/Sidebar) */}
+        <Route index={true} element={<ScreenRestaurantDashboard />} />
         <Route path="orders" element={<ScreenRestaurantOrderList />} />
         <Route path="reservations" element={<ScreenRestaurantReservations />} />
         <Route path="messages" element={<ScreenRestaurantChat />} />
+        {/* Manager Only Routes - Added to Staff Path */}
+        <Route path="management" element={<ScreenRestaurantManagement />} />
+        <Route path="devices" element={<ScreenRestaurantDevices />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
       </Route>
       {/* Chef screens */}
       <Route path="/chef" element={<RestaurantLayout />}>

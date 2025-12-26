@@ -104,9 +104,15 @@ const RestaurantLayout = () => {
   };
 
   // Filter items based on role
-  let currentRole = 'manager';
-  if (isStaffDashboard) currentRole = 'staff';
-  if (isChefDashboard) currentRole = 'chef';
+  let currentRole = user.role || 'staff';
+
+  // Only override if we are sure (Fallback safety, but user.role is better source of truth)
+  // If user is logged in as 'manager', currentRole is 'manager'.
+  // If user is 'staff', currentRole is 'staff'.
+
+  // Ensure 'manager' can see manager items even on /staff route
+  // The previous logic forced 'staff' role based on URL, blocking sidebar items.
+  // Now we trust the token/localStorage.
 
   const filteredItems = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
