@@ -33,6 +33,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-change-in-production-12345')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+
+# Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
+USE_SQLITE = env.bool('USE_SQLITE', default=False)
 # --- CRITICAL DEBUG MODE ---
 DEBUG = True
 
