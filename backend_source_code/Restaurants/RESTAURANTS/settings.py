@@ -416,18 +416,19 @@ else:
         'default': env.db('DATABASE_URL', default='postgresql://cleverdining_db_user:41ETCSVh25R43IG4vJrL0FHaFOcUoClV@dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com/cleverdining_db')
     }
 
-    # Auto-Configuration for Render vs Local
-    # Render sets the 'RENDER' environment variable to 'true'
-    ON_RENDER = os.environ.get('RENDER') or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-
-    if not ON_RENDER:
-        # We are running LOCALLY.
-        # If the HOST is set to the internal Render hostname (which is not resolvable locally), 
-        # switch to the External URL to allow local connectivity.
-        current_host = DATABASES['default'].get('HOST', '')
-        # Check specifically for the internal hostname or generic match
-        if current_host == 'dpg-d4ivnueuk2gs73bh11i0-a' or 'dpg-' in current_host and 'render.com' not in current_host:
-            print(f"  ! Local Environment Detected: Switching DB from internal host '{current_host}' to External URL.")
-            DATABASES['default']['HOST'] = 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com'
-            DATABASES['default'].setdefault('OPTIONS', {})
-            DATABASES['default']['OPTIONS']['sslmode'] = 'require'
+    # Universal DB Fix: Force External Connection for Stability
+    # This ensures both Local and Render environments connect successfully.
+    # While Internal URL is preferred for Render, the DNS resolution is currently failing.
+    # Using External URL is a safe fallback.
+    
+    current_host = DATABASES['default'].get('HOST', '')
+    
+    # Check for the specific internal hostname causing issues
+    if 'dpg-d4ivnueuk2gs73bh11i0-a' in current_host and 'render.com' not in current_host:
+        print(f"  ! Universal Fix: Switching DB from internal host '{current_host}' to External URL.")
+        # Force External URL
+        DATABASES['default']['HOST'] = 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com'
+        
+        # Enforce SSL (Required for External Render connections)
+        DATABASES['default'].setdefault('OPTIONS', {})
+        DATABASES['default']['OPTIONS']['sslmode'] = 'require'
