@@ -72,7 +72,7 @@ const ScreenCart = () => {
         }
       );
       toast.success("Order placed successfully!");
-      // clearCart();  <-- Removed: Do not clear cart until payment success
+      clearCart();
 
       // Navigate to checkout with the new Order ID
       if (response.data && response.data.id) {
