@@ -48,8 +48,18 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     const userInfo = localStorage.getItem("userInfo");
     const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
-    const device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
-    const restaurant_id = parsedUserInfo?.user?.restaurants?.[0]?.id;
+
+    // Robust ID Extraction (Supports Owner User structure AND Guest/Table Session structure)
+    let device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
+    let restaurant_id = parsedUserInfo?.user?.restaurants?.[0]?.id;
+
+    // Fallback for Guest/Table Session (where structure is flat or different)
+    if (!device_id) {
+      device_id = parsedUserInfo?.table_id || parsedUserInfo?.device_id || parsedUserInfo?.user?.device_id;
+    }
+    if (!restaurant_id) {
+      restaurant_id = parsedUserInfo?.restaurant_id || parsedUserInfo?.user?.restaurant_id;
+    }
 
     if (!device_id) return;
 

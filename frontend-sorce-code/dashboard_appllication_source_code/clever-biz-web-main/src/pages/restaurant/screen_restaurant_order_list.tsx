@@ -228,13 +228,7 @@ const ScreenRestaurantOrderList = () => {
   };
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
-    try {
-      await updateOrderStatus(orderId, newStatus);
-      toast.success(`Order status updated to ${newStatus}`);
-    } catch (e) {
-      console.error("Status update failed", e);
-      toast.error("Failed to update status");
-    }
+    await updateOrderStatus(orderId, newStatus);
   };
 
   return (
@@ -243,33 +237,36 @@ const ScreenRestaurantOrderList = () => {
       {/* PENDING CASH BANNER */}
       {cashOrders.length > 0 && (
         <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-700 shrink-0 animate-pulse">
               <span className="text-lg">💵</span>
             </div>
             <div>
               <h3 className="font-bold text-yellow-800 text-sm">Cash Payments Pending</h3>
-              <p className="text-xs text-yellow-700 font-medium">
-                Collect cash from tables to complete sessions.
+              <p className="text-xs text-yellow-700 font-medium whitespace-nowrap">
+                Collect cash to complete.
               </p>
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-auto">
+          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:flex-1 md:min-w-0">
             {cashOrders.map((order: any) => (
-              <div key={order.id} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[220px] flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-800 font-bold text-xs shrink-0 border border-yellow-200">
-                  {order.device_table_name || "Tab"}
+              <div key={order.id} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3 shrink-0">
+                {/* Table Number Badge */}
+                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex flex-col items-center justify-center text-yellow-800 font-bold text-[10px] shrink-0 border border-yellow-200 leading-tight">
+                  <span>Table</span>
+                  <span className="text-xs">{order.tableNo || order.device_table_name || "?"}</span>
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-900 truncate">Order #{order.id}</p>
                   <p className="text-[10px] text-slate-500 font-bold">AED {order.total_price}</p>
                 </div>
                 <button
                   onClick={() => handleConfirmCash(order.id)}
-                  className="h-7 px-3 bg-yellow-500 hover:bg-yellow-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors"
+                  className="h-7 px-3 bg-yellow-500 hover:bg-yellow-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors whitespace-nowrap"
                 >
-                  Mark Received
+                  Confirm
                 </button>
               </div>
             ))}
@@ -463,7 +460,9 @@ const ScreenRestaurantOrderList = () => {
                           </button>
                           {/* Simple Hover Menu for Actions */}
                           <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 hidden group-hover:block z-10">
-                            <button onClick={() => handleStatusChange(order.id, 'completed')} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Close Tab</button>
+                            {order.status !== 'completed' && (
+                              <button onClick={() => handleStatusChange(order.id, 'completed')} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Close Tab</button>
+                            )}
                             <button onClick={() => handleStatusChange(order.id, 'cancelled')} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel Order</button>
                           </div>
                         </div>
@@ -535,69 +534,112 @@ const ScreenRestaurantOrderList = () => {
 
       {/* VIEW ORDER MODAL */}
       {viewModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Order #{selectedOrder.id}</h3>
-                <p className="text-xs text-slate-500">{selectedOrder.device_table_name || "Table N/A"}</p>
-              </div>
-              <button onClick={() => setViewModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <span className="sr-only">Close</span>
-                {/* Close Icon SVG or Lucide X */}
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-              </button>
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+          {/* Modal Header */}
+          <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Order #{selectedOrder.id}</h3>
+              <p className="text-xs text-slate-500">{selectedOrder.device_table_name || "Table N/A"}</p>
             </div>
+            <button onClick={() => setViewModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <span className="sr-only">Close</span>
+              {/* Close Icon SVG or Lucide X */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+            </button>
+          </div>
 
-            {/* Modal Body */}
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
-              {/* Items */}
-              <div className="space-y-3">
-                {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                  selectedOrder.items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-3 p-2 border border-slate-100 rounded-lg">
-                      <div className="w-12 h-12 bg-slate-100 rounded-md flex items-center justify-center shrink-0">
-                        {item.image || item.image1 ? (
-                          <img src={item.image || item.image1} alt={item.item_name} className="w-full h-full object-cover rounded-md" />
-                        ) : (
-                          <span className="text-[10px] text-slate-400">Img</span>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-900 line-clamp-1">{item.item_name || "Item"}</p>
-                        <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
-                      </div>
-                      <p className="text-sm font-semibold text-[#0055FE]">AED {item.price}</p>
+          {/* Modal Body */}
+          <div className="p-4 max-h-[60vh] overflow-y-auto">
+            {/* Items */}
+            <div className="space-y-3">
+              {/* Check both order_items (backend) and items (legacy/frontend) */}
+              {(selectedOrder.order_items || selectedOrder.items) && (selectedOrder.order_items || selectedOrder.items).length > 0 ? (
+                (selectedOrder.order_items || selectedOrder.items).map((item: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-3 p-2 border border-slate-100 rounded-lg">
+                    <div className="w-12 h-12 bg-slate-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
+                      {item.image || item.image1 ? (
+                        <img src={item.image || item.image1} alt={item.item_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[10px] text-slate-400">Img</span>
+                      )}
                     </div>
-                  ))
-                ) : (
-                  <p className="text-center text-xs text-slate-400 py-4">No items details available</p>
-                )}
-              </div>
-
-              {/* Notes */}
-              {selectedOrder.special_request && (
-                <div className="mt-4 bg-yellow-50 border border-yellow-100 p-3 rounded-lg">
-                  <p className="text-xs font-bold text-yellow-700 uppercase mb-1">Notes</p>
-                  <p className="text-xs text-yellow-800 italic">{selectedOrder.special_request}</p>
-                </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-900 line-clamp-1">{item.item_name || "Item"}</p>
+                      {/* Handle both cases for price/qty location if structure varies */}
+                      <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
+                    </div>
+                    <p className="text-sm font-semibold text-[#0055FE]">AED {item.price}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-xs text-slate-400 py-4">No items details available</p>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-              <div>
-                <p className="text-xs text-slate-400">Total Amount</p>
-                <p className="text-xl font-bold">AED {selectedOrder.total_price}</p>
+            {/* Notes */}
+            {selectedOrder.special_request && (
+              <div className="mt-4 bg-yellow-50 border border-yellow-100 p-3 rounded-lg">
+                <p className="text-xs font-bold text-yellow-700 uppercase mb-1">Notes</p>
+                <p className="text-xs text-yellow-800 italic">{selectedOrder.special_request}</p>
               </div>
-              <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                Close
-              </button>
+            )}
+
+            {/* Payment Details */}
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Payment Details</h4>
+              <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Status</span>
+                  <span className={`font-bold uppercase ${selectedOrder.payment_status?.toLowerCase() === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
+                    {selectedOrder.payment_status || "Unpaid"}
+                  </span>
+                </div>
+
+                {/* Display Payments if available */}
+                {selectedOrder.payments && selectedOrder.payments.length > 0 ? (
+                  selectedOrder.payments.map((p: any, i: number) => (
+                    <div key={i} className="pt-2 border-t border-slate-200 mt-2">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-500">Method</span>
+                        <span className="font-medium text-slate-900 capitalize">{p.provider?.replace('_', ' ') || "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-500">Transaction ID</span>
+                        <span className="font-medium text-slate-900">{p.transaction_id ? `#${p.transaction_id.slice(-8)}` : "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Date</span>
+                        <span className="font-medium text-slate-900">{new Date(p.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  selectedOrder.payment_status === 'paid' && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Method</span>
+                      <span className="font-medium text-slate-900">Manual / Cash</span>
+                    </div>
+                  )
+                )}
+              </div>
             </div>
+
+          </div>
+
+          {/* Modal Footer */}
+          <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+            <div>
+              <p className="text-xs text-slate-400">Total Amount</p>
+              <p className="text-xl font-bold">AED {selectedOrder.total_price}</p>
+            </div>
+            <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              Close
+            </button>
           </div>
         </div>
       )}
+
+
 
       {/* Modals */}
       <StripeConnectModal open={openStripe} onClose={() => setOpenStripe(false)} />
@@ -606,7 +648,7 @@ const ScreenRestaurantOrderList = () => {
         onClose={() => setOpenGatewayModal(false)}
         provider={selectedProvider}
       />
-    </div>
+    </div >
   );
 };
 

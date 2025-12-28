@@ -4,9 +4,10 @@ from item.models import Item
 
 class OrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name')
+    image = serializers.ImageField(source='item.image', read_only=True)
     class Meta:
         model = OrderItem
-        fields = ['item_name', 'quantity', 'price']
+        fields = ['item_name', 'quantity', 'price', 'image']
 
 
 

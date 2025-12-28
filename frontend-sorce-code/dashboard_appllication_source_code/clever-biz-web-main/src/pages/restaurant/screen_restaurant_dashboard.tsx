@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
+import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import {
   TrendingUp,
   ShoppingBag,
@@ -95,6 +95,7 @@ const ScreenRestaurantDashboard = () => {
   } = useOwner();
 
   const { userRole } = useRole();
+  const { response } = useContext(WebSocketContext);
 
   // State
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -153,6 +154,20 @@ const ScreenRestaurantDashboard = () => {
       setAnalyticsLoading(false);
     }
   }, [timeRange, compareEnabled]);
+
+  // Real-time Updates
+  useEffect(() => {
+    if (
+      response?.type === "order_paid" ||
+      response?.type === "cash_payment_confirmed" ||
+      response?.type === "order_completed" ||
+      response?.type === "chefstaff_created" ||
+      response?.type === "chefstaff_deleted"
+    ) {
+      console.log("Real-time Dashboard Update:", response.type);
+      fetchAnalytics();
+    }
+  }, [response, fetchAnalytics]);
 
   // Add Item State
 

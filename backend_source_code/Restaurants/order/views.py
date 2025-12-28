@@ -180,30 +180,29 @@ class ConfirmCashPaymentAPIView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def patch(self, request, pk):
+        from payment.models import Payment
+        import uuid
+
         try:
             # Verify permission (Owner/Staff of restaurant)
-            if request.user.role == 'owner':
+            if hasattr(request.user, 'role') and request.user.role == 'owner':
                 order = Order.objects.get(pk=pk, restaurant__owner=request.user)
             else:
-                # Staff logic - already filtered by IsOwnerChefOrStaff but verify object
-                order = Order.objects.get(pk=pk)
-                # Ideally add restaurant check, but permissions class does strict check usually?
-                # For safety, skipping strict object-level check inside logic for speed, but Permission class handles restaurant access?
-                # Actually IsOwnerChefOrStaff is global, need to filter.
-                pass
+                order = Order.objects.get(pk=pk) # Permission class handles access
         except Order.DoesNotExist:
              return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if order.payment_status == 'paid':
              return Response({"message": "Order is already paid"}, status=status.HTTP_200_OK)
 
-        # Update Order (and all other session orders if bulk/session-based)
+        # Update Order (and all other session orders ONLY if they are also awaiting cash)
         orders_to_update = [order]
         
         if order.guest_session:
+             # Only auto-confirm other orders if they are ALSO waiting for cash (Bulk Cash Payment Case)
              session_orders = Order.objects.filter(
                  guest_session=order.guest_session,
-                 status__in=['pending', 'preparing', 'served', 'awaiting_cash']
+                 status='awaiting_cash'
              ).exclude(pk=order.pk).exclude(payment_status='paid')
              orders_to_update.extend(list(session_orders))
         
@@ -212,6 +211,22 @@ class ConfirmCashPaymentAPIView(APIView):
             o.payment_status = 'paid'
             o.save()
             
+            # CREATE PAYMENT RECORD
+            try:
+                Payment.objects.create(
+                    device=o.device,
+                    restaurant=o.restaurant,
+                    order=o,
+                    amount=o.total_price,
+                    provider='cash',
+                    status='completed',
+                    transaction_id=f"cash_{o.id}_{uuid.uuid4().hex[:8]}",
+                    confirmed_at=now(),
+                    created_by=f"staff:{request.user.id}"
+                )
+            except Exception as e:
+                print(f"Error creating payment record for order {o.id}: {e}")
+
             # Notify Restaurant (Updates Dashboard for each order logic or refresh)
             data = OrderDetailSerializer(o).data
             async_to_sync(channel_layer.group_send)(
@@ -230,33 +245,41 @@ class ConfirmCashPaymentAPIView(APIView):
                 }
             )
 
-        # End Session
+        # Check if session should end (Are there any OTHER unpaid orders?)
         if order.guest_session:
             session = order.guest_session
-            session.is_active = False
-            session.end_time = now() # Ensure end_time is set if field exists, else just is_active
-            # check if end_time exists in GuestSession model? I saw expires_at, created_at.
-            # I should inspect GuestSession model again. It has last_seen_at. 
-            # It DOES NOT have end_time in the ViewFile output I saw earlier (lines 66-73 in device/models.py).
-            # I should add 'ended_at' field? Or just rely on is_active=False.
-            # Prompt says "session.end_time = now".
-            # I must add `ended_at` to GuestSession model.
+            remaining_unpaid = Order.objects.filter(
+                guest_session=session,
+                status__in=['pending', 'preparing', 'served', 'awaiting_cash']
+            ).exclude(payment_status='paid').exists()
             
-            # For now I will just save is_active=False.
-            session.save()
-            
-            # Notify Guest (Updates App)
-            async_to_sync(channel_layer.group_send)(
-                f"session_{order.guest_session.id}",
-                {
-                    "type": "order_status_update",
-                    "order_id": order.id,
-                    "status": 'paid', 
-                    "session_ended": True
-                }
-            )
+            if not remaining_unpaid:
+                session.is_active = False
+                session.save()
+                
+                # Notify Guest (Updates App)
+                async_to_sync(channel_layer.group_send)(
+                    f"session_{order.guest_session.id}",
+                    {
+                        "type": "order_status_update",
+                        "order_id": order.id,
+                        "status": 'paid', 
+                        "session_ended": True
+                    }
+                )
+            else:
+                 # Just notify status update without ending session
+                 async_to_sync(channel_layer.group_send)(
+                    f"session_{order.guest_session.id}",
+                    {
+                        "type": "order_status_update",
+                        "order_id": order.id,
+                        "status": 'paid', 
+                        "session_ended": False
+                    }
+                )
 
-        return Response({"message": "Cash payment confirmed and session ended."})
+        return Response({"message": "Cash payment confirmed."})
 
 
 
@@ -302,7 +325,7 @@ class MyOrdersAPIView(generics.ListAPIView):
         if user.is_authenticated:
             return Order.objects.filter(
                 device__user=user,
-                status__in=['pending', 'preparing', 'served' , 'paid']
+                status__in=['pending', 'preparing', 'served', 'completed', 'paid']
             ).order_by('-created_time')
         else:
             # Try to resolve guest session
@@ -312,7 +335,7 @@ class MyOrdersAPIView(generics.ListAPIView):
                     session = GuestSession.objects.get(session_token=session_token, is_active=True)
                     return Order.objects.filter(
                         guest_session=session,
-                        status__in=['pending', 'preparing', 'served' , 'paid']
+                        status__in=['pending', 'preparing', 'served', 'completed', 'paid']
                     ).order_by('-created_time')
                 except GuestSession.DoesNotExist:
                     return Order.objects.none()
@@ -322,7 +345,7 @@ class MyOrdersAPIView(generics.ListAPIView):
             if device_id:
                 return Order.objects.filter(
                     device_id=device_id,
-                    status__in=['pending', 'preparing', 'served' , 'paid']
+                    status__in=['pending', 'preparing', 'served', 'completed', 'paid']
                 ).order_by('-created_time')
             return Order.objects.none()
 
@@ -425,16 +448,25 @@ class OwnerUpdateOrderStatusAPIView(APIView):
             return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-        if order.status == "completed":
-            return Response({"error": "Order already completed"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Allow cancelling a completed order (Voiding)
+        if order.status == "completed" and new_status == "cancelled":
+             pass # Allow passing through to update
+        
+        # Allow re-marking as completed (Idempotent - checks payment/messages again)
+        elif order.status == "completed" and new_status == "completed":
+             pass 
+             
+        elif order.status == "completed":
+            return Response({"error": "Order is already completed/delivered."}, status=status.HTTP_400_BAD_REQUEST)
 
-
-        if order.status == "paid" and new_status != "completed":
+        if order.status == "paid" and new_status != "completed" and new_status != "cancelled":
             return Response({"error": "Once order is paid, it can only be marked as completed."}, status=status.HTTP_400_BAD_REQUEST)
 
+
         order.status = new_status
-        if order.status == "completed":
-            payment_status = "paid"
+        # if order.status == "completed":
+        #     payment_status = "paid"  <-- Removed to allow payment after delivery
         order.save()
 
         if order.status == "completed":

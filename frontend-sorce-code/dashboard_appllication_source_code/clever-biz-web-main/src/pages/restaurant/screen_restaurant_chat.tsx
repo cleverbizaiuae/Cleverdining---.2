@@ -10,8 +10,6 @@ import {
   CheckCircle2,
   Clock,
   MoreVertical,
-  Phone,
-  Video,
   ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -149,36 +147,46 @@ const ScreenRestaurantChat = () => {
     const lastMsg = globalMessages[globalMessages.length - 1];
 
     if (lastMsg && lastMsg.type === 'chat_message') {
-      // Update Chat List logic
+      // 1. Update Chat List (Badges)
       setChatList(prevList => {
         return prevList.map(chat => {
-          // Identify if this message belongs to this chat room/device
-          // The backend event sends 'device_id'. We should match on that.
-          // Note: chat.id is the device/table ID.
-
           if (String(chat.id) === String(lastMsg.device_id)) {
             const isCurrentlyOpen = selectedChat?.id === chat.id;
-
-            // If currently open, we don't increment badge (logic handled by chat window generally, or we mark read instantly)
-            // But usually, if window is open, we might want to temporarily show or auto-read.
-            // For now, let's increment if NOT open.
+            // If open, we typically read it immediately, so no badge increment?
+            // Actually, let's keep it 0 if open.
             const newUnread = isCurrentlyOpen ? 0 : (chat.unread_count || 0) + 1;
-
             return {
               ...chat,
               unread_count: newUnread,
-              // Optional: Update preview snippet if we had one
             };
           }
           return chat;
         });
       });
 
-      // Also, if this message belongs to the CURRENT OPEN chat, apppend it to 'messages' locally
-      // (This handles the case where we don't rely solely on the dedicated socket, or if dedicated socket is redundant)
-      // However, we have a dedicated socket for the open chat (Lines 80-141).
-      // So we generally rely on that for the open conversation. 
-      // BUT, the 'Global' listener is CRITICAL for the "Left table" (Sidebar List) badges.
+      // 2. Redundancy: If this message belongs to the CURRENT OPEN chat, append it to 'messages' locally
+      // This ensures that if the dedicated socket is slow/disconnected, we still see the message from the Global stream.
+      if (selectedChat && String(selectedChat.id) === String(lastMsg.device_id)) {
+        setMessages(prev => {
+          // Dedup check
+          const alreadyExists = prev.some(m =>
+            m.message === lastMsg.message &&
+            Math.abs(new Date(m.timestamp).getTime() - new Date(lastMsg.timestamp).getTime()) < 2000
+          );
+          if (alreadyExists) return prev;
+
+          return [...prev, {
+            message: lastMsg.message,
+            sender: lastMsg.sender,
+            timestamp: lastMsg.timestamp,
+            is_from_device: lastMsg.is_from_device
+          }];
+        });
+
+        // Also mark as read via API if we are looking at it?
+        // We might throttling this to avoid spamming the API on every msg.
+        // For now, rely on "fetchHistory" or user action.
+      }
     }
   }, [globalMessages, selectedChat]); // Re-run when globalMessages changes
 
@@ -348,16 +356,34 @@ const ScreenRestaurantChat = () => {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button className="p-2 text-slate-400 hover:text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors">
-                    <Phone size={18} />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors">
-                    <Video size={18} />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
-                    <MoreVertical size={18} />
-                  </button>
+                <div className="flex items-center gap-2 relative">
+                  {/* Dropdown Menu */}
+                  <div className="relative group">
+                    <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors focus:outline-none">
+                      <MoreVertical size={18} />
+                    </button>
+                    {/* Dropdown Content */}
+                    <div className="absolute right-0 mt-2 w-36 bg-white border border-slate-100 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                      <button
+                        onClick={async () => {
+                          if (!selectedChat) return;
+                          if (window.confirm("Are you sure you want to clear this chat history?")) {
+                            try {
+                              await axiosInstance.post('/message/chat/clear-chat/', { device_id: selectedChat.id });
+                              setMessages([]); // Clear locally
+                              toast.success("Chat history cleared");
+                            } catch (err) {
+                              console.error(err);
+                              toast.error("Failed to clear chat");
+                            }
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg block"
+                      >
+                        Clear Chat
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
