@@ -67,7 +67,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       return; // Already connecting or connected
     }
 
-    const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/chat/${device_id}/?token=${tokenToUse}&restaurant_id=${restaurant_id}`;
+    // Use WSS for production fallback
+    const defaultWsUrl = "wss://cleverdining-2.onrender.com";
+    const wsBaseUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
+    const wsUrl = `${wsBaseUrl}/ws/chat/${device_id}/?token=${tokenToUse}&restaurant_id=${restaurant_id}`;
     console.log("Connecting to WebSocket:", wsUrl);
     const socket = new WebSocket(wsUrl);
 
