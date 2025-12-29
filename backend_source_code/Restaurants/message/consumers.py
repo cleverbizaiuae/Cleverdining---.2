@@ -104,11 +104,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
                 receiver = await self._get_restaurant_owner(self.restaurant_id)
                 is_from_device = True
+                
+                # PARANOID CHECK: If guest_session is missing, try to find it one last time from query params
+                if not self.guest_session:
+                     from urllib.parse import parse_qs
+                     query_string = self.scope['query_string'].decode()
+                     query_params = parse_qs(query_string)
+                     token_list = query_params.get('token')
+                     if token_list and token_list[0] != "guest_token":
+                          self.guest_session = await self._get_guest_session(token_list[0])
+                          print(f"DEBUG: Recovered guest_session in receive: {self.guest_session}")
+
+                if not self.guest_session:
+                     print("CRITICAL: Message received but NO guest_session found. Message will be lost/unlinked.")
             else:  # owner or staff
                 receiver = await self._get_device_user(self.device_id)
                 is_from_device = False
-
+            
             sender = self.user
+            
+            print(f"DEBUG: Saving Message. Sender: {sender}, Device: {self.device_id}, Session: {self.guest_session}")
 
             chat_message = await self._save_message(
                 sender=sender,
@@ -122,7 +137,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
 
             if not chat_message:
-                await self.send(text_data=json.dumps({"error": "Message could not be saved. Device or Restaurant may not exist."}))
+                logger.error("Failed to save message")
+                await self.send(text_data=json.dumps({"error": "Message could not be saved."}))
                 return
 
             # Use the safe username attached by _save_message to avoid Async-DB issues
@@ -143,20 +159,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
 
             # Broadcast the message to the general restaurant group (for notifications)
-            await self.channel_layer.group_send(
-                f"restaurant_{self.restaurant_id}",
-                {
-                    'type': 'chat_message',
-                    'message': message,
-                    'msg_type': msg_type,
-                    'sender': safe_username,
-                    'device_id' : self.device_id,
-                    'is_from_device': is_from_device,
-                    'timestamp': str(chat_message.timestamp),
-                }
-            )
+            # Ensure restaurant_id is valid
+            if self.restaurant_id:
+                print(f"DEBUG: Broadcasting to restaurant_{self.restaurant_id}")
+                await self.channel_layer.group_send(
+                    f"restaurant_{self.restaurant_id}",
+                    {
+                        'type': 'chat_message',
+                        'message': message,
+                        'msg_type': msg_type,
+                        'sender': safe_username,
+                        'device_id' : self.device_id,
+                        'is_from_device': is_from_device,
+                        'timestamp': str(chat_message.timestamp),
+                    }
+                )
         except Exception as e:
             logger.error(f"ChatConsumer Error: {e}", exc_info=True)
+            print(f"ChatConsumer Exception: {e}")
             await self.send(text_data=json.dumps({"error": "An error occurred processing your message."}))
 
     async def chat_message(self, event):

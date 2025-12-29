@@ -42,6 +42,7 @@ class ChatMessageViewSet(ModelViewSet):
         # 2. Guest Session Token (Priority 2 - for Customers)
         try:
             session_token = self.request.headers.get('X-Guest-Session-Token')
+            # print(f"DEBUG: Fetching messages with token: {session_token}")
             if session_token:
                 from device.models import GuestSession
                 try:
@@ -50,12 +51,18 @@ class ChatMessageViewSet(ModelViewSet):
                     session = GuestSession.objects.filter(session_token=session_token).first()
                     if session:
                         # STRICT VALIDATION: Return messages for this specific session
-                        return queryset.filter(guest_session=session).order_by('timestamp')
+                        qs = queryset.filter(guest_session=session).order_by('timestamp')
+                        # print(f"DEBUG: Found session {session.id}. Message count: {qs.count()}")
+                        return qs
                     else:
+                        print(f"DEBUG: Session not found for token: {session_token}")
                         return queryset.none()
                 except Exception as e:
                     print(f"Guest Auth Error: {e}")
                     return queryset.none()
+            else:
+                 # print("DEBUG: No X-Guest-Session-Token header provided.")
+                 pass
         except Exception as e:
             print(f"Queryset Error: {e}")
             return queryset.none()
