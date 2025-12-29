@@ -37,6 +37,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.restaurant_group_name = f"room_{self.device_id}_{self.restaurant_id}"
         print("jjdjdjdjjdjdjjd",self.restaurant_group_name)
 
+        # Fallback: If guest_session is missing but we have a token, try to resolve it manually
+        # This handles cases where middleware might have missed it or scope wasn't populated correctly
+        if not self.guest_session:
+            from urllib.parse import parse_qs
+            query_string = self.scope['query_string'].decode()
+            query_params = parse_qs(query_string)
+            token_list = query_params.get('token')
+            if token_list:
+                token = token_list[0]
+                if token and token != "guest_token":
+                   self.guest_session = await self._get_guest_session(token)
+
         if self.user and (self.user.is_authenticated or self.user.is_anonymous):
             # For anonymous users (guests), we might want to restrict them to their device room only
             # But for now, let's allow them to join the group to enable messaging
@@ -179,6 +191,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             restaurant = Restaurant.objects.get(id=restaurant_id)
             return restaurant.owner
         except Restaurant.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def _get_guest_session(self, token):
+        from device.models import GuestSession
+        try:
+            return GuestSession.objects.filter(session_token=token, is_active=True).first()
+        except Exception:
             return None
 
     # --- Item Event Handlers for Real-time Menu via Chat Socket ---

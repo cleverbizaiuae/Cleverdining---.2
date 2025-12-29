@@ -119,7 +119,12 @@ function MessagingUI() {
         console.error("Failed to load previous messages");
       }
     };
-    if (device_id && restaurant_id) fetchMessages();
+
+    if (device_id && restaurant_id) {
+      fetchMessages();
+      // Retry once after 1s just in case session latency caused empty list initially
+      setTimeout(() => fetchMessages(), 1000);
+    }
   }, [device_id, restaurant_id, userInfo]);
 
   useEffect(() => {
