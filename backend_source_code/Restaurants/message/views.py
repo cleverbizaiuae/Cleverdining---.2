@@ -46,7 +46,8 @@ class ChatMessageViewSet(ModelViewSet):
                 from device.models import GuestSession
                 try:
                     # Filter for active session, or just session by token
-                    session = GuestSession.objects.filter(session_token=session_token, is_active=True).first()
+                    # We remove is_active=True to allow viewing valid history even if session is technically 'closed'
+                    session = GuestSession.objects.filter(session_token=session_token).first()
                     if session:
                         # STRICT VALIDATION: Return messages for this specific session
                         return queryset.filter(guest_session=session).order_by('timestamp')

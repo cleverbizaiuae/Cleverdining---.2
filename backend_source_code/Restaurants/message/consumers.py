@@ -197,7 +197,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def _get_guest_session(self, token):
         from device.models import GuestSession
         try:
-            return GuestSession.objects.filter(session_token=token, is_active=True).first()
+            # Try to get active first
+            session = GuestSession.objects.filter(session_token=token, is_active=True).first()
+            if session: return session
+            # Fallback: get any session (maybe it expired just now?)
+            return GuestSession.objects.filter(session_token=token).first()
         except Exception:
             return None
 
