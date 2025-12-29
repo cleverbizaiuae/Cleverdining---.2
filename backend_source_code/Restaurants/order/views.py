@@ -198,13 +198,13 @@ class ConfirmCashPaymentAPIView(APIView):
         # Update Order (and all other session orders ONLY if they are also awaiting cash)
         orders_to_update = [order]
         
-        if order.guest_session:
-             # Only auto-confirm other orders if they are ALSO waiting for cash (Bulk Cash Payment Case)
-             session_orders = Order.objects.filter(
-                 guest_session=order.guest_session,
-                 status='awaiting_cash'
-             ).exclude(pk=order.pk).exclude(payment_status='paid')
-             orders_to_update.extend(list(session_orders))
+        # if order.guest_session:
+        #      # Only auto-confirm other orders if they are ALSO waiting for cash (Bulk Cash Payment Case)
+        #      session_orders = Order.objects.filter(
+        #          guest_session=order.guest_session,
+        #          status='awaiting_cash'
+        #      ).exclude(pk=order.pk).exclude(payment_status='paid')
+        #      orders_to_update.extend(list(session_orders))
         
         for o in orders_to_update:
             o.status = 'completed'
