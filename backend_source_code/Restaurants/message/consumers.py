@@ -212,14 +212,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if not guest_session:
             from device.models import GuestSession
             try:
-                # Find the most recent active session for this device
+                # 1. Try to find the most recent ACTIVE session
                 active_session = GuestSession.objects.filter(device=device, is_active=True).order_by('-created_at').first()
                 if active_session:
                     guest_session = active_session
                     print(f"DEBUG: Auto-linked message to Active GuestSession: {guest_session.id}")
                 else:
-                     # Fallback: Try to find ANY recent session? No, let's stick to active to avoid polluting old history.
-                     print(f"DEBUG: No active GuestSession found for Device {device.id}. Message will be unlinked.")
+                    # 2. Fallback: Find the LATEST session (even if inactive) to capture messages for closed/expired sessions
+                    # This handles cases where the session expired but the user is still viewing the chat.
+                    latest_session = GuestSession.objects.filter(device=device).order_by('-created_at').first()
+                    if latest_session:
+                        guest_session = latest_session
+                        print(f"DEBUG: Auto-linked message to Latest (Inactive?) GuestSession: {guest_session.id}")
+                    else:
+                        print(f"DEBUG: No GuestSession found for Device {device.id}. Message will be unlinked.")
             except Exception as e:
                 print(f"Error resolving active session: {e}")
 
