@@ -207,6 +207,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
             logger.warning(f"Restaurant with ID {restaurant_id} does not exist.")
             return None
 
+        # CRITICAL FIX: If guest_session is None (e.g. Staff reply, or fallback), try to find the ACTIVE session for this device
+        # This ensures messages are linked to the current conversation context so they appear in history fetches.
+        if not guest_session:
+            from device.models import GuestSession
+            try:
+                # Find the most recent active session for this device
+                active_session = GuestSession.objects.filter(device=device, is_active=True).order_by('-created_at').first()
+                if active_session:
+                    guest_session = active_session
+                    print(f"DEBUG: Auto-linked message to Active GuestSession: {guest_session.id}")
+                else:
+                     # Fallback: Try to find ANY recent session? No, let's stick to active to avoid polluting old history.
+                     print(f"DEBUG: No active GuestSession found for Device {device.id}. Message will be unlinked.")
+            except Exception as e:
+                print(f"Error resolving active session: {e}")
+
         msg = ChatMessage.objects.create(
             sender=sender,
             receiver=receiver,
