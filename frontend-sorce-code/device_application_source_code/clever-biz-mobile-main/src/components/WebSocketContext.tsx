@@ -24,7 +24,10 @@ interface WebSocketProviderProps {
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children,
 }) => {
+  // We use a Ref for the active socket to avoid stale closure issues in callbacks (like connect/handleVisibilityChange)
+  const wsRef = React.useRef<WebSocket | null>(null);
   const [ws, setWs] = useState<WebSocket | null>(null);
+
   const [hasNewMessage, setHasNewMessageState] = useState<boolean>(() => {
     return localStorage.getItem("newMessage") === "true";
   });
@@ -63,7 +66,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     if (!device_id) return;
 
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    // Check against the Ref, which is always current
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return; // Already connecting or connected
     }
 
@@ -71,8 +75,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const defaultWsUrl = "wss://cleverdining-2.onrender.com";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
     const wsUrl = `${wsBaseUrl}/ws/chat/${device_id}/?token=${tokenToUse}&restaurant_id=${restaurant_id}`;
+
     console.log("Connecting to WebSocket:", wsUrl);
     const socket = new WebSocket(wsUrl);
+
+    // Update both Ref and State
+    wsRef.current = socket;
+    setWs(socket);
 
     socket.onopen = () => {
       console.log("WebSocket connected");
@@ -81,6 +90,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         clearTimeout(reconnectTimeout.current);
         reconnectTimeout.current = null;
       }
+      // Force update state to trigger re-renders
+      setWs(socket);
     };
 
     socket.onmessage = (event) => {
@@ -103,6 +114,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     socket.onclose = () => {
       console.log("WebSocket disconnected. Attempting reconnect in 3s...");
+      wsRef.current = null;
       setWs(null);
       // Attempt reconnect
       if (!reconnectTimeout.current) {
@@ -112,13 +124,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         }, 3000);
       }
     };
-
-    setWs(socket);
   }, []); // Dependencies intentionaly empty to avoid recreating loop
 
   const sendMessage = (message: string, type: string = "message") => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ message, type }));
+    // Use Ref for immediate check
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ message, type }));
     } else {
       // Try to reconnect if trying to send and disconnected
       connect();
@@ -130,7 +141,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        const socket = ws;
+        const socket = wsRef.current;
         if (!socket || socket.readyState === WebSocket.CLOSED) {
           console.log("App visible, reconnecting socket...");
           connect();
@@ -142,11 +153,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (ws) {
+      if (wsRef.current) {
         // We typically don't strictly close on unmount of Provider unless app is closing, 
         // to prevent churn, but here we can clean up if completely unmounting.
-        ws.onclose = null; // Prevent reconnect loop on unmount
-        ws.close();
+        wsRef.current.onclose = null; // Prevent reconnect loop on unmount
+        wsRef.current.close();
+        wsRef.current = null;
       }
       if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
     };
