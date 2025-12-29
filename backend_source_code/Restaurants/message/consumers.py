@@ -58,68 +58,75 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         try:
-            data = json.loads(text_data)
-            message = data.get('message')
-            if not message:
-                raise ValueError("Missing message content")
-        except Exception:
-            await self.send(text_data=json.dumps({"error": "Invalid JSON or missing 'message' field"}))
-            return
+            try:
+                data = json.loads(text_data)
+                message = data.get('message')
+                if not message:
+                    raise ValueError("Missing message content")
+            except Exception:
+                await self.send(text_data=json.dumps({"error": "Invalid JSON or missing 'message' field"}))
+                return
 
-        msg_type = data.get('type', 'message')
+            msg_type = data.get('type', 'message')
 
-        # Determine sender and receiver
-        if self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
-            receiver = await self._get_restaurant_owner(self.restaurant_id)
-            is_from_device = True
-        else:  # owner or staff
-            receiver = await self._get_device_user(self.device_id)
-            is_from_device = False
+            # Determine sender and receiver
+            if self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
+                receiver = await self._get_restaurant_owner(self.restaurant_id)
+                is_from_device = True
+            else:  # owner or staff
+                receiver = await self._get_device_user(self.device_id)
+                is_from_device = False
 
-        sender = self.user
+            sender = self.user
 
-        chat_message = await self._save_message(
-            sender=sender,
-            receiver=receiver,
-            message=message,
-            device_id=self.device_id,
-            restaurant_id=self.restaurant_id,
-            is_from_device=is_from_device,
-            room_name=self.restaurant_group_name,
-            guest_session=self.guest_session # Pass session
-        )
+            chat_message = await self._save_message(
+                sender=sender,
+                receiver=receiver,
+                message=message,
+                device_id=self.device_id,
+                restaurant_id=self.restaurant_id,
+                is_from_device=is_from_device,
+                room_name=self.restaurant_group_name,
+                guest_session=self.guest_session # Pass session
+            )
 
-        if not chat_message:
-            await self.send(text_data=json.dumps({"error": "Message could not be saved. Device or Restaurant may not exist."}))
-            return
+            if not chat_message:
+                await self.send(text_data=json.dumps({"error": "Message could not be saved. Device or Restaurant may not exist."}))
+                return
 
-        # Broadcast the message to the specific chat room
-        await self.channel_layer.group_send(
-            self.restaurant_group_name,
-            {
-                'type': 'chat_message',
-                'message': message,
-                'msg_type': msg_type,
-                'sender': sender.username,
-                'device_id' : self.device_id,
-                'is_from_device': is_from_device,
-                'timestamp': str(chat_message.timestamp),
-            }
-        )
+            # Use the safe username attached by _save_message to avoid Async-DB issues
+            safe_username = getattr(chat_message, 'safe_sender_username', 'Unknown')
 
-        # Broadcast the message to the general restaurant group (for notifications)
-        await self.channel_layer.group_send(
-            f"restaurant_{self.restaurant_id}",
-            {
-                'type': 'chat_message',
-                'message': message,
-                'msg_type': msg_type,
-                'sender': sender.username,
-                'device_id' : self.device_id,
-                'is_from_device': is_from_device,
-                'timestamp': str(chat_message.timestamp),
-            }
-        )
+            # Broadcast the message to the specific chat room
+            await self.channel_layer.group_send(
+                self.restaurant_group_name,
+                {
+                    'type': 'chat_message',
+                    'message': message,
+                    'msg_type': msg_type,
+                    'sender': safe_username,
+                    'device_id' : self.device_id,
+                    'is_from_device': is_from_device,
+                    'timestamp': str(chat_message.timestamp),
+                }
+            )
+
+            # Broadcast the message to the general restaurant group (for notifications)
+            await self.channel_layer.group_send(
+                f"restaurant_{self.restaurant_id}",
+                {
+                    'type': 'chat_message',
+                    'message': message,
+                    'msg_type': msg_type,
+                    'sender': safe_username,
+                    'device_id' : self.device_id,
+                    'is_from_device': is_from_device,
+                    'timestamp': str(chat_message.timestamp),
+                }
+            )
+        except Exception as e:
+            logger.error(f"ChatConsumer Error: {e}", exc_info=True)
+            await self.send(text_data=json.dumps({"error": "An error occurred processing your message."}))
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
@@ -149,7 +156,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             logger.warning(f"Restaurant with ID {restaurant_id} does not exist.")
             return None
 
-        return ChatMessage.objects.create(
+        msg = ChatMessage.objects.create(
             sender=sender,
             receiver=receiver,
             message=message,
@@ -162,6 +169,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             business_day=restaurant.business_days.filter(is_active=True).last(), # Link to active business day
             guest_session=guest_session # Link to specific session
         )
+        # Attach username explicitly while we are in sync context to prevent Async/LazyLoading errs
+        msg.safe_sender_username = sender.username if sender else "Unknown"
+        return msg
 
     @database_sync_to_async
     def _get_restaurant_owner(self, restaurant_id):
