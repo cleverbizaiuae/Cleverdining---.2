@@ -54,6 +54,12 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
 
             const { url, transaction_id } = res.data;
 
+            if (provider === 'cash') {
+                toast.success("Cash collection requested! Please wait for staff confirmation.");
+                setShowMethodModal(false);
+                return;
+            }
+
             if (url) {
                 window.location.href = url;
             } else {
