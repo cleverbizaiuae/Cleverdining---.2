@@ -34,11 +34,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
             query_params = parse_qs(query_string)
             self.restaurant_id = query_params.get('restaurant_id', [None])[0]
 
+        self.restaurant_group_name = None
+        
+        # Parse restaurant_id securely
+        if self.restaurant_id:
+            try:
+                self.restaurant_id = str(int(self.restaurant_id)) # Normalize to stringified int
+            except (ValueError, TypeError):
+                self.restaurant_id = None
+        
+        if not self.restaurant_id:
+            await self.close(code=4002) # Invalid ID
+            return
+
         self.restaurant_group_name = f"room_{self.device_id}_{self.restaurant_id}"
-        print("jjdjdjdjjdjdjjd",self.restaurant_group_name)
+        print(f"DEBUG: ChatConsumer Connecting. Device: {self.device_id}, Restaurant: {self.restaurant_id}, Group: {self.restaurant_group_name}")
 
         # Fallback: If guest_session is missing but we have a token, try to resolve it manually
-        # This handles cases where middleware might have missed it or scope wasn't populated correctly
         if not self.guest_session:
             from urllib.parse import parse_qs
             query_string = self.scope['query_string'].decode()
@@ -49,12 +61,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 if token and token != "guest_token":
                    self.guest_session = await self._get_guest_session(token)
 
+        # CRITICAL: For anonymous users (Guests), we MUST have a guest_session.
+        # Otherwise, messages are saved with guest_session=None and disappear from history (cannot be fetched).
+        if self.user.is_anonymous and not self.guest_session:
+             print("DEBUG: Anonymous user rejected - No Guest Session found.")
+             await self.close(code=4003) # Forbidden/Missing Session
+             return
+
         if self.user and (self.user.is_authenticated or self.user.is_anonymous):
             # For anonymous users (guests), we might want to restrict them to their device room only
-            # But for now, let's allow them to join the group to enable messaging
+            # For now, let's allow them to join the group to enable messaging
             await self.channel_layer.group_add(self.restaurant_group_name, self.channel_name)
             
-            # Join the restaurant-wide group to receive item/menu updates
+            # Join the restaurant-wide group to receive item/menu updates AND broadcast chat for dashboard
             if self.restaurant_id:
                 self.restaurant_general_group = f"restaurant_{self.restaurant_id}"
                 await self.channel_layer.group_add(self.restaurant_general_group, self.channel_name)

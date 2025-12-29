@@ -74,6 +74,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     // Use WSS for production fallback
     const defaultWsUrl = "wss://cleverdining-2.onrender.com";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
+
+    // Safety Check: If we are a guest (no accessToken) and have no guestSessionToken, do NOT connect.
+    // This prevents connecting as an anonymous "ghost" with no session, which leads to lost messages.
+    if ((!accessToken || accessToken === "guest_token") && !tokenToUse) {
+      console.warn("WebSocket Context: Missing Guest Token, aborting connection to prevent history loss.");
+      return;
+    }
+
     const wsUrl = `${wsBaseUrl}/ws/chat/${device_id}/?token=${tokenToUse}&restaurant_id=${restaurant_id}`;
 
     console.log("Connecting to WebSocket:", wsUrl);
