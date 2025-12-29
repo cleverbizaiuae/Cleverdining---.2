@@ -52,8 +52,8 @@ const TableEntry = () => {
                 localStorage.setItem("guest_session_token", session_token); // CRITICAL for backend auth
                 localStorage.removeItem('cart'); // Clear old cart to be safe
 
-                // 5. Redirect to dashboard
-                navigate("/dashboard");
+                // 5. Redirect to dashboard (Force reload)
+                window.location.href = "/dashboard";
 
             } catch (err: any) {
                 console.error("Failed to fetch device/session:", err);

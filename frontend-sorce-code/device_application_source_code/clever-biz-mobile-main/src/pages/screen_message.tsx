@@ -191,12 +191,22 @@ function MessagingUI() {
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-bold text-gray-900 leading-tight">Staff</span>
-              <span className={cn(
-                "text-xs font-medium transition-colors duration-300",
-                ws?.readyState === WebSocket.OPEN ? "text-green-600" : "text-red-500"
-              )}>
-                {ws?.readyState === WebSocket.OPEN ? 'Online' : 'Reconnecting...'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "text-xs font-medium transition-colors duration-300",
+                  ws?.readyState === WebSocket.OPEN ? "text-green-600" : "text-red-500"
+                )}>
+                  {ws?.readyState === WebSocket.OPEN ? 'Online' : 'Reconnecting...'}
+                </span>
+                {ws?.readyState !== WebSocket.OPEN && (
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="text-[10px] bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded text-gray-600 border border-gray-300"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

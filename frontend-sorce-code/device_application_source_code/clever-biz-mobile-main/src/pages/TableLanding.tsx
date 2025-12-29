@@ -64,8 +64,8 @@ export default function TableLanding() {
                 };
                 localStorage.setItem('userInfo', JSON.stringify(userInfo));
 
-                // Redirect to home
-                navigate('/');
+                // Redirect to home (Force reload to initialize WebSocket with new token)
+                window.location.href = '/';
             } catch (err: any) {
                 console.error("Failed to resolve table", err);
                 setError(err.response?.data?.error || "Invalid table link");
