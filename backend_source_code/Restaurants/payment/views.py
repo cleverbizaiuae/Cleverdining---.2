@@ -173,15 +173,22 @@ class CreateBulkCheckoutSessionView(APIView):
 
         # 4. Processing
         if provider == 'cash':
-            # Mark all as awaiting_cash
+            # 1. Cache the list of orders BEFORE update
+            # (Because update() clears cache, and the exclusion filter would then hide them)
+            all_orders = list(unpaid_orders)
+            
+            # 2. Mark all as awaiting_cash
             unpaid_orders.update(status='awaiting_cash', payment_status='pending_cash')
             
             # Send ONE Alert
-            first_order = unpaid_orders.first()
+            if not all_orders:
+                 return Response({'error': 'No orders to process'}, status=400)
+
+            first_order = all_orders[0]
             
             # Create a comprehensive order representation for the alert
             items_summary = []
-            for o in unpaid_orders:
+            for o in all_orders:
                 for item in o.order_items.all():
                     items_summary.append({
                         "item_name": f"(Order #{o.id}) {item.item.item_name}", 
@@ -197,7 +204,7 @@ class CreateBulkCheckoutSessionView(APIView):
                          "id": f"BULK-{session.id}", 
                          "device_name": session.device.table_number or session.device.table_name,
                          "items": items_summary,
-                         "tip_amount": sum(o.tip_amount for o in unpaid_orders)
+                         "tip_amount": sum(o.tip_amount for o in all_orders)
                     }, 
                     "table_number": session.device.table_number or session.device.table_name,
                     "total_amount": str(total_amount),

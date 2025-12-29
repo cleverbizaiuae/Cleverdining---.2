@@ -236,7 +236,7 @@ const ScreenRestaurantOrderList = () => {
 
       {/* PENDING CASH BANNER */}
       {cashOrders.length > 0 && (
-        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300">
+        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300 max-w-full">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-700 shrink-0 animate-pulse">
               <span className="text-lg">💵</span>
@@ -249,7 +249,7 @@ const ScreenRestaurantOrderList = () => {
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:flex-1 md:min-w-0">
+          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:flex-1 md:min-w-0 max-w-full">
             {cashOrders.map((order: any) => (
               <div key={order.id} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3 shrink-0">
                 {/* Table Number Badge */}
@@ -276,7 +276,7 @@ const ScreenRestaurantOrderList = () => {
 
       {/* READY FOR DELIVERY BANNER */}
       {readyOrders.length > 0 && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300">
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300 max-w-full">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 shrink-0">
               <Bell size={16} />
@@ -290,7 +290,7 @@ const ScreenRestaurantOrderList = () => {
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-auto">
+          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:flex-1 md:min-w-0 max-w-full">
             {readyOrders.map((order: any) => (
               <div key={order.id} className="bg-white border border-green-100 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
