@@ -13,11 +13,12 @@ export const FlappyBird: React.FC<FlappyBirdProps> = ({ onBack }) => {
     const [highScore, setHighScore] = useState(0);
 
     // Game constants
-    const GRAVITY = 0.6;
-    const JUMP = -8;
-    const PIPE_SPEED = 3;
-    const PIPE_SPAWN_RATE = 1500; // ms
-    const PIPE_GAP = 150;
+    // Adjusted Game constants for better playability
+    const GRAVITY = 0.5;
+    const JUMP = -7.5;
+    const PIPE_SPEED = 2.5;
+    const PIPE_SPAWN_RATE = 1800; // ms (slower spawn)
+    const PIPE_GAP = 170; // Wider gap
 
     useEffect(() => {
         const storedHighScore = localStorage.getItem('flappy_highscore');
@@ -51,29 +52,38 @@ export const FlappyBird: React.FC<FlappyBirdProps> = ({ onBack }) => {
         let birdVelocity = 0;
         let pipes: { x: number; topHeight: number; passed: boolean }[] = [];
         let lastPipeTime = 0;
+        let lastTime = 0; // For delta time
         let animationFrameId: number;
 
         const loop = (timestamp: number) => {
             if (gameState !== 'playing') return;
+            if (!lastTime) lastTime = timestamp;
+
+            // Calculate delta time (normalized to ~60fps)
+            // If 60fps -> dt = 1. If 120fps -> dt = 0.5
+            const dt = (timestamp - lastTime) / 16.66;
+            lastTime = timestamp;
+
+            // Cap dt to prevent huge jumps if tab was inactive
+            const safeDt = Math.min(dt, 2.0);
 
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Update bird
-            birdVelocity += GRAVITY;
-            birdY += birdVelocity;
+            birdVelocity += GRAVITY * safeDt;
+            birdY += birdVelocity * safeDt;
 
             // Draw bird
             ctx.fillStyle = '#FFD700'; // Gold bird
             ctx.beginPath();
             ctx.arc(50, birdY, 15, 0, Math.PI * 2);
             ctx.fill();
-            // Eye
+            // Eye & Beak details (simplified for performance/readabilty if needed, keep existing)
             ctx.fillStyle = '#000';
             ctx.beginPath();
             ctx.arc(58, birdY - 5, 4, 0, Math.PI * 2);
             ctx.fill();
-            // Beak
             ctx.fillStyle = '#FF4500';
             ctx.beginPath();
             ctx.moveTo(60, birdY);
@@ -86,20 +96,25 @@ export const FlappyBird: React.FC<FlappyBirdProps> = ({ onBack }) => {
             if (timestamp - lastPipeTime > PIPE_SPAWN_RATE) {
                 const minPipeHeight = 50;
                 const maxPipeHeight = canvas.height - PIPE_GAP - minPipeHeight;
-                const topHeight = Math.random() * (maxPipeHeight - minPipeHeight) + minPipeHeight;
-
-                pipes.push({
-                    x: canvas.width,
-                    topHeight,
-                    passed: false
-                });
-                lastPipeTime = timestamp;
+                // Ensure reasonable math
+                if (maxPipeHeight > minPipeHeight) {
+                    const topHeight = Math.random() * (maxPipeHeight - minPipeHeight) + minPipeHeight;
+                    pipes.push({
+                        x: canvas.width,
+                        topHeight,
+                        passed: false
+                    });
+                    lastPipeTime = timestamp;
+                } else {
+                    // Fallback if screen is too short
+                    lastPipeTime = timestamp;
+                }
             }
 
             // Update and draw pipes
             ctx.fillStyle = '#2ECC71'; // Green pipes
             pipes.forEach((pipe, index) => {
-                pipe.x -= PIPE_SPEED;
+                pipe.x -= PIPE_SPEED * safeDt;
 
                 // Draw top pipe
                 ctx.fillRect(pipe.x, 0, 50, pipe.topHeight);

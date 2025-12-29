@@ -195,8 +195,8 @@ const ScreenOrders = () => {
         close={() => setIsGameHubOpen(false)}
       />
 
-      {/* 5. Sticky Total Pay Bar */}
-      <StickyTotalPayBar orders={orders} />
+      {/* 5. Sticky Total Pay Bar - Hidden when playing games */}
+      {!isGameHubOpen && <StickyTotalPayBar orders={orders} />}
     </div>
   );
 };

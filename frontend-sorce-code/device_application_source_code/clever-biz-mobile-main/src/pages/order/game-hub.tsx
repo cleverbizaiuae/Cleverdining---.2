@@ -28,7 +28,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
     const handleBack = () => setActiveGame(null);
 
     return (
-        <div className="fixed inset-0 z-50 bg-gray-900 text-white overflow-y-auto animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 bg-gray-900 text-white overflow-hidden animate-in fade-in duration-300 flex flex-col">
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between p-6 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
                 <div className="flex items-center gap-3">
@@ -50,7 +50,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
             </div>
 
             {/* Content */}
-            <div className="p-6">
+            <div className="flex-1 flex flex-col h-full">
                 <AnimatePresence mode="wait">
                     {activeGame ? (
                         <motion.div
@@ -71,6 +71,7 @@ export const GameHub = ({ isOpen, close }: GameHubProps) => {
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
+                            className="p-6"
                         >
                             {/* Games Grid */}
                             <div>
