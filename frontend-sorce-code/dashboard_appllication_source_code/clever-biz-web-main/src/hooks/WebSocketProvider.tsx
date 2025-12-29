@@ -80,11 +80,17 @@ const WebSocketProvider = ({ children }) => {
         setMessages((prevMessages) => [...prevMessages, parsedMessage]);
 
         if (parsedMessage.type === "chat_message") {
-          // If message is NOT from the current user, increment unread
-          // Verify sender against current user's username/email
-          if (parsedMessage.sender !== parseUser.username && parsedMessage.sender !== parseUser.email) {
-            console.log("Incrementing Global Unread Count");
+          // Logic: If message is FROM a device (customer), it's incoming for us.
+          // OR if it's not from device but sender is different (e.g. another staff member?) - though typically staff chat isn't implemented yet.
+          // The most reliable check for "New Message for Restaurant" is is_from_device === true.
+
+          if (parsedMessage.is_from_device) {
+            console.log("Incrementing Global Unread Count (Incoming Device Msg)");
             setUnreadCount((prev) => prev + 1);
+          } else if (parsedMessage.sender !== parseUser.username && parsedMessage.sender !== parseUser.email) {
+            // Fallback for potential future staff-to-staff chat
+            // console.log("Incrementing Global Unread Count (Other Sender)");
+            // setUnreadCount((prev) => prev + 1);
           }
         }
 
