@@ -29,11 +29,12 @@ class ChatMessageViewSet(ModelViewSet):
 
                 if self.action == 'list':
                     if device_id:
-                        # Filter by device_id. The restaurant_id check is implicit via permission or can be explicit
-                        # using device__restaurant_id to ensure the device belongs to the requested restaurant.
+                        # Filter by device_id.
                         qs = queryset.filter(device_id=device_id)
                         if restaurant_id:
-                            qs = qs.filter(device__restaurant_id=restaurant_id)
+                            # Use direct restaurant_id field on ChatMessage instead of device__restaurant_id
+                            # This ensures we find messages saved for this restaurant even if device relationship is complex/stale
+                            qs = qs.filter(restaurant_id=restaurant_id)
                         return qs.order_by('timestamp')
                     else:
                         # Maybe return all for restaurant? No, list requires filtering usually.

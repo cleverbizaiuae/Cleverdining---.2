@@ -103,6 +103,9 @@ function MessagingUI() {
           `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`,
           { headers }
         );
+        console.log("DEBUG: Chat History Response Status:", response.status);
+        console.log("DEBUG: Chat History Data:", JSON.stringify(response.data).substring(0, 500)); // Log first 500 chars 
+
         type ApiMessage = {
           id: number;
           is_from_device: boolean;
