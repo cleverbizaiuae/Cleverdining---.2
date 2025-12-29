@@ -146,7 +146,7 @@ class CreateBulkCheckoutSessionView(APIView):
         # Filter for orders that are 'unpaid' AND status is not cancelled
         unpaid_orders = Order.objects.filter(
             guest_session=session, 
-            status__in=['pending', 'preparing', 'served'],
+            status__in=['pending', 'preparing', 'served', 'completed'],
         ).exclude(payment_status__in=['paid', 'pending_cash']) # waiting cash is considered "pending" process, so exclude or allow retry if failed? If pending_cash, user can confirm. Let's exclude.
         
         # If user wants to retry failed payment, status might be 'failed'. Including 'failed' in filter implicitly by not excluding it.
