@@ -249,7 +249,7 @@ const ScreenRestaurantOrderList = () => {
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:flex-1 md:min-w-0 max-w-full">
+          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-0 md:flex-1 max-w-full">
             {cashOrders.map((order: any) => (
               <div key={order.id} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3 shrink-0">
                 {/* Table Number Badge */}
@@ -290,7 +290,7 @@ const ScreenRestaurantOrderList = () => {
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:flex-1 md:min-w-0 max-w-full">
+          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-0 md:flex-1 max-w-full">
             {readyOrders.map((order: any) => (
               <div key={order.id} className="bg-white border border-green-100 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
