@@ -89,8 +89,15 @@ function MessagingUI() {
 
     const fetchMessages = async () => {
       try {
+        const guestToken = localStorage.getItem("guest_session_token");
+        const headers: any = {};
+        if (guestToken) {
+          headers["X-Guest-Session-Token"] = guestToken;
+        }
+
         const response = await axiosInstance.get(
-          `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`
+          `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`,
+          { headers }
         );
         type ApiMessage = {
           id: number;
@@ -108,8 +115,8 @@ function MessagingUI() {
 
         setMessages(mapped);
       } catch {
-        toast.error("Failed to load previous messages.");
-        setMessages([]);
+        // Silent fail or low-key toast to avoid spamming user
+        console.error("Failed to load previous messages");
       }
     };
     if (device_id && restaurant_id) fetchMessages();
@@ -177,11 +184,19 @@ function MessagingUI() {
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                 <Bot size={20} className="text-blue-600" />
               </div>
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+              <div className={cn(
+                "absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full transition-colors duration-300",
+                ws?.readyState === WebSocket.OPEN ? "bg-green-500" : "bg-red-500"
+              )}></div>
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-bold text-gray-900 leading-tight">Staff</span>
-              <span className="text-xs font-medium text-green-600">Online</span>
+              <span className={cn(
+                "text-xs font-medium transition-colors duration-300",
+                ws?.readyState === WebSocket.OPEN ? "text-green-600" : "text-red-500"
+              )}>
+                {ws?.readyState === WebSocket.OPEN ? 'Online' : 'Reconnecting...'}
+              </span>
             </div>
           </div>
         </div>
@@ -321,10 +336,10 @@ function MessagingUI() {
 
               <button
                 type="submit"
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || ws?.readyState !== WebSocket.OPEN}
                 className={cn(
                   "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200",
-                  inputValue.trim()
+                  inputValue.trim() && ws?.readyState === WebSocket.OPEN
                     ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
                     : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 )}
