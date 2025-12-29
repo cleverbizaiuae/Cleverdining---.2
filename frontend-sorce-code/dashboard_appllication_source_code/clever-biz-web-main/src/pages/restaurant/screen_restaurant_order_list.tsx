@@ -186,7 +186,7 @@ const ScreenRestaurantOrderList = () => {
 
   const handleMarkDelivered = async (orderId: number) => {
     try {
-      await updateOrderStatus(orderId, 'completed');
+      await updateOrderStatus(orderId, 'completed', false);
       toast.success(`Order #${orderId} marked as delivered/completed`);
     } catch (error) {
       console.error("Failed to update status", error);

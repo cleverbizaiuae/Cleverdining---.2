@@ -56,7 +56,7 @@ const ScreenChefOrderList = () => {
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
     try {
-      await updateOrderStatus(orderId, newStatus);
+      await updateOrderStatus(orderId, newStatus, false);
       toast.success(`Order status updated to ${newStatus}`);
     } catch (e) {
       console.error("Status update failed", e);

@@ -127,7 +127,7 @@ interface OwnerContextType {
   createFoodItem: (formData: FormData) => Promise<void>;
   deleteFoodItem: (id: number) => Promise<void>;
   updateAvailability: (id: number, available: boolean) => Promise<void>;
-  updateOrderStatus: (id: number, status: string) => Promise<void>;
+  updateOrderStatus: (id: number, status: string, showToast?: boolean) => Promise<void>;
   updateReservationStatus: (id: number, status: string) => Promise<void>;
   setCurrentPage: (page: number) => void;
   setSearchQuery: (query: string) => void;
@@ -850,7 +850,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const updateOrderStatus = useCallback(
-    async (id: number, status: string) => {
+    async (id: number, status: string, showToast: boolean = true) => {
       // Don't update if still loading or if userRole is null
       if (isLoading || !userRole) {
         return;
@@ -873,7 +873,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         const response = await axiosInstance.patch(endpoint, {
           status: status.toLowerCase(),
         });
-        toast.success("Order status updated successfully!");
+        if (showToast) {
+          toast.success("Order status updated successfully!");
+        }
 
         // Update local orders state immediately for instant feedback
         setOrders((prevOrders) =>

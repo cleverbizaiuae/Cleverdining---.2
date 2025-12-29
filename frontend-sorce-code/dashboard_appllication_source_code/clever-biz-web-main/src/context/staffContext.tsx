@@ -106,7 +106,7 @@ interface StaffContextType {
   fetchStatusSummary: () => Promise<void>;
   fetchFoodItems: (page?: number, search?: string) => Promise<void>;
   fetchOrders: (page?: number, search?: string) => Promise<void>;
-  updateOrderStatus: (id: number, status: string) => Promise<void>;
+  updateOrderStatus: (id: number, status: string, showToast?: boolean) => Promise<void>;
   updateAvailability: (id: number, availability: boolean) => Promise<void>;
   setCurrentPage: (page: number) => void;
   setSearchQuery: (query: string) => void;
@@ -255,7 +255,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const updateOrderStatus = useCallback(
-    async (id: number, status: string) => {
+    async (id: number, status: string, showToast: boolean = true) => {
       try {
         const endpoint =
           userRole === "staff"
@@ -265,7 +265,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
           status: status.toLowerCase(),
         });
 
-        toast.success("Order status updated successfully!");
+        if (showToast) {
+          toast.success("Order status updated successfully!");
+        }
 
         // Update local orders state immediately for instant feedback
         setOrders((prevOrders) => {

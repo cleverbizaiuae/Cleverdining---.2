@@ -467,7 +467,7 @@ class OwnerUpdateOrderStatusAPIView(APIView):
         order.status = new_status
         # if order.status == "completed":
         #     payment_status = "paid"  <-- Removed to allow payment after delivery
-        order.save()
+        order.save(update_fields=['status', 'updated_time'])
 
         if order.status == "completed":
             ChatMessage.objects.filter(
@@ -602,7 +602,7 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = new_status
-        order.save()
+        order.save(update_fields=['status', 'updated_time'])
 
         if order.status == "completed":
             ChatMessage.objects.filter(
