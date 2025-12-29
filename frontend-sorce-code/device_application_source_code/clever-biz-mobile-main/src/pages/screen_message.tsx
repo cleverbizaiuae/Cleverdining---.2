@@ -90,9 +90,13 @@ function MessagingUI() {
     const fetchMessages = async () => {
       try {
         const guestToken = localStorage.getItem("guest_session_token");
+        console.log(`DEBUG: Fetching messages. Device: ${device_id}, Rest: ${restaurant_id}, Token: ${guestToken ? 'Present' : 'MISSING'}`);
+
         const headers: any = {};
         if (guestToken) {
           headers["X-Guest-Session-Token"] = guestToken;
+        } else {
+          console.warn("DEBUG: No guest token found! History fetch may fail or be empty.");
         }
 
         const response = await axiosInstance.get(
