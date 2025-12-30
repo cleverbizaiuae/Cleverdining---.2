@@ -207,6 +207,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Unified Handler: Just push whatever comes to the socket
         await self.send(text_data=json.dumps(event))
 
+    async def session_closed(self, event):
+        # Forward session closed signal to client for immediate logout
+        await self.send(text_data=json.dumps({
+            "type": "session_closed",
+            "message": event.get("message", "Session ended")
+        }))
+
     @database_sync_to_async
     def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device,room_name, guest_session=None):
         try:
