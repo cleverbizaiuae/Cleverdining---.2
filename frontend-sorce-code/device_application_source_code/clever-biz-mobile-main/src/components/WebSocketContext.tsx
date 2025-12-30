@@ -84,101 +84,116 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const wsBaseUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
 
     // Safety Check: If we are a guest (no accessToken) and have no guestSessionToken, do NOT connect.
-    // This prevents connecting as an anonymous "ghost" with no session, which leads to lost messages.
     if ((!accessToken || accessToken === "guest_token") && !tokenToUse) {
       console.warn("WebSocket Context: Missing Guest Token, aborting connection to prevent history loss.");
       return;
     }
 
-    console.log("WebSocket connected");
-    // Clear any pending reconnect attempts
-    if (reconnectTimeout.current) {
-      clearTimeout(reconnectTimeout.current);
-      reconnectTimeout.current = null;
-    }
-    // Force update state to trigger re-renders
-    setWs(socket);
-  };
-
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === 'order_status_update' && data.session_ended) {
-      console.log("Session Ended via WebSocket");
-      localStorage.removeItem("userInfo");
-      localStorage.removeItem("guest_session_token");
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("pending_order_id");
-      window.location.href = "/dashboard/success";
+    // UNIFIED CHAT URL: Connect to the Restaurant Room
+    // If we have a restaurant ID, connect to the unified room.
+    let wsUrl = "";
+    if (restaurantId && tokenToUse) {
+      wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurantId}/?token=${tokenToUse}`;
+    } else {
+      console.warn("Missing restaurant_id, cannot connect to Unified Chat Room.");
       return;
     }
 
-    if (data.message && typeof data.message === "string") {
-      // Set the newMessage flag when a new message arrives
-      setNewMessageFlag(true);
-    }
-  };
+    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    const socket = new WebSocket(wsUrl);
 
-  socket.onclose = () => {
-    console.log("WebSocket disconnected. Attempting reconnect in 3s...");
-    wsRef.current = null;
-    setWs(null);
-    // Attempt reconnect
-    if (!reconnectTimeout.current) {
-      reconnectTimeout.current = setTimeout(() => {
+    // Update both Ref and State
+    wsRef.current = socket;
+    setWs(socket);
+
+    socket.onopen = () => {
+      console.log("WebSocket connected");
+      // Clear any pending reconnect attempts
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
         reconnectTimeout.current = null;
-        connect();
-      }, 3000);
-    }
-  };
-}, []); // Dependencies intentionaly empty to avoid recreating loop
-
-const sendMessage = (message: string, type: string = "message") => {
-  // Use Ref for immediate check
-  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-    console.log(`DEBUG: Mobile Sending WS Payload: ${JSON.stringify({ message, type })}`);
-    wsRef.current.send(JSON.stringify({ message, type }));
-  } else {
-    console.warn("DEBUG: Mobile WS not ready. Triggering reconnect.");
-    // Try to reconnect if trying to send and disconnected
-    connect();
-  }
-};
-
-useEffect(() => {
-  connect();
-
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      const socket = wsRef.current;
-      if (!socket || socket.readyState === WebSocket.CLOSED) {
-        console.log("App visible, reconnecting socket...");
-        connect();
       }
-    }
-  };
+    };
 
-  document.addEventListener('visibilitychange', handleVisibilityChange);
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'order_status_update' && data.session_ended) {
+        console.log("Session Ended via WebSocket");
+        localStorage.removeItem("userInfo");
+        localStorage.removeItem("guest_session_token");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("pending_order_id");
+        window.location.href = "/dashboard/success";
+        return;
+      }
 
-  return () => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    if (wsRef.current) {
-      // We typically don't strictly close on unmount of Provider unless app is closing, 
-      // to prevent churn, but here we can clean up if completely unmounting.
-      wsRef.current.onclose = null; // Prevent reconnect loop on unmount
-      wsRef.current.close();
+      if (data.message && typeof data.message === "string") {
+        // Set the newMessage flag when a new message arrives
+        setNewMessageFlag(true);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log("WebSocket disconnected. Attempting reconnect in 3s...");
       wsRef.current = null;
-    }
-    if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-  };
-}, []);
+      setWs(null);
+      // Attempt reconnect
+      if (!reconnectTimeout.current) {
+        reconnectTimeout.current = setTimeout(() => {
+          reconnectTimeout.current = null;
+          connect();
+        }, 3000);
+      }
+    };
+  }, []);
 
-return (
-  <WebSocketContext.Provider
-    value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage }}
-  >
-    {children}
-  </WebSocketContext.Provider>
-);
+  const sendMessage = (message: string, type: string = "message") => {
+    // Use Ref for immediate check
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log(`DEBUG: Mobile Sending WS Payload: ${JSON.stringify({ message, type })}`);
+      wsRef.current.send(JSON.stringify({ message, type }));
+    } else {
+      console.warn("DEBUG: Mobile WS not ready. Triggering reconnect.");
+      // Try to reconnect if trying to send and disconnected
+      connect();
+    }
+  };
+
+  useEffect(() => {
+    connect();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const socket = wsRef.current;
+        if (!socket || socket.readyState === WebSocket.CLOSED) {
+          console.log("App visible, reconnecting socket...");
+          connect();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wsRef.current) {
+        // We typically don't strictly close on unmount of Provider unless app is closing, 
+        // to prevent churn, but here we can clean up if completely unmounting.
+        wsRef.current.onclose = null; // Prevent reconnect loop on unmount
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+    };
+  }, []);
+
+  return (
+    <WebSocketContext.Provider
+      value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage }}
+    >
+      {children}
+    </WebSocketContext.Provider>
+  );
 };
 
 export const useWebSocket = (): WebSocketContextType => {
