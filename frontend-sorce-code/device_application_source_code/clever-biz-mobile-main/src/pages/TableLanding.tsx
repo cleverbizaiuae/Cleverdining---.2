@@ -39,7 +39,11 @@ export default function TableLanding() {
 
                 // Store session token
                 localStorage.setItem('guest_session_token', session_token);
-                // DO NOT set accessToken to session_token. It is a UUID, not a JWT.
+                // CRITICAL FIX: Remove accessToken to prevent "Identity Crisis"
+                // If we don't remove this, WebSocketContext might still try to authenticate as the Owner (Pranay)
+                // instead of the Guest (Table 1), causing blue bubbles and confusion.
+                localStorage.removeItem('accessToken');
+
                 // Backend treats it as Invalid Token (401) if sent as Bearer.
                 // Guest access relies on X-Guest-Session-Token header.
 
