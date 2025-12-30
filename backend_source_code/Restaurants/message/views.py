@@ -202,11 +202,12 @@ class ChatMessageViewSet(ModelViewSet):
         if count == 0:
              print(f"DEBUG_UNREAD: User {user.email} (Restaurants: {restaurant_ids}) has 0 unread messages.")
         
-        # Update or create the UnreadCount record (Optional/Legacy support)
-        UnreadCount.objects.update_or_create(
-            user=user,
-            defaults={'unread_count': count, 'user_role': user.role}
-        )
+        # Optimization: Do NOT write to DB in a GET request (caused 504 timeouts due to locking).
+        # UnreadCount model should be updated via Signals (post_save) or Actions (mark_read), not here.
+        # UnreadCount.objects.update_or_create(
+        #     user=user,
+        #     defaults={'unread_count': count, 'user_role': user.role}
+        # )
             
         return Response({'unread_count': count})
     @action(detail=False, methods=['post'], url_path='clear-chat')
