@@ -232,19 +232,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
             except Exception as e:
                 print(f"Error resolving active session: {e}")
 
-        msg = ChatMessage.objects.create(
-            sender=sender,
-            receiver=receiver,
-            message=message,
-            device=device,
-            restaurant=restaurant,
-            is_from_device=is_from_device,
-            room_name=room_name,
-            new_message=True,
-
-            business_day=restaurant.business_days.filter(is_active=True).last(), # Link to active business day
-            guest_session=guest_session # Link to specific session
-        )
+        try:
+            msg = ChatMessage.objects.create(
+                sender=sender,
+                receiver=receiver,
+                message=message,
+                device=device,
+                restaurant=restaurant,
+                is_from_device=is_from_device,
+                room_name=room_name,
+                new_message=True,
+                business_day=restaurant.business_days.filter(is_active=True).last(), # Link to active business day
+                guest_session=guest_session # Link to specific session
+            )
+        except Exception as e:
+            # Fallback: If creation fails (e.g. IntegrityError due to invalid guest_session), retry without session
+            print(f"WARNING: Failed to save message with session {getattr(guest_session, 'id', 'None')}. Retrying without session. Error: {e}")
+            msg = ChatMessage.objects.create(
+                sender=sender,
+                receiver=receiver,
+                message=message,
+                device=device,
+                restaurant=restaurant,
+                is_from_device=is_from_device,
+                room_name=room_name,
+                new_message=True,
+                business_day=restaurant.business_days.filter(is_active=True).last(), 
+                guest_session=None # Detach stale session
+            )
         # Attach username explicitly while we are in sync context to prevent Async/LazyLoading errs
         msg.safe_sender_username = sender.username if sender else "Unknown"
         return msg
