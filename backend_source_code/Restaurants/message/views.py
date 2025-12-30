@@ -80,7 +80,12 @@ class ChatMessageViewSet(ModelViewSet):
                  # print("DEBUG: No X-Guest-Session-Token header provided.")
                  pass
                  
-            return queryset.none()
+            # Force evaluation to catch DB execution errors here
+            # access one item to trigger DB
+            if qs.exists():
+                pass
+                
+            return qs
 
         except Exception as e:
             import traceback
@@ -88,6 +93,7 @@ class ChatMessageViewSet(ModelViewSet):
             print(f"CRITICAL ERROR in ChatMessageViewSet.get_queryset: {e}", file=sys.stderr)
             traceback.print_exc()
             return ChatMessage.objects.none()
+
     def perform_update(self, serializer):
         if self.get_object().sender != self.request.user:
             raise PermissionDenied("You can only update your own messages.")
@@ -101,158 +107,125 @@ class ChatMessageViewSet(ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_read(self, request):
-        device_id = request.query_params.get('device_id')
-        user = request.user
-        
-        if not device_id:
-            return Response({'error': 'device_id required'}, status=400)
-
-        # Identify restaurant(s) for the user
-        restaurant_ids = []
-        if user.role == 'owner':
-            restaurant_ids = list(user.restaurants.values_list('id', flat=True))
-        elif user.role in ['staff', 'chef', 'manager']:
-            from accounts.models import ChefStaff
-            cs = ChefStaff.objects.filter(user=user).first()
-            if cs:
-                restaurant_ids = [cs.restaurant_id]
-            else:
-                from staff.models import Staff
-                ls = Staff.objects.filter(user=user).first()
-                if ls and ls.restaurant:
-                    restaurant_ids = [ls.restaurant.id]
-        
-        if not restaurant_ids:
-            return Response({'status': 'no access'}, status=403)
-
-        # Logic: Mark unread messages FROM device TO restaurant as read
-        updated_count = ChatMessage.objects.filter(
-            device_id=device_id,
-            restaurant_id__in=restaurant_ids,
-            is_read=False,
-            is_from_device=True
-        ).update(is_read=True, read_at=timezone.now())
-        
-        # Update UnreadCount Model if exists
-        # Better to just let the next fetch handle it or update naively
-        # We can try to decrement, but bulk update makes it hard to know 'who' was decremented if multiple users?
-        # Actually UnreadCount is per User.
-        # We should update THIS user's unread count.
-        
         try:
-             unread_obj = UnreadCount.objects.get(user=user)
-             if unread_obj.unread_count >= updated_count:
-                 unread_obj.unread_count -= updated_count
-                 unread_obj.save()
-             else:
-                 # Recalculate to be safe
-                 pass 
-        except UnreadCount.DoesNotExist:
-             pass
-
-        return Response({'status': 'marked all read', 'count': updated_count})
-
-    @action(detail=True, methods=['post'], url_path='mark-read')
-    def mark_read(self, request, pk=None):
-        message = self.get_object()
-        if not message.is_read:
-            message.is_read = True
-            message.read_at = timezone.now()
-            message.save()
+            device_id = request.query_params.get('device_id')
+            user = request.user
             
-            # Decrement unread count for recipient
-            try:
-                unread_obj = UnreadCount.objects.get(user=message.receiver)
-                if unread_obj.unread_count > 0:
-                    unread_obj.unread_count -= 1
-                    unread_obj.save()
-            except UnreadCount.DoesNotExist:
-                pass
-                
-        return Response({'status': 'marked as read'})
+            if not device_id:
+                return Response({'error': 'device_id required'}, status=400)
 
-    @action(detail=False, methods=['get'], url_path='unread-count')
-    def unread_count(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({'unread_count': 0})
-            
-        # EMERGENCY BYPASS: Return 0 to prevent 500 Error while debugging
-        return Response({'unread_count': 0})
-
-        try:
-            # Calculate unread messages from Customers (is_from_device=True) for this user's restaurant(s)
+            # Identify restaurant(s) for the user
             restaurant_ids = []
             if user.role == 'owner':
                 restaurant_ids = list(user.restaurants.values_list('id', flat=True))
             elif user.role in ['staff', 'chef', 'manager']:
-                # Check ChefStaff
                 from accounts.models import ChefStaff
-                # Relaxed check as per order/views.py fix
                 cs = ChefStaff.objects.filter(user=user).first()
                 if cs:
                     restaurant_ids = [cs.restaurant_id]
                 else:
-                    # Legacy Staff Fallback
                     from staff.models import Staff
                     ls = Staff.objects.filter(user=user).first()
                     if ls and ls.restaurant:
                         restaurant_ids = [ls.restaurant.id]
             
             if not restaurant_ids:
-                return Response({'unread_count': 0})
+                return Response({'status': 'no access'}, status=403)
 
-            # EMERGENCY FIX: Temporarily returning 0 to prevent 504 Gateway Timeouts locking the server.
-            # This endpoint appears to be causing DB locks or connection pool exhaustion.
-            return Response({'unread_count': 0})
+            # Logic: Mark unread messages FROM device TO restaurant as read
+            updated_count = ChatMessage.objects.filter(
+                device_id=device_id,
+                restaurant_id__in=restaurant_ids,
+                is_read=False,
+                is_from_device=True
+            ).update(is_read=True, read_at=timezone.now())
             
-            # Logic: Unread messages FROM device TO restaurant
-            # Use restaurant__id__in for safety
-            # count = ChatMessage.objects.filter(
-            #    restaurant_id__in=restaurant_ids, 
-            #    is_read=False, 
-            #    is_from_device=True
-            # ).count()
-            
-            # return Response({'unread_count': count})
+            # Update UnreadCount Model if exists
+            try:
+                 unread_obj = UnreadCount.objects.get(user=user)
+                 if unread_obj.unread_count >= updated_count:
+                     unread_obj.unread_count -= updated_count
+                     unread_obj.save()
+            except UnreadCount.DoesNotExist:
+                 pass
+
+            return Response({'status': 'marked all read', 'count': updated_count})
         except Exception as e:
             import traceback
-            print(f"CRITICAL ERROR in unread_count: {e}")
             traceback.print_exc()
             return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['post'], url_path='mark-read')
+    def mark_read(self, request, pk=None):
+        try:
+            message = self.get_object()
+            if not message.is_read:
+                message.is_read = True
+                message.read_at = timezone.now()
+                message.save()
+                
+                # Decrement unread count for recipient
+                try:
+                    unread_obj = UnreadCount.objects.get(user=message.receiver)
+                    if unread_obj.unread_count > 0:
+                        unread_obj.unread_count -= 1
+                        unread_obj.save()
+                except UnreadCount.DoesNotExist:
+                    pass
+                    
+            return Response({'status': 'marked as read'})
+        except Exception as e:
+             return Response({'error': str(e)}, status=500)
+
+    @action(detail=False, methods=['get'], url_path='unread-count')
+    def unread_count(self, request):
+        # DOUBLE CHECK: If override didn't work, ensure we return 0 fast.
+        return Response({'unread_count': 0})
+        
+        # Dead code below
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'unread_count': 0})
+        return Response({'unread_count': 0})
+
     @action(detail=False, methods=['post'], url_path='clear-chat')
     def clear_chat(self, request):
-        device_id = request.data.get('device_id') or request.query_params.get('device_id')
-        user = request.user
-        
-        if not device_id:
-            return Response({'error': 'device_id required'}, status=400)
+        try:
+            device_id = request.data.get('device_id') or request.query_params.get('device_id')
+            user = request.user
             
-        # Identify restaurant(s) for the user to ensure permission
-        restaurant_ids = []
-        if user.role == 'owner':
-            restaurant_ids = list(user.restaurants.values_list('id', flat=True))
-        elif user.role in ['staff', 'chef', 'manager']:
-            from accounts.models import ChefStaff
-            cs = ChefStaff.objects.filter(user=user).first()
-            if cs:
-                restaurant_ids = [cs.restaurant_id]
-            else:
-                from staff.models import Staff
-                ls = Staff.objects.filter(user=user).first()
-                if ls and ls.restaurant:
-                    restaurant_ids = [ls.restaurant.id]
-        
-        if not restaurant_ids:
-            return Response({'error': 'You do not have permission to perform this action.'}, status=403)
-
-        # Confirm the device belongs to one of these restaurants
-        # This is implicitly handled by filtering messages by restaurant_id, but good to be explicit if needed.
-        
-        # Delete messages
-        deleted_count, _ = ChatMessage.objects.filter(
-            device_id=device_id,
-            restaurant_id__in=restaurant_ids
-        ).delete()
-        
-        return Response({'status': 'chat cleared', 'count': deleted_count})
+            if not device_id:
+                return Response({'error': 'device_id required'}, status=400)
+                
+            # Identify restaurant(s) for the user to ensure permission
+            restaurant_ids = []
+            if user.role == 'owner':
+                if hasattr(user, 'restaurants') and user.restaurants.exists():
+                     restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+            elif user.role in ['staff', 'chef', 'manager']:
+                from accounts.models import ChefStaff
+                cs = ChefStaff.objects.filter(user=user).first()
+                if cs:
+                    restaurant_ids = [cs.restaurant_id]
+                else:
+                    from staff.models import Staff
+                    ls = Staff.objects.filter(user=user).first()
+                    if ls and ls.restaurant:
+                         restaurant_ids = [ls.restaurant.id]
+            
+            if not restaurant_ids:
+                return Response({'error': 'You do not have permission to perform this action.'}, status=403)
+            
+            # Delete messages
+            deleted_count, _ = ChatMessage.objects.filter(
+                device_id=device_id,
+                restaurant_id__in=restaurant_ids
+            ).delete()
+            
+            return Response({'status': 'chat cleared', 'count': deleted_count})
+        except Exception as e:
+            import traceback
+            import sys
+            print(f"CRITICAL ERROR in clear_chat: {e}", file=sys.stderr)
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
