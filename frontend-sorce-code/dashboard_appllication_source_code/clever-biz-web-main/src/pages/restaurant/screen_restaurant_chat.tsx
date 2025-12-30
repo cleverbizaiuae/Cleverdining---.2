@@ -130,15 +130,18 @@ const ScreenRestaurantChat = () => {
             }];
           });
         }
-      };
+      } catch (e) {
+        console.error("Dashboard WS Error:", e);
+      }
+    };
 
-      ws.onerror = (e) => console.error("WS Error", e);
-      ws.onclose = () => console.log("Chat WS Closed");
+    ws.onerror = (e) => console.error("WS Error", e);
+    ws.onclose = () => console.log("Chat WS Closed");
 
-      setSocket(ws);
+    setSocket(ws);
 
-      return () => ws.close();
-    }, [selectedChat]);
+    return () => ws.close();
+  }, [selectedChat]);
 
   // 3. Global WebSocket Listener for Real-time List Updates
   const { messages: globalMessages } = useContext(WebSocketContext) || {};
