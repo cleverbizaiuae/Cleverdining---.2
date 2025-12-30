@@ -139,7 +139,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'order_status_update' && data.session_ended) {
+        if ((data.type === 'order_status_update' && data.session_ended) || data.type === 'session_closed') {
           console.log("Session Ended via WebSocket");
           localStorage.removeItem("userInfo");
           localStorage.removeItem("guest_session_token");
