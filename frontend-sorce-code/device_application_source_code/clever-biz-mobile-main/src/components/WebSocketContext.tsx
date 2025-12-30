@@ -41,7 +41,24 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     setHasNewMessageState(value);
   };
 
-  const [messages, setMessages] = useState<any[]>([]);
+  // Initialize from LocalStorage
+  const [messages, setMessages] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("chat_messages_cache");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Persist on Change
+  useEffect(() => {
+    try {
+      localStorage.setItem("chat_messages_cache", JSON.stringify(messages));
+    } catch (e) {
+      console.warn("Failed to persist chat messages", e);
+    }
+  }, [messages]);
 
   const connect = React.useCallback(() => {
     const accessToken = localStorage.getItem("accessToken");
@@ -128,6 +145,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           localStorage.removeItem("guest_session_token");
           localStorage.removeItem("accessToken");
           localStorage.removeItem("pending_order_id");
+          localStorage.removeItem("chat_messages_cache"); // Clear Chat on Session End
           window.location.href = "/dashboard/success";
           return;
         }
