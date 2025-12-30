@@ -22,32 +22,32 @@ class ChatMessageViewSet(ModelViewSet):
         return super().get_authenticators()
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        
-        # 1. Staff/User Authentication (Priority 1)
-        user = self.request.user
-        if user.is_authenticated:
-            # Check role to differentiate between logged-in 'customer' (if any) and staff/owner
-            if hasattr(user, 'role') and user.role in ['owner', 'staff', 'chef', 'manager']:
-                 # Staff logic
-                device_id = self.request.query_params.get('device_id')
-                restaurant_id = self.request.query_params.get('restaurant_id')
-
-                if self.action == 'list':
-                    if device_id:
-                        # Filter by device_id.
-                        qs = queryset.filter(device_id=device_id)
-                        if restaurant_id:
-                            # Use direct restaurant_id field on ChatMessage instead of device__restaurant_id
-                            # This ensures we find messages saved for this restaurant even if device relationship is complex/stale
-                            qs = qs.filter(restaurant_id=restaurant_id)
-                        return qs.order_by('timestamp')
-                    else:
-                        # Maybe return all for restaurant? No, list requires filtering usually.
-                        return queryset.none()
-        
-        # 2. Guest Session Token (Priority 2 - for Customers)
         try:
+            queryset = super().get_queryset()
+            
+            # 1. Staff/User Authentication (Priority 1)
+            user = self.request.user
+            if user.is_authenticated:
+                # Check role to differentiate between logged-in 'customer' (if any) and staff/owner
+                if hasattr(user, 'role') and user.role in ['owner', 'staff', 'chef', 'manager']:
+                     # Staff logic
+                    device_id = self.request.query_params.get('device_id')
+                    restaurant_id = self.request.query_params.get('restaurant_id')
+
+                    if self.action == 'list':
+                        if device_id:
+                            # Filter by device_id.
+                            qs = queryset.filter(device_id=device_id)
+                            if restaurant_id:
+                                # Use direct restaurant_id field on ChatMessage instead of device__restaurant_id
+                                # This ensures we find messages saved for this restaurant even if device relationship is complex/stale
+                                qs = qs.filter(restaurant_id=restaurant_id)
+                            return qs.order_by('timestamp')
+                        else:
+                            # Maybe return all for restaurant? No, list requires filtering usually.
+                            return queryset.none()
+            
+            # 2. Guest Session Token (Priority 2 - for Customers)
             session_token = self.request.headers.get('X-Guest-Session-Token')
             # print(f"DEBUG: Fetching messages with token: {session_token}")
             if session_token:
@@ -79,13 +79,15 @@ class ChatMessageViewSet(ModelViewSet):
             else:
                  # print("DEBUG: No X-Guest-Session-Token header provided.")
                  pass
-        except Exception as e:
-            print(f"Queryset Error: {e}")
+                 
             return queryset.none()
-        
-        return queryset.none()
-        
-        return queryset.none()
+
+        except Exception as e:
+            import traceback
+            import sys
+            print(f"CRITICAL ERROR in ChatMessageViewSet.get_queryset: {e}", file=sys.stderr)
+            traceback.print_exc()
+            return ChatMessage.objects.none()
     def perform_update(self, serializer):
         if self.get_object().sender != self.request.user:
             raise PermissionDenied("You can only update your own messages.")
