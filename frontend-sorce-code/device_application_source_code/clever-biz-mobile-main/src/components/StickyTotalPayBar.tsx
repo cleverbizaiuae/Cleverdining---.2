@@ -25,7 +25,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
     const unpaidOrders = useMemo(() => {
         return orders.filter(
             (o) =>
-                ['pending', 'preparing', 'served'].includes(o.status) &&
+                ['pending', 'preparing', 'served', 'completed', 'delivered'].includes(o.status) &&
                 (!o.payment_status || ['unpaid', 'pending', 'failed'].includes(o.payment_status))
         );
     }, [orders]);
