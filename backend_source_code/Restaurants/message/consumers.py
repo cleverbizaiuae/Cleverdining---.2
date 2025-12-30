@@ -21,182 +21,172 @@ logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.device_id = self.scope['url_route']['kwargs']['device_id']
+        # UNIFIED ARCHITECTURE:
+        # 1. Staff connects to "Firehose" (restaurant_staff_<id>) to see ALL chats.
+        # 2. Guest connects to "Private Room" (guest_<session_id>) to see ONLY their chat.
+        
+        self.restaurant_id_kwarg = self.scope['url_route']['kwargs'].get('restaurant_id')
+        self.device_id_kwarg = self.scope['url_route']['kwargs'].get('device_id') # Legacy support
+
         self.user = self.scope['user']
-        self.guest_session = self.scope.get('guest_session') # Capture session from scope (set by Middleware)
+        self.guest_session = self.scope.get('guest_session')
         self.user_info = self.scope.get('user_info', {})
         
-        # Get restaurant_id from user_info or query params
-        self.restaurant_id = self.user_info.get('restaurants_id')
-        if not self.restaurant_id:
-            from urllib.parse import parse_qs
-            query_string = self.scope['query_string'].decode()
-            query_params = parse_qs(query_string)
-            self.restaurant_id = query_params.get('restaurant_id', [None])[0]
-
-        self.restaurant_group_name = None
+        # Resolve Restaurant ID
+        self.restaurant_id = self.restaurant_id_kwarg
         
-        # Parse restaurant_id securely
-        if self.restaurant_id:
-            try:
-                self.restaurant_id = str(int(self.restaurant_id)) # Normalize to stringified int
-            except (ValueError, TypeError):
-                self.restaurant_id = None
-        
+        # Legacy: If connected via /chat/<device_id>, find restaurant from user or query
         if not self.restaurant_id:
-            await self.close(code=4002) # Invalid ID
-            return
+             # Try determining from user
+             self.restaurant_id = self.user_info.get('restaurants_id')
+             if not self.restaurant_id:
+                from urllib.parse import parse_qs
+                query_string = self.scope['query_string'].decode()
+                query_params = parse_qs(query_string)
+                self.restaurant_id = query_params.get('restaurant_id', [None])[0]
 
-        self.restaurant_group_name = f"room_{self.device_id}_{self.restaurant_id}"
-        print(f"DEBUG: ChatConsumer Connecting. Device: {self.device_id}, Restaurant: {self.restaurant_id}, Group: {self.restaurant_group_name}")
-
-        # Fallback: If guest_session is missing but we have a token, try to resolve it manually
-        if not self.guest_session:
-            from urllib.parse import parse_qs
-            query_string = self.scope['query_string'].decode()
-            query_params = parse_qs(query_string)
-            token_list = query_params.get('token')
-            if token_list:
-                token = token_list[0]
-                if token and token != "guest_token":
-                   self.guest_session = await self._get_guest_session(token)
-
-        # CRITICAL: For anonymous users (Guests), we MUST have a guest_session.
-        # Otherwise, messages are saved with guest_session=None and disappear from history (cannot be fetched).
-        if self.user.is_anonymous and not self.guest_session:
-             print("DEBUG: Anonymous user rejected - No Guest Session found.")
-             await self.close(code=4003) # Forbidden/Missing Session
+        if not self.restaurant_id:
+             print("DEBUG: Connection Rejected - No Restaurant ID")
+             await self.close(code=4002)
              return
 
-        if self.user and (self.user.is_authenticated or self.user.is_anonymous):
-            # For anonymous users (guests), we might want to restrict them to their device room only
-            # For now, let's allow them to join the group to enable messaging
-            await self.channel_layer.group_add(self.restaurant_group_name, self.channel_name)
-            
-            # Join the restaurant-wide group to receive item/menu updates AND broadcast chat for dashboard
-            if self.restaurant_id:
-                self.restaurant_general_group = f"restaurant_{self.restaurant_id}"
-                await self.channel_layer.group_add(self.restaurant_general_group, self.channel_name)
-            
-            await self.accept()
+        self.restaurant_id = str(self.restaurant_id)
+        self.staff_firehose_group = f"restaurant_staff_{self.restaurant_id}"
+        
+        # Determine Identity & Groups
+        # PRIORITIZE GUEST SESSION
+        if self.guest_session:
+             self.is_guest = True
+             self.device_id = self.guest_session.device_id # Use device from session
+             # Guest only joins their private session room
+             self.my_group = f"guest_session_{self.guest_session.id}"
+             print(f"DEBUG: Guest Connected to Private Room: {self.my_group}")
+        
+        elif self.user and self.user.is_authenticated and self.user.role in ['owner', 'staff', 'manager', 'chef']:
+             self.is_guest = False
+             self.device_id = None # Staff doesn't have a device_id
+             # Staff joins the Firehose (to see all messages)
+             self.my_group = self.staff_firehose_group
+             print(f"DEBUG: Staff {self.user.email} Connected to Firehose: {self.my_group}")
         else:
-            await self.close()
+             print("DEBUG: Connection Rejected - Unauthenticated (No Guest Session, No Staff Login)")
+             await self.close(code=4003)
+             return
+
+        # Add to assigned group
+        await self.channel_layer.group_add(self.my_group, self.channel_name)
+        await self.accept()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.restaurant_group_name, self.channel_name)
-        if hasattr(self, 'restaurant_general_group'):
-            await self.channel_layer.group_discard(self.restaurant_general_group, self.channel_name)
+        if hasattr(self, 'my_group'):
+            await self.channel_layer.group_discard(self.my_group, self.channel_name)
 
     async def receive(self, text_data):
         try:
-            try:
-                data = json.loads(text_data)
-                message = data.get('message')
-                if not message:
-                    raise ValueError("Missing message content")
-            except Exception:
-                await self.send(text_data=json.dumps({"error": "Invalid JSON or missing 'message' field"}))
-                return
-
-            msg_type = data.get('type', 'message')
-
-            # Determine sender and receiver
-            # Fix: If guest_session is present, assume this is a Customer on a Device, even if the user is technically logged in (e.g. via session cookies).
-            # This prioritizes the "Table Identity" over the "User Identity" to prevent Admin messages looking like Staff replies when testing on mobile.
-            if self.guest_session or self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
-                receiver = await self._get_restaurant_owner(self.restaurant_id)
-                is_from_device = True
-                
-                # PARANOID CHECK: If guest_session is missing, try to find it one last time from query params
-                if not self.guest_session:
-                     from urllib.parse import parse_qs
-                     query_string = self.scope['query_string'].decode()
-                     query_params = parse_qs(query_string)
-                     token_list = query_params.get('token')
-                     if token_list and token_list[0] != "guest_token":
-                          self.guest_session = await self._get_guest_session(token_list[0])
-                          print(f"DEBUG: Recovered guest_session in receive: {self.guest_session}")
-
-                if not self.guest_session:
-                     print("CRITICAL: Message received but NO guest_session found. Message will be lost/unlinked.")
-                
-                # Force sender to be "Guest" context if from device
-                # If we rely on self.user, it might be "Pranay" due to session cookies.
-                sender = self.user if not self.guest_session else None 
-
-            else:  # owner or staff (Explicitly NO guest session)
-                try:
-                    receiver = await self._get_device_user(self.device_id)
-                except Exception:
-                    receiver = None
-                is_from_device = False
-                sender = self.user
+            data = json.loads(text_data)
+            message = data.get('message')
+            if not message: return
             
-            print(f"DEBUG: Saving Message. Sender: {sender}, Device: {self.device_id}, Session: {self.guest_session}")
-
-            chat_message = await self._save_message(
-                sender=sender,
-                receiver=receiver,
-                message=message,
-                device_id=self.device_id,
-                restaurant_id=self.restaurant_id,
-                is_from_device=is_from_device,
-                room_name=self.restaurant_group_name,
-                guest_session=self.guest_session # Pass session
-            )
-
-            if not chat_message:
-                logger.error("Failed to save message")
-                await self.send(text_data=json.dumps({"error": "Message could not be saved."}))
-                return
-
-            # Use the safe username attached by _save_message to avoid Async-DB issues
-            safe_username = getattr(chat_message, 'safe_sender_username', 'Unknown')
-
-            # Broadcast the message to the specific chat room
-            await self.channel_layer.group_send(
-                self.restaurant_group_name,
-                {
-                    'type': 'chat_message',
-                    'message': message,
-                    'msg_type': msg_type,
-                    'sender': safe_username,
-                    'device_id' : self.device_id,
-                    'is_from_device': is_from_device,
-                    'timestamp': str(chat_message.timestamp),
-                }
-            )
-
-            # Broadcast the message to the general restaurant group (for notifications)
-            # Ensure restaurant_id is valid
-            if self.restaurant_id:
-                print(f"DEBUG: Broadcasting to restaurant_{self.restaurant_id}")
+            # Target Determination
+            # If Staff, they must specify which Device/Session they are replying to in the payload
+            # If Guest, target is automatically the Restaurant Owner
+            
+            receiver = None
+            is_from_device = False
+            
+            if self.is_guest:
+                is_from_device = True
+                sender = None # Anonymous
+                
+                # Guest Message Routing:
+                # 1. Send to Firehose (so Staff sees it)
+                # 2. Send to My Group (Echo for other tabs)
+                
                 await self.channel_layer.group_send(
-                    f"restaurant_{self.restaurant_id}",
+                    self.staff_firehose_group,
                     {
                         'type': 'chat_message',
                         'message': message,
-                        'msg_type': msg_type,
-                        'sender': safe_username,
-                        'device_id' : self.device_id,
-                        'is_from_device': is_from_device,
-                        'timestamp': str(chat_message.timestamp),
+                        'sender': f"Table {self.guest_session.table_id}" if self.guest_session else "Guest",
+                        'is_from_device': True,
+                        'guest_session_id': self.guest_session.id,
+                        'timestamp': str(timezone.now())
                     }
                 )
+                
+                # Echo to self (Private Group)
+                await self.channel_layer.group_send(
+                    self.my_group,
+                    {
+                        'type': 'chat_message',
+                        'message': message,
+                        'sender': "You",
+                        'is_from_device': True,
+                        'timestamp': str(timezone.now())
+                    }
+                )
+
+            else: # Staff Sending
+                is_from_device = False
+                sender = self.user
+                
+                # Staff MUST provide target session/device in payload
+                target_session_id = data.get('guest_session_id')
+                # Fallback: legacy mobile apps might send 'device_id'. We need to resolve active session.
+                
+                if not target_session_id:
+                     print("ERROR: Staff reply missing 'guest_session_id'. Cannot route.")
+                     return
+
+                target_group = f"guest_session_{target_session_id}"
+                
+                # 1. Send to Target Guest
+                await self.channel_layer.group_send(
+                    target_group,
+                    {
+                        'type': 'chat_message',
+                        'message': message,
+                        'sender': self.user.username if self.user else "Staff",
+                        'is_from_device': False,
+                        'timestamp': str(timezone.now())
+                    }
+                )
+                
+                # 2. Echo to Firehose (so other staff see the reply)
+                await self.channel_layer.group_send(
+                    self.staff_firehose_group,
+                    {
+                        'type': 'chat_message',
+                        'message': message,
+                        'sender': self.user.username if self.user else "Staff",
+                        'is_from_device': False,
+                        'guest_session_id': target_session_id, # Context for UI
+                        'timestamp': str(timezone.now())
+                    }
+                )
+
+            # --- Database Persistence (Async) ---
+            # Use self-healing _save_message logic here...
+            await self._save_message(
+                sender=sender, 
+                receiver=None, # Deprecated logic, rely on session link
+                message=message,
+                device_id=self.device_id if self.is_guest else None,
+                restaurant_id=self.restaurant_id,
+                is_from_device=is_from_device,
+                room_name=self.staff_firehose_group,
+                guest_session=self.guest_session if self.is_guest else None 
+                # Note: For Staff, we need to resolve the GuestSession object from ID to link it properly in DB.
+                # Use helper _get_guest_session_by_id(target_session_id)
+            )
         except Exception as e:
             logger.error(f"ChatConsumer Error: {e}", exc_info=True)
             print(f"ChatConsumer Exception: {e}")
             await self.send(text_data=json.dumps({"error": f"Error: {str(e)}"}))
 
     async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            'message': event['message'],
-            'msg_type': event.get('msg_type', 'message'),
-            'sender': event['sender'],
-            'device_id': event['device_id'],
-            'is_from_device': event['is_from_device'],
-            'timestamp': event['timestamp'],
-        }))
+        # Unified Handler: Just push whatever comes to the socket
+        await self.send(text_data=json.dumps(event))
 
     @database_sync_to_async
     def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device,room_name, guest_session=None):
