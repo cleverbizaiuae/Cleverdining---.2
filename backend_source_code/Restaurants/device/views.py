@@ -128,7 +128,8 @@ class CloseTableSessionView(APIView):
         try:
              session = GuestSession.objects.get(id=session_id)
         except GuestSession.DoesNotExist:
-             return Response({'error': 'Session not found'}, status=404)
+             # If session is missing, treat it as already closed/gone to allow UI to refresh.
+             return Response({'message': 'Session not found (already closed)'}, status=200)
              
         # Check permissions (Hotel ownership)
         user = request.user
