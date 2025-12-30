@@ -43,10 +43,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const accessToken = localStorage.getItem("accessToken");
     const guestSessionToken = localStorage.getItem("guest_session_token");
 
-    // Use Guest Token if Access Token is "guest_token" marker or missing
-    let tokenToUse = accessToken;
-    if (!accessToken || accessToken === "guest_token") {
-      tokenToUse = guestSessionToken || "";
+    // Use Guest Token if found (Priority: Guest > User for Table Mode)
+    // This ensures owners scanning a QR code chat as "Guest" not "Staff"
+    let tokenToUse = guestSessionToken;
+
+    if (!tokenToUse && accessToken && accessToken !== "guest_token") {
+      tokenToUse = accessToken;
     }
 
     const userInfo = localStorage.getItem("userInfo");
