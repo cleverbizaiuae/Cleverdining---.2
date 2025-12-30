@@ -21,61 +21,79 @@ logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # UNIFIED ARCHITECTURE:
-        # 1. Staff connects to "Firehose" (restaurant_staff_<id>) to see ALL chats.
-        # 2. Guest connects to "Private Room" (guest_<session_id>) to see ONLY their chat.
-        
-        self.restaurant_id_kwarg = self.scope['url_route']['kwargs'].get('restaurant_id')
-        self.device_id_kwarg = self.scope['url_route']['kwargs'].get('device_id') # Legacy support
+        try:
+            # UNIFIED ARCHITECTURE:
+            # 1. Staff connects to "Firehose" (restaurant_staff_<id>) to see ALL chats.
+            # 2. Guest connects to "Private Room" (guest_<session_id>) to see ONLY their chat.
+            
+            self.restaurant_id_kwarg = self.scope['url_route']['kwargs'].get('restaurant_id')
+            
+            self.user = self.scope.get('user')
+            if not self.user:
+                from django.contrib.auth.models import AnonymousUser
+                self.user = AnonymousUser()
 
-        self.user = self.scope['user']
-        self.guest_session = self.scope.get('guest_session')
-        self.user_info = self.scope.get('user_info', {})
-        
-        # Resolve Restaurant ID
-        self.restaurant_id = self.restaurant_id_kwarg
-        
-        # Legacy: If connected via /chat/<device_id>, find restaurant from user or query
-        if not self.restaurant_id:
-             # Try determining from user
-             self.restaurant_id = self.user_info.get('restaurants_id')
-             if not self.restaurant_id:
-                from urllib.parse import parse_qs
-                query_string = self.scope['query_string'].decode()
-                query_params = parse_qs(query_string)
-                self.restaurant_id = query_params.get('restaurant_id', [None])[0]
+            self.guest_session = self.scope.get('guest_session')
+            self.user_info = self.scope.get('user_info', {})
+            
+            # Resolve Restaurant ID
+            self.restaurant_id = self.restaurant_id_kwarg
+            
+            # Legacy Fallback
+            if not self.restaurant_id:
+                 self.restaurant_id = self.user_info.get('restaurants_id')
+                 if not self.restaurant_id:
+                    from urllib.parse import parse_qs
+                    query_string = self.scope.get('query_string', b'').decode()
+                    query_params = parse_qs(query_string)
+                    self.restaurant_id = query_params.get('restaurant_id', [None])[0]
 
-        if not self.restaurant_id:
-             print("DEBUG: Connection Rejected - No Restaurant ID")
-             await self.close(code=4002)
-             return
+            if not self.restaurant_id:
+                 print("DEBUG: Connection Rejected - No Restaurant ID")
+                 await self.close(code=4002)
+                 return
 
-        self.restaurant_id = str(self.restaurant_id)
-        self.staff_firehose_group = f"restaurant_staff_{self.restaurant_id}"
-        
-        # Determine Identity & Groups
-        # PRIORITIZE GUEST SESSION
-        if self.guest_session:
-             self.is_guest = True
-             self.device_id = self.guest_session.device_id # Use device from session
-             # Guest only joins their private session room
-             self.my_group = f"guest_session_{self.guest_session.id}"
-             print(f"DEBUG: Guest Connected to Private Room: {self.my_group}")
-        
-        elif self.user and self.user.is_authenticated and self.user.role in ['owner', 'staff', 'manager', 'chef']:
-             self.is_guest = False
-             self.device_id = None # Staff doesn't have a device_id
-             # Staff joins the Firehose (to see all messages)
-             self.my_group = self.staff_firehose_group
-             print(f"DEBUG: Staff {self.user.email} Connected to Firehose: {self.my_group}")
-        else:
-             print("DEBUG: Connection Rejected - Unauthenticated (No Guest Session, No Staff Login)")
-             await self.close(code=4003)
-             return
+            self.restaurant_id = str(self.restaurant_id)
+            self.staff_firehose_group = f"restaurant_staff_{self.restaurant_id}"
+            
+            # Determine Identity & Groups
+            # 1. GUEST Check
+            if self.guest_session:
+                 self.is_guest = True
+                 self.device_id = self.guest_session.device_id 
+                 self.my_group = f"guest_session_{self.guest_session.id}"
+                 print(f"DEBUG: Guest Connected to Private Room: {self.my_group}")
+            
+            # 2. STAFF Check (Owner, Staff, Manager, Chef)
+            # Use user_info lookup to be safe against AttributeError on self.user
+            else:
+                 user_role = self.user_info.get('role')
+                 # Fallback: check attribute if not in info
+                 if not user_role and hasattr(self.user, 'role'):
+                     user_role = self.user.role
+                 
+                 print(f"DEBUG: Authenticating Staff Connection. User: {self.user}, Role: {user_role}, Auth: {self.user.is_authenticated}")
 
-        # Add to assigned group
-        await self.channel_layer.group_add(self.my_group, self.channel_name)
-        await self.accept()
+                 if self.user and self.user.is_authenticated and user_role in ['owner', 'staff', 'manager', 'chef']:
+                     self.is_guest = False
+                     self.device_id = None 
+                     self.my_group = self.staff_firehose_group
+                     print(f"DEBUG: {user_role.capitalize()} {self.user.email} Joined Firehose: {self.my_group}")
+                 else:
+                     print(f"DEBUG: Connection Rejected - Role Mismatch or Unauthenticated. Role found: {user_role}")
+                     await self.close(code=4003)
+                     return
+
+            # Add to assigned group
+            await self.channel_layer.group_add(self.my_group, self.channel_name)
+            await self.accept()
+            print("DEBUG: WebSocket Accepted Successfully")
+
+        except Exception as e:
+            print(f"CRITICAL: Exception in ChatConsumer.connect: {e}")
+            import traceback
+            traceback.print_exc()
+            await self.close(code=4000)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'my_group'):
