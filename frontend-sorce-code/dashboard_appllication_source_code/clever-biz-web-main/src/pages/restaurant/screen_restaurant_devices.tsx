@@ -206,9 +206,10 @@ export const ScreenRestaurantDevices = () => {
       toast.success("Session closed successfully");
       fetchAllDevices();
       setIsEndSessionModalOpen(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error("Failed to close session");
+      const msg = e.response?.data?.error || e.response?.data?.detail || e.message || "Failed to close session";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
