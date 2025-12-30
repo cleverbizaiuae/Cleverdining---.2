@@ -76,18 +76,18 @@ class JWTAuthMiddleware(BaseMiddleware):
                             try:
                                 if info["role"] == 'owner':
                                     # Use safe access
-                                    if hasattr(user, "restaurants") and await sync_to_async(user.restaurants.exists)():
-                                        first_rest = await sync_to_async(user.restaurants.first)()
+                                    if hasattr(user, "restaurants") and user.restaurants.exists():
+                                        first_rest = user.restaurants.first()
                                         if first_rest:
                                             info["restaurants_id"] = first_rest.id
                                 elif info["role"] in ['staff', 'manager']:
                                     from staff.models import Staff
-                                    staff_profile = await sync_to_async(Staff.objects.filter(user=user).first)()
+                                    staff_profile = Staff.objects.filter(user=user).first()
                                     if staff_profile and staff_profile.restaurant:
                                         info["restaurants_id"] = staff_profile.restaurant.id
                                 elif info["role"] == 'chef':
                                     from accounts.models import ChefStaff
-                                    chef_profile = await sync_to_async(ChefStaff.objects.filter(user=user).first)()
+                                    chef_profile = ChefStaff.objects.filter(user=user).first()
                                     if chef_profile:
                                         info["restaurants_id"] = chef_profile.restaurant_id
                             except Exception as e:
