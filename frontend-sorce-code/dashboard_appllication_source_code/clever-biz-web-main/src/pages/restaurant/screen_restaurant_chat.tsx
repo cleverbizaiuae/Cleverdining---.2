@@ -22,6 +22,7 @@ interface ChatRoomItem {
   restaurant_id: string;
   restaurant?: string | number;
   unread_count?: number;
+  active_guest_session_id?: string | number;
 }
 
 interface Message {
