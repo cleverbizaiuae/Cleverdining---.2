@@ -110,6 +110,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         'sender': f"Table {self.guest_session.table_id}" if self.guest_session else "Guest",
                         'is_from_device': True,
                         'guest_session_id': self.guest_session.id,
+                        'device_id': self.device_id, # Added for Dashboard filtering compatibility
                         'timestamp': str(timezone.now())
                     }
                 )
