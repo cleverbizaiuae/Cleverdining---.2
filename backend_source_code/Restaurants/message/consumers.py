@@ -118,7 +118,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 if not self.guest_session:
                      print("CRITICAL: Message received but NO guest_session found. Message will be lost/unlinked.")
             else:  # owner or staff
-                receiver = await self._get_device_user(self.device_id)
+                try:
+                    receiver = await self._get_device_user(self.device_id)
+                except Exception:
+                    receiver = None
                 is_from_device = False
             
             sender = self.user
@@ -177,7 +180,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"ChatConsumer Error: {e}", exc_info=True)
             print(f"ChatConsumer Exception: {e}")
-            await self.send(text_data=json.dumps({"error": "An error occurred processing your message."}))
+            await self.send(text_data=json.dumps({"error": f"Error: {str(e)}"}))
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
