@@ -75,99 +75,86 @@ const ScreenRestaurantChat = () => {
     fetchChats();
   }, []);
 
-  // 2. Unified WebSocket Connection
-  // Connects to the Restaurant Firehose once.
+  // 2. Unified WebSocket Connection (With Auto-Reconnect)
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
-    // Determine the restaurant ID to connect to.
-    // If multiple restaurants, this logic needs to know which one we are viewing.
-    // For now, assume selectedChat determines the restaurant context, 
-    // OR use the first available restaurant if list is present.
-
-    // Safety: If no chat selected, we might still want to be connected to get Unread counts?
-    // But the requirement says "Same table + same session -> same chat".
-    // Let's connect when the component mounts, using the userInfo's restaurant or the first chat item.
-
-    if (!userInfo) return;
+    if (!userInfo || !selectedChat) return;
 
     const jwt = localStorage.getItem("accessToken");
-    if (!jwt || jwt === "guest_token") {
-      console.warn("Invalid Session for Dashboard Chat");
-      return;
-    }
-
-    // Resolve Restaurant ID
-    // If owner, might have multiple. If staff, usually one.
-    // We need a reliable ID. selectedChat has one.
-    // Stragegy: Connect when a chat is selected, OR connect to a "Master" if possible.
-    // For this fix to work effectively for the selected conversation, we use selectedChat's restaurant.
-
-    if (!selectedChat) return;
+    if (!jwt || jwt === "guest_token") return;
 
     const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
-
-    // UNIFIED URL: /ws/chat/restaurant/<id>/
     const wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurantId}/?token=${jwt}`;
 
-    console.log(`Connecting to Unified Chat Room: ${wsUrl}`);
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => console.log("Unified Chat WS Connected");
-
-    ws.onmessage = (event) => {
-      try {
-        console.log("DEBUG: Unified WS Received:", event.data);
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'chat_message') {
-          // Filter: Does this message belong to the currently open chat?
-          // The backend sends 'guest_session_id' in the payload.
-          // We compare it with selectedChat.session_id (if available) or filter by user/device.
-
-          // Note: selectedChat from API returns 'id' which might be DeviceID or SessionID depending on backend view.
-          // Let's assume matches device_id for now as per legacy, but ideally verify session.
-
-          // Robust Filtering:
-          // 1. If 'guest_session_id' matches selectedChat.active_session_id
-          // 2. OR if 'device_id' matches selectedChat.id (Legacy fallback)
-
-          // For now, let's simply check if the message is relevant to the UI
-          // If we are looking at Table 5, and Table 5 sends a message, show it.
-
-          const isRelevant =
-            (data.guest_session_id && data.guest_session_id === selectedChat.active_guest_session_id) || // Exact Match
-            (data.device_id && String(data.device_id) === String(selectedChat.id)); // Loose Device Match
-
-          if (isRelevant || data.sender === "You") { // "You" means echo (but staff usually sends as "Staff")
-            // Add to UI
-            setMessages(prev => {
-              const lastMsg = prev[prev.length - 1];
-              // De-dupe based on content + timestamp proximity
-              if (lastMsg && lastMsg.message === data.message && (Date.now() - new Date(lastMsg.timestamp).getTime() < 2000)) {
-                return prev;
-              }
-              return [...prev, {
-                message: data.message,
-                sender: data.sender || "unknown",
-                timestamp: data.timestamp || Date.now(),
-                is_from_device: data.is_from_device
-              }];
-            });
-          }
-        }
-      } catch (e) {
-        console.error("Dashboard WS Error:", e);
+    const connect = () => {
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+        return;
       }
+
+      console.log(`Connecting to Unified Chat Room: ${wsUrl}`);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      setSocket(ws);
+
+      ws.onopen = () => {
+        console.log("Unified Chat WS Connected");
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        // ... (Same Message Logic) ...
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'chat_message') {
+            const isRelevant =
+              (data.guest_session_id && data.guest_session_id === selectedChat.active_guest_session_id) ||
+              (data.device_id && String(data.device_id) === String(selectedChat.id));
+
+            if (isRelevant || data.sender === "You") {
+              setMessages(prev => {
+                const lastMsg = prev[prev.length - 1];
+                if (lastMsg && lastMsg.message === data.message && (Date.now() - new Date(lastMsg.timestamp).getTime() < 2000)) {
+                  return prev;
+                }
+                return [...prev, {
+                  message: data.message,
+                  sender: data.sender || "unknown",
+                  timestamp: data.timestamp || Date.now(),
+                  is_from_device: data.is_from_device
+                }];
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Dashboard WS Error:", e);
+        }
+      };
+
+      ws.onerror = (e) => console.error("WS Error", e);
+
+      ws.onclose = () => {
+        console.log("Unified Chat WS Closed. Reconnecting in 3s...");
+        wsRef.current = null;
+        if (!reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(connect, 3000);
+        }
+      };
     };
 
-    ws.onerror = (e) => console.error("WS Error", e);
-    ws.onclose = () => console.log("Unified Chat WS Closed");
+    connect();
 
-    setSocket(ws);
-
-    return () => ws.close();
-  }, [selectedChat]); // Re-connect if switching restaurants (rare) or selecting first time
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    };
+  }, [selectedChat, userInfo]);
 
   // 3. Global WebSocket Listener for Real-time List Updates
   const { messages: globalMessages } = useContext(WebSocketContext) || {};
