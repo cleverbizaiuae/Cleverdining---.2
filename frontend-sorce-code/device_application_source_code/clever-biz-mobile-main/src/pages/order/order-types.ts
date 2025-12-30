@@ -16,4 +16,5 @@ export type Order = {
   restaurant: number;
   device_name: string;
   stripe_publishable_key: string;
+  payment_status?: string;
 };
