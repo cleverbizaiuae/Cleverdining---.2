@@ -55,10 +55,12 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                         <div className="flex flex-col items-end gap-1">
                             <span className={cn(
                                 "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide",
-                                // Mock logic for payment status
-                                true ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"
+                                // Real Logic
+                                (order.payment_status === 'paid')
+                                    ? "bg-green-100 text-green-600"
+                                    : "bg-red-100 text-red-600"
                             )}>
-                                Unpaid
+                                {order.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
                             </span>
                             <span className="text-sm font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg">
                                 AED {order.total_price}
@@ -133,6 +135,17 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
 
                 {/* D. Action Buttons */}
                 <div className="p-5 pt-0 flex gap-3">
+                    {/* Pay Button - Show if UNPAID, regardless of status */}
+                    {(!order.payment_status || order.payment_status === 'unpaid' || order.payment_status === 'pending' || order.payment_status === 'failed') && (
+                        <button
+                            onClick={() => onCheckout(order)}
+                            className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold text-sm hover:bg-green-700 transition-colors shadow-lg shadow-green-200 flex items-center justify-center gap-2"
+                        >
+                            <Receipt size={16} />
+                            Pay Now
+                        </button>
+                    )}
+
                     <button
                         onClick={() => setIsReviewOpen(true)}
                         className="flex-1 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold text-sm hover:bg-blue-100 transition-colors"
