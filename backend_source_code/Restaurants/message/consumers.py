@@ -101,7 +101,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             msg_type = data.get('type', 'message')
 
             # Determine sender and receiver
-            if self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
+            # Fix: If guest_session is present, assume this is a Customer on a Device, even if the user is technically logged in (e.g. via session cookies).
+            # This prioritizes the "Table Identity" over the "User Identity" to prevent Admin messages looking like Staff replies when testing on mobile.
+            if self.guest_session or self.user.is_anonymous or (hasattr(self.user, 'role') and self.user.role == "customer"):
                 receiver = await self._get_restaurant_owner(self.restaurant_id)
                 is_from_device = True
                 
@@ -117,14 +119,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
                 if not self.guest_session:
                      print("CRITICAL: Message received but NO guest_session found. Message will be lost/unlinked.")
-            else:  # owner or staff
+                
+                # Force sender to be "Guest" context if from device
+                # If we rely on self.user, it might be "Pranay" due to session cookies.
+                sender = self.user if not self.guest_session else None 
+
+            else:  # owner or staff (Explicitly NO guest session)
                 try:
                     receiver = await self._get_device_user(self.device_id)
                 except Exception:
                     receiver = None
                 is_from_device = False
-            
-            sender = self.user
+                sender = self.user
             
             print(f"DEBUG: Saving Message. Sender: {sender}, Device: {self.device_id}, Session: {self.guest_session}")
 
