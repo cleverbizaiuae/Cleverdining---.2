@@ -33,13 +33,13 @@ function App() {
     const storedUserInfo = localStorage.getItem("userInfo");
 
     if (tableIdParam && restaurantIdParam) {
-      // Case 1: URL params present - redirect to real login flow
-      // Pass restaurant_id to allow Self-Healing URLs (fallback lookup)
+      // Case 1: URL params present - redirect to real login flow (TableLanding)
+      // PRIORITY: This must happen even if logged in, to ensure Guest Token is generated for the new table.
       window.location.href = `/login?id=${tableIdParam}&table=${tableNameParam || 'Table'}&restaurant_id=${restaurantIdParam}`;
       return;
 
     } else if (storedUserInfo) {
-      // Case 2: Session already exists - redirect to dashboard
+      // Case 2: Session already exists (and no new table scan) - redirect to dashboard
       navigate("/dashboard");
 
     } else {
