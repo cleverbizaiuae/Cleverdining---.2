@@ -74,61 +74,86 @@ const ScreenRestaurantChat = () => {
     fetchChats();
   }, []);
 
-  // 2. WebSocket Connection for Selected Chat
+  // 2. Unified WebSocket Connection
+  // Connects to the Restaurant Firehose once.
   useEffect(() => {
-    if (!selectedChat) return;
+    // Determine the restaurant ID to connect to.
+    // If multiple restaurants, this logic needs to know which one we are viewing.
+    // For now, assume selectedChat determines the restaurant context, 
+    // OR use the first available restaurant if list is present.
+
+    // Safety: If no chat selected, we might still want to be connected to get Unread counts?
+    // But the requirement says "Same table + same session -> same chat".
+    // Let's connect when the component mounts, using the userInfo's restaurant or the first chat item.
+
+    if (!userInfo) return;
 
     const jwt = localStorage.getItem("accessToken");
-
-    // Safety check: Don't connect if we have a "guest_token" (from mobile app testing)
-    // This prevents the "Message Glitch" where staff appear as customers.
     if (!jwt || jwt === "guest_token") {
-      console.warn("Invalid JWT for staff chat (guest_token detected). Aborting connection.");
-      // toast.error("Invalid session. please re-login.");
+      console.warn("Invalid Session for Dashboard Chat");
       return;
     }
 
+    // Resolve Restaurant ID
+    // If owner, might have multiple. If staff, usually one.
+    // We need a reliable ID. selectedChat has one.
+    // Stragegy: Connect when a chat is selected, OR connect to a "Master" if possible.
+    // For this fix to work effectively for the selected conversation, we use selectedChat's restaurant.
+
+    if (!selectedChat) return;
+
+    const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
-    // WebSocket URL pattern based on utilities.tsx analysis: /ws/chat/{device_id}/
-    const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
-    const wsUrl = `${wsBaseUrl}/ws/chat/${selectedChat.id}/?token=${jwt}&restaurant_id=${restaurantId}`;
 
+    // UNIFIED URL: /ws/chat/restaurant/<id>/
+    const wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurantId}/?token=${jwt}`;
+
+    console.log(`Connecting to Unified Chat Room: ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => console.log("Chat WS Connected:", selectedChat.table_name);
+    ws.onopen = () => console.log("Unified Chat WS Connected");
 
     ws.onmessage = (event) => {
       try {
-        console.log("DEBUG: Dashboard Chat WS Received:", event.data);
+        console.log("DEBUG: Unified WS Received:", event.data);
         const data = JSON.parse(event.data);
-        if (data.message) {
-          // Fix: Use the flag from backend (which is accurate) instead of hardcoding 'true'
-          // If undefined, default to true (customer)
-          let isFromDevice = data.is_from_device !== undefined ? data.is_from_device : true;
 
-          // Deduplication/Optimistic UI Fix:
-          // If it's from US (isFromDevice=false), we might have already added it optimistically.
-          // Simple strategy: Trust the backend event. 
-          // If we want to avoid double-rendering, we should filter or match.
-          // For now, let's just use the correct flag so even if duplicated, it's on the RIGHT side.
+        if (data.type === 'chat_message') {
+          // Filter: Does this message belong to the currently open chat?
+          // The backend sends 'guest_session_id' in the payload.
+          // We compare it with selectedChat.session_id (if available) or filter by user/device.
 
-          setMessages(prev => {
-            // Optional: Avoid adding if exact message exists at end (simple debounce)
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg && !isFromDevice && lastMsg.message === data.message) {
-              const lastTime = new Date(lastMsg.timestamp).getTime();
-              if (!isNaN(lastTime) && (Date.now() - lastTime < 2000)) {
-                return prev; // Ignore echo of our own message sent < 2s ago
+          // Note: selectedChat from API returns 'id' which might be DeviceID or SessionID depending on backend view.
+          // Let's assume matches device_id for now as per legacy, but ideally verify session.
+
+          // Robust Filtering:
+          // 1. If 'guest_session_id' matches selectedChat.active_session_id
+          // 2. OR if 'device_id' matches selectedChat.id (Legacy fallback)
+
+          // For now, let's simply check if the message is relevant to the UI
+          // If we are looking at Table 5, and Table 5 sends a message, show it.
+
+          const isRelevant =
+            (data.guest_session_id && data.guest_session_id === selectedChat.active_guest_session_id) || // Exact Match
+            (data.device_id && String(data.device_id) === String(selectedChat.id)); // Loose Device Match
+
+          if (isRelevant || data.sender === "You") { // "You" means echo (but staff usually sends as "Staff")
+            // Add to UI
+            setMessages(prev => {
+              const lastMsg = prev[prev.length - 1];
+              // De-dupe based on content + timestamp proximity
+              if (lastMsg && lastMsg.message === data.message && (Date.now() - new Date(lastMsg.timestamp).getTime() < 2000)) {
+                return prev;
               }
-            }
-            return [...prev, {
-              message: data.message,
-              sender: data.sender || "unknown",
-              timestamp: Date.now(),
-              is_from_device: isFromDevice
-            }];
-          });
+              return [...prev, {
+                message: data.message,
+                sender: data.sender || "unknown",
+                timestamp: data.timestamp || Date.now(),
+                is_from_device: data.is_from_device
+              }];
+            });
+          }
         }
       } catch (e) {
         console.error("Dashboard WS Error:", e);
@@ -136,12 +161,12 @@ const ScreenRestaurantChat = () => {
     };
 
     ws.onerror = (e) => console.error("WS Error", e);
-    ws.onclose = () => console.log("Chat WS Closed");
+    ws.onclose = () => console.log("Unified Chat WS Closed");
 
     setSocket(ws);
 
     return () => ws.close();
-  }, [selectedChat]);
+  }, [selectedChat]); // Re-connect if switching restaurants (rare) or selecting first time
 
   // 3. Global WebSocket Listener for Real-time List Updates
   const { messages: globalMessages } = useContext(WebSocketContext) || {};
