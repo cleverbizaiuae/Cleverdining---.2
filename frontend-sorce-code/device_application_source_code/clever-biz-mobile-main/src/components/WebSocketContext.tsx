@@ -51,6 +51,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       tokenToUse = accessToken;
     }
 
+    console.log("DEBUG: WS Token Decision:", {
+      accessToken: accessToken ? accessToken.substring(0, 10) + "..." : "null",
+      guestToken: guestSessionToken ? guestSessionToken.substring(0, 10) + "..." : "null",
+      FINAL_DECISION: tokenToUse ? tokenToUse.substring(0, 10) + "..." : "null"
+    });
+
     const userInfo = localStorage.getItem("userInfo");
     const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
 
