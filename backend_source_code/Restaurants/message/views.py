@@ -15,6 +15,12 @@ class ChatMessageViewSet(ModelViewSet):
     permission_classes = [permissions.AllowAny]
     pagination_class = None
 
+    def get_authenticators(self):
+        # EMERGENCY BYPASS: Disable Authentication for unread_count to prevent DB Lock/Timeout
+        if self.action == 'unread_count':
+            return []
+        return super().get_authenticators()
+
     def get_queryset(self):
         queryset = super().get_queryset()
         
