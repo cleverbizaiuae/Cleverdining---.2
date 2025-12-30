@@ -23,12 +23,13 @@ const ScreenMessage = () => {
 
 function MessagingUI() {
   const navigate = useNavigate();
+  // Consume global state from Context
+  const { ws, sendMessage, hasNewMessage: contextHasNewMessage, setNewMessageFlag, messages, setMessages } = useWebSocket();
+
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Removed local messages state
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const isLargeDevice = useMediaQuery("only screen and (min-width : 993px)");
-
-  const { ws, sendMessage, hasNewMessage: contextHasNewMessage, setNewMessageFlag } = useWebSocket();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const userInfo = localStorage.getItem("userInfo");
@@ -36,47 +37,7 @@ function MessagingUI() {
   const device_id = userInfoContent?.user?.restaurants?.[0]?.device_id || null;
   const restaurant_id = userInfoContent?.user?.restaurants?.[0]?.id || null;
 
-  // Sync local messages with WebSocket events
-  useEffect(() => {
-    if (!ws) return;
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.message && typeof data.message === "string") {
-          setMessages((prev) => {
-            // Deduplicate: If we already have this message (optimistically added), don't add it again.
-            // Check the last few messages for a match.
-            const isDuplicate = prev.slice(-3).some(m =>
-              m.text === data.message &&
-              m.is_from_device === data.is_from_device
-            );
-
-            if (isDuplicate) return prev;
-
-            return [
-              ...prev,
-              {
-                id: prev.length + 1,
-                is_from_device: data.is_from_device,
-                text: data.message,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                hasActions: false // Default to false for incoming messages unless specified
-              },
-            ];
-          });
-        }
-      } catch (error) {
-        console.error("Error processing message:", event.data);
-      }
-    };
-
-    ws.addEventListener("message", handleMessage);
-
-    return () => {
-      ws.removeEventListener("message", handleMessage);
-    };
-  }, [ws]);
+  // Removed local WebSocket event listener because Context handles it now.
 
   useEffect(() => {
     if (window.location.pathname === "/dashboard/message") {
@@ -84,8 +45,10 @@ function MessagingUI() {
     }
   }, [setNewMessageFlag]);
 
+  // Fetch History ONLY if messages are empty (or on initial load check)
+  // We can optimize this to only fetch if length is 0 to avoid overwrite on tab switch
   useEffect(() => {
-    if (!userInfo) return;
+    if (!userInfo || messages.length > 0) return; // Skip if we already have messages
 
     const fetchMessages = async () => {
       try {
@@ -95,61 +58,52 @@ function MessagingUI() {
         const headers: any = {};
         if (guestToken) {
           headers["X-Guest-Session-Token"] = guestToken;
-        } else {
-          console.warn("DEBUG: No guest token found! History fetch may fail or be empty.");
         }
 
         const response = await axiosInstance.get(
           `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`,
           { headers }
         );
-        console.log("DEBUG: Chat History Response Status:", response.status);
-        console.log("DEBUG: Chat History Data:", JSON.stringify(response.data).substring(0, 500)); // Log first 500 chars 
 
         type ApiMessage = {
           id: number;
           is_from_device: boolean;
           message: string;
-          timestamp?: string; // Corrected field name
+          timestamp?: string;
         };
         const mapped = (response.data || []).map((msg: ApiMessage) => ({
           id: msg.id,
           is_from_device: msg.is_from_device,
-          text: msg.message || "", // Handle null/undefined message
+          text: msg.message || "",
           timestamp: msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-          hasActions: !msg.is_from_device && (msg.message || "").includes("Welcome") // Safe check
+          hasActions: !msg.is_from_device && (msg.message || "").includes("Welcome")
         }));
 
+        // Update Context State
         setMessages(mapped);
       } catch {
-        // Silent fail or low-key toast to avoid spamming user
         console.error("Failed to load previous messages");
       }
     };
 
     if (device_id && restaurant_id) {
       fetchMessages();
-      // Retry once after 1s just in case session latency caused empty list initially
-      setTimeout(() => fetchMessages(), 1000);
     }
-  }, [device_id, restaurant_id, userInfo]);
+  }, [device_id, restaurant_id, userInfo, setMessages, messages.length]); // Added dependencies
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages]); // Scrolls whenever global messages update
 
   const handleSubmit = (e: FormEvent<HTMLElement>) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    // If socket is closed, sendMessage (context) will try to reconnect.
-    // We remove the blocking toast here to prevent "Please refresh" loops.
-
     try {
       sendMessage(inputValue);
-      // Optimistically add message to UI
+      // Optimistically add message to Global State
       setMessages((prev) => [
         ...prev,
         {

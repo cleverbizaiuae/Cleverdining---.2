@@ -217,7 +217,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
   return (
     <WebSocketContext.Provider
-      value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage }}
+      value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage, messages, setMessages }}
     >
       {children}
     </WebSocketContext.Provider>
