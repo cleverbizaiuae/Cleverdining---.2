@@ -169,6 +169,9 @@ class ChatMessageViewSet(ModelViewSet):
         if not user.is_authenticated:
             return Response({'unread_count': 0})
             
+        # EMERGENCY BYPASS: Return 0 to prevent 500 Error while debugging
+        return Response({'unread_count': 0})
+
         try:
             # Calculate unread messages from Customers (is_from_device=True) for this user's restaurant(s)
             restaurant_ids = []
