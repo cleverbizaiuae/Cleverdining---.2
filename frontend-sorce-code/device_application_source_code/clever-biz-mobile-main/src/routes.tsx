@@ -27,8 +27,9 @@ function App() {
       return;
     }
 
-    const tableIdParam = searchParams.get("table_id");
-    const tableNameParam = searchParams.get("table_name");
+    // Fix: QR Code uses 'id' and 'table', not just 'table_id' and 'table_name'
+    const tableIdParam = searchParams.get("table_id") || searchParams.get("id");
+    const tableNameParam = searchParams.get("table_name") || searchParams.get("table");
     const restaurantIdParam = searchParams.get("restaurant_id");
     const storedUserInfo = localStorage.getItem("userInfo");
 
