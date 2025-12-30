@@ -196,7 +196,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 restaurant_id=self.restaurant_id,
                 is_from_device=is_from_device,
                 room_name=self.staff_firehose_group,
-                guest_session=self.guest_session if self.is_guest else None 
+                guest_session=self.guest_session if self.is_guest else target_guest_session
+                
                 # Note: For Staff, we need to resolve the GuestSession object from ID to link it properly in DB.
                 # Use helper _get_guest_session_by_id(target_session_id)
             )
