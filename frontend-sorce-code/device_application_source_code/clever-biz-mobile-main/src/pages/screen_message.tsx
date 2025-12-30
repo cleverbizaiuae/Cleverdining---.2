@@ -115,9 +115,9 @@ function MessagingUI() {
         const mapped = (response.data || []).map((msg: ApiMessage) => ({
           id: msg.id,
           is_from_device: msg.is_from_device,
-          text: msg.message,
+          text: msg.message || "", // Handle null/undefined message
           timestamp: msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-          hasActions: !msg.is_from_device && msg.message.includes("Welcome") // Simple heuristic for now
+          hasActions: !msg.is_from_device && (msg.message || "").includes("Welcome") // Safe check
         }));
 
         setMessages(mapped);
