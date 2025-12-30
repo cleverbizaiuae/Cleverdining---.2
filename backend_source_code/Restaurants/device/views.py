@@ -137,7 +137,16 @@ class CloseTableSessionView(APIView):
         if user.role == 'owner':
              if restaurant.owner != user:
                  return Response({'error': 'Unauthorized'}, status=403)
-        # Add staff checks if needed (IsOwnerChefOrStaff covers it mostly but need to ensure 'accepted')
+        
+        # Explicit Staff Check
+        elif user.role in ['staff', 'chef', 'manager']:
+             is_authorized = ChefStaff.objects.filter(user=user, restaurant=restaurant, action='accepted').exists()
+             if not is_authorized:
+                  # Legacy fallback
+                  from staff.models import Staff
+                  is_legacy = Staff.objects.filter(user=user, restaurant=restaurant).exists()
+                  if not is_legacy:
+                       return Response({'error': 'Unauthorized: Not assigned to this restaurant'}, status=403)
         
         # 2. Close Session
         if not session.is_active:
@@ -146,36 +155,33 @@ class CloseTableSessionView(APIView):
         session.is_active = False
         session.save()
         
-        # 3. Handle Active Orders?
-        # Requirement: "Clear any open orders tied to session (mark as cancelled or completed based on rules)."
-        # Rule: If 'pending'/'preparing' -> Cancel? If 'served' -> Completed?
-        # Safe default: Mark unpaid as 'cancelled' if no food made, but usually manual close implies "Done".
-        # Let's Mark all UNPAID orders as 'cancelled' or just let them be?
-        # Prompt says: "Any active orders must be completed or cancelled."
-        
+        # 3. Handle Active Orders
+        # Mark unpaid/pending orders as cancelled
         from order.models import Order
         unpaid_orders = Order.objects.filter(guest_session=session, payment_status__in=['unpaid', 'pending', 'pending_cash'])
-        # We'll cancel them to be safe/clean
         unpaid_orders.update(status='cancelled', payment_status='cancelled')
         
-        # 4. Notify Dashboard & Customer
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant.id}",
-            {
-                "type": "session_closed", 
-                "session_id": session.id,
-                "table_id": session.device.id
-            }
-        )
-        
-        # Notify Customer Device to reset
-        async_to_sync(channel_layer.group_send)(
-            f"session_{session.id}",
-            {
-                "type": "session_closed",
-                "message": "Session closed by staff"
-            }
-        )
+        # 4. Notify Dashboard & Customer (Safe Broadcast)
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant.id}",
+                {
+                    "type": "session_closed", 
+                    "session_id": session.id,
+                    "table_id": session.device.id
+                }
+            )
+            
+            # Notify Customer Device to reset
+            async_to_sync(channel_layer.group_send)(
+                f"session_{session.id}",
+                {
+                    "type": "session_closed",
+                    "message": "Session closed by staff"
+                }
+            )
+        except Exception as e:
+            print(f"Warning: Failed to broadcast session_close: {e}")
         
         return Response({'message': 'Session closed successfully'})
 
