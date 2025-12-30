@@ -197,8 +197,18 @@ WSGI_APPLICATION = 'RESTAURANTS.wsgi.application'
 
 # Channel layers - use in-memory for now, add Redis later if needed
 REDIS_HOST = env('REDIS_HOST', default=None)
+REDIS_URL = env('REDIS_URL', default=None) # Standard Render/Heroku Var
 
-if REDIS_HOST and REDIS_HOST != 'localhost':
+if REDIS_URL:
+     CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
+        },
+    }
+elif REDIS_HOST and REDIS_HOST != 'localhost':
     # Use Redis if available
     CHANNEL_LAYERS = {
         "default": {
