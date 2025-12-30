@@ -48,7 +48,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         try {
           const res = await axiosInstance.get("/api/customer/cart/");
           // Transform backend cart items to frontend format
-          const backendItems = res.data.map((cartItem: any) => ({
+          // FIXED: Ensure res.data is an array before mapping to prevent "data.map is not a function" crash
+          const rawData = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+          const backendItems = rawData.map((cartItem: any) => ({
             ...cartItem.item, // Spread item details
             quantity: cartItem.quantity,
             // Ensure all required fields are present, fallback if needed
