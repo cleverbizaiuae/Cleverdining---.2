@@ -51,9 +51,18 @@ class ChatMessageViewSet(ModelViewSet):
                     # We remove is_active=True to allow viewing valid history even if session is technically 'closed'
                     session = GuestSession.objects.filter(session_token=session_token).first()
                     if session:
-                        # STRICT VALIDATION: Return messages for this specific session
-                        qs = queryset.filter(guest_session=session).order_by('timestamp')
-                        # print(f"DEBUG: Found session {session.id}. Message count: {qs.count()}")
+                        # ROBUST FETCH: Instead of relying solely on the 'guest_session' FK (which might be missing on Staff replies),
+                        # we fetch all messages for this DEVICE that occurred AFTER the session started.
+                        # This ensures the guest sees the entire conversation context for their current sitting.
+                        
+                        # Logic: Device ID match AND (Linked to Session OR (Timestamp >= Session Start))
+                        from django.db.models import Q
+                        qs = queryset.filter(
+                            Q(guest_session=session) | 
+                            Q(device=session.device, timestamp__gte=session.created_at)
+                        ).order_by('timestamp')
+                        
+                        # print(f"DEBUG: Found session {session.id}. Fetching by Device {session.device.id} since {session.created_at}. Count: {qs.count()}")
                         return qs
                     else:
                         print(f"DEBUG: Session not found for token: {session_token}")
