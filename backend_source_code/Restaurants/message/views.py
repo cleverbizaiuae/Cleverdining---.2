@@ -191,26 +191,19 @@ class ChatMessageViewSet(ModelViewSet):
             if not restaurant_ids:
                 return Response({'unread_count': 0})
 
+            # EMERGENCY FIX: Temporarily returning 0 to prevent 504 Gateway Timeouts locking the server.
+            # This endpoint appears to be causing DB locks or connection pool exhaustion.
+            return Response({'unread_count': 0})
+            
             # Logic: Unread messages FROM device TO restaurant
             # Use restaurant__id__in for safety
-            count = ChatMessage.objects.filter(
-                restaurant_id__in=restaurant_ids, 
-                is_read=False, 
-                is_from_device=True
-            ).count()
+            # count = ChatMessage.objects.filter(
+            #    restaurant_id__in=restaurant_ids, 
+            #    is_read=False, 
+            #    is_from_device=True
+            # ).count()
             
-            # Debugging
-            if count == 0:
-                print(f"DEBUG_UNREAD: User {user.id} has 0 unread messages.")
-            
-            # Optimization: Do NOT write to DB in a GET request (caused 504 timeouts due to locking).
-            # UnreadCount model should be updated via Signals (post_save) or Actions (mark_read), not here.
-            # UnreadCount.objects.update_or_create(
-            #     user=user,
-            #     defaults={'unread_count': count, 'user_role': user.role}
-            # )
-                
-            return Response({'unread_count': count})
+            # return Response({'unread_count': count})
         except Exception as e:
             import traceback
             print(f"CRITICAL ERROR in unread_count: {e}")
