@@ -159,6 +159,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
                 target_group = f"guest_session_{target_session_id}"
                 
+                target_guest_session = await self._get_guest_session_by_id(target_session_id)
+                
                 # 1. Send to Target Guest
                 await self.channel_layer.group_send(
                     target_group,
