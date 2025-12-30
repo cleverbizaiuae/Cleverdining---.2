@@ -137,8 +137,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const sendMessage = (message: string, type: string = "message") => {
     // Use Ref for immediate check
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log(`DEBUG: Mobile Sending WS Payload: ${JSON.stringify({ message, type })}`);
       wsRef.current.send(JSON.stringify({ message, type }));
     } else {
+      console.warn("DEBUG: Mobile WS not ready. Triggering reconnect.");
       // Try to reconnect if trying to send and disconnected
       connect();
     }
