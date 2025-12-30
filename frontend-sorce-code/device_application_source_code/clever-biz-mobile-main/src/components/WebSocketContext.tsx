@@ -92,8 +92,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     // UNIFIED CHAT URL: Connect to the Restaurant Room
     // If we have a restaurant ID, connect to the unified room.
     let wsUrl = "";
-    if (restaurantId && tokenToUse) {
-      wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurantId}/?token=${tokenToUse}`;
+    if (restaurant_id && tokenToUse) {
+      wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurant_id}/?token=${tokenToUse}`;
     } else {
       console.warn("Missing restaurant_id, cannot connect to Unified Chat Room.");
       return;
