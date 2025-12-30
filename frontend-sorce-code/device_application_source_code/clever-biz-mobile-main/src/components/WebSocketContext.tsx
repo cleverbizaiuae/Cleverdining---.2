@@ -11,6 +11,8 @@ type WebSocketContextType = {
   hasNewMessage: boolean;
   sendMessage: (message: string, type?: string) => void;
   setNewMessageFlag: (value: boolean) => void;
+  messages: any[];
+  setMessages: React.Dispatch<React.SetStateAction<any[]>>;
 };
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(
@@ -38,6 +40,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     localStorage.setItem("newMessage", value ? "true" : "false");
     setHasNewMessageState(value);
   };
+
+  const [messages, setMessages] = useState<any[]>([]);
 
   const connect = React.useCallback(() => {
     const accessToken = localStorage.getItem("accessToken");
@@ -116,20 +120,44 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
 
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'order_status_update' && data.session_ended) {
-        console.log("Session Ended via WebSocket");
-        localStorage.removeItem("userInfo");
-        localStorage.removeItem("guest_session_token");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("pending_order_id");
-        window.location.href = "/dashboard/success";
-        return;
-      }
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'order_status_update' && data.session_ended) {
+          console.log("Session Ended via WebSocket");
+          localStorage.removeItem("userInfo");
+          localStorage.removeItem("guest_session_token");
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("pending_order_id");
+          window.location.href = "/dashboard/success";
+          return;
+        }
 
-      if (data.message && typeof data.message === "string") {
-        // Set the newMessage flag when a new message arrives
-        setNewMessageFlag(true);
+        if (data.message && typeof data.message === "string") {
+          // Set the newMessage flag when a new message arrives
+          setNewMessageFlag(true);
+
+          // PERSISTENCE FIX: Update Global Message State
+          setMessages(prev => {
+            // Deduplication Logic
+            const isDuplicate = prev.slice(-5).some(m =>
+              m.text === data.message &&
+              m.is_from_device === data.is_from_device &&
+              (Date.now() - new Date(m.timestamp || Date.now()).getTime() < 5000)
+            );
+
+            if (isDuplicate) return prev;
+
+            return [...prev, {
+              id: prev.length + 1, // Simple ID generation
+              is_from_device: data.is_from_device,
+              text: data.message,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              hasActions: false
+            }];
+          });
+        }
+      } catch (e) {
+        console.error("WS Message Error", e);
       }
     };
 
