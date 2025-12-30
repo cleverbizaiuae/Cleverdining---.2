@@ -71,8 +71,25 @@ class JWTAuthMiddleware(BaseMiddleware):
                                 "role": getattr(user, "role", "unknown"),
                                 "restaurants_id": None
                             }
-                            if hasattr(user, "restaurants") and user.restaurants.exists():
-                                info["restaurants_id"] = user.restaurants.first().id
+                            
+                            # Resolve Restaurant ID based on Role
+                            try:
+                                if info["role"] == 'owner':
+                                    if hasattr(user, "restaurants") and user.restaurants.exists():
+                                        info["restaurants_id"] = user.restaurants.first().id
+                                elif info["role"] in ['staff', 'manager']:
+                                    from staff.models import Staff
+                                    staff_profile = Staff.objects.filter(user=user).first()
+                                    if staff_profile and staff_profile.restaurant:
+                                        info["restaurants_id"] = staff_profile.restaurant.id
+                                elif info["role"] == 'chef':
+                                    from accounts.models import ChefStaff
+                                    chef_profile = ChefStaff.objects.filter(user=user).first()
+                                    if chef_profile:
+                                        info["restaurants_id"] = chef_profile.restaurant_id
+                            except Exception as e:
+                                print(f"Error resolving restaurant for user {user.id}: {e}", file=sys.stderr)
+                            
                             return info
 
                         scope["user_info"] = await get_user_info(user)
