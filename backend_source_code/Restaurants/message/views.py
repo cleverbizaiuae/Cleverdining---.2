@@ -169,47 +169,53 @@ class ChatMessageViewSet(ModelViewSet):
         if not user.is_authenticated:
             return Response({'unread_count': 0})
             
-        # Calculate unread messages from Customers (is_from_device=True) for this user's restaurant(s)
-        restaurant_ids = []
-        if user.role == 'owner':
-            restaurant_ids = list(user.restaurants.values_list('id', flat=True))
-        elif user.role in ['staff', 'chef', 'manager']:
-            # Check ChefStaff
-            from accounts.models import ChefStaff
-             # Relaxed check as per order/views.py fix
-            cs = ChefStaff.objects.filter(user=user).first()
-            if cs:
-                restaurant_ids = [cs.restaurant_id]
-            else:
-                 # Legacy Staff Fallback
-                from staff.models import Staff
-                ls = Staff.objects.filter(user=user).first()
-                if ls and ls.restaurant:
-                    restaurant_ids = [ls.restaurant.id]
-        
-        if not restaurant_ids:
-             return Response({'unread_count': 0})
-
-        # Logic: Unread messages FROM device TO restaurant
-        # Use restaurant__id__in for safety
-        count = ChatMessage.objects.filter(
-            restaurant_id__in=restaurant_ids, 
-            is_read=False, 
-            is_from_device=True
-        ).count()
-        
-        # Debugging
-        if count == 0:
-             print(f"DEBUG_UNREAD: User {user.email} (Restaurants: {restaurant_ids}) has 0 unread messages.")
-        
-        # Optimization: Do NOT write to DB in a GET request (caused 504 timeouts due to locking).
-        # UnreadCount model should be updated via Signals (post_save) or Actions (mark_read), not here.
-        # UnreadCount.objects.update_or_create(
-        #     user=user,
-        #     defaults={'unread_count': count, 'user_role': user.role}
-        # )
+        try:
+            # Calculate unread messages from Customers (is_from_device=True) for this user's restaurant(s)
+            restaurant_ids = []
+            if user.role == 'owner':
+                restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+            elif user.role in ['staff', 'chef', 'manager']:
+                # Check ChefStaff
+                from accounts.models import ChefStaff
+                # Relaxed check as per order/views.py fix
+                cs = ChefStaff.objects.filter(user=user).first()
+                if cs:
+                    restaurant_ids = [cs.restaurant_id]
+                else:
+                    # Legacy Staff Fallback
+                    from staff.models import Staff
+                    ls = Staff.objects.filter(user=user).first()
+                    if ls and ls.restaurant:
+                        restaurant_ids = [ls.restaurant.id]
             
-        return Response({'unread_count': count})
+            if not restaurant_ids:
+                return Response({'unread_count': 0})
+
+            # Logic: Unread messages FROM device TO restaurant
+            # Use restaurant__id__in for safety
+            count = ChatMessage.objects.filter(
+                restaurant_id__in=restaurant_ids, 
+                is_read=False, 
+                is_from_device=True
+            ).count()
+            
+            # Debugging
+            if count == 0:
+                print(f"DEBUG_UNREAD: User {user.id} has 0 unread messages.")
+            
+            # Optimization: Do NOT write to DB in a GET request (caused 504 timeouts due to locking).
+            # UnreadCount model should be updated via Signals (post_save) or Actions (mark_read), not here.
+            # UnreadCount.objects.update_or_create(
+            #     user=user,
+            #     defaults={'unread_count': count, 'user_role': user.role}
+            # )
+                
+            return Response({'unread_count': count})
+        except Exception as e:
+            import traceback
+            print(f"CRITICAL ERROR in unread_count: {e}")
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
     @action(detail=False, methods=['post'], url_path='clear-chat')
     def clear_chat(self, request):
         device_id = request.data.get('device_id') or request.query_params.get('device_id')
