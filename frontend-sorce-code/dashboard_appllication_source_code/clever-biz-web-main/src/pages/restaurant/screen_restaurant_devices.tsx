@@ -414,7 +414,7 @@ export const ScreenRestaurantDevices = () => {
       {/* End Session Modal */}
       <Modal isOpen={isEndSessionModalOpen} onClose={() => setIsEndSessionModalOpen(false)} title="End Session" maxWidth="max-w-sm">
         <div className="space-y-6">
-          <p className="text-slate-600">Are you sure you want to end this session? Any active orders should be completed first.</p>
+          <p className="text-slate-600">Are you sure you want to end this session? This will immediately log out the table and redirect to the login screen.</p>
           <div className="flex gap-3">
             <button
               onClick={() => setIsEndSessionModalOpen(false)}

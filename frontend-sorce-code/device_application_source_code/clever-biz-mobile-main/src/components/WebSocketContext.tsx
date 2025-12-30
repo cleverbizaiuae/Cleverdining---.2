@@ -146,7 +146,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           localStorage.removeItem("accessToken");
           localStorage.removeItem("pending_order_id");
           localStorage.removeItem("chat_messages_cache"); // Clear Chat on Session End
-          window.location.href = "/dashboard/success";
+          window.location.href = "/login";
           return;
         }
 
