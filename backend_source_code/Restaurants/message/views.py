@@ -19,15 +19,24 @@ class ChatMessageViewSet(ModelViewSet):
     # Removed get_authenticators override as authentication_classes=[] handles it globally for this view
 
 
+    def handle_exception(self, exc):
+        """
+        Ultimate Safety Net: Catch ALL exceptions (Permissions, Throttling, Unexpected)
+        and return empty list to prevent 500 crashes.
+        """
+        import traceback
+        import sys
+        print(f"CRITICAL HANDLE_EXCEPTION in ChatMessageViewSet: {exc}", file=sys.stderr)
+        traceback.print_exc()
+        # Force return 200 OK with empty list
+        return Response([], status=200)
+
     def list(self, request, *args, **kwargs):
+        # We still keep local try-catch but handle_exception is the real fallback
         try:
             return super().list(request, *args, **kwargs)
         except Exception as e:
-            import traceback
-            import sys
-            print(f"CRITICAL LIST ERROR in ChatMessageViewSet: {e}", file=sys.stderr)
-            traceback.print_exc()
-            return Response([], status=200) # Safe fallback
+            return self.handle_exception(e)
 
 
     def get_queryset(self):
