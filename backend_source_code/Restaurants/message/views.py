@@ -21,6 +21,17 @@ class ChatMessageViewSet(ModelViewSet):
             return []
         return super().get_authenticators()
 
+    def list(self, request, *args, **kwargs):
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            import traceback
+            import sys
+            print(f"CRITICAL LIST ERROR in ChatMessageViewSet: {e}", file=sys.stderr)
+            traceback.print_exc()
+            return Response([], status=200) # Safe fallback
+
+
     def get_queryset(self):
         try:
             queryset = super().get_queryset()
