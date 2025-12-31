@@ -17,13 +17,22 @@ class ChatMessage(models.Model):
 
     message = models.TextField()
     is_from_device = models.BooleanField(default=False)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True) # Indexed for history sort
     room_name = models.CharField(max_length=255, blank=True, null=True)
-    new_message = models.BooleanField(default=True)
+    new_message = models.BooleanField(default=True, db_index=True) # Indexed for unread checks
     
     # Read tracking
-    is_read = models.BooleanField(default=False)
+    is_read = models.BooleanField(default=False, db_index=True) # Indexed for unread counts
     read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['timestamp']
+        indexes = [
+            models.Index(fields=['restaurant', 'is_read', 'is_from_device']),
+            models.Index(fields=['device', 'timestamp']),
+            models.Index(fields=['guest_session', 'timestamp']),
+            models.Index(fields=['sender', 'is_read']),
+        ]
 
     def __str__(self):
         if self.is_from_device:

@@ -64,22 +64,16 @@ class ChatMessageViewSet(ModelViewSet):
             if session_token:
                 from device.models import GuestSession
                 try:
-                    # Filter for active session, or just session by token
-                    # We remove is_active=True to allow viewing valid history even if session is technically 'closed'
                     session = GuestSession.objects.filter(session_token=session_token).first()
                     if session:
-                        # ROBUST FETCH: Instead of relying solely on the 'guest_session' FK (which might be missing on Staff replies),
-                        # we fetch all messages for this DEVICE that occurred AFTER the session started.
-                        # This ensures the guest sees the entire conversation context for their current sitting.
-                        
-                        # Logic: Device ID match AND (Linked to Session OR (Timestamp >= Session Start))
-                        from django.db.models import Q
+                        # OPTIMIZED FETCH: 
+                        # Filtering by (device + timestamp) uses the composite index [device, timestamp]
+                        # This is much faster than the OR query and functionally equivalent for this use case
+                        # (since all valid session messages will match this timeframe/device)
                         qs = queryset.filter(
-                            Q(guest_session=session) | 
-                            Q(device=session.device, timestamp__gte=session.created_at)
+                            device=session.device, 
+                            timestamp__gte=session.created_at
                         ).order_by('timestamp')
-                        
-                        # print(f"DEBUG: Found session {session.id}. Fetching by Device {session.device.id} since {session.created_at}. Count: {qs.count()}")
                         return qs
                     else:
                         print(f"DEBUG: Session not found for token: {session_token}")
@@ -88,11 +82,9 @@ class ChatMessageViewSet(ModelViewSet):
                     print(f"Guest Auth Error: {e}")
                     return queryset.none()
             else:
-                 # print("DEBUG: No X-Guest-Session-Token header provided.")
                  pass
                  
             # Force evaluation to catch DB execution errors here
-            # access one item to trigger DB
             if qs.exists():
                 pass
                 
@@ -190,14 +182,44 @@ class ChatMessageViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
-        # DOUBLE CHECK: If override didn't work, ensure we return 0 fast.
-        return Response({'unread_count': 0})
-        
-        # Dead code below
-        user = request.user
-        if not user.is_authenticated:
-            return Response({'unread_count': 0})
-        return Response({'unread_count': 0})
+        try:
+            user = request.user
+            if not user.is_authenticated:
+                return Response({'unread_count': 0})
+            
+            # Efficient Count Query (No Object Loading)
+            # 1. Resolve Restaurant IDs
+            restaurant_ids = []
+            if hasattr(user, 'role'):
+                if user.role == 'owner':
+                    restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+                elif user.role in ['staff', 'chef', 'manager']:
+                    from accounts.models import ChefStaff
+                    cs = ChefStaff.objects.filter(user=user).first()
+                    if cs:
+                        restaurant_ids = [cs.restaurant_id]
+                    else:
+                         from staff.models import Staff
+                         ls = Staff.objects.filter(user=user).first()
+                         if ls and ls.restaurant:
+                             restaurant_ids = [ls.restaurant.id]
+            
+            if not restaurant_ids:
+                 return Response({'unread_count': 0})
+
+            # 2. Count unread messages for these restaurants (using Index)
+            # Filter: restaurant IN [...], is_read=False, is_from_device=True
+            count = ChatMessage.objects.filter(
+                restaurant_id__in=restaurant_ids,
+                is_read=False,
+                is_from_device=True
+            ).count()
+            
+            return Response({'unread_count': count})
+        except Exception as e:
+             # Fail safe silently to 0
+             print(f"Unread Count Error: {e}")
+             return Response({'unread_count': 0})
 
     @action(detail=False, methods=['post'], url_path='clear-chat')
     def clear_chat(self, request):
