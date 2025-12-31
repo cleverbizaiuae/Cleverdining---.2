@@ -48,7 +48,7 @@ function MessagingUI() {
   // Fetch History ONLY if messages are empty (or on initial load check)
   // We can optimize this to only fetch if length is 0 to avoid overwrite on tab switch
   useEffect(() => {
-    if (!userInfo || messages.length > 0) return; // Skip if we already have messages
+    if (!userInfo) return; // Always fetch to sync latest state from Canonical Backend
 
     const fetchMessages = async () => {
       try {
