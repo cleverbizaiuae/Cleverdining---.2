@@ -33,61 +33,56 @@ class ChatMessageViewSet(ModelViewSet):
 
 
     def get_queryset(self):
+        # FIX: Strict Null-Safety
+        queryset = super().get_queryset()
+        qs = ChatMessage.objects.none() # Default to Avoid UnboundLocalError
+        
         try:
-            queryset = super().get_queryset()
-            
-            # 1. Staff/User Authentication (Priority 1)
-            user = self.request.user
-            if user.is_authenticated:
-                # Check role to differentiate between logged-in 'customer' (if any) and staff/owner
-                if hasattr(user, 'role') and user.role in ['owner', 'staff', 'chef', 'manager']:
-                     # Staff logic
-                    device_id = self.request.query_params.get('device_id')
-                    restaurant_id = self.request.query_params.get('restaurant_id')
-
-                    if self.action == 'list':
-                        if device_id:
-                            # Filter by device_id.
-                            qs = queryset.filter(device_id=device_id)
-                            if restaurant_id:
-                                # Use direct restaurant_id field on ChatMessage instead of device__restaurant_id
-                                # This ensures we find messages saved for this restaurant even if device relationship is complex/stale
-                                qs = qs.filter(restaurant_id=restaurant_id)
-                            return qs.order_by('timestamp')
-                        else:
-                            # Maybe return all for restaurant? No, list requires filtering usually.
-                            return queryset.none()
-            
-            # 2. Guest Session Token (Priority 2 - for Customers)
+            # 1. Extract Parameters Safely
+            device_id = self.request.query_params.get('device_id')
+            restaurant_id = self.request.query_params.get('restaurant_id')
             session_token = self.request.headers.get('X-Guest-Session-Token')
-            # print(f"DEBUG: Fetching messages with token: {session_token}")
+            user = self.request.user
+
+            # 2. Logic Cascade (Priority: Auth > Session > Device Fallback)
+
+            # A. Authenticated Staff/Owner
+            if user.is_authenticated and hasattr(user, 'role') and user.role in ['owner', 'staff', 'chef', 'manager']:
+                 if self.action == 'list':
+                    if device_id:
+                        qs = queryset.filter(device_id=device_id)
+                        if restaurant_id:
+                            qs = qs.filter(restaurant_id=restaurant_id)
+                        return qs.order_by('timestamp')
+                    else:
+                        return ChatMessage.objects.none()
+
+            # B. Guest Session (Token Provided)
             if session_token:
                 from device.models import GuestSession
                 try:
                     session = GuestSession.objects.filter(session_token=session_token).first()
                     if session:
-                        # OPTIMIZED FETCH: 
-                        # Filtering by (device + timestamp) uses the composite index [device, timestamp]
-                        # This is much faster than the OR query and functionally equivalent for this use case
-                        # (since all valid session messages will match this timeframe/device)
+                        # Optimized Access
                         qs = queryset.filter(
                             device=session.device, 
                             timestamp__gte=session.created_at
                         ).order_by('timestamp')
                         return qs
-                    else:
-                        print(f"DEBUG: Session not found for token: {session_token}")
-                        return queryset.none()
-                except Exception as e:
-                    print(f"Guest Auth Error: {e}")
-                    return queryset.none()
-            else:
-                 pass
-                 
-            # Force evaluation to catch DB execution errors here
-            if qs.exists():
-                pass
-                
+                except Exception:
+                    pass 
+
+            # C. Device ID Fallback (Requested by User: "If device_id exists -> use it")
+            # Only allow if explicitly requested (e.g. public/kiosk mode or lost token recovery)
+            # We strictly filter by restaurant_id too to prevent data leaks across restaurants
+            if device_id and restaurant_id:
+                 qs = queryset.filter(
+                     device_id=device_id,
+                     restaurant_id=restaurant_id
+                 ).order_by('timestamp')
+                 return qs
+
+            # D. Fallthrough
             return qs
 
         except Exception as e:
