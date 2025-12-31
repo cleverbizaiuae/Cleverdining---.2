@@ -155,10 +155,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 if not target_session_id:
                      print("ERROR: Staff reply missing 'guest_session_id'. Cannot route.")
                      return
-
-                target_group = f"guest_session_{target_session_id}"
                 
                 target_guest_session = await self._get_guest_session_by_id(target_session_id)
+                target_device_id = str(target_guest_session.device_id)
+                
+                target_group = f"chat_canonical_{self.restaurant_id}_{target_device_id}_{target_session_id}"
+
                 
                 # 1. Send to Target Guest
                 await self.channel_layer.group_send(
