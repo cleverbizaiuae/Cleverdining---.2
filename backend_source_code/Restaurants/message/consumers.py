@@ -128,7 +128,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         'guest_session_id': self.guest_session.id,
                         'device_id': self.device_id, # Added for Dashboard filtering compatibility
                         "restaurant_id": self.restaurant_id,
-                        'timestamp': str(timezone.now())
+                        'timestamp': str(timezone.now()),
                     }
                 )
                 
