@@ -110,9 +110,32 @@ class ChatMessageViewSet(ModelViewSet):
             raise PermissionDenied("You can only delete your own messages.")
         return super().destroy(request, *args, **kwargs)
         
-        @action(detail=False, methods=['post'], url_path='mark-all-read')
-        def mark_all_read(self, request):
-            return Response({'status': 'ignored'}, status=200)
+    @action(detail=False, methods=['post'], url_path='mark-all-read')
+    def mark_all_read(self, request):
+        try:
+            device_id = request.query_params.get('device_id')
+            user = request.user
+            
+            if not device_id:
+                return Response({'error': 'device_id required'}, status=400)
+
+            # Identify restaurant(s) for the user
+            restaurant_ids = []
+            if user.role == 'owner':
+                restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+            elif user.role in ['staff', 'chef', 'manager']:
+                from accounts.models import ChefStaff
+                cs = ChefStaff.objects.filter(user=user).first()
+                if cs:
+                    restaurant_ids = [cs.restaurant_id]
+                else:
+                    from staff.models import Staff
+                    ls = Staff.objects.filter(user=user).first()
+                    if ls and ls.restaurant:
+                        restaurant_ids = [ls.restaurant.id]
+            
+            if not restaurant_ids:
+                return Response({'status': 'no access'}, status=403)
 
 
             # Logic: Mark unread messages FROM device TO restaurant as read
