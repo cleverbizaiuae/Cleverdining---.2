@@ -50,6 +50,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                  await self.close(code=4002)
                  return
             self.restaurant_id = str(self.restaurant_id)
+
+            # Canonical staff firehose group for this restaurant (shared constant)
+            self.staff_firehose_group = f"restaurant_firehose_{self.restaurant_id}"
+
             
             # 2. Determine Identity & Canonical Room
             if self.guest_session:
