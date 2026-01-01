@@ -15,9 +15,26 @@ channel_layer = get_channel_layer()
 
 class PaymentSerializer(serializers.ModelSerializer):
     order_id = serializers.IntegerField(source='order.id', read_only=True)
-    table_name = serializers.CharField(source='order.table.table_number', read_only=True, default="Online")
-    table_id = serializers.IntegerField(source='order.table.id', read_only=True, allow_null=True)
-    customer_name = serializers.CharField(source='order.customer.name', read_only=True, default="Guest")
+    # Fixed: Order uses 'device' not 'table'
+    table_name = serializers.SerializerMethodField()
+    table_id = serializers.SerializerMethodField()
+    customer_name = serializers.CharField(default="Guest", read_only=True)
+    
+    def get_table_name(self, obj):
+        try:
+            if obj.order and obj.order.device:
+                return obj.order.device.table_name or obj.order.device.table_number or f"Table {obj.order.device.id}"
+        except:
+            pass
+        return "Online"
+    
+    def get_table_id(self, obj):
+        try:
+            if obj.order and obj.order.device:
+                return obj.order.device.id
+        except:
+            pass
+        return None
     
     class Meta:
         model = Payment
