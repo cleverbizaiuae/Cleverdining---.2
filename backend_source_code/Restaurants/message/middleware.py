@@ -39,12 +39,13 @@ class JWTAuthMiddleware(BaseMiddleware):
                 from django.contrib.auth.models import AnonymousUser
                 scope["user"] = AnonymousUser()
             else:
-                # Check for GuestSession first
+                # Check for GuestSession first (Relaxed: Allow inactive to resolve Identity)
                 from device.models import GuestSession
                 session = None
                 try:
-                    session = await sync_to_async(GuestSession.objects.get)(session_token=token, is_active=True)
-                except GuestSession.DoesNotExist:
+                    # Allow lookup even if is_active=False to ensure Device ID is resolved for Chat
+                    session = await sync_to_async(GuestSession.objects.filter(session_token=token).first)()
+                except Exception:
                     pass
 
                 if session:
