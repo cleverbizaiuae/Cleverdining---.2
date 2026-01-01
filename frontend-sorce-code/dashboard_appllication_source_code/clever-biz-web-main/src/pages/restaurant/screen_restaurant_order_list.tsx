@@ -534,112 +534,112 @@ const ScreenRestaurantOrderList = () => {
 
       {/* VIEW ORDER MODAL */}
       {viewModalOpen && selectedOrder && (
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-          {/* Modal Header */}
-          <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Order #{selectedOrder.id}</h3>
-              <p className="text-xs text-slate-500">{selectedOrder.device_table_name || "Table N/A"}</p>
-            </div>
-            <button onClick={() => setViewModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-              <span className="sr-only">Close</span>
-              {/* Close Icon SVG or Lucide X */}
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-            </button>
-          </div>
-
-          {/* Modal Body */}
-          <div className="p-4 max-h-[60vh] overflow-y-auto">
-            {/* Items */}
-            <div className="space-y-3">
-              {/* Check both order_items (backend) and items (legacy/frontend) */}
-              {(selectedOrder.order_items || selectedOrder.items) && (selectedOrder.order_items || selectedOrder.items).length > 0 ? (
-                (selectedOrder.order_items || selectedOrder.items).map((item: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-3 p-2 border border-slate-100 rounded-lg">
-                    <div className="w-12 h-12 bg-slate-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
-                      {item.image || item.image1 ? (
-                        <img src={item.image || item.image1} alt={item.item_name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-[10px] text-slate-400">Img</span>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-900 line-clamp-1">{item.item_name || "Item"}</p>
-                      {/* Handle both cases for price/qty location if structure varies */}
-                      <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
-                    </div>
-                    <p className="text-sm font-semibold text-[#0055FE]">AED {item.price}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center text-xs text-slate-400 py-4">No items details available</p>
-              )}
-            </div>
-
-            {/* Notes */}
-            {selectedOrder.special_request && (
-              <div className="mt-4 bg-yellow-50 border border-yellow-100 p-3 rounded-lg">
-                <p className="text-xs font-bold text-yellow-700 uppercase mb-1">Notes</p>
-                <p className="text-xs text-yellow-800 italic">{selectedOrder.special_request}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Order #{selectedOrder.id}</h3>
+                <p className="text-xs text-slate-500">{selectedOrder.device_table_name || selectedOrder.tableNo || "Table N/A"}</p>
               </div>
-            )}
+              <button onClick={() => setViewModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-full">
+                <span className="sr-only">Close</span>
+                {/* Close Icon SVG or Lucide X */}
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+              </button>
+            </div>
 
-            {/* Payment Details */}
-            <div className="mt-6 pt-4 border-t border-slate-100">
-              <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Payment Details</h4>
-              <div className="bg-slate-50 rounded-lg p-3 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Status</span>
-                  <span className={`font-bold uppercase ${selectedOrder.payment_status?.toLowerCase() === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
-                    {selectedOrder.payment_status || "Unpaid"}
-                  </span>
-                </div>
-
-                {/* Display Payments if available */}
-                {selectedOrder.payments && selectedOrder.payments.length > 0 ? (
-                  selectedOrder.payments.map((p: any, i: number) => (
-                    <div key={i} className="pt-2 border-t border-slate-200 mt-2">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-500">Method</span>
-                        <span className="font-medium text-slate-900 capitalize">{p.provider?.replace('_', ' ') || "N/A"}</span>
+            {/* Modal Body */}
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              {/* Items */}
+              <div className="space-y-3">
+                {/* Check both order_items (backend) and items (legacy/frontend) */}
+                {(selectedOrder.order_items || selectedOrder.items) && (selectedOrder.order_items || selectedOrder.items).length > 0 ? (
+                  (selectedOrder.order_items || selectedOrder.items).map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-3 p-2 border border-slate-100 rounded-lg">
+                      <div className="w-12 h-12 bg-slate-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
+                        {item.image || item.image1 ? (
+                          <img src={item.image || item.image1} alt={item.item_name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Img</span>
+                        )}
                       </div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-500">Transaction ID</span>
-                        <span className="font-medium text-slate-900">{p.transaction_id ? `#${p.transaction_id.slice(-8)}` : "N/A"}</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-slate-900 line-clamp-1">{item.item_name || "Item"}</p>
+                        {/* Handle both cases for price/qty location if structure varies */}
+                        <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Date</span>
-                        <span className="font-medium text-slate-900">{new Date(p.created_at).toLocaleString()}</span>
-                      </div>
+                      <p className="text-sm font-semibold text-[#0055FE]">AED {item.price}</p>
                     </div>
                   ))
                 ) : (
-                  selectedOrder.payment_status === 'paid' && (
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Method</span>
-                      <span className="font-medium text-slate-900">Manual / Cash</span>
-                    </div>
-                  )
+                  <p className="text-center text-xs text-slate-400 py-4">No items details available</p>
                 )}
               </div>
+
+              {/* Notes */}
+              {selectedOrder.special_request && (
+                <div className="mt-4 bg-yellow-50 border border-yellow-100 p-3 rounded-lg">
+                  <p className="text-xs font-bold text-yellow-700 uppercase mb-1">Notes</p>
+                  <p className="text-xs text-yellow-800 italic">{selectedOrder.special_request}</p>
+                </div>
+              )}
+
+              {/* Payment Details */}
+              <div className="mt-6 pt-4 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Payment Details</h4>
+                <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Status</span>
+                    <span className={`font-bold uppercase ${selectedOrder.payment_status?.toLowerCase() === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
+                      {selectedOrder.payment_status || "Unpaid"}
+                    </span>
+                  </div>
+
+                  {/* Display Payments if available */}
+                  {selectedOrder.payments && selectedOrder.payments.length > 0 ? (
+                    selectedOrder.payments.map((p: any, i: number) => (
+                      <div key={i} className="pt-2 border-t border-slate-200 mt-2">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-500">Method</span>
+                          <span className="font-medium text-slate-900 capitalize">{p.provider?.replace('_', ' ') || "N/A"}</span>
+                        </div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-500">Transaction ID</span>
+                          <span className="font-medium text-slate-900">{p.transaction_id ? `#${p.transaction_id.slice(-8)}` : "N/A"}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Date</span>
+                          <span className="font-medium text-slate-900">{new Date(p.created_at).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    selectedOrder.payment_status === 'paid' && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Method</span>
+                        <span className="font-medium text-slate-900">Manual / Cash</span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+
             </div>
 
-          </div>
-
-          {/* Modal Footer */}
-          <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-            <div>
-              <p className="text-xs text-slate-400">Total Amount</p>
-              <p className="text-xl font-bold">AED {selectedOrder.total_price}</p>
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+              <div>
+                <p className="text-xs text-slate-400">Total Amount</p>
+                <p className="text-xl font-bold">AED {selectedOrder.total_price}</p>
+              </div>
+              <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                Close
+              </button>
             </div>
-            <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-              Close
-            </button>
           </div>
         </div>
       )}
-
-
 
       {/* Modals */}
       <StripeConnectModal open={openStripe} onClose={() => setOpenStripe(false)} />
@@ -648,7 +648,7 @@ const ScreenRestaurantOrderList = () => {
         onClose={() => setOpenGatewayModal(false)}
         provider={selectedProvider}
       />
-    </div >
+    </div>
   );
 };
 
