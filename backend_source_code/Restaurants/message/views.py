@@ -185,44 +185,9 @@ class ChatMessageViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
-        try:
-            user = request.user
-            if not user.is_authenticated:
-                return Response({'unread_count': 0}, status=200)
-            
-            # Efficient Count Query (No Object Loading)
-            # 1. Resolve Restaurant IDs
-            restaurant_ids = []
-            if hasattr(user, 'role'):
-                if user.role == 'owner':
-                    restaurant_ids = list(user.restaurants.values_list('id', flat=True))
-                elif user.role in ['staff', 'chef', 'manager']:
-                    from accounts.models import ChefStaff
-                    cs = ChefStaff.objects.filter(user=user).first()
-                    if cs:
-                        restaurant_ids = [cs.restaurant_id]
-                    else:
-                         from staff.models import Staff
-                         ls = Staff.objects.filter(user=user).first()
-                         if ls and ls.restaurant:
-                             restaurant_ids = [ls.restaurant.id]
-            
-            if not restaurant_ids:
-                 return Response({'unread_count': 0})
-
-            # 2. Count unread messages for these restaurants (using Index)
-            # Filter: restaurant IN [...], is_read=False, is_from_device=True
-            count = ChatMessage.objects.filter(
-                restaurant_id__in=restaurant_ids,
-                is_read=False,
-                is_from_device=True
-            ).count()
-            
-            return Response({'unread_count': count})
-        except Exception as e:
-             # Fail safe silently to 0
-             print(f"Unread Count Error: {e}")
-             return Response({'unread_count': 0})
+        # EMERGENCY DAMAGE CONTROL: Hardcode 0 to prevent 504 Timeouts
+        # This endpoint was causing DB locks/timeouts blocking the entire chat system.
+        return Response({'unread_count': 0})
 
     @action(detail=False, methods=['post'], url_path='clear-chat')
     def clear_chat(self, request):

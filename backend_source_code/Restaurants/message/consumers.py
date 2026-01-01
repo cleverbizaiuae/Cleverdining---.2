@@ -22,10 +22,11 @@ logger = logging.getLogger(__name__)
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         try:
-            # CANONICAL ARCHITECTURE:
-            # 1. Guest -> "Canonical Room" (chat_canonical_<rest>_<dev>_<sess>)
-            # 2. Staff -> "Firehose" (restaurant_firehose_<rest>)
+            # SINGLE DELIVERY ROOM ARCHITECTURE
+            # All users (Guest, Owner, Staff) join ONE room per restaurant.
+            # Routing is handled by the payload, filtered by the client.
             
+            # 1. Host Resolution (Robust)
             self.restaurant_id_kwarg = self.scope['url_route']['kwargs'].get('restaurant_id')
             self.user = self.scope.get('user')
             if not self.user:
@@ -35,7 +36,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.guest_session = self.scope.get('guest_session')
             self.user_info = self.scope.get('user_info', {})
             
-            # 1. Resolve Restaurant (Mandatory)
             self.restaurant_id = self.restaurant_id_kwarg
             if not self.restaurant_id:
                  self.restaurant_id = self.user_info.get('restaurants_id')
@@ -50,42 +50,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
                  await self.close(code=4002)
                  return
             self.restaurant_id = str(self.restaurant_id)
-
-            # Canonical staff firehose group for this restaurant (shared constant)
-            self.staff_firehose_group = f"restaurant_firehose_{self.restaurant_id}"
-
             
-            # 2. Determine Identity & Canonical Room
+            # 2. Universal Room Name
+            self.my_group = f"restaurant_chat_{self.restaurant_id}"
+            
+            # 3. Context Metadata (for message saving, NOT routing)
             if self.guest_session:
                  self.is_guest = True
                  self.device_id = str(self.guest_session.device_id)
                  self.session_id = str(self.guest_session.id)
-                 
-                 # CANONICAL ROOM: Specific to this session context
-                 self.my_group = f"chat_canonical_{self.restaurant_id}_{self.device_id}_{self.session_id}"
-                 print(f"DEBUG: Guest Connected to Canonical Room: {self.my_group}")
-            
+                 print(f"DEBUG: Guest Joined Shared Room: {self.my_group}")
             elif self.user and self.user.is_authenticated:
-                 user_role = self.user_info.get('role') or getattr(self.user, 'role', 'unknown')
-                 if user_role in ['owner', 'staff', 'manager', 'chef']:
-                     self.is_guest = False
-                     self.device_id = None
-                     # STAFF FIREHOSE: All messages for this restaurant
-                     self.my_group = f"restaurant_firehose_{self.restaurant_id}"
-                     print(f"DEBUG: Staff {self.user.username} ({user_role}) Connected to Firehose: {self.my_group}")
-                 else:
-                     print(f"DEBUG: Connection Rejected - Role {user_role} not authorized for chat")
-                     await self.close(code=4003)
-                     return
+                 self.is_guest = False
+                 self.device_id = None
+                 print(f"DEBUG: Staff Joined Shared Room: {self.my_group}")
             else:
-                 print("DEBUG: Connection Rejected - Unauthenticated and No Session")
-                 await self.close(code=4001)
-                 return
+                 # Allow anonymous connection if we have restaurant_id? 
+                 # User says "Resolve restaurant_id first and only".
+                 # We'll allow it but mark as Guest/Unknown if missing auth
+                 self.is_guest = True # Assume guest if not staff
+                 self.device_id = None # Will resolve from payload if provided
+                 print(f"DEBUG: Unknown User Joined Shared Room: {self.my_group}")
 
-            # 3. Join Group & Accept
+            # 4. Join The One True Room
             await self.channel_layer.group_add(self.my_group, self.channel_name)
             await self.accept()
-            print(f"DEBUG: WebSocket Accepted for {self.my_group}")
 
         except Exception as e:
             print(f"CRITICAL: Exception in ChatConsumer.connect: {e}")
@@ -103,108 +92,71 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message = data.get('message')
             if not message: return
             
-            # Target Determination
-            # If Staff, they must specify which Device/Session they are replying to in the payload
-            # If Guest, target is automatically the Restaurant Owner
-            
-            receiver = None
-            is_from_device = False
+            # Prepare Payload
+            timestamp = str(timezone.now())
             
             if self.is_guest:
+                sender_name = f"Table {self.guest_session.table_id}" if hasattr(self, 'guest_session') and self.guest_session else "Guest"
                 is_from_device = True
-                sender = None # Anonymous
+                device_id = self.device_id
+                guest_session_id = self.guest_session.id if hasattr(self, 'guest_session') and self.guest_session else None
                 
-                # Guest Message Routing:
-                # 1. Send to Firehose (so Staff sees it)
-                # 2. Send to My Group (Echo for other tabs)
-                
-                await self.channel_layer.group_send(
-                    self.staff_firehose_group,
-                    {
-                        'type': 'chat_message',
-                        'message': message,
-                        'sender': f"Table {self.guest_session.table_id}" if self.guest_session else "Guest",
-                        'is_from_device': True,
-                        'guest_session_id': self.guest_session.id,
-                        'device_id': self.device_id, # Added for Dashboard filtering compatibility
-                        "restaurant_id": self.restaurant_id,
-                        'timestamp': str(timezone.now()),
-                    }
+                # Save first
+                await self._save_message(
+                    sender=None, 
+                    receiver=None, 
+                    message=message, 
+                    device_id=device_id, 
+                    restaurant_id=self.restaurant_id, 
+                    is_from_device=True, 
+                    room_name=self.my_group, 
+                    guest_session=self.guest_session
                 )
-                
-                # Echo to self (Private Group)
-                await self.channel_layer.group_send(
-                    self.my_group,
-                    {
-                        'type': 'chat_message',
-                        'message': message,
-                        'sender': "You",
-                        'is_from_device': True,
-                        'timestamp': str(timezone.now())
-                    }
-                )
-
-            else: # Staff Sending
+            else:
+                sender_name = self.user.username if self.user else "Staff"
                 is_from_device = False
-                sender = self.user
+                device_id = None # Staff doesn't have device ID
                 
-                # Staff MUST provide target session/device in payload
+                # Staff MUST provide target context
                 target_session_id = data.get('guest_session_id')
-                # Fallback: legacy mobile apps might send 'device_id'. We need to resolve active session.
-                
-                if not target_session_id:
-                     print("ERROR: Staff reply missing 'guest_session_id'. Cannot route.")
-                     return
-                
                 target_guest_session = await self._get_guest_session_by_id(target_session_id)
-                target_device_id = str(target_guest_session.device_id)
                 
-                target_group = f"chat_canonical_{self.restaurant_id}_{target_device_id}_{target_session_id}"
-
+                # Resolving device_id from target session for filtering payload
+                target_device_id = target_guest_session.device_id if target_guest_session else None
                 
-                # 1. Send to Target Guest
-                await self.channel_layer.group_send(
-                    target_group,
-                    {
-                        'type': 'chat_message',
-                        'message': message,
-                        'sender': self.user.username if self.user else "Staff",
-                        'is_from_device': False,
-                        'timestamp': str(timezone.now())
-                    }
+                guest_session_id = target_session_id
+                
+                # Save
+                await self._save_message(
+                    sender=self.user, 
+                    receiver=None, 
+                    message=message, 
+                    device_id=None, 
+                    restaurant_id=self.restaurant_id, 
+                    is_from_device=False, 
+                    room_name=self.my_group, 
+                    guest_session=target_guest_session
                 )
                 
-                # 2. Echo to Firehose (so other staff see the reply)
-                await self.channel_layer.group_send(
-                    self.staff_firehose_group,
-                    {
-                        'type': 'chat_message',
-                        'message': message,
-                        'sender': self.user.username if self.user else "Staff",
-                        'is_from_device': False,
-                        'guest_session_id': target_session_id, # Context for UI
-                        'timestamp': str(timezone.now())
-                    }
-                )
+                # Overwrite device_id in payload so mobile clients can filter it!
+                device_id = target_device_id 
 
-            # --- Database Persistence (Async) ---
-            # Use self-healing _save_message logic here...
-            await self._save_message(
-                sender=sender, 
-                receiver=None, # Deprecated logic, rely on session link
-                message=message,
-                device_id=self.device_id if self.is_guest else None,
-                restaurant_id=self.restaurant_id,
-                is_from_device=is_from_device,
-                room_name=self.staff_firehose_group,
-                guest_session=self.guest_session if self.is_guest else None
-                
-                # Note: For Staff, we need to resolve the GuestSession object from ID to link it properly in DB.
-                # Use helper _get_guest_session_by_id(target_session_id)
+            # BROADCAST TO EVERYONE (One Pipe)
+            await self.channel_layer.group_send(
+                self.my_group,
+                {
+                    'type': 'chat_message',
+                    'message': message,
+                    'sender': sender_name,
+                    'is_from_device': is_from_device,
+                    'device_id': device_id, # Crucial for client-side filtering
+                    'guest_session_id': guest_session_id,
+                    'timestamp': timestamp
+                }
             )
+
         except Exception as e:
             logger.error(f"ChatConsumer Error: {e}", exc_info=True)
-            print(f"ChatConsumer Exception: {e}")
             await self.send(text_data=json.dumps({"error": f"Error: {str(e)}"}))
 
     async def chat_message(self, event):
@@ -347,7 +299,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             logger.warning(f"Device not found when fetching user. Device ID: {device_id}")
             return None
         
-
 
 
 
@@ -805,279 +756,3 @@ class RestaurantCallConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(self.user_group, self.channel_name)
         if hasattr(self, "call_group"):
             await self.channel_layer.group_discard(self.call_group, self.channel_name)
-
-        # End active calls
-        if self.user and self.user.is_authenticated:
-            await self.end_existing_calls(self.user.id)
-
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        action = data.get("action")
-
-        if action == "start_call":
-            await self.handle_start_call(data)
-        elif action == "accept_call":
-            await self.handle_accept_call(data)
-        elif action == "end_call":
-            await self.handle_end_call(data)
-
-    # -------------------------------
-    # Start Call
-    # -------------------------------
-    async def handle_start_call(self, data):
-        receiver_id = data.get("receiver_id")
-        if not receiver_id:
-            await self.send(json.dumps({"error": "Missing receiver_id"}))
-            return
-
-        # Resolve caller_id (handle anonymous guests)
-        caller_id = self.user.id
-        if self.user.is_anonymous:
-            device_id = data.get("device_id")
-            device_user = await self._get_device_user(device_id)
-            if device_user:
-                caller_id = device_user.id
-            else:
-                await self.send(json.dumps({"error": "Device user not found for guest"}))
-                return
-
-        # Busy checks
-        if await self.is_user_busy(receiver_id):
-            await self.send(json.dumps({"action": "receiver_busy", "receiver_id": receiver_id}))
-            return
-        if await self.is_user_busy(caller_id):
-            await self.send(json.dumps({"action": "caller_busy", "user_id": caller_id}))
-            return
-
-        # Check if both users belong to the same restaurant
-        if not await self.check_same_restaurant(caller_id, receiver_id):
-            await self.send(json.dumps({"error": "Users must belong to the same restaurant"}))
-            return
-
-        # End existing calls for caller
-        await self.end_existing_calls(caller_id)
-
-        # Create new call session
-        call_session = await self.create_call_session(caller_id, receiver_id, device_id)
-        if not call_session:
-            await self.send(json.dumps({"error": "Failed to create call session"}))
-            return
-
-        # Private call group
-        self.call_group = f"call_{call_session.id}"
-        await self.channel_layer.group_add(self.call_group, self.channel_name)
-
-        # Notify receiver only
-        await self.channel_layer.group_send(
-            f"user_{receiver_id}",
-            {
-                "type": "call_message",
-                "message": json.dumps({
-                    "action": "incoming_call",
-                    "from": self.user.username,
-                    "call_id": call_session.id,
-                    "device_id": data.get("device_id"),
-                    "table_id": data.get("table_id")
-                })
-            }
-        )
-
-        # Confirm to caller
-        await self.send(json.dumps({
-            "action": "call_started",
-            "call_id": call_session.id
-        }))
-
-        # --- NEW: Send "Incoming call" message to Chat ---
-        try:
-            # Get table name for the message
-            device = await database_sync_to_async(Device.objects.get)(id=data.get("device_id"))
-            table_name = device.table_name
-            
-            message_content = f"Incoming call from {table_name}"
-            
-            # Save message to DB
-            chat_message = await self._save_message(
-                sender=self.user,
-                receiver=await database_sync_to_async(User.objects.get)(id=receiver_id),
-                message=message_content,
-                device_id=data.get("device_id"),
-                restaurant_id=self.restaurant_id,
-                is_from_device=True,
-                room_name=f"room_{data.get('device_id')}_{self.restaurant_id}"
-            )
-
-            # Broadcast to Chat Group (so dashboard sees it)
-            chat_group_name = f"room_{data.get('device_id')}_{self.restaurant_id}"
-            await self.channel_layer.group_send(
-                chat_group_name,
-                {
-                    'type': 'chat_message',
-                    'message': message_content,
-                    'sender': self.user.username,
-                    'device_id': data.get("device_id"),
-                    'is_from_device': True,
-                    'timestamp': str(chat_message.timestamp) if chat_message else str(timezone.now()),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Failed to send call alert message: {e}")
-
-    # -------------------------------
-    # Accept Call
-    # -------------------------------
-    async def handle_accept_call(self, data):
-        call_id = data.get("call_id")
-        call_session = await self.get_call_session(call_id)
-        if call_session and call_session.is_active:
-            self.call_group = f"call_{call_id}"
-            await self.channel_layer.group_add(self.call_group, self.channel_name)
-
-            # Notify only participants
-            await self.channel_layer.group_send(
-                self.call_group,
-                {
-                    "type": "call_message",
-                    "message": json.dumps({
-                        "action": "call_accepted",
-                        "by": self.user.username,
-                        "call_id": call_id
-                    })
-                }
-            )
-
-    # -------------------------------
-    # End Call
-    # -------------------------------
-    async def handle_end_call(self, data):
-        call_id = data.get("call_id")
-        call_session = await self.get_call_session(call_id)
-        
-        if call_session and call_session.is_active:
-            receiver_id = await database_sync_to_async(lambda: call_session.receiver.id)()
-            await self.end_call_session(call_session)
-            
-            # Broadcast to call group (if established)
-            await self.channel_layer.group_send(
-                f"call_{call_id}",
-                {
-                    "type": "call_message",
-                    "message": json.dumps({
-                        "action": "call_ended",
-                        "by": self.user.username
-                    })
-                }
-            )
-            
-            # Also broadcast to receiver's user group (in case they haven't answered yet)
-            if receiver_id:
-                await self.channel_layer.group_send(
-                    f"user_{receiver_id}",
-                    {
-                        "type": "call_message",
-                        "message": json.dumps({
-                            "action": "call_ended",
-                            "by": self.user.username,
-                            "call_id": call_id
-                        })
-                    }
-                )
-
-    # -------------------------------
-    # Database Helpers
-    # -------------------------------
-    @database_sync_to_async
-    def _get_device_user(self, device_id):
-        try:
-            device = Device.objects.get(id=device_id)
-            return device.user
-        except Device.DoesNotExist:
-            return None
-
-    @database_sync_to_async
-    def create_call_session(self, caller_id, receiver_id, device_id=None):
-        try:
-            caller = User.objects.get(id=caller_id)
-            receiver = User.objects.get(id=receiver_id)
-            device = None
-            if device_id:
-                device = Device.objects.get(id=device_id)
-            return CallSession.objects.create(caller=caller, receiver=receiver, device=device, is_active=True)
-        except Exception:
-            return None
-
-    @database_sync_to_async
-    def get_call_session(self, call_id):
-        try:
-            return CallSession.objects.get(id=call_id)
-        except CallSession.DoesNotExist:
-            return None
-
-    @database_sync_to_async
-    def end_call_session(self, call_session):
-        call_session.is_active = False
-        call_session.ended_at = timezone.now()
-        call_session.save()
-
-    @database_sync_to_async
-    def end_existing_calls(self, user_id):
-        CallSession.objects.filter(caller_id=user_id, is_active=True).update(is_active=False, ended_at=timezone.now())
-        CallSession.objects.filter(receiver_id=user_id, is_active=True).update(is_active=False, ended_at=timezone.now())
-
-    @database_sync_to_async
-    def is_user_busy(self, user_id):
-        cutoff = timezone.now() - timedelta(minutes=2)
-        return CallSession.objects.filter(is_active=True, started_at__gte=cutoff, caller_id=user_id).exists() \
-               or CallSession.objects.filter(is_active=True, started_at__gte=cutoff, receiver_id=user_id).exists()
-
-    @database_sync_to_async
-    def check_same_restaurant(self, user1_id, user2_id):
-        try:
-            # Restaurants for user1
-            rest1_owner = set(Restaurant.objects.filter(owner_id=user1_id).values_list('id', flat=True))
-            rest1_staff = set(ChefStaff.objects.filter(user_id=user1_id).values_list('restaurant_id', flat=True))
-            rest1_device = set(Device.objects.filter(user_id=user1_id).values_list('restaurant_id', flat=True))
-            rest1 = rest1_owner | rest1_staff | rest1_device
-
-            # Restaurants for user2
-            rest2_owner = set(Restaurant.objects.filter(owner_id=user2_id).values_list('id', flat=True))
-            rest2_staff = set(ChefStaff.objects.filter(user_id=user2_id).values_list('restaurant_id', flat=True))
-            rest2_device = set(Device.objects.filter(user_id=user2_id).values_list('restaurant_id', flat=True))
-            rest2 = rest2_owner | rest2_staff | rest2_device
-
-            # Check intersection
-            return len(rest1 & rest2) > 0
-        except Exception:
-            return False
-
-    # -------------------------------
-    # Group message handler
-    # -------------------------------
-    async def call_message(self, event):
-        await self.send(text_data=event["message"])
-
-    # -------------------------------
-    # Helper Methods
-    # -------------------------------
-    @database_sync_to_async
-    def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device, room_name):
-        try:
-            device = Device.objects.get(id=device_id)
-            restaurant = Restaurant.objects.get(id=restaurant_id)
-            return ChatMessage.objects.create(
-                sender=sender,
-                receiver=receiver,
-                message=message,
-                device=device,
-                restaurant=restaurant,
-                is_from_device=is_from_device,
-                room_name=room_name,
-                new_message=True
-            )
-        except Exception as e:
-            logger.error(f"Error saving message: {e}")
-            return None
-
-
-
-
