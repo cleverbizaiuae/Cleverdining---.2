@@ -151,7 +151,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 except Exception as save_err:
                     logger.warning(f"Staff message save failed (will still broadcast): {save_err}")
 
-            # BROADCAST TO EVERYONE (One Pipe)
+            # BROADCAST TO CHAT ROOM (for chat page)
             await self.channel_layer.group_send(
                 self.my_group,
                 {
@@ -160,6 +160,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'sender': sender_name,
                     'is_from_device': is_from_device,
                     'device_id': device_id, # Crucial for client-side filtering
+                    'guest_session_id': guest_session_id,
+                    'timestamp': timestamp
+                }
+            )
+            
+            # ALSO BROADCAST TO RESTAURANT GROUP (for sidebar badge in Dashboard)
+            await self.channel_layer.group_send(
+                f"restaurant_{self.restaurant_id}",
+                {
+                    'type': 'chat_message',
+                    'message': message,
+                    'sender': sender_name,
+                    'is_from_device': is_from_device,
+                    'device_id': device_id,
                     'guest_session_id': guest_session_id,
                     'timestamp': timestamp
                 }
