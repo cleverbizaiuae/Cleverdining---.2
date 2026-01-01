@@ -48,22 +48,29 @@ class PaymentAdminViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if getattr(user, 'role', '') == 'owner':
-             # Assuming user has 'restaurants' relation or we query Restaurant
-             from restaurant.models import Restaurant
-             return Payment.objects.filter(restaurant__owner=user)
         
-        elif getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
-             from accounts.models import ChefStaff
-             # Check ChefStaff
-             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-             if chef_staff:
-                  return Payment.objects.filter(restaurant=chef_staff.restaurant)
-             
-             # Fallback Legacy
-             if hasattr(user, 'staff_profile') and user.staff_profile:
-                  return Payment.objects.filter(restaurant=user.staff_profile.restaurant)
-                  
+        # Try multiple paths to find the owner's restaurant
+        # 1. Direct Owner Check (most reliable)
+        from restaurant.models import Restaurant
+        owned_restaurants = Restaurant.objects.filter(owner=user)
+        if owned_restaurants.exists():
+            return Payment.objects.filter(restaurant__in=owned_restaurants).order_by('-created_at')
+        
+        # 2. Role-based check for staff
+        if getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
+            from accounts.models import ChefStaff
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if chef_staff:
+                return Payment.objects.filter(restaurant=chef_staff.restaurant).order_by('-created_at')
+            
+            # Fallback Legacy staff_profile
+            if hasattr(user, 'staff_profile') and user.staff_profile:
+                return Payment.objects.filter(restaurant=user.staff_profile.restaurant).order_by('-created_at')
+        
+        # 3. Last resort: check if user has any restaurant relationship
+        if hasattr(user, 'restaurants') and user.restaurants.exists():
+            return Payment.objects.filter(restaurant__in=user.restaurants.all()).order_by('-created_at')
+                
         return Payment.objects.none()
 
     @action(detail=False, methods=['get'])
