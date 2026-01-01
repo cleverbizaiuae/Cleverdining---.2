@@ -91,6 +91,49 @@ class PaymentAdminViewSet(ModelViewSet):
         return Payment.objects.none()
 
     @action(detail=False, methods=['get'])
+    def debug_payments(self, request):
+        """Debug endpoint to see raw payment data and diagnose issues."""
+        user = request.user
+        
+        from restaurant.models import Restaurant
+        from order.models import Order
+        
+        # Get owned restaurants
+        owned_restaurants = list(Restaurant.objects.filter(owner=user).values('id', 'title'))
+        
+        # Get ALL payments in the system (for debugging)
+        total_payments = Payment.objects.count()
+        
+        # Get payments for this owner's restaurants
+        if owned_restaurants:
+            rest_ids = [r['id'] for r in owned_restaurants]
+            user_payments = Payment.objects.filter(restaurant_id__in=rest_ids).count()
+            sample_payments = list(Payment.objects.filter(restaurant_id__in=rest_ids)[:5].values(
+                'id', 'order_id', 'amount', 'provider', 'status', 'created_at'
+            ))
+            
+            # Check paid orders without payments
+            paid_orders_without_payment = Order.objects.filter(
+                restaurant_id__in=rest_ids,
+                payment_status='paid'
+            ).exclude(
+                id__in=Payment.objects.filter(restaurant_id__in=rest_ids).values('order_id')
+            ).count()
+        else:
+            user_payments = 0
+            sample_payments = []
+            paid_orders_without_payment = 0
+        
+        return Response({
+            'user_role': getattr(user, 'role', 'unknown'),
+            'owned_restaurants': owned_restaurants,
+            'total_payments_in_system': total_payments,
+            'payments_for_user': user_payments,
+            'sample_payments': sample_payments,
+            'paid_orders_without_payment_record': paid_orders_without_payment,
+        })
+
+    @action(detail=False, methods=['get'])
     def export_csv(self, request):
         # Apply filters to the queryset
         queryset = self.filter_queryset(self.get_queryset())
