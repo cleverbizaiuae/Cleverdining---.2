@@ -182,8 +182,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             logger.warning(f"Device with ID {device_id} does not exist.")
             return None
 
-        # If sender is anonymous (guest), use the device's user
-        if sender.is_anonymous:
+        # If sender is None (guest) or anonymous, use the device's user
+        if sender is None or (hasattr(sender, 'is_anonymous') and sender.is_anonymous):
             sender = device.user
 
         try:
