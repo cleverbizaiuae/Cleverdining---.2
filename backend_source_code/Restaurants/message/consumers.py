@@ -96,29 +96,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
             timestamp = str(timezone.now())
             
             if self.is_guest:
-                sender_name = f"Table {self.guest_session.table_id}" if hasattr(self, 'guest_session') and self.guest_session else "Guest"
+                sender_name = f"Table {self.guest_session.device_id}" if hasattr(self, 'guest_session') and self.guest_session else "Guest"
                 is_from_device = True
                 device_id = self.device_id
                 guest_session_id = self.guest_session.id if hasattr(self, 'guest_session') and self.guest_session else None
                 
-                # Save first
-                await self._save_message(
-                    sender=None, 
-                    receiver=None, 
-                    message=message, 
-                    device_id=device_id, 
-                    restaurant_id=self.restaurant_id, 
-                    is_from_device=True, 
-                    room_name=self.my_group, 
-                    guest_session=self.guest_session
-                )
+                # Save (wrapped - don't let save failure block broadcast)
+                try:
+                    await self._save_message(
+                        sender=None, 
+                        receiver=None, 
+                        message=message, 
+                        device_id=device_id, 
+                        restaurant_id=self.restaurant_id, 
+                        is_from_device=True, 
+                        room_name=self.my_group, 
+                        guest_session=self.guest_session
+                    )
+                except Exception as save_err:
+                    logger.warning(f"Guest message save failed (will still broadcast): {save_err}")
             else:
                 sender_name = self.user.username if self.user else "Staff"
                 is_from_device = False
                 
                 # Staff sends target context: prefer session, fallback to direct device_id
                 target_session_id = data.get('guest_session_id')
-                target_device_id = data.get('device_id')  # NEW: Accept device_id directly
+                target_device_id = data.get('device_id')  # Accept device_id directly
                 target_guest_session = None
                 
                 if target_session_id:
@@ -133,17 +136,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 guest_session_id = target_session_id
                 device_id = target_device_id  # Use resolved or direct device_id
                 
-                # Save
-                await self._save_message(
-                    sender=self.user, 
-                    receiver=None, 
-                    message=message, 
-                    device_id=target_device_id,  # Now we pass device_id for saving
-                    restaurant_id=self.restaurant_id, 
-                    is_from_device=False, 
-                    room_name=self.my_group, 
-                    guest_session=target_guest_session
-                )
+                # Save (wrapped - don't let save failure block broadcast)
+                try:
+                    await self._save_message(
+                        sender=self.user, 
+                        receiver=None, 
+                        message=message, 
+                        device_id=target_device_id,
+                        restaurant_id=self.restaurant_id, 
+                        is_from_device=False, 
+                        room_name=self.my_group, 
+                        guest_session=target_guest_session
+                    )
+                except Exception as save_err:
+                    logger.warning(f"Staff message save failed (will still broadcast): {save_err}")
 
             # BROADCAST TO EVERYONE (One Pipe)
             await self.channel_layer.group_send(
