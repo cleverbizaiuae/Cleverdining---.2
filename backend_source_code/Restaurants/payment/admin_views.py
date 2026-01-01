@@ -221,8 +221,8 @@ class PaymentAdminViewSet(ModelViewSet):
     @action(detail=False, methods=['post'])
     def backfill_payments(self, request):
         """
-        Create Payment records for all paid orders that don't have payment records.
-        This is a one-time utility to fix historical data.
+        Create Payment records for paid orders that don't have payment records.
+        Limited to 50 orders per call to prevent timeouts.
         """
         import uuid
         from order.models import Order
@@ -230,51 +230,60 @@ class PaymentAdminViewSet(ModelViewSet):
         
         user = request.user
         
-        # Get user's restaurants
-        if getattr(user, 'role', '') == 'owner':
-            restaurants = Restaurant.objects.filter(owner=user)
-        else:
-            restaurants = []
+        # Get user's restaurants - FAST query
+        rest_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
         
-        if not restaurants:
-            return Response({"error": "No restaurants found"}, status=400)
+        if not rest_ids:
+            return Response({"error": "No restaurants found", "user_role": getattr(user, 'role', 'unknown')}, status=400)
+        
+        # Get existing payment order IDs in ONE query
+        existing_payment_order_ids = set(
+            Payment.objects.filter(restaurant_id__in=rest_ids).values_list('order_id', flat=True)
+        )
+        
+        # Find paid orders WITHOUT payments - LIMIT 50 to prevent timeout
+        paid_orders = Order.objects.filter(
+            restaurant_id__in=rest_ids,
+            payment_status='paid'
+        ).exclude(
+            id__in=existing_payment_order_ids
+        ).select_related('device', 'restaurant')[:50]
+        
+        # Bulk create payments
+        payments_to_create = []
+        for order in paid_orders:
+            payments_to_create.append(Payment(
+                device=order.device,
+                restaurant=order.restaurant,
+                order=order,
+                amount=order.total_price,
+                provider='cash',
+                status='completed',
+                transaction_id=f"backfill_{order.id}_{uuid.uuid4().hex[:8]}",
+                confirmed_at=order.updated_time,
+                created_by='backfill'
+            ))
         
         created_count = 0
-        skipped_count = 0
-        errors = []
+        if payments_to_create:
+            try:
+                Payment.objects.bulk_create(payments_to_create, ignore_conflicts=True)
+                created_count = len(payments_to_create)
+            except Exception as e:
+                return Response({"error": str(e)}, status=500)
         
-        for restaurant in restaurants:
-            # Find paid orders without payment records
-            paid_orders = Order.objects.filter(
-                restaurant=restaurant,
-                payment_status='paid'
-            )
-            
-            for order in paid_orders:
-                # Check if payment already exists
-                if Payment.objects.filter(order=order).exists():
-                    skipped_count += 1
-                    continue
-                
-                try:
-                    Payment.objects.create(
-                        device=order.device,
-                        restaurant=order.restaurant,
-                        order=order,
-                        amount=order.total_price,
-                        provider='cash',  # Assume cash for backfilled orders
-                        status='completed',
-                        transaction_id=f"backfill_{order.id}_{uuid.uuid4().hex[:8]}",
-                        confirmed_at=order.updated_time,
-                        created_by='backfill'
-                    )
-                    created_count += 1
-                except Exception as e:
-                    errors.append(f"Order {order.id}: {str(e)}")
+        # Check how many more remain
+        remaining = Order.objects.filter(
+            restaurant_id__in=rest_ids,
+            payment_status='paid'
+        ).exclude(
+            id__in=Payment.objects.filter(restaurant_id__in=rest_ids).values_list('order_id', flat=True)
+        ).count()
         
         return Response({
-            "message": f"Backfill completed. Created {created_count} payments, skipped {skipped_count}.",
+            "message": f"Created {created_count} payments. {remaining} orders remaining.",
             "created": created_count,
-            "skipped": skipped_count,
-            "errors": errors[:5]  # Limit errors shown
+            "remaining": remaining,
+            "run_again": remaining > 0
         })
+
