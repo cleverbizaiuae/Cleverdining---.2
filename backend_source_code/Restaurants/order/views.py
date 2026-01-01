@@ -212,20 +212,37 @@ class ConfirmCashPaymentAPIView(APIView):
             o.save()
             
             # CREATE PAYMENT RECORD
+            payment_created = False
+            payment_error = None
             try:
-                Payment.objects.create(
-                    device=o.device,
-                    restaurant=o.restaurant,
-                    order=o,
-                    amount=o.total_price,
-                    provider='cash',
-                    status='completed',
-                    transaction_id=f"cash_{o.id}_{uuid.uuid4().hex[:8]}",
-                    confirmed_at=now(),
-                    created_by=f"staff:{request.user.id}"
-                )
+                from django.utils import timezone
+                import logging
+                logger = logging.getLogger(__name__)
+                
+                # Check if payment already exists for this order
+                existing_payment = Payment.objects.filter(order=o).first()
+                if existing_payment:
+                    logger.info(f"Payment already exists for order {o.id}: {existing_payment.id}")
+                    payment_created = True
+                else:
+                    payment = Payment.objects.create(
+                        device=o.device,
+                        restaurant=o.restaurant,
+                        order=o,
+                        amount=o.total_price,
+                        provider='cash',
+                        status='completed',
+                        transaction_id=f"cash_{o.id}_{uuid.uuid4().hex[:8]}",
+                        confirmed_at=timezone.now(),
+                        created_by=f"staff:{request.user.id}"
+                    )
+                    payment_created = True
+                    logger.info(f"Payment created successfully for order {o.id}: payment_id={payment.id}")
             except Exception as e:
-                print(f"Error creating payment record for order {o.id}: {e}")
+                import traceback
+                payment_error = str(e)
+                print(f"CRITICAL ERROR creating payment record for order {o.id}: {e}")
+                print(traceback.format_exc())
 
             # Notify Restaurant (Updates Dashboard for each order logic or refresh)
             data = OrderDetailSerializer(o).data

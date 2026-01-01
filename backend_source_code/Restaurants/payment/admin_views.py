@@ -174,3 +174,64 @@ class PaymentAdminViewSet(ModelViewSet):
             f"restaurant_{payment.restaurant.id}",
             payload
         )
+
+    @action(detail=False, methods=['post'])
+    def backfill_payments(self, request):
+        """
+        Create Payment records for all paid orders that don't have payment records.
+        This is a one-time utility to fix historical data.
+        """
+        import uuid
+        from order.models import Order
+        from restaurant.models import Restaurant
+        
+        user = request.user
+        
+        # Get user's restaurants
+        if getattr(user, 'role', '') == 'owner':
+            restaurants = Restaurant.objects.filter(owner=user)
+        else:
+            restaurants = []
+        
+        if not restaurants:
+            return Response({"error": "No restaurants found"}, status=400)
+        
+        created_count = 0
+        skipped_count = 0
+        errors = []
+        
+        for restaurant in restaurants:
+            # Find paid orders without payment records
+            paid_orders = Order.objects.filter(
+                restaurant=restaurant,
+                payment_status='paid'
+            )
+            
+            for order in paid_orders:
+                # Check if payment already exists
+                if Payment.objects.filter(order=order).exists():
+                    skipped_count += 1
+                    continue
+                
+                try:
+                    Payment.objects.create(
+                        device=order.device,
+                        restaurant=order.restaurant,
+                        order=order,
+                        amount=order.total_price,
+                        provider='cash',  # Assume cash for backfilled orders
+                        status='completed',
+                        transaction_id=f"backfill_{order.id}_{uuid.uuid4().hex[:8]}",
+                        confirmed_at=order.updated_time,
+                        created_by='backfill'
+                    )
+                    created_count += 1
+                except Exception as e:
+                    errors.append(f"Order {order.id}: {str(e)}")
+        
+        return Response({
+            "message": f"Backfill completed. Created {created_count} payments, skipped {skipped_count}.",
+            "created": created_count,
+            "skipped": skipped_count,
+            "errors": errors[:5]  # Limit errors shown
+        })
