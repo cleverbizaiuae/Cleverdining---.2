@@ -260,9 +260,15 @@ const ScreenRestaurantChat = () => {
   }, [messages]);
 
   const handleSend = () => {
-    if (!inputText.trim() || !socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!inputText.trim() || !socket || socket.readyState !== WebSocket.OPEN || !selectedChat) return;
 
-    const payload = { type: "message", message: inputText };
+    const payload = {
+      type: "message",
+      message: inputText,
+      device_id: selectedChat.id, // Target device
+      guest_session_id: selectedChat.active_guest_session_id // Target session
+    };
+    console.log("Dashboard Sending WS Payload:", payload);
     socket.send(JSON.stringify(payload));
 
     // Optimistic UI update

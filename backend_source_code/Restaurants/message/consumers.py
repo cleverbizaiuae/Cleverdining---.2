@@ -115,31 +115,35 @@ class ChatConsumer(AsyncWebsocketConsumer):
             else:
                 sender_name = self.user.username if self.user else "Staff"
                 is_from_device = False
-                device_id = None # Staff doesn't have device ID
                 
-                # Staff MUST provide target context
+                # Staff sends target context: prefer session, fallback to direct device_id
                 target_session_id = data.get('guest_session_id')
-                target_guest_session = await self._get_guest_session_by_id(target_session_id)
+                target_device_id = data.get('device_id')  # NEW: Accept device_id directly
+                target_guest_session = None
                 
-                # Resolving device_id from target session for filtering payload
-                target_device_id = target_guest_session.device_id if target_guest_session else None
+                if target_session_id:
+                    target_guest_session = await self._get_guest_session_by_id(target_session_id)
+                    if target_guest_session:
+                        target_device_id = target_guest_session.device_id
+                
+                # Fallback: If no session but device_id provided, resolve session from device
+                if not target_guest_session and target_device_id:
+                    target_guest_session = await self._get_active_session_for_device(target_device_id)
                 
                 guest_session_id = target_session_id
+                device_id = target_device_id  # Use resolved or direct device_id
                 
                 # Save
                 await self._save_message(
                     sender=self.user, 
                     receiver=None, 
                     message=message, 
-                    device_id=None, 
+                    device_id=target_device_id,  # Now we pass device_id for saving
                     restaurant_id=self.restaurant_id, 
                     is_from_device=False, 
                     room_name=self.my_group, 
                     guest_session=target_guest_session
                 )
-                
-                # Overwrite device_id in payload so mobile clients can filter it!
-                device_id = target_device_id 
 
             # BROADCAST TO EVERYONE (One Pipe)
             await self.channel_layer.group_send(
@@ -267,6 +271,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         from device.models import GuestSession
         try:
             return GuestSession.objects.get(id=session_id)
+        except Exception:
+            return None
+
+    @database_sync_to_async
+    def _get_active_session_for_device(self, device_id):
+        """Resolve the active (or latest) guest session for a given device_id."""
+        from device.models import GuestSession
+        try:
+            # Try active first
+            session = GuestSession.objects.filter(device_id=device_id, is_active=True).order_by('-created_at').first()
+            if session:
+                return session
+            # Fallback to latest inactive
+            return GuestSession.objects.filter(device_id=device_id).order_by('-created_at').first()
         except Exception:
             return None
 
