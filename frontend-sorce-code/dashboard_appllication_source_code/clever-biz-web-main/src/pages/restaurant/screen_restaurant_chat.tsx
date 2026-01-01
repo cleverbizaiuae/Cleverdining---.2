@@ -113,8 +113,10 @@ const ScreenRestaurantChat = () => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'chat_message') {
+            console.log("Dashboard Received WS Data:", data);
+
             const isRelevant =
-              (data.guest_session_id && data.guest_session_id === selectedChat.active_guest_session_id) ||
+              (data.guest_session_id && String(data.guest_session_id) === String(selectedChat.active_guest_session_id)) ||
               (data.device_id && String(data.device_id) === String(selectedChat.id));
 
             if (isRelevant || data.sender === "You") {
@@ -123,12 +125,22 @@ const ScreenRestaurantChat = () => {
                 if (lastMsg && lastMsg.message === data.message && (Date.now() - new Date(lastMsg.timestamp).getTime() < 2000)) {
                   return prev;
                 }
+
+                // Bulletproof boolean conversion
+                const isFromDevice = data.is_from_device === true || data.is_from_device === "true" || data.is_from_device === "True";
+
                 return [...prev, {
                   message: data.message,
                   sender: data.sender || "unknown",
                   timestamp: data.timestamp || Date.now(),
-                  is_from_device: data.is_from_device
+                  is_from_device: isFromDevice
                 }];
+              });
+            } else {
+              console.log("Dashboard Message Filtered Out:", {
+                relevant: isRelevant,
+                msgDeviceId: data.device_id,
+                chatId: selectedChat.id
               });
             }
           }
@@ -193,11 +205,14 @@ const ScreenRestaurantChat = () => {
           );
           if (alreadyExists) return prev;
 
+          // Bulletproof boolean conversion
+          const isFromDevice = lastMsg.is_from_device === true || lastMsg.is_from_device === "true" || lastMsg.is_from_device === "True";
+
           return [...prev, {
             message: lastMsg.message,
             sender: lastMsg.sender,
             timestamp: lastMsg.timestamp,
-            is_from_device: lastMsg.is_from_device
+            is_from_device: isFromDevice
           }];
         });
 
