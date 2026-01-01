@@ -177,25 +177,29 @@ const ScreenRestaurantChat = () => {
     const lastMsg = globalMessages[globalMessages.length - 1];
 
     if (lastMsg && lastMsg.type === 'chat_message') {
-      // 1. Update Chat List (Badges)
-      setChatList(prevList => {
-        return prevList.map(chat => {
-          if (String(chat.id) === String(lastMsg.device_id)) {
-            const isCurrentlyOpen = selectedChat?.id === chat.id;
-            // If open, we typically read it immediately, so no badge increment?
-            // Actually, let's keep it 0 if open.
-            const newUnread = isCurrentlyOpen ? 0 : (chat.unread_count || 0) + 1;
-            return {
-              ...chat,
-              unread_count: newUnread,
-            };
-          }
-          return chat;
+      // Only process INCOMING messages (from device/customer)
+      const isIncoming = lastMsg.is_from_device === true || lastMsg.is_from_device === "true";
+
+      // 1. Update Chat List (Badges) - only for incoming messages
+      if (isIncoming && lastMsg.device_id) {
+        setChatList(prevList => {
+          return prevList.map(chat => {
+            if (String(chat.id) === String(lastMsg.device_id)) {
+              const isCurrentlyOpen = selectedChat?.id === chat.id;
+              // If this chat is currently open, don't increment badge
+              if (isCurrentlyOpen) return chat;
+
+              return {
+                ...chat,
+                unread_count: (chat.unread_count || 0) + 1,
+              };
+            }
+            return chat;
+          });
         });
-      });
+      }
 
       // 2. Redundancy: If this message belongs to the CURRENT OPEN chat, append it to 'messages' locally
-      // This ensures that if the dedicated socket is slow/disconnected, we still see the message from the Global stream.
       if (selectedChat && String(selectedChat.id) === String(lastMsg.device_id)) {
         setMessages(prev => {
           // Dedup check
@@ -215,36 +219,33 @@ const ScreenRestaurantChat = () => {
             is_from_device: isFromDevice
           }];
         });
-
-        // Also mark as read via API if we are looking at it?
-        // We might throttling this to avoid spamming the API on every msg.
-        // For now, rely on "fetchHistory" or user action.
       }
     }
   }, [globalMessages, selectedChat]); // Re-run when globalMessages changes
 
-  // 4. Fetch History on Selection
+  // 4. Fetch History on Selection + Clear Badge
   useEffect(() => {
     if (!selectedChat) return;
+
+    // IMMEDIATELY clear local badge for this chat (optimistic UI)
+    const currentUnread = chatList.find(c => c.id === selectedChat.id)?.unread_count || 0;
+    setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
+
+    // Also decrement global count immediately
+    if (currentUnread > 0 && setUnreadCount) {
+      setUnreadCount((prev: number) => Math.max(0, prev - currentUnread));
+    }
+
     const fetchHistory = async () => {
       try {
         const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
         const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
         setMessages(Array.isArray(data) ? data : []);
 
-        // Mark all as read when opening chat
-        try {
-          const res = await axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`);
-          if (res.data.count > 0 && setUnreadCount) {
-            // Decrease global count
-            setUnreadCount((prev: number) => Math.max(0, prev - res.data.count));
-
-            // Update local chat list to clear badge immediately
-            setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
-          }
-        } catch (err) {
-          console.error("Failed to mark messages read", err);
-        }
+        // Mark all as read on server (fire and forget, badge already cleared locally)
+        axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`).catch(err => {
+          console.warn("mark-all-read failed (non-blocking):", err);
+        });
       } catch (error) {
         console.error("Failed to fetch history", error);
       }
