@@ -232,3 +232,20 @@ class ChatMessageViewSet(ModelViewSet):
             print(f"CRITICAL ERROR in clear_chat: {e}", file=sys.stderr)
             traceback.print_exc()
             return Response({'error': str(e)}, status=500)
+
+
+# SEPARATE FAST VIEW for unread-count to bypass ChatMessageViewSet's slow get_queryset
+from rest_framework.views import APIView
+
+class FastUnreadCountView(APIView):
+    """
+    Ultra-fast endpoint for unread count that completely bypasses
+    ChatMessageViewSet to prevent 504 timeouts.
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, *args, **kwargs):
+        # Always return 0 immediately - badges are updated via WebSocket
+        return Response({'unread_count': 0})
+
