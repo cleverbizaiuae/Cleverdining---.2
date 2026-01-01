@@ -13,31 +13,24 @@ const SuccessPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  useEffect(() => {
-    // 1. Capture Order ID BEFORE clearing
-    const pendingId = localStorage.getItem("pending_order_id");
-
-    // Also check URL params for bulk session ID (though less useful for single review)
-    const params = new URLSearchParams(window.location.search);
-    // const sessionId = params.get("session_id"); // e.g. bulk_cash_43
-
-    if (pendingId) {
-      setOrderId(pendingId);
-    } else {
-      // Fallback: Try to fetch latest paid order for this device?
-      // For now, relies on pending_order_id being present.
-      // If coming from card payment redirect, pending_order_id might have been set during checkout init.
-    }
-
-    // Clear sensitive session data on mount, BUT keep pending_order_id in state
+  // Cleanup function - moved from mount to after review or when leaving
+  const cleanupSession = () => {
     localStorage.removeItem("userInfo");
     localStorage.removeItem("guest_session_token");
     localStorage.removeItem("accessToken");
-    // localStorage.removeItem("pending_order_id"); // Don't clear immediately if we want to use it? 
-    // Actually, usually we want to clear it to prevent stale state. 
-    // But we captured it in state above. So safe to clear from storage if needed.
-    // Let's clear it now.
     localStorage.removeItem("pending_order_id");
+  };
+
+  useEffect(() => {
+    // 1. Capture Order ID
+    const pendingId = localStorage.getItem("pending_order_id");
+
+    if (pendingId) {
+      setOrderId(pendingId);
+    }
+
+    // DON'T clear tokens here - need them for review API call!
+    // Cleanup will happen after review submission or when clicking "Back to Home"
 
     // Prevent back navigation
     window.history.pushState(null, "", window.location.href);
@@ -61,9 +54,19 @@ const SuccessPage = () => {
       });
       toast.success("Thanks for your feedback!");
       setSubmitted(true);
-    } catch (error) {
+
+      // Cleanup AFTER successful review
+      cleanupSession();
+    } catch (error: any) {
       console.error("Review failed", error);
-      toast.error("Failed to submit review");
+      // If auth failure, still cleanup and show generic message
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        toast.error("Session expired. Thanks for dining with us!");
+        setSubmitted(true); // Prevent retry loop
+        cleanupSession();
+      } else {
+        toast.error("Failed to submit review");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -107,8 +110,8 @@ const SuccessPage = () => {
                 <Star
                   size={32}
                   className={`transition-colors ${(hoverRating || rating) >= i
-                      ? "text-yellow-400 fill-yellow-400"
-                      : "text-gray-300 fill-gray-100"
+                    ? "text-yellow-400 fill-yellow-400"
+                    : "text-gray-300 fill-gray-100"
                     }`}
                 />
               </button>
@@ -123,6 +126,7 @@ const SuccessPage = () => {
 
         <button
           onClick={() => {
+            cleanupSession();
             window.location.href = "/login";
           }}
           className="w-full bg-gray-900 text-white font-bold py-3 px-6 rounded-xl hover:bg-gray-800 transition-colors"
