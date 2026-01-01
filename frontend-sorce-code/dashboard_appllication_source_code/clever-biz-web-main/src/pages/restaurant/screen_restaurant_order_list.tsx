@@ -122,6 +122,26 @@ const ScreenRestaurantOrderList = () => {
     order.status === 'awaiting_cash' || order.payment_status === 'pending_cash'
   );
 
+  // Group cash orders by table (device_id or tableNo)
+  const cashOrdersByTable = cashOrders.reduce((acc: any, order: any) => {
+    const tableKey = order.device_id || order.tableNo || order.device_table_name || 'unknown';
+    const tableName = order.tableNo || order.device_table_name || 'Unknown';
+
+    if (!acc[tableKey]) {
+      acc[tableKey] = {
+        tableKey,
+        tableName,
+        orders: [],
+        totalAmount: 0
+      };
+    }
+    acc[tableKey].orders.push(order);
+    acc[tableKey].totalAmount += parseFloat(order.total_price) || 0;
+    return acc;
+  }, {});
+
+  const groupedCashTables = Object.values(cashOrdersByTable) as any[];
+
   // 3. Actions
   const [isClosingDay, setIsClosingDay] = useState(false);
 
@@ -172,6 +192,24 @@ const ScreenRestaurantOrderList = () => {
     }
   };
 
+  // Confirm all cash orders for a table (takes array of order IDs)
+  const handleConfirmCashForTable = async (orderIds: number[]) => {
+    try {
+      // Confirm first order - backend will handle session-level logic
+      // For bulk confirmation, we confirm each order
+      for (const orderId of orderIds) {
+        await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
+      }
+      toast.success("Cash Received! All orders for this table completed.");
+      // Refresh list
+      fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to confirm cash payment");
+    }
+  };
+
+  // Keep backward compatible single order confirm
   const handleConfirmCash = async (orderId: number) => {
     try {
       await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
@@ -234,8 +272,8 @@ const ScreenRestaurantOrderList = () => {
   return (
     <div className="flex flex-col gap-6">
 
-      {/* PENDING CASH BANNER */}
-      {cashOrders.length > 0 && (
+      {/* PENDING CASH BANNER - Grouped by Table */}
+      {groupedCashTables.length > 0 && (
         <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300 max-w-full">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-700 shrink-0 animate-pulse">
@@ -250,20 +288,22 @@ const ScreenRestaurantOrderList = () => {
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-0 md:flex-1 max-w-full">
-            {cashOrders.map((order: any) => (
-              <div key={order.id} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3 shrink-0">
+            {groupedCashTables.map((tableGroup: any) => (
+              <div key={tableGroup.tableKey} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[220px] flex items-center gap-3 shrink-0">
                 {/* Table Number Badge */}
                 <div className="w-10 h-10 rounded-lg bg-yellow-100 flex flex-col items-center justify-center text-yellow-800 font-bold text-[10px] shrink-0 border border-yellow-200 leading-tight">
                   <span>Table</span>
-                  <span className="text-xs">{order.tableNo || order.device_table_name || "?"}</span>
+                  <span className="text-xs">{tableGroup.tableName}</span>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-900 truncate">Order #{order.id}</p>
-                  <p className="text-[10px] text-slate-500 font-bold">AED {order.total_price}</p>
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {tableGroup.orders.length} Order{tableGroup.orders.length > 1 ? 's' : ''}
+                  </p>
+                  <p className="text-sm text-yellow-700 font-bold">AED {tableGroup.totalAmount.toFixed(2)}</p>
                 </div>
                 <button
-                  onClick={() => handleConfirmCash(order.id)}
+                  onClick={() => handleConfirmCashForTable(tableGroup.orders.map((o: any) => o.id))}
                   className="h-7 px-3 bg-yellow-500 hover:bg-yellow-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors whitespace-nowrap"
                 >
                   Confirm
@@ -558,10 +598,11 @@ const ScreenRestaurantOrderList = () => {
                   (selectedOrder.order_items || selectedOrder.items).map((item: any, idx: number) => (
                     <div key={idx} className="flex items-center gap-3 p-2 border border-slate-100 rounded-lg">
                       <div className="w-12 h-12 bg-slate-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
-                        {item.image || item.image1 ? (
-                          <img src={item.image || item.image1} alt={item.item_name} className="w-full h-full object-cover" />
+                        {/* Check multiple possible image field locations */}
+                        {(item.image || item.image1 || item.item?.image) ? (
+                          <img src={item.image || item.image1 || item.item?.image} alt={item.item_name} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-[10px] text-slate-400">Img</span>
+                          <span className="text-[10px] text-slate-400">No img</span>
                         )}
                       </div>
                       <div className="flex-1">
