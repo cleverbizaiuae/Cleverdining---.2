@@ -89,7 +89,7 @@ function MessagingUI() {
     if (device_id && restaurant_id) {
       fetchMessages();
     }
-  }, [device_id, restaurant_id, userInfo, setMessages, messages.length]); // Added dependencies
+  }, [device_id, restaurant_id, userInfo, setMessages]); // Fixed: Removed messages.length to prevent stale overwrite loop
 
   useEffect(() => {
     if (messagesEndRef.current) {
