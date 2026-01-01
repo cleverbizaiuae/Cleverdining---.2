@@ -156,18 +156,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
           // PERSISTENCE FIX: Update Global Message State
           setMessages(prev => {
-            // Deduplication Logic
-            const isDuplicate = prev.slice(-5).some(m =>
+            // Improved Deduplication: Check last 10 messages for exact text match
+            // This handles optimistic UI adding message before WS echo arrives
+            const isDuplicate = prev.slice(-10).some(m =>
               m.text === data.message &&
-              m.is_from_device === data.is_from_device &&
-              (Date.now() - new Date(m.timestamp || Date.now()).getTime() < 5000)
+              m.is_from_device === (data.is_from_device === true || data.is_from_device === "true")
             );
 
-            if (isDuplicate) return prev;
+            if (isDuplicate) {
+              console.log("DEBUG: Duplicate message filtered:", data.message);
+              return prev;
+            }
 
             return [...prev, {
-              id: prev.length + 1, // Simple ID generation
-              is_from_device: data.is_from_device,
+              id: Date.now(), // Use timestamp for unique ID
+              is_from_device: data.is_from_device === true || data.is_from_device === "true",
               text: data.message,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               hasActions: false
