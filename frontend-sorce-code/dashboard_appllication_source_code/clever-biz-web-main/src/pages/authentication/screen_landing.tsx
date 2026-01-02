@@ -42,12 +42,20 @@ const ScreenLanding = () => {
           {/* Navigation Buttons */}
           <div className="flex flex-row justify-center items-center gap-x-4">
             {isLoggedIn ? (
-              <button
-                onClick={handleLogout}
-                className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300"
-              >
-                Logout
-              </button>
+              <>
+                <Link
+                  to="/dashboard"
+                  className="px-6 py-2.5 rounded-full border-2 border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE] hover:text-white font-medium transition-all duration-300"
+                >
+                  Dashboard
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300"
+                >
+                  Logout
+                </button>
+              </>
             ) : (
               <Link to="/login" className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300">
                 Login

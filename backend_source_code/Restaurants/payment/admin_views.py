@@ -51,6 +51,16 @@ import csv
 from django.http import HttpResponse
 
 class PaymentAdminViewSet(ModelViewSet):
+    """
+    CANONICAL FIX: Order-Aware Payments API
+    
+    This viewset merges:
+    1. Real Payment records from the Payment table
+    2. Synthetic/derived payment objects for PAID orders without Payment records
+    
+    This ensures the Payments tab reflects reality - all paid orders appear,
+    even if no Payment record was created at payment time.
+    """
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
     queryset = Payment.objects.all()
@@ -63,32 +73,147 @@ class PaymentAdminViewSet(ModelViewSet):
     ordering_fields = ['created_at', 'amount']
     ordering = ['-created_at']
 
-    def get_queryset(self):
+    def _get_user_restaurant_ids(self):
+        """Get restaurant IDs the user has access to."""
         user = self.request.user
-        
-        # Try multiple paths to find the owner's restaurant
-        # 1. Direct Owner Check (most reliable)
         from restaurant.models import Restaurant
-        owned_restaurants = Restaurant.objects.filter(owner=user)
-        if owned_restaurants.exists():
-            return Payment.objects.filter(restaurant__in=owned_restaurants).order_by('-created_at')
         
-        # 2. Role-based check for staff
+        # 1. Direct Owner Check
+        owned_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
+        if owned_ids:
+            return owned_ids
+        
+        # 2. Staff/Manager check
         if getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
             from accounts.models import ChefStaff
             chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
             if chef_staff:
-                return Payment.objects.filter(restaurant=chef_staff.restaurant).order_by('-created_at')
-            
-            # Fallback Legacy staff_profile
+                return [chef_staff.restaurant_id]
             if hasattr(user, 'staff_profile') and user.staff_profile:
-                return Payment.objects.filter(restaurant=user.staff_profile.restaurant).order_by('-created_at')
+                return [user.staff_profile.restaurant_id]
         
-        # 3. Last resort: check if user has any restaurant relationship
+        # 3. Fallback
         if hasattr(user, 'restaurants') and user.restaurants.exists():
-            return Payment.objects.filter(restaurant__in=user.restaurants.all()).order_by('-created_at')
-                
-        return Payment.objects.none()
+            return list(user.restaurants.values_list('id', flat=True))
+        
+        return []
+
+    def get_queryset(self):
+        """Return real Payment records for the user's restaurants."""
+        rest_ids = self._get_user_restaurant_ids()
+        if not rest_ids:
+            return Payment.objects.none()
+        return Payment.objects.filter(restaurant_id__in=rest_ids).order_by('-created_at')
+
+    def _get_orphaned_paid_orders(self, rest_ids):
+        """
+        Find PAID orders that have NO corresponding Payment record.
+        These are the 'orphaned' orders that need synthetic payments.
+        """
+        from order.models import Order
+        
+        # Get order IDs that already have payments
+        orders_with_payments = set(
+            Payment.objects.filter(restaurant_id__in=rest_ids).values_list('order_id', flat=True)
+        )
+        
+        # Find PAID orders without payments
+        orphaned_orders = Order.objects.filter(
+            restaurant_id__in=rest_ids,
+            payment_status='paid'
+        ).exclude(
+            id__in=orders_with_payments
+        ).select_related('device', 'restaurant').order_by('-updated_time')
+        
+        return orphaned_orders
+
+    def _create_synthetic_payment(self, order):
+        """
+        Generate a synthetic payment dict from an orphaned PAID order.
+        This is NOT saved to the database - it's a read-only derived object.
+        """
+        table_name = "Online"
+        table_id = None
+        if order.device:
+            table_name = order.device.table_name or order.device.table_number or f"Table {order.device.id}"
+            table_id = order.device.id
+        
+        return {
+            'id': f"derived_{order.id}",  # Synthetic ID to distinguish from real payments
+            'order_id': order.id,
+            'table_name': table_name,
+            'table_id': table_id,
+            'customer_name': "Guest",
+            'amount': str(order.total_price),
+            'provider': 'cash',
+            'status': 'completed',
+            'transaction_id': f"derived_order_{order.id}",
+            'created_at': order.created_time.isoformat() if order.created_time else None,
+            'updated_at': order.updated_time.isoformat() if order.updated_time else None,
+            'created_by': 'derived',
+            'confirmed_at': order.updated_time.isoformat() if order.updated_time else None,
+            'cancelled_at': None,
+            'cancel_reason': None
+        }
+
+    def list(self, request, *args, **kwargs):
+        """
+        CANONICAL FIX: Merge real payments with synthetic payments.
+        
+        Returns a unified list that includes:
+        1. Real Payment records from the database
+        2. Synthetic payments derived from PAID orders without Payment records
+        """
+        rest_ids = self._get_user_restaurant_ids()
+        
+        if not rest_ids:
+            return Response({
+                'count': 0,
+                'results': [],
+                'total_revenue': '0.00',
+                'received_amount': '0.00',
+                'pending_amount': '0.00'
+            })
+        
+        # 1. Get real payments and serialize them
+        real_payments = self.get_queryset()
+        real_payment_data = PaymentSerializer(real_payments, many=True).data
+        
+        # 2. Get orphaned PAID orders and create synthetic payments
+        orphaned_orders = self._get_orphaned_paid_orders(rest_ids)
+        synthetic_payments = [self._create_synthetic_payment(order) for order in orphaned_orders]
+        
+        # 3. Merge both lists
+        all_payments = list(real_payment_data) + synthetic_payments
+        
+        # 4. Sort by confirmed_at descending (most recent first)
+        def get_sort_key(p):
+            confirmed = p.get('confirmed_at') or p.get('created_at') or ''
+            return confirmed if confirmed else '1970-01-01'
+        
+        all_payments.sort(key=get_sort_key, reverse=True)
+        
+        # 5. Calculate revenue metrics
+        total_revenue = sum(float(p.get('amount', 0) or 0) for p in all_payments)
+        received_amount = sum(
+            float(p.get('amount', 0) or 0) 
+            for p in all_payments 
+            if p.get('status') == 'completed'
+        )
+        pending_amount = sum(
+            float(p.get('amount', 0) or 0) 
+            for p in all_payments 
+            if p.get('status') == 'pending'
+        )
+        
+        # 6. Return merged response
+        return Response({
+            'count': len(all_payments),
+            'results': all_payments,
+            'total_revenue': f"{total_revenue:.2f}",
+            'received_amount': f"{received_amount:.2f}",
+            'pending_amount': f"{pending_amount:.2f}"
+        })
 
     @action(detail=False, methods=['get'])
     def debug_payments(self, request):
