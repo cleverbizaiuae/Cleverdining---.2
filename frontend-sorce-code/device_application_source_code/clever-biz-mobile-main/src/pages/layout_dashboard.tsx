@@ -246,17 +246,54 @@ const LayoutDashboard = () => {
     }
   };
   useEffect(() => {
-    fetchItems();
-
-    // Debounced search effect
+    // Debounced search effect - only fetch after user stops typing
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
       fetchItems();
-    }, 400);
+    }, 300); // Reduced from 400ms for faster response
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
   }, [search, selectedCategory, categories, lastUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+
+  // Memoized filtered items to avoid re-computing on every render
+  const filteredItems = useMemo(() => {
+    let result = items.filter(item => item.availability); // Only show available items
+
+    // Determine active main category
+    let activeCategoryIndex = selectedCategory;
+    if (activeCategoryIndex === null && categories.length > 0) {
+      const firstParent = categories.find(c => !c.parent_category);
+      if (firstParent) activeCategoryIndex = categories.indexOf(firstParent);
+    }
+
+    // 1. Filter by Main Category
+    if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
+      const mainCatId = categories[activeCategoryIndex].id;
+      const subCats = categories.filter(c => c.parent_category === mainCatId);
+
+      // 2. Filter by Subcategory
+      let activeSubCatId = selectedSubCategory;
+      if (activeSubCatId === null && subCats.length > 0) {
+        activeSubCatId = subCats[0].id;
+      }
+
+      if (activeSubCatId !== null) {
+        result = result.filter(item => item.sub_category === activeSubCatId);
+      } else {
+        result = result.filter(item =>
+          item.category === mainCatId && !item.sub_category
+        );
+        if (subCats.length === 0) {
+          result = items.filter(item => item.category === mainCatId);
+        }
+      }
+    } else {
+      return [];
+    }
+
+    return result;
+  }, [items, selectedCategory, selectedSubCategory, categories]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -396,70 +433,30 @@ const LayoutDashboard = () => {
 
               {/* Main Content (Menu Feed) */}
               <main className="px-4 py-4 flex flex-col gap-4 flex-1">
-                {(() => {
-                  let filteredItems = items.filter(item => item.availability); // Only show available items
-
-                  // Determine active main category
-                  let activeCategoryIndex = selectedCategory;
-                  if (activeCategoryIndex === null && categories.length > 0) {
-                    const firstParent = categories.find(c => !c.parent_category);
-                    if (firstParent) activeCategoryIndex = categories.indexOf(firstParent);
-                  }
-
-                  // 1. Filter by Main Category
-                  if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
-                    const mainCatId = categories[activeCategoryIndex].id;
-                    const subCats = categories.filter(c => c.parent_category === mainCatId);
-
-                    // 2. Filter by Subcategory
-                    let activeSubCatId = selectedSubCategory;
-                    if (activeSubCatId === null && subCats.length > 0) {
-                      activeSubCatId = subCats[0].id;
-                    }
-
-                    if (activeSubCatId !== null) {
-                      filteredItems = filteredItems.filter(item => item.sub_category === activeSubCatId);
-                    } else {
-                      filteredItems = filteredItems.filter(item =>
-                        item.category === mainCatId && !item.sub_category
-                      );
-                      if (subCats.length === 0) {
-                        filteredItems = items.filter(item => item.category === mainCatId);
-                      }
-                    }
-                  } else {
-                    return null;
-                  }
-
-                  if (filteredItems.length === 0) {
-                    return (
-                      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                        <p>No items found.</p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <AnimatePresence mode="popLayout">
-                      {filteredItems.map((item) => (
-                        <motion.div
-                          key={item.id}
-                          layout="position" // specific fix for list filtering layout containment
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="w-full" // Ensure it takes full width of grid column
-                        >
-                          <FoodItemCard
-                            item={item}
-                            onAdd={() => showFood(item.id)}
-                          />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  );
-                })()}
+                {filteredItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                    <p>No items found.</p>
+                  </div>
+                ) : (
+                  <AnimatePresence mode="popLayout">
+                    {filteredItems.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        layout="position"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="w-full"
+                      >
+                        <FoodItemCard
+                          item={item}
+                          onAdd={() => showFood(item.id)}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
                 <Footer />
               </main>
             </div>
