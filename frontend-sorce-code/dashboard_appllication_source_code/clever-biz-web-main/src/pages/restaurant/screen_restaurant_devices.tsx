@@ -202,7 +202,7 @@ export const ScreenRestaurantDevices = () => {
     if (!sessionToClose) return;
     setLoading(true);
     try {
-      await axiosInstance.post(`/staff/sessions/${sessionToClose}/close/`);
+      await axiosInstance.post(`/api/staff/sessions/${sessionToClose}/close/`);
       toast.success("Session closed successfully");
       fetchAllDevices();
       setIsEndSessionModalOpen(false);
