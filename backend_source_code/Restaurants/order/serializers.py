@@ -11,14 +11,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = ['item_name', 'quantity', 'price', 'image']
     
     def get_image(self, obj):
-        if obj.item and obj.item.image:
+        if obj.item and obj.item.image1:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.item.image.url)
+                return request.build_absolute_uri(obj.item.image1.url)
             # Fallback: return full URL using settings
             from django.conf import settings
             base_url = getattr(settings, 'SITE_URL', 'https://cleverdining-2.onrender.com')
-            return f"{base_url}{obj.item.image.url}"
+            return f"{base_url}{obj.item.image1.url}"
         return None
 
 
@@ -105,7 +105,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     price = serializers.DecimalField(source='item.price', max_digits=10, decimal_places=2, read_only=True)
     discount_percentage = serializers.DecimalField(source='item.discount_percentage', max_digits=5, decimal_places=2, read_only=True)
     final_price = serializers.SerializerMethodField()
-    image = serializers.ImageField(source='item.image', read_only=True)
+    image = serializers.ImageField(source='item.image1', read_only=True)
 
     class Meta:
         model = CartItem
