@@ -129,37 +129,43 @@ const ScreenLanding = () => {
             </div>
 
             {/* Right Hero Image Card */}
-            <div className="flex-1 relative w-full flex justify-end">
-              <div className="relative z-10 rounded-[24px] border border-slate-200 shadow-2xl shadow-blue-100/50 overflow-hidden bg-white max-w-[420px] w-full hover:shadow-blue-200/50 transition-shadow duration-500 aspect-[4/5] group">
+            {/* Right Hero Image Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="flex-1 relative w-full flex justify-center lg:justify-end"
+            >
+              <div className="relative z-10 rounded-[24px] border border-slate-200 shadow-2xl shadow-blue-100/50 overflow-hidden bg-white w-full max-w-md lg:max-w-xl hover:shadow-blue-200/50 transition-shadow duration-500 aspect-[4/5] group">
                 <img
                   src={heroImage}
                   alt="AI-generated image of a professional chef holding a tablet device"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                 />
 
                 {/* Image Overlay Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent pointer-events-none"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent pointer-events-none z-10"></div>
 
                 {/* Floating QR Card Mockup */}
-                <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-xl border border-slate-100 rounded-xl p-4 shadow-lg flex items-center gap-4">
+                <div className="absolute bottom-8 right-8 bg-white/90 backdrop-blur-xl border border-slate-100 rounded-xl p-4 shadow-lg flex items-center gap-4 z-20 w-[200px] animate-fadeIn">
                   <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-2xl">⚡️</div>
                   <div>
-                    <h4 className="font-bold text-slate-800 text-sm">Instant Table Ordering</h4>
-                    <p className="text-xs text-slate-500">Scan QR & Order in seconds</p>
+                    <h4 className="font-bold text-slate-800 text-sm">Instant Order</h4>
+                    <p className="text-[10px] text-slate-500">Scan QR & Order</p>
                   </div>
                 </div>
 
                 {/* Floating Stats Card (Top Left) */}
-                <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md border border-slate-100 rounded-lg py-2 px-3 shadow-sm flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md border border-slate-100 rounded-lg py-2 px-3 shadow-sm flex items-center gap-2 z-20">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                   <span className="text-xs font-bold text-slate-800">System Active</span>
                 </div>
               </div>
 
               {/* Decorative blobs */}
-              <div className="absolute -top-12 -right-12 w-64 h-64 bg-cyan-100 rounded-full blur-3xl opacity-40 -z-10"></div>
+              <div className="absolute -top-12 -right-12 w-64 h-64 bg-cyan-100 rounded-full blur-3xl opacity-40 -z-10 animate-pulse"></div>
               <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-blue-100 rounded-full blur-3xl opacity-40 -z-10"></div>
-            </div>
+            </motion.div>
 
           </div>
         </section>
