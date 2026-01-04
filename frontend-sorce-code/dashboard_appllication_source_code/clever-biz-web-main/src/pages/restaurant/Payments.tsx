@@ -311,9 +311,7 @@ export const Payments = () => {
                     <table className="w-full text-left">
                         <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
                             <tr>
-                                <th className="px-5 py-3 w-10">
-                                    <input type="checkbox" className="rounded border-slate-300 text-[#0055FE] focus:ring-[#0055FE]" checked={selectedPayments.size === filteredPayments.length && filteredPayments.length > 0} onChange={() => setSelectedPayments(selectedPayments.size === filteredPayments.length ? new Set() : new Set(filteredPayments.map(p => p.id)))} />
-                                </th>
+                                {/* Checkbox Column Removed */}
                                 <th className="px-5 py-3">ID</th>
                                 <th className="px-5 py-3">Table</th>
                                 <th className="px-5 py-3">Provider</th>
@@ -326,9 +324,7 @@ export const Payments = () => {
                         <tbody className="divide-y divide-slate-100">
                             {filteredPayments.length > 0 ? filteredPayments.map(p => (
                                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <td className="px-5 py-3">
-                                        <input type="checkbox" className="rounded border-slate-300 text-[#0055FE] focus:ring-[#0055FE]" checked={selectedPayments.has(p.id)} onChange={() => { const s = new Set(selectedPayments); s.has(p.id) ? s.delete(p.id) : s.add(p.id); setSelectedPayments(s); }} />
-                                    </td>
+                                    {/* Checkbox Cell Removed */}
                                     <td className="px-5 py-3 text-sm font-medium text-slate-900">#{p.id}</td>
                                     <td className="px-5 py-3 text-xs text-slate-600">{p.table_name || "N/A"}</td>
                                     <td className="px-5 py-3">

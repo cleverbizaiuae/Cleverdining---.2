@@ -12,7 +12,7 @@ from .serializers import OrderCreateSerializerFixed, OrderDetailSerializer
 from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff,IsOwnerChefOrStaff
 from accounts.models import ChefStaff
 from django.utils.timezone import now
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from calendar import month_name
 from restaurant.models import Restaurant
 from accounts.models import ChefStaff
@@ -524,6 +524,32 @@ class OwnerUpdateOrderStatusAPIView(APIView):
     
 
 
+class OwnerOrderDetailAPIView(generics.RetrieveAPIView):
+    serializer_class = OrderDetailSerializer
+    permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
+    lookup_field = 'pk'
+
+    def get_queryset(self):
+        user = self.request.user
+        base_qs = Order.objects.select_related(
+            'device', 'restaurant', 'guest_session', 'business_day'
+        ).prefetch_related(
+            'order_items__item', 'payments'
+        )
+        
+        if user.role == 'owner':
+             return base_qs.filter(restaurant__owner=user)
+        elif user.role in ['manager', 'staff', 'chef']:
+             restaurant_ids = ChefStaff.objects.filter(
+                user=user, 
+                action='accepted'
+             ).values_list('restaurant_id', flat=True)
+             return base_qs.filter(restaurant_id__in=restaurant_ids)
+        
+        return Order.objects.none()
+    
+
+
 
 class ChefStaffOrdersAPIView(generics.ListAPIView):
     serializer_class = OrderDetailSerializer
@@ -703,7 +729,10 @@ class OrderAnalyticsAPIView(APIView):
             def get_data_for_range(start_d, end_d, agg_type):
                 try:
                     l, r_data, o_data = [], [], []
-                    curr_q = Order.objects.filter(restaurant=restaurant, status='completed', created_time__range=[start_d, end_d])
+                    curr_q = Order.objects.filter(
+                        restaurant=restaurant, 
+                        created_time__range=[start_d, end_d]
+                    ).filter(Q(status='completed') | Q(payment_status='paid'))
                     
                     if agg_type == 'hourly':
                         query_date = start_d.date()
@@ -799,11 +828,17 @@ class OrderAnalyticsAPIView(APIView):
             
             # Weekly Growth (Compare this week vs last week)
             start_week = now_dt.date() - timedelta(days=now_dt.weekday())
-            this_week_rev = Order.objects.filter(restaurant=restaurant, status='completed', created_time__date__gte=start_week).aggregate(s=Sum('total_price'))['s'] or 0
+            this_week_rev = Order.objects.filter(
+                restaurant=restaurant, 
+                created_time__date__gte=start_week
+            ).filter(Q(status='completed') | Q(payment_status='paid')).aggregate(s=Sum('total_price'))['s'] or 0
             
             last_week_start = start_week - timedelta(days=7)
             last_week_end = start_week - timedelta(days=1)
-            last_week_rev = Order.objects.filter(restaurant=restaurant, status='completed', created_time__date__range=[last_week_start, last_week_end]).aggregate(s=Sum('total_price'))['s'] or 0
+            last_week_rev = Order.objects.filter(
+                restaurant=restaurant, 
+                created_time__date__range=[last_week_start, last_week_end]
+            ).filter(Q(status='completed') | Q(payment_status='paid')).aggregate(s=Sum('total_price'))['s'] or 0
             
             growth = 0
             if last_week_rev > 0:
@@ -884,10 +919,9 @@ class MonthlySalesReportView(APIView):
             # Get all completed orders for this restaurant in the current month
             orders = Order.objects.filter(
                 restaurant=restaurant,
-                status='completed',
                 created_time__year=current_year,
                 created_time__month=current_month
-            )
+            ).filter(Q(status='completed') | Q(payment_status='paid'))
 
             # Prepare day-wise totals and counts
             days_in_month = monthrange(current_year, current_month)[1]
