@@ -7,7 +7,7 @@ import axiosInstance from "../../lib/axios";
 import logo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
 
 // Image imports
-import heroImage from "../../assets/hero-image-1.webp"; // Using existing asset
+import heroImage from "../../assets/restaurant_login_bg.jpg"; // Using new user uploaded asset
 import mobileLogo from "../../assets/mobile_logo.png";   // Using existing asset
 
 type PortalRole = "manager" | "staff" | "chef";
