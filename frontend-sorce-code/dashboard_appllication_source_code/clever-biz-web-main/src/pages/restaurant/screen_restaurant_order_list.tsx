@@ -291,9 +291,8 @@ const ScreenRestaurantOrderList = () => {
             {groupedCashTables.map((tableGroup: any) => (
               <div key={tableGroup.tableKey} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[220px] flex items-center gap-3 shrink-0">
                 {/* Table Number Badge */}
-                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex flex-col items-center justify-center text-yellow-800 font-bold text-[10px] shrink-0 border border-yellow-200 leading-tight">
-                  <span>Table</span>
-                  <span className="text-xs">{tableGroup.tableName}</span>
+                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-800 font-bold text-xs shrink-0 border border-yellow-200">
+                  {tableGroup.tableName}
                 </div>
 
                 <div className="flex-1 min-w-0">
