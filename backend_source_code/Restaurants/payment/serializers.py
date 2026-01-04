@@ -2,6 +2,9 @@ from rest_framework import serializers
 from .models import StripeDetails, PaymentGateway, Payment
 
 class PaymentSerializer(serializers.ModelSerializer):
+    order_id = serializers.IntegerField(source='order.id', read_only=True)
+    table_name = serializers.CharField(source='device.table_name', read_only=True)
+    
     class Meta:
         model = Payment
         fields = '__all__'

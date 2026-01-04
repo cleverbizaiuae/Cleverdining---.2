@@ -85,7 +85,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
 
     if (!isOpen || !payment) return null;
 
-    const items = orderDetails?.items || [];
+    const items = orderDetails?.order_items || [];
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
@@ -138,8 +138,8 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                             {items.map((item: any, idx: number) => (
                                 <div key={idx} className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">
-                                        {item.order_item?.foodItem?.image ? (
-                                            <img src={item.order_item.foodItem.image} alt="" className="w-full h-full object-cover" />
+                                        {item.image ? (
+                                            <img src={item.image} alt="" className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-300">
                                                 <ShoppingBag size={16} />
