@@ -5,7 +5,7 @@ import {
   SubscriptionIcon2,
   SubscriptionIcon3,
 } from "../../components/utilities";
-import heroImage from "../../assets/hero-image-1.webp";
+import heroImage from "../../assets/landing_hero.jpg";
 import subscriptionCardOverlay from "../../assets/subscription-card-overlay.webp";
 import { Link, useNavigate } from "react-router";
 import { Disclosure, DisclosureButton } from "@headlessui/react";
