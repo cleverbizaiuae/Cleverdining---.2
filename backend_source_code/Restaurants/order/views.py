@@ -711,7 +711,7 @@ class OrderAnalyticsAPIView(APIView):
             if not restaurants:
                  return Response({"status": {}, "chart_data": {}})
 
-            restaurant = restaurants[0] # Focus on single restaurant for analytics for now
+            # restaurant = restaurants[0] # Focus on single restaurant for analytics for now (DEPRECATED - Using filtered list)
             
             # --- FILTERS ---
             time_range = request.query_params.get('time_range', 'year') # today, week, month, year
@@ -730,7 +730,7 @@ class OrderAnalyticsAPIView(APIView):
                 try:
                     l, r_data, o_data = [], [], []
                     curr_q = Order.objects.filter(
-                        restaurant=restaurant, 
+                        restaurant__in=restaurants, 
                         created_time__range=[start_d, end_d]
                     ).filter(Q(status='completed') | Q(payment_status='paid'))
                     
@@ -829,14 +829,14 @@ class OrderAnalyticsAPIView(APIView):
             # Weekly Growth (Compare this week vs last week)
             start_week = now_dt.date() - timedelta(days=now_dt.weekday())
             this_week_rev = Order.objects.filter(
-                restaurant=restaurant, 
+                restaurant__in=restaurants, 
                 created_time__date__gte=start_week
             ).filter(Q(status='completed') | Q(payment_status='paid')).aggregate(s=Sum('total_price'))['s'] or 0
             
             last_week_start = start_week - timedelta(days=7)
             last_week_end = start_week - timedelta(days=1)
             last_week_rev = Order.objects.filter(
-                restaurant=restaurant, 
+                restaurant__in=restaurants, 
                 created_time__date__range=[last_week_start, last_week_end]
             ).filter(Q(status='completed') | Q(payment_status='paid')).aggregate(s=Sum('total_price'))['s'] or 0
             
@@ -845,7 +845,7 @@ class OrderAnalyticsAPIView(APIView):
                 growth = ((this_week_rev - last_week_rev) / last_week_rev) * 100
 
             # Active staff count - using action='accepted' as proxy for active
-            active_staff = ChefStaff.objects.filter(restaurant=restaurant, action='accepted').count()
+            active_staff = ChefStaff.objects.filter(restaurant__in=restaurants, action='accepted').count()
             
             
             return Response({
