@@ -22,6 +22,7 @@ interface ChatRoomItem {
   table_name: string;
   user_id: string;
   restaurant_id: string;
+  last_message_time?: string;
 }
 
 interface Message {
@@ -223,8 +224,10 @@ const ScreenChefChat = () => {
                       <span className={cn("text-xs font-bold truncate", isActive ? "text-[#0055FE]" : "text-slate-900")}>
                         {chat.table_name}
                       </span>
-                      {/* Mock Time */}
-                      <span className="text-[10px] text-slate-400">12:30 PM</span>
+                      {/* Timestamp */}
+                      <span className="text-[10px] text-slate-400">
+                        {chat.last_message_time ? formatTime(chat.last_message_time) : ""}
+                      </span>
                     </div>
                     <p className="text-[10px] text-slate-500 truncate">Tap to view conversation</p>
                   </div>

@@ -211,7 +211,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         print(f"DEBUG_DEVICES: Fetching devices for {user.email} Role: {getattr(user, 'role', 'N/A')}")
         
         # Optimized: Use select_related and prefetch_related to avoid N+1 queries
-        from django.db.models import Count, Q, Prefetch
+        from django.db.models import Count, Q, Prefetch, Max
         from .models import GuestSession
         
         base_qs = Device.objects.select_related(
@@ -223,7 +223,8 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 to_attr='active_sessions_cache'
             )
         ).annotate(
-            unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True))
+            unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True)),
+            last_message_time=Max('messages__timestamp')
         )
         
         if user.role == 'owner':

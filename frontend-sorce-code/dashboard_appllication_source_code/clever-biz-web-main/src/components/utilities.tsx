@@ -953,6 +953,7 @@ export interface ChatRoomItem {
   id: string;
   table_name: string;
   user_id?: string;
+  last_message_time?: string;
 }
 
 export type MsgType = {
@@ -1670,6 +1671,9 @@ const ChatListItem: React.FC<ChatListItemProps> = ({
       </div>
 
       <div className="flex flex-col items-end gap-y-1">
+        <span className="text-[10px] text-primary-text/60">
+          {data.last_message_time ? formatTimestamp(data.last_message_time) : ""}
+        </span>
         {unread > 0 && (
           <span className="text-xs bg-red-600 text-white rounded-full px-2 py-0.5">
             {unread}

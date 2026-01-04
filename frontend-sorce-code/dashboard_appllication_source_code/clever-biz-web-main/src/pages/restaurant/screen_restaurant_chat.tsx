@@ -23,6 +23,7 @@ interface ChatRoomItem {
   restaurant?: string | number;
   unread_count?: number;
   active_guest_session_id?: string | number;
+  last_message_time?: string;
 }
 
 interface Message {
@@ -184,18 +185,20 @@ const ScreenRestaurantChat = () => {
       // Only process INCOMING messages (from device/customer)
       const isIncoming = lastMsg.is_from_device === true || lastMsg.is_from_device === "true";
 
-      // 1. Update Chat List (Badges) - only for incoming messages
-      if (isIncoming && lastMsg.device_id) {
+      // 1. Update Chat List (Badges + Time)
+      if (lastMsg.device_id) {
         setChatList(prevList => {
           return prevList.map(chat => {
             if (String(chat.id) === String(lastMsg.device_id)) {
               const isCurrentlyOpen = selectedChat?.id === chat.id;
-              // If this chat is currently open, don't increment badge
-              if (isCurrentlyOpen) return chat;
+
+              // Increment badge only if incoming and not currently open
+              const shouldIncrement = isIncoming && !isCurrentlyOpen;
 
               return {
                 ...chat,
-                unread_count: (chat.unread_count || 0) + 1,
+                unread_count: shouldIncrement ? (chat.unread_count || 0) + 1 : chat.unread_count,
+                last_message_time: lastMsg.timestamp
               };
             }
             return chat;
@@ -283,6 +286,9 @@ const ScreenRestaurantChat = () => {
       timestamp: Date.now(),
       is_from_device: false
     }]);
+
+    // Update List Timestamp
+    setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, last_message_time: new Date().toISOString() } : c));
     setInputText("");
   };
 
@@ -367,7 +373,9 @@ const ScreenRestaurantChat = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <p className="text-[10px] text-slate-500 truncate">Tap to view conversation</p>
-                      <span className="text-[10px] text-slate-400">12:30 PM</span>
+                      <span className="text-[10px] text-slate-400">
+                        {chat.last_message_time ? formatTime(chat.last_message_time) : ""}
+                      </span>
                     </div>
                   </div>
                 </button>
