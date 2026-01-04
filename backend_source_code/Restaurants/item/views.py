@@ -38,14 +38,17 @@ class ItemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Optimized: Use select_related to avoid N+1 queries
+        base_qs = Item.objects.select_related('category', 'restaurant', 'sub_category')
+        
         if user.role == 'owner':
-            return Item.objects.filter(restaurant__owner=user)
+            return base_qs.filter(restaurant__owner=user)
         elif user.role in ['chef', 'staff', 'manager']:
             restaurant_ids = ChefStaff.objects.filter(
                 user=user,
                 action='accepted'
             ).values_list('restaurant_id', flat=True)
-            return Item.objects.filter(restaurant_id__in=restaurant_ids)
+            return base_qs.filter(restaurant_id__in=restaurant_ids)
         return Item.objects.none()
 
     def perform_create(self, serializer):
@@ -281,25 +284,27 @@ class CustomerItemViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['item_name', 'category__Category_name']
 
     def get_queryset(self):
+        # Optimized: Use select_related to avoid N+1 queries for category and restaurant
+        base_qs = Item.objects.select_related('category', 'restaurant', 'sub_category')
+        
         # Allow anonymous access for customer-facing endpoint
         if self.action == 'retrieve':
-            return Item.objects.all()
+            return base_qs.all()
 
         # Return items from first restaurant for anonymous users
         if self.request.user.is_anonymous:
             restaurant_id = self.request.query_params.get('restaurant_id')
             if restaurant_id:
-                return Item.objects.filter(restaurant_id=restaurant_id)
+                return base_qs.filter(restaurant_id=restaurant_id)
             
             first_restaurant = Restaurant.objects.first()
             if first_restaurant:
-                return Item.objects.filter(restaurant=first_restaurant)
+                return base_qs.filter(restaurant=first_restaurant)
             return Item.objects.none()
         
         restaurant_ids = self.request.user.devices.values_list('restaurant_id', flat=True)
-        # print("Customer's restaurant IDs:", list(restaurant_ids))
         val=list(restaurant_ids)
-        return Item.objects.filter(restaurant_id__in=val)
+        return base_qs.filter(restaurant_id__in=val)
 
 
 

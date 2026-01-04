@@ -210,26 +210,42 @@ class DeviceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         print(f"DEBUG_DEVICES: Fetching devices for {user.email} Role: {getattr(user, 'role', 'N/A')}")
         
+        # Optimized: Use select_related and prefetch_related to avoid N+1 queries
+        from django.db.models import Count, Q, Prefetch
+        from .models import GuestSession
+        
+        base_qs = Device.objects.select_related(
+            'restaurant', 'user'
+        ).prefetch_related(
+            Prefetch(
+                'guest_sessions',
+                queryset=GuestSession.objects.filter(is_active=True),
+                to_attr='active_sessions_cache'
+            )
+        ).annotate(
+            unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True))
+        )
+        
         if user.role == 'owner':
-            return Device.objects.filter(restaurant__owner=user).order_by('-id')
+            return base_qs.filter(restaurant__owner=user).order_by('-id')
         
         # Staff/Chef/Manager Logic
         # 1. Preferred: ChefStaff model
         chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
         if chef_staff:
              print(f"DEBUG_DEVICES: Found ChefStaff for rest {chef_staff.restaurant.id}")
-             return Device.objects.filter(restaurant=chef_staff.restaurant).order_by('-id')
+             return base_qs.filter(restaurant=chef_staff.restaurant).order_by('-id')
         
         # 2. Fallback: Legacy Staff model
         from staff.models import Staff
         legacy_staff = Staff.objects.filter(user=user).first()
         if legacy_staff:
              print(f"DEBUG_DEVICES: Found Legacy Staff for rest {legacy_staff.restaurant.id}")
-             return Device.objects.filter(restaurant=legacy_staff.restaurant).order_by('-id')
+             return base_qs.filter(restaurant=legacy_staff.restaurant).order_by('-id')
              
         # 3. Fallback: Owner check (in case role is mismatched but is actually owner)
         if user.role == 'owner': # Redundant check but safe
-             return Device.objects.filter(restaurant__owner=user).order_by('-id')
+             return base_qs.filter(restaurant__owner=user).order_by('-id')
 
         print("DEBUG_DEVICES: No access found. Returning empty.")
         return Device.objects.none()

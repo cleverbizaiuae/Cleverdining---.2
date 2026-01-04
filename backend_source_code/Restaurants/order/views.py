@@ -339,8 +339,15 @@ class MyOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        # Optimized: Use select_related and prefetch_related to avoid N+1 queries
+        base_qs = Order.objects.select_related(
+            'device', 'restaurant', 'guest_session'
+        ).prefetch_related(
+            'order_items__item', 'payments'
+        )
+        
         if user.is_authenticated:
-            return Order.objects.filter(
+            return base_qs.filter(
                 device__user=user,
                 status__in=['pending', 'preparing', 'served', 'completed', 'paid']
             ).order_by('-created_time')
@@ -350,7 +357,7 @@ class MyOrdersAPIView(generics.ListAPIView):
             if session_token:
                 try:
                     session = GuestSession.objects.get(session_token=session_token, is_active=True)
-                    return Order.objects.filter(
+                    return base_qs.filter(
                         guest_session=session,
                         status__in=['pending', 'preparing', 'served', 'completed', 'paid']
                     ).order_by('-created_time')
@@ -360,7 +367,7 @@ class MyOrdersAPIView(generics.ListAPIView):
             # Fallback to device_id (Legacy/Insecure - consider deprecating)
             device_id = self.request.query_params.get('device_id')
             if device_id:
-                return Order.objects.filter(
+                return base_qs.filter(
                     device_id=device_id,
                     status__in=['pending', 'preparing', 'served', 'completed', 'paid']
                 ).order_by('-created_time')
@@ -392,23 +399,26 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Order.objects.none()
+        
+        # Optimized: Use select_related and prefetch_related to avoid N+1 queries
+        base_qs = Order.objects.select_related(
+            'device', 'restaurant', 'guest_session', 'business_day'
+        ).prefetch_related(
+            'order_items__item', 'payments'
+        )
         
         if user.role == 'owner':
-             queryset = Order.objects.filter(restaurant__owner=user)
+             queryset = base_qs.filter(restaurant__owner=user)
         elif user.role in ['manager', 'staff', 'chef']:
              restaurant_ids = ChefStaff.objects.filter(
                 user=user, 
                 action='accepted'
              ).values_list('restaurant_id', flat=True)
-             queryset = Order.objects.filter(restaurant_id__in=restaurant_ids)
+             queryset = base_qs.filter(restaurant_id__in=restaurant_ids)
+        else:
+             queryset = Order.objects.none()
         
         # BUSINESS DAY FILTER: Show only orders for the active business day(s)
-        # Assuming we want to show orders for ALL restaurants the user has access to, but filtered by THEIR respective active days.
-        # This is complex in a single query if multiple restaurants.
-        # But usually a user dashboard focuses on ONE restaurant context.
-        # However, for now, let's filter orders where order.business_day.is_active = True
-        
         return queryset.filter(business_day__is_active=True).order_by('-created_time')
     
     def list(self, request, *args, **kwargs):

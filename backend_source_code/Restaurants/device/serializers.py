@@ -16,10 +16,19 @@ class DeviceSerializer(serializers.ModelSerializer):
         read_only_fields =['username', 'restaurant_name','restaurant']
 
     def get_active_session_id(self, obj):
+        # Use cached data if available (from prefetch_related)
+        if hasattr(obj, 'active_sessions_cache'):
+            active_sessions = obj.active_sessions_cache
+            return active_sessions[0].id if active_sessions else None
+        # Fallback to query
         session = obj.guest_sessions.filter(is_active=True).first()
         return session.id if session else None
 
     def get_unread_count(self, obj):
+        # Use cached annotation if available
+        if hasattr(obj, 'unread_count_cached'):
+            return obj.unread_count_cached
+        # Fallback to query
         return obj.messages.filter(is_read=False, is_from_device=True).count()
 
 

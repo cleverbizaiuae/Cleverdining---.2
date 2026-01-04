@@ -103,7 +103,12 @@ class PaymentAdminViewSet(ModelViewSet):
         rest_ids = self._get_user_restaurant_ids()
         if not rest_ids:
             return Payment.objects.none()
-        return Payment.objects.filter(restaurant_id__in=rest_ids).order_by('-created_at')
+        # Optimized: Use select_related to avoid N+1 queries
+        return Payment.objects.filter(
+            restaurant_id__in=rest_ids
+        ).select_related(
+            'order', 'order__device', 'restaurant'
+        ).order_by('-created_at')
 
     def _get_orphaned_paid_orders(self, rest_ids):
         """
