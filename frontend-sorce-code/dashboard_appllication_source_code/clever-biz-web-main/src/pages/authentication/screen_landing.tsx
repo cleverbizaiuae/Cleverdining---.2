@@ -43,12 +43,34 @@ const ScreenLanding = () => {
           <div className="flex flex-row justify-center items-center gap-x-4">
             {isLoggedIn ? (
               <>
-                <Link
-                  to="/dashboard"
+                <button
+                  onClick={() => {
+                    // Get user role and navigate to appropriate dashboard
+                    const userInfo = localStorage.getItem("userInfo");
+                    let targetPath = "/restaurant"; // Default for owner
+                    if (userInfo) {
+                      try {
+                        const parsedInfo = JSON.parse(userInfo);
+                        const role = parsedInfo?.user?.role || parsedInfo?.role;
+                        if (role === "staff") {
+                          targetPath = "/staff";
+                        } else if (role === "chef") {
+                          targetPath = "/chef";
+                        } else if (role === "manager") {
+                          targetPath = "/restaurant";
+                        } else if (role === "owner") {
+                          targetPath = "/restaurant";
+                        }
+                      } catch (e) {
+                        console.error("Error parsing userInfo", e);
+                      }
+                    }
+                    navigate(targetPath);
+                  }}
                   className="px-6 py-2.5 rounded-full border-2 border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE] hover:text-white font-medium transition-all duration-300"
                 >
                   Dashboard
-                </Link>
+                </button>
                 <button
                   onClick={handleLogout}
                   className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300"
