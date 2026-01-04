@@ -4,10 +4,22 @@ from item.models import Item
 
 class OrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name')
-    image = serializers.ImageField(source='item.image', read_only=True)
+    image = serializers.SerializerMethodField()
+    
     class Meta:
         model = OrderItem
         fields = ['item_name', 'quantity', 'price', 'image']
+    
+    def get_image(self, obj):
+        if obj.item and obj.item.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.item.image.url)
+            # Fallback: return full URL using settings
+            from django.conf import settings
+            base_url = getattr(settings, 'SITE_URL', 'https://cleverdining-2.onrender.com')
+            return f"{base_url}{obj.item.image.url}"
+        return None
 
 
 

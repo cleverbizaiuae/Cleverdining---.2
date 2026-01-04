@@ -391,6 +391,18 @@ const ScreenRestaurantOrderList = () => {
             >
               <Moon size={14} /> Close Day
             </button>
+            {closedDayDate && (
+              <button
+                onClick={() => {
+                  localStorage.removeItem('closedDayDate');
+                  setClosedDayDate(null);
+                  toast.success("Filter cleared - showing all orders");
+                }}
+                className="h-8 px-3 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+              >
+                Show All Orders
+              </button>
+            )}
 
             {/* Payment Dropdown - Only for Owner/Manager */}
             {(userRole === 'owner' || userRole === 'manager') && (
