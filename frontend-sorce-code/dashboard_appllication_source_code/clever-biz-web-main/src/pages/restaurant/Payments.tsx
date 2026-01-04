@@ -180,6 +180,10 @@ export const Payments = () => {
     const [isViewOpen, setIsViewOpen] = useState(false);
     const { response } = useWebSocket();
 
+    // API-provided totals
+    const [totalRevenue, setTotalRevenue] = useState<string>('0.00');
+    const [receivedAmount, setReceivedAmount] = useState<string>('0.00');
+
     const fetchPayments = useCallback(async () => {
         setLoading(true);
         try {
@@ -189,9 +193,28 @@ export const Payments = () => {
             if (endDate) params.append('created_at__lte', endDate.toISOString().split('T')[0]);
             if (params.toString()) url += `?${params.toString()}`;
             const res = await axios.get(url);
-            setPayments(Array.isArray(res.data) ? res.data : []);
+            // API returns { count, results, total_revenue, received_amount, pending_amount }
+            const data = res.data;
+            if (data && Array.isArray(data.results)) {
+                setPayments(data.results);
+                setTotalRevenue(data.total_revenue || '0.00');
+                setReceivedAmount(data.received_amount || '0.00');
+            } else if (Array.isArray(data)) {
+                setPayments(data);
+                // Calculate from data if flat array
+                const total = data.filter((p: Payment) => p.status === 'completed').reduce((sum: number, p: Payment) => sum + parseFloat(p.amount || '0'), 0);
+                setTotalRevenue(total.toFixed(2));
+                setReceivedAmount(total.toFixed(2));
+            } else {
+                setPayments([]);
+                setTotalRevenue('0.00');
+                setReceivedAmount('0.00');
+            }
         } catch (error) {
             console.error("Failed to fetch payments", error);
+            setPayments([]);
+            setTotalRevenue('0.00');
+            setReceivedAmount('0.00');
         } finally {
             setLoading(false);
         }
@@ -234,17 +257,13 @@ export const Payments = () => {
         }
     };
 
-    // Calculate totals for cards
-    const totalRevenue = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + parseFloat(p.amount), 0);
-    const pendingAmount = payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + parseFloat(p.amount), 0);
-
     return (
         <div className="flex flex-col gap-6 font-inter">
             {/* METRIC CARDS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <MetricCard
                     title="Total Revenue"
-                    value={`AED ${totalRevenue.toFixed(2)}`}
+                    value={`AED ${totalRevenue}`}
                     icon={DollarSign}
                     colorClass="text-[#0055FE]"
                     bgClass="bg-white"
@@ -252,19 +271,11 @@ export const Payments = () => {
                 />
                 <MetricCard
                     title="Received Amount"
-                    value={`AED ${totalRevenue.toFixed(2)}`} // Assuming received = completed revenue for now
+                    value={`AED ${receivedAmount}`}
                     icon={Wallet}
                     colorClass="text-green-600"
                     bgClass="bg-white"
                     iconBgClass="bg-green-100"
-                />
-                <MetricCard
-                    title="Pending Amount"
-                    value={`AED ${pendingAmount.toFixed(2)}`}
-                    icon={AlertCircle}
-                    colorClass="text-orange-600"
-                    bgClass="bg-white"
-                    iconBgClass="bg-orange-100"
                 />
             </div>
 
