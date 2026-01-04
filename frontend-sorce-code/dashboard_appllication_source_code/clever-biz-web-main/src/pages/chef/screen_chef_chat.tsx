@@ -31,10 +31,14 @@ interface Message {
   is_from_device: boolean;
 }
 
-// Utility for formatting time
+// Utility for formatting time in Gulf Standard Time (GMT+4)
 const formatTime = (ts: string | number) => {
   const date = new Date(ts);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('en-AE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Dubai'
+  });
 };
 
 const ScreenChefChat = () => {

@@ -2231,20 +2231,22 @@ const formatTimestamp = (timestamp: string): string => {
 
     // If less than 24 hours, show time
     if (diffInHours < 24) {
-      return date.toLocaleTimeString("en-US", {
+      return date.toLocaleTimeString("en-AE", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
+        timeZone: "Asia/Dubai",
       });
     }
 
     // If more than 24 hours, show date
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("en-AE", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Dubai",
     });
   } catch (error) {
     console.error("Error formatting timestamp:", error);
