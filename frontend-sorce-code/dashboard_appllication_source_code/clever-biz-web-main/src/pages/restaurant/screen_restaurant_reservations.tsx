@@ -232,7 +232,7 @@ const ScreenRestaurantReservations = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 text-sm">
-                    {new Date(res.reservation_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {new Date(res.reservation_time).toLocaleString('en-AE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' })}
                   </td>
                   <td className="px-6 py-4 text-slate-500 text-sm italic truncate max-w-[150px]">
                     {res.customRequest || "-"}
@@ -269,7 +269,7 @@ const ScreenRestaurantReservations = () => {
                   </div>
                 </div>
                 <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded">
-                  {new Date(res.reservation_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(res.reservation_time).toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' })}
                 </span>
               </div>
 
