@@ -531,22 +531,32 @@ const ScreenRestaurantDashboard = () => {
             </div>
 
             <div className="space-y-4">
-              {sellingItemData && sellingItemData.length > 0 ? (
-                sellingItemData.slice(0, 5).map((item: any, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="font-medium text-slate-700">{item.item_name}</span>
-                      <span className="text-slate-500">{item.percentage || '0%'}</span>
+              {sellingItemData && sellingItemData.length > 0 ? (() => {
+                // Calculate max value for proportional bars
+                const maxValue = Math.max(...sellingItemData.slice(0, 5).map((item: any) =>
+                  parseFloat(item.percentage) || item.total_sold || 0
+                ));
+
+                return sellingItemData.slice(0, 5).map((item: any, idx: number) => {
+                  const value = parseFloat(item.percentage) || item.total_sold || 0;
+                  const barWidth = maxValue > 0 ? (value / maxValue) * 100 : 0;
+
+                  return (
+                    <div key={idx}>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="font-medium text-slate-700">{item.item_name}</span>
+                        <span className="text-slate-500">{typeof item.percentage === 'number' ? item.percentage.toFixed(2) : item.percentage || '0'}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#0055FE] rounded-full transition-all duration-300"
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[#0055FE] rounded-full"
-                        style={{ width: `${Math.min((item.total_sold / 100) * 100, 100)}%` }} // Rough percentage calc if backend doesn't send %
-                      />
-                    </div>
-                  </div>
-                ))
-              ) : (
+                  );
+                });
+              })() : (
                 <p className="text-xs text-slate-400 text-center py-4">No data available</p>
               )}
             </div>
