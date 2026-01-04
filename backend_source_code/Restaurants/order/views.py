@@ -693,23 +693,27 @@ class OrderAnalyticsAPIView(APIView):
         import traceback
         try:
             user = request.user
-            restaurants = []
-            # Check Owner
-            if getattr(user, 'role', '') == 'owner':
-                restaurants = Restaurant.objects.filter(owner=user)
+            user = request.user
+            restaurant_ids = []
+            
+            # 1. Direct Owner Check
+            # Use explicit import to avoid circular dep issues if any
+            from restaurant.models import Restaurant
+            owned_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
+            if owned_ids:
+                restaurant_ids = owned_ids
             else:
-                # Check ChefStaff (legacy/standard)
-                chef_staff = ChefStaff.objects.filter(user=user).first()
-                if chef_staff:
-                    restaurants = [chef_staff.restaurant]
-                try:
-                    if not restaurants and user.staff_profile:
-                        restaurants = [user.staff_profile.restaurant]
-                except:
-                    pass
-
-            if not restaurants:
-                 return Response({"status": {}, "chart_data": {}})
+                # 2. Staff/Manager check
+                if getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
+                    from accounts.models import ChefStaff
+                    chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+                    if chef_staff:
+                        restaurant_ids = [chef_staff.restaurant_id]
+                    elif hasattr(user, 'staff_profile') and user.staff_profile:
+                        restaurant_ids = [user.staff_profile.restaurant_id]
+            
+            if not restaurant_ids:
+                  return Response({"status": {}, "chart_data": {}})
 
             # restaurant = restaurants[0] # Focus on single restaurant for analytics for now (DEPRECATED - Using filtered list)
             
@@ -730,7 +734,7 @@ class OrderAnalyticsAPIView(APIView):
                 try:
                     l, r_data, o_data = [], [], []
                     curr_q = Order.objects.filter(
-                        restaurant__in=restaurants, 
+                        restaurant_id__in=restaurant_ids, 
                         created_time__range=[start_d, end_d]
                     ).filter(Q(status='completed') | Q(payment_status='paid'))
                     
@@ -829,14 +833,14 @@ class OrderAnalyticsAPIView(APIView):
             # Weekly Growth (Compare this week vs last week)
             start_week = now_dt.date() - timedelta(days=now_dt.weekday())
             this_week_rev = Order.objects.filter(
-                restaurant__in=restaurants, 
+                restaurant_id__in=restaurant_ids, 
                 created_time__date__gte=start_week
             ).filter(Q(status='completed') | Q(payment_status='paid')).aggregate(s=Sum('total_price'))['s'] or 0
             
             last_week_start = start_week - timedelta(days=7)
             last_week_end = start_week - timedelta(days=1)
             last_week_rev = Order.objects.filter(
-                restaurant__in=restaurants, 
+                restaurant_id__in=restaurant_ids, 
                 created_time__date__range=[last_week_start, last_week_end]
             ).filter(Q(status='completed') | Q(payment_status='paid')).aggregate(s=Sum('total_price'))['s'] or 0
             
@@ -844,8 +848,8 @@ class OrderAnalyticsAPIView(APIView):
             if last_week_rev > 0:
                 growth = ((this_week_rev - last_week_rev) / last_week_rev) * 100
 
-            # Active staff count - using action='accepted' as proxy for active
-            active_staff = ChefStaff.objects.filter(restaurant__in=restaurants, action='accepted').count()
+            # Active staff count
+            active_staff = ChefStaff.objects.filter(restaurant_id__in=restaurant_ids, action='accepted').count()
             
             
             return Response({
