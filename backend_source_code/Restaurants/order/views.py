@@ -705,7 +705,6 @@ class OrderAnalyticsAPIView(APIView):
             else:
                 # 2. Staff/Manager check
                 if getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
-                    from accounts.models import ChefStaff
                     chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
                     if chef_staff:
                         restaurant_ids = [chef_staff.restaurant_id]
