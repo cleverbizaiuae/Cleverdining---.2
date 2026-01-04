@@ -130,11 +130,15 @@ const ScreenLanding = () => {
 
             {/* Right Hero Image Card */}
             <div className="flex-1 relative w-full flex justify-end">
-              <div className="relative z-10 rounded-2xl border border-slate-200 shadow-2xl shadow-blue-100/50 overflow-hidden bg-white max-w-[600px] w-full hover:shadow-blue-200/50 transition-shadow duration-500">
-                <img src={heroImage} alt="Dashboard Preview" className="w-full h-auto object-cover" />
+              <div className="relative z-10 rounded-[24px] border border-slate-200 shadow-2xl shadow-blue-100/50 overflow-hidden bg-white max-w-[420px] w-full hover:shadow-blue-200/50 transition-shadow duration-500 aspect-[4/5] group">
+                <img
+                  src={heroImage}
+                  alt="AI-generated image of a professional chef holding a tablet device"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
 
                 {/* Image Overlay Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent pointer-events-none"></div>
 
                 {/* Floating QR Card Mockup */}
                 <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-xl border border-slate-100 rounded-xl p-4 shadow-lg flex items-center gap-4">
