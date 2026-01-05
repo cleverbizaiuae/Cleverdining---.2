@@ -825,8 +825,28 @@ class OrderAnalyticsAPIView(APIView):
 
 
             # ---- METRIC CARDS (Using strict Today/Week logic) ----
-            # Total Revenue (Filtered)
-            total_revenue = sum(revenue_data)
+            # Total Revenue - CANONICAL: Match PaymentAdminViewSet logic exactly
+            # 1. Sum real Payment amounts for this restaurant
+            from payment.models import Payment
+            real_payment_revenue = Payment.objects.filter(
+                restaurant_id__in=restaurant_ids
+            ).aggregate(s=Sum('amount'))['s'] or 0
+            
+            # 2. Find orphaned PAID orders (no Payment record) and sum their total_price
+            orders_with_payments = set(
+                Payment.objects.filter(restaurant_id__in=restaurant_ids).values_list('order_id', flat=True)
+            )
+            orphan_revenue = Order.objects.filter(
+                restaurant_id__in=restaurant_ids,
+                payment_status='paid'
+            ).exclude(
+                id__in=orders_with_payments
+            ).aggregate(s=Sum('total_price'))['s'] or 0
+            
+            # 3. Total revenue = real payments + orphan order amounts
+            total_revenue = float(real_payment_revenue) + float(orphan_revenue)
+            
+            # Total orders count (from chart data)
             total_orders_count = sum(orders_count_data)
             
             # Weekly Growth (Compare this week vs last week)
