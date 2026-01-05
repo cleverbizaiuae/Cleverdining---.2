@@ -467,8 +467,8 @@ const LayoutDashboard = () => {
           )}
         </div>
 
-        {/* 6. Bottom Navigation */}
-        <BottomNav />
+        {/* 6. Bottom Navigation - Hide on success/checkout pages */}
+        {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
       </div>
 
       {/* Detail modal */}
