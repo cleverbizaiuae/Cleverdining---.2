@@ -236,16 +236,50 @@ class ChatMessageViewSet(ModelViewSet):
 
 # SEPARATE FAST VIEW for unread-count to bypass ChatMessageViewSet's slow get_queryset
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 
 class FastUnreadCountView(APIView):
     """
-    Ultra-fast endpoint for unread count that completely bypasses
-    ChatMessageViewSet to prevent 504 timeouts.
+    Fast endpoint for total unread count across all devices.
+    Calculates sum of unread device-originated messages for user's restaurant(s).
     """
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, *args, **kwargs):
-        # Always return 0 immediately - badges are updated via WebSocket
-        return Response({'unread_count': 0})
+        try:
+            user = request.user
+            
+            # Get restaurant IDs for this user
+            restaurant_ids = []
+            if getattr(user, 'role', '') == 'owner':
+                restaurant_ids = list(user.restaurants.values_list('id', flat=True)) if hasattr(user, 'restaurants') else []
+            elif getattr(user, 'role', '') in ['staff', 'chef', 'manager']:
+                from accounts.models import ChefStaff
+                cs = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if cs:
+                    restaurant_ids = [cs.restaurant_id]
+                else:
+                    from staff.models import Staff
+                    ls = Staff.objects.filter(user=user).first()
+                    if ls and ls.restaurant:
+                        restaurant_ids = [ls.restaurant.id]
+            
+            if not restaurant_ids:
+                return Response({'unread_count': 0})
+            
+            # Count unread messages FROM devices (customer messages) for all devices in user's restaurants
+            total_unread = ChatMessage.objects.filter(
+                restaurant_id__in=restaurant_ids,
+                is_read=False,
+                is_from_device=True
+            ).count()
+            
+            return Response({'unread_count': total_unread})
+            
+        except Exception as e:
+            # Fail-safe: return 0 on error to prevent crashes
+            import traceback
+            traceback.print_exc()
+            return Response({'unread_count': 0})
+
 
