@@ -64,17 +64,17 @@ export default function CheckoutPage() {
     const guestToken = localStorage.getItem("guest_session_token");
 
     if (isBulkCheckout && guestToken) {
-      // Fetch all orders for this guest session
-      axiosInstance.get(`/api/customer/orders/`, {
+      // Fetch all unpaid orders for this guest session using correct endpoint
+      axiosInstance.get(`/api/customer/uncomplete/orders/`, {
         headers: { "X-Guest-Session-Token": guestToken }
       })
         .then(res => {
           const orders = res.data.results || res.data || [];
-          // Filter unpaid orders
-          const unpaidOrders = orders.filter((o: any) =>
+          // Filter unpaid orders (backend already filters, but double-check)
+          const unpaidOrders = Array.isArray(orders) ? orders.filter((o: any) =>
             ['pending', 'preparing', 'served', 'completed', 'delivered'].includes(o.status) &&
             (!o.payment_status || ['unpaid', 'pending', 'failed'].includes(o.payment_status))
-          );
+          ) : [];
           setAllOrders(unpaidOrders);
           // Set orderData to first order for CheckoutButton compatibility
           if (unpaidOrders.length > 0) {
