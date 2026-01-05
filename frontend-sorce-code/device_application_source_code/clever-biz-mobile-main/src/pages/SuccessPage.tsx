@@ -4,9 +4,7 @@ import { Star, Send, Instagram, Facebook, Twitter } from "lucide-react";
 import { motion } from "motion/react";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-
-// Import logo - update path if needed
-import logo from "../assets/cleverbiz_full_logo.png";
+import { Logo } from "../components/icons/logo";
 
 const SuccessPage = () => {
   const navigate = useNavigate();
@@ -88,14 +86,14 @@ const SuccessPage = () => {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 items-center justify-start p-6 pt-12 text-center">
       {/* Logo */}
-      <motion.img
-        src={logo}
-        alt="CleverBiz"
-        className="h-10 mb-6"
+      <motion.div
+        className="mb-6"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-      />
+      >
+        <Logo className="h-8" />
+      </motion.div>
 
       {/* Thank You Heading */}
       <motion.h1
