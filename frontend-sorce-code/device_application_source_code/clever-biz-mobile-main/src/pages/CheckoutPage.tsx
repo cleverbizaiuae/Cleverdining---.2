@@ -12,27 +12,37 @@ export default function CheckoutPage() {
 
   // Prioritize state -> query param -> localStorage (Bulletproof fallback)
   const orderId = location.state?.orderId || params.get("orderId") || localStorage.getItem("pending_order_id");
-
+  const isBulkCheckout = location.state?.isBulkCheckout || localStorage.getItem("bulk_checkout") === "true";
+  const passedTotalAmount = location.state?.totalAmount || 0;
 
   console.log("CheckoutPage Debug:", {
     stateId: location.state?.orderId,
     paramId: params.get("orderId"),
     storageId: localStorage.getItem("pending_order_id"),
+    isBulkCheckout,
+    passedTotalAmount,
     fullUrl: window.location.href,
     search: location.search
   });
 
   useEffect(() => {
-    if (!orderId) {
+    // Clear bulk_checkout flag after using it
+    return () => {
+      localStorage.removeItem("bulk_checkout");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!orderId && !isBulkCheckout) {
       // Redirect back to cart if no Order ID found
       const timer = setTimeout(() => {
         navigate("/dashboard/cart");
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [orderId, navigate]);
+  }, [orderId, isBulkCheckout, navigate]);
 
-  if (!orderId) {
+  if (!orderId && !isBulkCheckout) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] p-4 text-center">
         <p className="text-lg font-semibold text-red-500 mb-2">Order ID missing</p>
@@ -43,6 +53,7 @@ export default function CheckoutPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash'>('card');
   const [orderData, setOrderData] = useState<any>(null);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
   const [tipType, setTipType] = useState<'percentage' | 'custom_amount' | 'custom_percentage' | null>(null);
   const [tipValue, setTipValue] = useState<number | string>(''); // 5, 10, 15, or custom input
   const [tipAmount, setTipAmount] = useState<number>(0);
@@ -50,20 +61,45 @@ export default function CheckoutPage() {
 
   // Fetch Order Data to get Subtotal
   useEffect(() => {
-    if (orderId) {
+    const guestToken = localStorage.getItem("guest_session_token");
+
+    if (isBulkCheckout && guestToken) {
+      // Fetch all orders for this guest session
+      axiosInstance.get(`/api/customer/orders/`, {
+        headers: { "X-Guest-Session-Token": guestToken }
+      })
+        .then(res => {
+          const orders = res.data.results || res.data || [];
+          // Filter unpaid orders
+          const unpaidOrders = orders.filter((o: any) =>
+            ['pending', 'preparing', 'served', 'completed', 'delivered'].includes(o.status) &&
+            (!o.payment_status || ['unpaid', 'pending', 'failed'].includes(o.payment_status))
+          );
+          setAllOrders(unpaidOrders);
+          // Set orderData to first order for CheckoutButton compatibility
+          if (unpaidOrders.length > 0) {
+            setOrderData(unpaidOrders[0]);
+          }
+        })
+        .catch(err => console.error("Failed to fetch orders", err));
+    } else if (orderId) {
       axiosInstance.get(`/api/customer/uncomplete/orders/${orderId}/`)
         .then(res => {
           setOrderData(res.data);
-          // If already has tip? Maybe reset or load.
         })
         .catch(err => console.error("Failed to fetch order", err));
     }
-  }, [orderId]);
+  }, [orderId, isBulkCheckout]);
 
-  // Calculate Subtotal (Assuming orderData.items contains prices)
-  // Or safer: use orderData.total_price but subtract existing tip if we want clean subtotal?
-  // Let's calculate from items to be sure.
-  const subtotal = orderData?.items?.reduce((acc: number, item: any) => acc + (Number(item.price) * item.quantity), 0) || 0;
+  // Calculate Subtotal - use order.total_price for accuracy
+  const subtotal = isBulkCheckout
+    ? allOrders.reduce((acc, o) => acc + Number(o.total_price || 0), 0)
+    : Number(orderData?.total_price || 0);
+
+  // Collect all items from all orders for display
+  const allItems = isBulkCheckout
+    ? allOrders.flatMap((o) => (o.items || []).map((item: any) => ({ ...item, orderId: o.id })))
+    : (orderData?.items || []);
   // If Tax/Service exists, we should ideally get them.
   // Assuming Subtotal for Tip = Item Total.
 
@@ -120,12 +156,14 @@ export default function CheckoutPage() {
 
       {/* ORDER SUMMARY */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4">
-        <h2 className="text-sm font-bold text-gray-500 uppercase mb-3">Order Summary</h2>
-        <div className="space-y-2 mb-4">
-          {orderData?.items?.map((item: any) => (
-            <div key={item.id} className="flex justify-between text-sm">
+        <h2 className="text-sm font-bold text-gray-500 uppercase mb-3">
+          Order Summary {isBulkCheckout && allOrders.length > 1 && `(${allOrders.length} orders)`}
+        </h2>
+        <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+          {allItems.map((item: any, index: number) => (
+            <div key={`${item.id}-${index}`} className="flex justify-between text-sm">
               <span>{item.quantity}x {item.item_name}</span>
-              <span>{item.price}</span>
+              <span>AED {Number(item.price).toFixed(2)}</span>
             </div>
           ))}
         </div>
