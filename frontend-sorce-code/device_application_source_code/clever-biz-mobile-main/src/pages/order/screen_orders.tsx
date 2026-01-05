@@ -28,7 +28,14 @@ const ScreenOrders = () => {
       try {
         setLoading(true);
         setErr(null);
-        const res = await axiosInstance.get(`/api/customer/uncomplete/orders/?device_id=${device_id}`);
+
+        // Use session token for proper session-based filtering
+        const guestSessionToken = localStorage.getItem("guest_session_token");
+
+        const res = await axiosInstance.get(`/api/customer/uncomplete/orders/`, {
+          headers: guestSessionToken ? { 'X-Guest-Session-Token': guestSessionToken } : {},
+          params: device_id ? { device_id } : {} // Fallback for legacy support
+        });
         const d = res?.data;
 
         const list: Order[] = Array.isArray(d)
