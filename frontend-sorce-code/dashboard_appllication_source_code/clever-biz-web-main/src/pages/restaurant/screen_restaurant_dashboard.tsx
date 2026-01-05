@@ -308,7 +308,7 @@ const ScreenRestaurantDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Total Revenue"
-            value={analyticsLoading ? "..." : `AED ${analytics?.status?.today_total_completed_order_price || 0}`}
+            value={analyticsLoading ? "..." : `AED ${analytics?.status?.total_revenue || 0}`}
             trend={`${analytics?.status?.weekly_growth || 0}%`}
             isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
             subtext="vs last week"
@@ -316,7 +316,7 @@ const ScreenRestaurantDashboard = () => {
           />
           <MetricCard
             title="Total Orders"
-            value={analyticsLoading ? "..." : analytics?.status?.today_total_completed_order || 0}
+            value={analyticsLoading ? "..." : analytics?.status?.total_orders || 0}
             subtext="Processed today"
             trend="12%"
             isPositive={true}
@@ -324,7 +324,7 @@ const ScreenRestaurantDashboard = () => {
           />
           <MetricCard
             title="Active Staff"
-            value={analyticsLoading ? "..." : analytics?.status?.total_member || 0}
+            value={analyticsLoading ? "..." : analytics?.status?.active_staff || 0}
             subtext="Currently online"
             trend="0%"
             isPositive={true}
