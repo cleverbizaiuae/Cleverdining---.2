@@ -60,7 +60,7 @@ const SuccessPage = () => {
         order: parseInt(orderId),
         rating: rating,
         guest_no: 1, // Default
-        guest_name: name || undefined,
+        name: name || undefined,
         comment: comment || undefined
       });
       toast.success("Thanks for your feedback!");
