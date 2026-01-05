@@ -69,7 +69,7 @@ export default function CheckoutButton({
         // For cash payments, redirect to success page directly
         if (provider === 'cash') {
           toast.success("Cash collection requested! Staff will come to your table.");
-          navigate('/success');
+          navigate('/dashboard/success');
           return;
         }
         window.location.href = url;

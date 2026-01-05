@@ -60,7 +60,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
                 toast.success("Cash collection requested! Please wait for staff confirmation.");
                 setShowMethodModal(false);
                 // Redirect to Thank You page
-                navigate('/success');
+                navigate('/dashboard/success');
                 return;
             }
 
