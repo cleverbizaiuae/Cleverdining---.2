@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axiosInstance from "../lib/axios";
 import { loadStripe } from "@stripe/stripe-js";
 import toast from "react-hot-toast";
@@ -20,6 +21,7 @@ export default function CheckoutButton({
 }) {
   console.log(orderId);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PK!);
 
   const handleCheckout = async () => {
@@ -64,6 +66,12 @@ export default function CheckoutButton({
 
       // If URL is provided (Cash or Stripe), follow it
       if (url) {
+        // For cash payments, redirect to success page directly
+        if (provider === 'cash') {
+          toast.success("Cash collection requested! Staff will come to your table.");
+          navigate('/success');
+          return;
+        }
         window.location.href = url;
         return;
       }

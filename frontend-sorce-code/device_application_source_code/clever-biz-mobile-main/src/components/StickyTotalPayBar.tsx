@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CreditCard, Banknote } from 'lucide-react';
 import axiosInstance from '@/lib/axios';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface Order {
     id: number;
@@ -20,6 +21,7 @@ interface StickyTotalPayBarProps {
 export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, onPaymentSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [showMethodModal, setShowMethodModal] = useState(false);
+    const navigate = useNavigate();
 
     // Filter Unpaid Orders
     const unpaidOrders = useMemo(() => {
@@ -57,6 +59,8 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
             if (provider === 'cash') {
                 toast.success("Cash collection requested! Please wait for staff confirmation.");
                 setShowMethodModal(false);
+                // Redirect to Thank You page
+                navigate('/success');
                 return;
             }
 
