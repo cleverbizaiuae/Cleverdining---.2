@@ -859,8 +859,8 @@ const ScreenRestaurantDashboard = () => {
             </select>
           </div>
 
-          {/* Sub-Category Dropdown - shows after category is selected */}
-          {itemFormData.category && categories.filter((c: any) => c.parent_category?.toString() === itemFormData.category.toString()).length > 0 && (
+          {/* Sub-Category Dropdown - always shows after category is selected */}
+          {itemFormData.category && (
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Sub-Category (Optional)</label>
               <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
