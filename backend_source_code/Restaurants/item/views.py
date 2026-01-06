@@ -285,7 +285,8 @@ class CustomerItemViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         # Optimized: Use select_related to avoid N+1 queries for category and restaurant
-        base_qs = Item.objects.select_related('category', 'restaurant', 'sub_category')
+        # Filter only available items for customer-facing endpoint
+        base_qs = Item.objects.select_related('category', 'restaurant', 'sub_category').filter(availability=True)
         
         # Allow anonymous access for customer-facing endpoint
         if self.action == 'retrieve':
