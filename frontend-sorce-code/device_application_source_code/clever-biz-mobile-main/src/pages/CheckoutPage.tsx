@@ -152,7 +152,20 @@ export default function CheckoutPage() {
 
   return (
     <div className="p-4 h-full overflow-y-auto pb-24 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold mb-4 text-center">Checkout</h1>
+      {/* Header with Back Button */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+          <span className="text-sm font-medium">Back</span>
+        </button>
+        <h1 className="text-2xl font-bold text-center flex-1">Checkout</h1>
+        <div className="w-12"></div> {/* Spacer for centering */}
+      </div>
 
       {/* ORDER SUMMARY */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4">

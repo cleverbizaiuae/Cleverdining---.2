@@ -130,7 +130,7 @@ const ScreenRestaurantDashboard = () => {
 
   // Add Item State
   const [showAddItem, setShowAddItem] = useState(false);
-  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
+  const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
   const [isViewAll, setIsViewAll] = useState(false);
 
   // Fetch Analytics
@@ -475,6 +475,7 @@ const ScreenRestaurantDashboard = () => {
                                     price: item.price,
                                     description: item.description || "",
                                     category: item.category_id || "",
+                                    sub_category: item.sub_category_id || "",
                                     discount_percentage: item.discount_percentage || 0,
                                     image1: null,
                                     video: null
@@ -825,7 +826,7 @@ const ScreenRestaurantDashboard = () => {
         onClose={() => {
           setShowAddItem(false);
           setEditingItem(null);
-          setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null, video: null });
+          setItemFormData({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "", image1: null, video: null });
         }}
         title={editingItem ? "Edit Item" : "Add New Item"}
       >
@@ -852,11 +853,23 @@ const ScreenRestaurantDashboard = () => {
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
             <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
-              value={itemFormData.category} onChange={e => setItemFormData({ ...itemFormData, category: e.target.value })}>
+              value={itemFormData.category} onChange={e => setItemFormData({ ...itemFormData, category: e.target.value, sub_category: "" })}>
               <option value="">Select Category</option>
-              {categories.map((c: any) => <option key={c.id} value={c.id}>{c.Category_name}</option>)}
+              {categories.filter((c: any) => !c.parent_category).map((c: any) => <option key={c.id} value={c.id}>{c.Category_name}</option>)}
             </select>
           </div>
+
+          {/* Sub-Category Dropdown - shows after category is selected */}
+          {itemFormData.category && categories.filter((c: any) => c.parent_category?.toString() === itemFormData.category.toString()).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Sub-Category (Optional)</label>
+              <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
+                value={itemFormData.sub_category || ""} onChange={e => setItemFormData({ ...itemFormData, sub_category: e.target.value })}>
+                <option value="">Select Sub-Category</option>
+                {categories.filter((c: any) => c.parent_category?.toString() === itemFormData.category.toString()).map((c: any) => <option key={c.id} value={c.id}>{c.Category_name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
@@ -922,6 +935,7 @@ const ScreenRestaurantDashboard = () => {
               formData.append('price', itemFormData.price);
               formData.append('description', itemFormData.description);
               formData.append('category', itemFormData.category);
+              if (itemFormData.sub_category) formData.append('sub_category', itemFormData.sub_category);
               if ((itemFormData as any).discount_percentage) formData.append('discount_percentage', (itemFormData as any).discount_percentage);
               if (itemFormData.image1) formData.append('image1', itemFormData.image1);
               if (itemFormData.video) formData.append('video', itemFormData.video);
@@ -944,7 +958,7 @@ const ScreenRestaurantDashboard = () => {
 
                 setShowAddItem(false);
                 setEditingItem(null);
-                setItemFormData({ item_name: "", price: "", description: "", category: "", discount_percentage: "", image1: null, video: null });
+                setItemFormData({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "", image1: null, video: null });
                 fetchFoodItems(currentPage, debouncedSearchQuery);
               } catch (e: any) {
                 console.error(e);
