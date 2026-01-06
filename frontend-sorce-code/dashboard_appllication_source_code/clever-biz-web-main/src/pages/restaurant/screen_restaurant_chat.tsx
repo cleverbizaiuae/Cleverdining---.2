@@ -53,6 +53,7 @@ const ScreenRestaurantChat = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showClearChatModal, setShowClearChatModal] = useState(false);
 
   // 1. Fetch Chat List (Tables)
   useEffect(() => {
@@ -297,207 +298,237 @@ const ScreenRestaurantChat = () => {
   );
 
   return (
-    <div className="flex flex-col gap-6 h-[calc(100vh-6rem)]">
+    <>
+      <div className="flex flex-col gap-6 h-[calc(100vh-6rem)]">
 
-      {/* ALERT BANNER */}
-      {/* Spec: Blue/Indigo Gradient - Light Theme */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center">
-            <Bell size={20} className="text-[#0055FE]" />
-          </div>
-          <div>
-            <h3 className="font-bold text-lg text-[#0055FE]">New Messages</h3>
-            <p className="text-slate-600 text-sm">You have unread requests. Check table list.</p>
-          </div>
-        </div>
-        <button
-          onClick={() => toast.success("All messages acknowledged")}
-          className="px-4 py-2 bg-[#0055FE] text-white font-semibold rounded-lg text-sm hover:bg-[#0047D1] transition-colors shadow-md shadow-blue-500/10"
-        >
-          Acknowledge
-        </button>
-      </div>
-
-      {/* CHAT INTERFACE */}
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex overflow-hidden relative">
-
-        {/* LEFT SIDEBAR (Chat List) */}
-        <div className={cn(
-          "w-full md:w-80 border-r border-slate-200 flex flex-col bg-slate-50 h-full absolute md:relative z-10",
-          selectedChat ? "hidden md:flex" : "flex"
-        )}>
-          <div className="p-4 border-b border-slate-200">
-            <h3 className="font-bold text-slate-900 mb-3">Messages</h3>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input
-                type="text"
-                placeholder="Search tables..."
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-[#0055FE]"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
+        {/* ALERT BANNER */}
+        {/* Spec: Blue/Indigo Gradient - Light Theme */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center">
+              <Bell size={20} className="text-[#0055FE]" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-[#0055FE]">New Messages</h3>
+              <p className="text-slate-600 text-sm">You have unread requests. Check table list.</p>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {filteredChats.map(chat => {
-              const isActive = selectedChat?.id === chat.id;
-              return (
-                <button
-                  key={chat.id}
-                  onClick={() => setSelectedChat(chat)}
-                  className={cn(
-                    "w-full p-3 flex items-center gap-3 transition-colors text-left relative overflow-hidden rounded-r-lg", // Modified rounded
-                    isActive ? "bg-[#0055FE]/5 border-l-2 border-l-[#0055FE]" : "hover:bg-slate-100 border-l-2 border-transparent"
-                  )}
-                >
-
-                  <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
-                    isActive ? "bg-blue-50 text-[#0055FE]" : "bg-slate-200 text-slate-600"
-                  )}>
-                    {chat.table_name.substring(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-0.5">
-                      <span className={cn("text-xs font-bold truncate", isActive ? "text-[#0055FE]" : "text-slate-900")}>
-                        {chat.table_name}
-                      </span>
-                      {/* Unread Badge */}
-                      {!!chat.unread_count && chat.unread_count > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                          {chat.unread_count}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <p className="text-[10px] text-slate-500 truncate">Tap to view conversation</p>
-                      <span className="text-[10px] text-slate-400">
-                        {chat.last_message_time ? formatTime(chat.last_message_time) : ""}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <button
+            onClick={() => toast.success("All messages acknowledged")}
+            className="px-4 py-2 bg-[#0055FE] text-white font-semibold rounded-lg text-sm hover:bg-[#0047D1] transition-colors shadow-md shadow-blue-500/10"
+          >
+            Acknowledge
+          </button>
         </div>
 
-        {/* RIGHT AREA (Chat Window) */}
-        <div className={cn(
-          "flex-1 flex flex-col relative bg-white h-full",
-          !selectedChat ? "hidden md:flex" : "flex"
-        )}>
-          {selectedChat ? (
-            <>
-              {/* Header */}
-              <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setSelectedChat(null)} className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-full">
-                    <ArrowLeft size={20} />
-                  </button>
-                  <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center text-[#0055FE] font-bold">
-                    {selectedChat.table_name.substring(0, 2)}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-sm">{selectedChat.table_name}</h3>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                      <span className="text-xs text-slate-500">Online</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 relative">
-                  {/* Dropdown Menu */}
-                  <div className="relative group">
-                    <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors focus:outline-none">
-                      <MoreVertical size={18} />
-                    </button>
-                    {/* Dropdown Content */}
-                    <div className="absolute right-0 mt-2 w-36 bg-white border border-slate-100 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                      <button
-                        onClick={async () => {
-                          if (!selectedChat) return;
-                          if (window.confirm("Are you sure you want to clear this chat history?")) {
-                            try {
-                              await axiosInstance.post('/message/chat/clear-chat/', { device_id: selectedChat.id });
-                              setMessages([]); // Clear locally
-                              toast.success("Chat history cleared");
-                            } catch (err) {
-                              console.error(err);
-                              toast.error("Failed to clear chat");
-                            }
-                          }
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg block"
-                      >
-                        Clear Chat
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        {/* CHAT INTERFACE */}
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex overflow-hidden relative">
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50" ref={scrollRef}>
-                {messages.map((msg, idx) => {
-                  const isCustomer = msg.is_from_device;
-                  return (
-                    <div key={idx} className={cn("flex w-full", isCustomer ? "justify-start" : "justify-end")}>
-                      <div className={cn(
-                        "max-w-[70%] rounded-2xl p-4 text-sm relative shadow-sm",
-                        isCustomer
-                          ? "bg-white text-slate-800 rounded-tl-none border border-slate-100"
-                          : "bg-[#0055FE] text-white rounded-tr-none"
-                      )}>
-                        <p>{msg.message}</p>
-                        <p className={cn(
-                          "text-[10px] mt-1 text-right",
-                          isCustomer ? "text-slate-400" : "text-blue-200"
-                        )}>
-                          {formatTime(msg.timestamp)}
-                        </p>
+          {/* LEFT SIDEBAR (Chat List) */}
+          <div className={cn(
+            "w-full md:w-80 border-r border-slate-200 flex flex-col bg-slate-50 h-full absolute md:relative z-10",
+            selectedChat ? "hidden md:flex" : "flex"
+          )}>
+            <div className="p-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-900 mb-3">Messages</h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Search tables..."
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-[#0055FE]"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {filteredChats.map(chat => {
+                const isActive = selectedChat?.id === chat.id;
+                return (
+                  <button
+                    key={chat.id}
+                    onClick={() => setSelectedChat(chat)}
+                    className={cn(
+                      "w-full p-3 flex items-center gap-3 transition-colors text-left relative overflow-hidden rounded-r-lg", // Modified rounded
+                      isActive ? "bg-[#0055FE]/5 border-l-2 border-l-[#0055FE]" : "hover:bg-slate-100 border-l-2 border-transparent"
+                    )}
+                  >
+
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
+                      isActive ? "bg-blue-50 text-[#0055FE]" : "bg-slate-200 text-slate-600"
+                    )}>
+                      {chat.table_name.substring(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className={cn("text-xs font-bold truncate", isActive ? "text-[#0055FE]" : "text-slate-900")}>
+                          {chat.table_name}
+                        </span>
+                        {/* Unread Badge */}
+                        {!!chat.unread_count && chat.unread_count > 0 && (
+                          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                            {chat.unread_count}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] text-slate-500 truncate">Tap to view conversation</p>
+                        <span className="text-[10px] text-slate-400">
+                          {chat.last_message_time ? formatTime(chat.last_message_time) : ""}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Input Area */}
-              <div className="p-4 border-t border-slate-200 bg-white">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Type your message..."
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 transition-all"
-                    value={inputText}
-                    onChange={e => setInputText(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                  />
-                  <button
-                    onClick={handleSend}
-                    disabled={!inputText.trim()}
-                    className="bg-[#0055FE] hover:bg-[#0047D1] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 rounded-lg flex items-center justify-center transition-colors"
-                  >
-                    <Send size={18} />
                   </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-slate-50/30">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <Search size={32} className="text-slate-300" />
-              </div>
-              <h3 className="text-slate-900 font-semibold mb-1">No Chat Selected</h3>
-              <p className="text-sm">Select a table from the sidebar to start messaging.</p>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
 
+          {/* RIGHT AREA (Chat Window) */}
+          <div className={cn(
+            "flex-1 flex flex-col relative bg-white h-full",
+            !selectedChat ? "hidden md:flex" : "flex"
+          )}>
+            {selectedChat ? (
+              <>
+                {/* Header */}
+                <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setSelectedChat(null)} className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-full">
+                      <ArrowLeft size={20} />
+                    </button>
+                    <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center text-[#0055FE] font-bold">
+                      {selectedChat.table_name.substring(0, 2)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">{selectedChat.table_name}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        <span className="text-xs text-slate-500">Online</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 relative">
+                    {/* Dropdown Menu */}
+                    <div className="relative group">
+                      <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors focus:outline-none">
+                        <MoreVertical size={18} />
+                      </button>
+                      {/* Dropdown Content */}
+                      <div className="absolute right-0 mt-2 w-36 bg-white border border-slate-100 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                        <button
+                          onClick={() => setShowClearChatModal(true)}
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg block"
+                        >
+                          Clear Chat
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50" ref={scrollRef}>
+                  {messages.map((msg, idx) => {
+                    const isCustomer = msg.is_from_device;
+                    return (
+                      <div key={idx} className={cn("flex w-full", isCustomer ? "justify-start" : "justify-end")}>
+                        <div className={cn(
+                          "max-w-[70%] rounded-2xl p-4 text-sm relative shadow-sm",
+                          isCustomer
+                            ? "bg-white text-slate-800 rounded-tl-none border border-slate-100"
+                            : "bg-[#0055FE] text-white rounded-tr-none"
+                        )}>
+                          <p>{msg.message}</p>
+                          <p className={cn(
+                            "text-[10px] mt-1 text-right",
+                            isCustomer ? "text-slate-400" : "text-blue-200"
+                          )}>
+                            {formatTime(msg.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Input Area */}
+                <div className="p-4 border-t border-slate-200 bg-white">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Type your message..."
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 transition-all"
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSend()}
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={!inputText.trim()}
+                      className="bg-[#0055FE] hover:bg-[#0047D1] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 rounded-lg flex items-center justify-center transition-colors"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-slate-50/30">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                  <Search size={32} className="text-slate-300" />
+                </div>
+                <h3 className="text-slate-900 font-semibold mb-1">No Chat Selected</h3>
+                <p className="text-sm">Select a table from the sidebar to start messaging.</p>
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
-    </div>
+
+      {/* Clear Chat Confirmation Modal */}
+      {
+        showClearChatModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-200">
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Clear Chat History</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Are you sure you want to clear all messages for <strong>{selectedChat?.table_name || 'this table'}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowClearChatModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedChat) return;
+                    try {
+                      await axiosInstance.post('/message/chat/clear-chat/', { device_id: selectedChat.id });
+                      setMessages([]); // Clear locally
+                      toast.success("Chat history cleared");
+                    } catch (err) {
+                      console.error(err);
+                      toast.error("Failed to clear chat");
+                    } finally {
+                      setShowClearChatModal(false);
+                    }
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                >
+                  Clear Chat
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </>
   );
 };
 

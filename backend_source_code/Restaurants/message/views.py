@@ -330,3 +330,49 @@ class MarkAllReadView(APIView):
             import traceback
             traceback.print_exc()
             return Response({'status': 'error_handled', 'error': str(e), 'count': 0}, status=200)
+
+
+class ClearChatView(APIView):
+    """
+    Authenticated endpoint for clearing chat history for a specific device/table.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            device_id = request.data.get('device_id') or request.query_params.get('device_id')
+            user = request.user
+            
+            if not device_id:
+                return Response({'error': 'device_id required'}, status=400)
+            
+            # Identify restaurant(s) for the user to ensure permission
+            restaurant_ids = []
+            if getattr(user, 'role', '') == 'owner':
+                if hasattr(user, 'restaurants') and user.restaurants.exists():
+                    restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+            elif getattr(user, 'role', '') in ['staff', 'chef', 'manager']:
+                from accounts.models import ChefStaff
+                cs = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if cs:
+                    restaurant_ids = [cs.restaurant_id]
+                else:
+                    from staff.models import Staff
+                    ls = Staff.objects.filter(user=user).first()
+                    if ls and ls.restaurant:
+                        restaurant_ids = [ls.restaurant.id]
+            
+            if not restaurant_ids:
+                return Response({'error': 'You do not have permission to clear this chat.'}, status=403)
+            
+            # Delete messages for this device in user's restaurant(s)
+            deleted_count, _ = ChatMessage.objects.filter(
+                device_id=device_id,
+                restaurant_id__in=restaurant_ids
+            ).delete()
+            
+            return Response({'status': 'chat cleared', 'count': deleted_count})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
