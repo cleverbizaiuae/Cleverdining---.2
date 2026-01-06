@@ -753,7 +753,7 @@ const ScreenRestaurantDashboard = () => {
               onChange={e => showEditSubCategory ? setEditingSubCategory({ ...editingSubCategory, parent_category: e.target.value }) : setSubCatFormData({ ...subCatFormData, parent_category: e.target.value })}
             >
               <option value="">Select Parent Category</option>
-              {categories.map((cat: any) => (
+              {categories.filter((cat: any) => !cat.parent_category).map((cat: any) => (
                 <option key={cat.id} value={cat.id}>{cat.Category_name}</option>
               ))}
             </select>
