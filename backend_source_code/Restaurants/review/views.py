@@ -21,20 +21,35 @@ channel_layer = get_channel_layer()
 class CreateReviewAPIView(generics.CreateAPIView):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
-    permission_classes = [permissions.IsAuthenticated,IsCustomerRole]
+    permission_classes = [permissions.AllowAny]  # Allow guest reviews
 
     def perform_create(self, serializer):
+        from device.models import GuestSession
+        
+        # Try to get device from authenticated user first
+        device = None
         user = self.request.user
-
-        # Get the device
-        device = user.devices.first()
+        
+        if user.is_authenticated:
+            device = user.devices.first()
+        
+        # If no authenticated user or no device, try guest session
         if not device:
-            raise ValidationError("User is not linked to any device.")
+            session_token = self.request.headers.get('X-Guest-Session-Token')
+            if session_token:
+                try:
+                    session = GuestSession.objects.get(session_token=session_token, is_active=True)
+                    device = session.device
+                except GuestSession.DoesNotExist:
+                    pass
+        
+        if not device:
+            raise ValidationError("Cannot determine device for this review. Please try again.")
 
         # Validate order belongs to this device and hasn't been reviewed
         order = serializer.validated_data['order']
         if order.device != device:
-            raise ValidationError("This order is not linked to your device.")
+            raise ValidationError("This order is not linked to your session.")
 
         if hasattr(order, 'review'):
             raise ValidationError("This order already has a review.")

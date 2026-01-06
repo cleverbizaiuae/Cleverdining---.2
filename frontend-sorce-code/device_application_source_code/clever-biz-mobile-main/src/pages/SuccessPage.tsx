@@ -50,12 +50,15 @@ const SuccessPage = () => {
 
     setSubmitting(true);
     try {
+      const guestSessionToken = localStorage.getItem("guest_session_token");
       await axiosInstance.post('/api/reviews/create/', {
         order: parseInt(orderId),
         rating: rating,
         guest_no: 1,
         name: name || undefined,
         comment: comment || undefined
+      }, {
+        headers: guestSessionToken ? { 'X-Guest-Session-Token': guestSessionToken } : {}
       });
       toast.success("Thanks for your feedback!");
       setSubmitted(true);
