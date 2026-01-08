@@ -218,7 +218,7 @@ const ScreenRestaurantDashboard = () => {
   const chartLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const chartValues = analytics?.current_year ? Object.values(analytics.current_year) as number[] : Array(12).fill(0);
 
-  const ImageUploaderWithAI = ({ label, currentImage, onImageSelected }: any) => {
+  const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSelected }: any) => {
     const [mode, setMode] = useState<'upload' | 'ai'>('upload');
     const [prompt, setPrompt] = useState('');
     const [generating, setGenerating] = useState(false);
@@ -245,6 +245,11 @@ const ScreenRestaurantDashboard = () => {
       }
     };
 
+    // Preview image: new file > generated > existing URL
+    const previewUrl = currentImage
+      ? (typeof currentImage === 'string' ? currentImage : URL.createObjectURL(currentImage))
+      : (generatedPreview || existingImageUrl || null);
+
     return (
       <div>
         <div className="flex justify-between items-center mb-1">
@@ -256,7 +261,7 @@ const ScreenRestaurantDashboard = () => {
         </div>
 
         {mode === 'upload' ? (
-          <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
+          <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
             <input
               type="file"
               accept="image/*"
@@ -266,16 +271,25 @@ const ScreenRestaurantDashboard = () => {
                 onImageSelected(file);
               }}
             />
-            <div className="mb-2 text-slate-400"><Upload size={24} /></div>
-            <p className="text-sm font-medium text-slate-700">Upload a File</p>
-            <p className="text-xs text-slate-500">Drag and drop or browse</p>
-            {currentImage && <p className="mt-2 text-xs text-green-600 font-medium">{currentImage.name || "Image Selected"}</p>}
+            {previewUrl ? (
+              <div className="w-full">
+                <img src={previewUrl} alt="Preview" className="w-full h-24 object-cover rounded-md border border-slate-200 mb-2" />
+                <p className="text-xs text-green-600 font-medium">{currentImage?.name || "Current Image"}</p>
+                <p className="text-[10px] text-slate-400">Click to replace</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-2 text-slate-400"><Upload size={24} /></div>
+                <p className="text-sm font-medium text-slate-700">Upload a File</p>
+                <p className="text-xs text-slate-500">Drag and drop or browse</p>
+              </>
+            )}
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+          <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
             <textarea
-              className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-20 outline-none focus:border-[#0055FE]"
-              placeholder="Describe the image (e.g., 'A delicious pepperoni pizza on a wooden table')..."
+              className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-16 outline-none focus:border-[#0055FE]"
+              placeholder="Describe the image (e.g., 'A delicious pepperoni pizza')..."
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
             />
@@ -288,10 +302,9 @@ const ScreenRestaurantDashboard = () => {
               Generate Image
             </button>
             {generatedPreview && (
-              <div className="mt-3">
-                <p className="text-[10px] text-slate-500 mb-1">Preview:</p>
-                <img src={generatedPreview} alt="AI Generated" className="w-full h-32 object-cover rounded-md border border-slate-200" />
-                <p className="text-[10px] text-green-600 mt-1 text-center font-medium">Image selected automatically</p>
+              <div className="mt-2">
+                <img src={generatedPreview} alt="AI Generated" className="w-full h-24 object-cover rounded-md border border-slate-200" />
+                <p className="text-[10px] text-green-600 mt-1 text-center font-medium">Image selected</p>
               </div>
             )}
           </div>
@@ -881,6 +894,7 @@ const ScreenRestaurantDashboard = () => {
           <ImageUploaderWithAI
             label="Item Image"
             currentImage={itemFormData.image1}
+            existingImageUrl={editingItem?.image1}
             onImageSelected={(file: File) => setItemFormData({ ...itemFormData, image1: file })}
           />
 
