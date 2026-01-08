@@ -151,7 +151,7 @@ export default function CheckoutPage() {
   const finalTotal = (subtotal + tipAmount).toFixed(2);
 
   return (
-    <div className="p-4 h-full overflow-y-auto pb-24 max-w-lg mx-auto">
+    <div className="p-4 h-full overflow-y-auto pb-8 max-w-lg mx-auto">
       {/* Header with Back Button */}
       <div className="flex items-center justify-between mb-4">
         <button
