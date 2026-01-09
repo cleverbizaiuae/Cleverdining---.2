@@ -57,6 +57,7 @@ const ScreenRestaurantOrderList = () => {
   const [openGatewayModal, setOpenGatewayModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<"stripe" | "razorpay" | "checkout" | "paytabs">("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -504,18 +505,23 @@ const ScreenRestaurantOrderList = () => {
                         >
                           <Eye size={16} />
                         </button>
-                        {/* More Options Dropdown - can be expanded later if needed */}
-                        <div className="relative group">
-                          <button className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors">
+                        {/* More Options Dropdown - Click to open */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenActionMenuId(openActionMenuId === order.id ? null : order.id)}
+                            className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors"
+                          >
                             <MoreHorizontal size={16} />
                           </button>
-                          {/* Simple Hover Menu for Actions */}
-                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 hidden group-hover:block z-10">
-                            {order.status !== 'completed' && (
-                              <button onClick={() => handleStatusChange(order.id, 'completed')} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Close Tab</button>
-                            )}
-                            <button onClick={() => handleStatusChange(order.id, 'cancelled')} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel Order</button>
-                          </div>
+                          {/* Click-based Menu */}
+                          {openActionMenuId === order.id && (
+                            <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 z-10">
+                              {order.status !== 'completed' && (
+                                <button onClick={() => { handleStatusChange(order.id, 'completed'); setOpenActionMenuId(null); }} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Close Tab</button>
+                              )}
+                              <button onClick={() => { handleStatusChange(order.id, 'cancelled'); setOpenActionMenuId(null); }} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel Order</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
