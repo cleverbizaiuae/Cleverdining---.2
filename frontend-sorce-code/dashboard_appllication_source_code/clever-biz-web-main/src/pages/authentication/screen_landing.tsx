@@ -119,9 +119,9 @@ const ScreenLanding = () => {
               </p>
 
               <div className="flex items-center gap-4">
-                <Link to="/register" className="px-8 py-4 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold text-lg shadow-xl shadow-blue-600/20 hover:shadow-blue-600/30 hover:-translate-y-0.5 transition-all duration-300">
+                <a href="https://cleverbiz.ai" target="_blank" rel="noopener noreferrer" className="px-8 py-4 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold text-lg shadow-xl shadow-blue-600/20 hover:shadow-blue-600/30 hover:-translate-y-0.5 transition-all duration-300">
                   Visit Cleverbiz AI Website
-                </Link>
+                </a>
                 <div className="h-full w-[1px] bg-slate-200 mx-2"></div>
                 <SocialContactButtons className="text-slate-400 hover:text-[#0055FE] transition-colors" />
               </div>
