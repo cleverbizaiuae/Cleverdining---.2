@@ -50,16 +50,16 @@ const ScreenSuperAdminLogin = () => {
     };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 font-inter">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 p-4 font-inter">
             {/* Header Section */}
             <div className="flex flex-col items-center mb-8">
                 <img src={logo} alt="CleverBiz AI" className="h-12 w-auto mb-4" /> {/* Adjusted size for full logo */}
-                <h1 className="text-2xl font-bold text-white">Super Admin</h1>
-                <p className="text-sm text-slate-400 mt-1">Sign in to manage restaurants</p>
+                <h1 className="text-2xl font-bold text-slate-900">Super Admin</h1>
+                <p className="text-sm text-slate-500 mt-1">Sign in to manage restaurants</p>
             </div>
 
             {/* Form Card */}
-            <div className="w-full max-w-sm bg-[#1E293B] rounded-2xl border border-slate-700 p-6 shadow-xl">
+            <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 p-6 shadow-xl">
 
                 {/* Error Alert */}
                 {error && (
@@ -73,7 +73,7 @@ const ScreenSuperAdminLogin = () => {
 
                     {/* Email Input */}
                     <div className="space-y-1.5">
-                        <label className="block text-xs text-slate-400">Email</label>
+                        <label className="block text-xs text-slate-700 font-medium">Email</label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                             <input
@@ -82,14 +82,14 @@ const ScreenSuperAdminLogin = () => {
                                 placeholder="admin@cleverbiz.ai"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-10 pl-10 pr-4 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder:text-slate-500 text-sm focus:border-[#0055FE] focus:ring-1 focus:ring-[#0055FE] outline-none transition-all"
+                                className="w-full h-10 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 text-sm focus:border-[#0055FE] focus:ring-1 focus:ring-[#0055FE] outline-none transition-all"
                             />
                         </div>
                     </div>
 
                     {/* Password Input */}
                     <div className="space-y-1.5">
-                        <label className="block text-xs text-slate-400">Password</label>
+                        <label className="block text-xs text-slate-700 font-medium">Password</label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                             <input
@@ -98,12 +98,12 @@ const ScreenSuperAdminLogin = () => {
                                 placeholder="Enter password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full h-10 pl-10 pr-10 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder:text-slate-500 text-sm focus:border-[#0055FE] focus:ring-1 focus:ring-[#0055FE] outline-none transition-all"
+                                className="w-full h-10 pl-10 pr-10 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 text-sm focus:border-[#0055FE] focus:ring-1 focus:ring-[#0055FE] outline-none transition-all"
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
                             >
                                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                             </button>
@@ -124,7 +124,7 @@ const ScreenSuperAdminLogin = () => {
             </div>
 
             {/* Footer */}
-            <p className="mt-8 text-xs text-slate-500 text-center">
+            <p className="mt-8 text-xs text-slate-400 text-center">
                 Powered by CleverBiz AI
             </p>
         </div>
