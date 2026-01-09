@@ -1,8 +1,6 @@
 import { Order } from "./order-types";
 import { cn } from "clsx-for-tailwind";
 import { Check, ChefHat, Clock, Utensils, Receipt } from "lucide-react";
-import { useState } from "react";
-import { ReviewModal } from "./review-modal";
 
 interface OrderCardProps {
     order: Order;
@@ -10,7 +8,6 @@ interface OrderCardProps {
 }
 
 export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
-    const [isReviewOpen, setIsReviewOpen] = useState(false);
 
     // Normalize items
     const items = order.order_items || order.items || [];
@@ -145,24 +142,8 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                             Pay Now
                         </button>
                     )}
-
-                    <button
-                        onClick={() => setIsReviewOpen(true)}
-                        className="flex-1 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold text-sm hover:bg-blue-100 transition-colors"
-                    >
-                        Review
-                    </button>
                 </div>
             </div>
-
-            <ReviewModal
-                isOpen={isReviewOpen}
-                close={() => setIsReviewOpen(false)}
-                onSubmit={(rating, comment) => {
-                    console.log("Review submitted:", { rating, comment, orderId: order.id });
-                    // Implement actual submission logic here
-                }}
-            />
         </>
     );
 };

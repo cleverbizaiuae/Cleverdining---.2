@@ -90,6 +90,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             message = data.get('message')
+            message_type = data.get('type', 'message')  # Capture message type (e.g., 'alert')
             if not message: return
             
             # Prepare Payload
@@ -157,6 +158,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 {
                     'type': 'chat_message',
                     'message': message,
+                    'message_type': message_type,  # Include alert type
                     'sender': sender_name,
                     'is_from_device': is_from_device,
                     'device_id': device_id, # Crucial for client-side filtering
@@ -171,6 +173,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 {
                     'type': 'chat_message',
                     'message': message,
+                    'message_type': message_type,  # Include alert type
                     'sender': sender_name,
                     'is_from_device': is_from_device,
                     'device_id': device_id,
@@ -753,6 +756,7 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'chat_message',
             'message': event['message'],
+            'message_type': event.get('message_type', 'message'),  # Include alert type
             'sender': event['sender'],
             'device_id': event['device_id'],
             'is_from_device': event['is_from_device'],

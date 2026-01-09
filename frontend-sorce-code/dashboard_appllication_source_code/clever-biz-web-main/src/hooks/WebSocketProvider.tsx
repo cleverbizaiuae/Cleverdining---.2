@@ -124,6 +124,41 @@ const WebSocketProvider = ({ children }) => {
           });
         }
 
+        // Handle Assistance Request Alerts from Tables
+        if (parsedMessage.type === "chat_message" && parsedMessage.message_type === "alert") {
+          // Play Alert Sound
+          try {
+            const audio = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
+            audio.play().catch(e => console.log("Audio play failed", e));
+          } catch (e) { console.log(e); }
+
+          // Extract table info from message
+          const messageText = parsedMessage.message || "A table needs assistance";
+
+          // Show Prominent Toast
+          toast((t) => (
+            <div onClick={() => {
+              toast.dismiss(t.id);
+              window.location.href = "/dashboard/messages";
+            }} className="cursor-pointer">
+              <p className="font-bold text-lg">🔔 Assistance Requested!</p>
+              <p className="text-sm">{messageText}</p>
+              <p className="text-xs text-gray-500 mt-1">Click to respond</p>
+            </div>
+          ), {
+            duration: 30000,
+            position: 'top-center',
+            style: {
+              border: '3px solid #EF4444',
+              padding: '20px',
+              color: '#991B1B',
+              background: '#FEE2E2',
+              fontSize: '16px',
+              boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)'
+            },
+          });
+        }
+
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
       }
