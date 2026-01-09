@@ -54,7 +54,7 @@ const CategoriesTable = ({ categories, setCategories }) => {
           </thead>
           <tbody>
             {categories
-              .filter((category) => !category.parent_category)
+              .filter((category) => !category.parent_category && category.parent_category !== 0)
               .map((category) => (
                 <tr
                   key={category.id}
