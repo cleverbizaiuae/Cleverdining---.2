@@ -20,7 +20,7 @@ import ScreenAdminRegister from "./pages/authentication/screen_admin_register";
 import ScreenOtpVerification from "./pages/authentication/screen_otp_verification";
 import ScreenPassword from "./pages/authentication/screen_password";
 import ScreenPrivacy from "./pages/authentication/screen_privacy";
-import ScreenRegister from "./pages/authentication/screen_register";
+
 import ScreenTermsCondition from "./pages/authentication/screen_terms";
 import ChefLayout from "./pages/chef/layout";
 import ScreenChefChat from "./pages/chef/screen_chef_chat";
@@ -87,7 +87,7 @@ function App() {
       {/* Entry screens */}
       <Route element={<Layout />}>
 
-        <Route path="register" element={<ScreenRegister />} />
+
         <Route path="verify-email" element={<ScreenEmailVerification />} />
         <Route path="create-password" element={<ScreenPassword />} />
         <Route path="verify-otp" element={<ScreenOtpVerification />} />
