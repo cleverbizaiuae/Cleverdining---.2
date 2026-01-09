@@ -391,14 +391,30 @@ class MyOrdersAPIView(generics.ListAPIView):
 
 class MySingleOrderAPIView(generics.RetrieveAPIView):
     serializer_class = OrderDetailSerializer
-    permission_classes = [IsAuthenticated,IsCustomerRole]
+    permission_classes = [permissions.AllowAny]
     lookup_field = 'pk' 
 
     def get_queryset(self):
-        return Order.objects.filter(
-            device__user=self.request.user,
-            status__in=['pending', 'preparing', 'served']
-        )
+        user = self.request.user
+        if user.is_authenticated:
+            return Order.objects.filter(
+                device__user=self.request.user,
+                status__in=['pending', 'preparing', 'served']
+            )
+
+        # Guest Session Logic
+        session_token = self.request.headers.get('X-Guest-Session-Token')
+        if session_token:
+            try:
+                session = GuestSession.objects.get(session_token=session_token, is_active=True)
+                return Order.objects.filter(
+                    guest_session=session,
+                    status__in=['pending', 'preparing', 'served']
+                )
+            except GuestSession.DoesNotExist:
+                return Order.objects.none()
+        
+        return Order.objects.none()
 
 
 
