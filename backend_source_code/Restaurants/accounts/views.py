@@ -30,6 +30,8 @@ from django.contrib.auth import authenticate
 
 logger = logging.getLogger(__name__)
 
+import time
+
 class CreateSuperAdminView(APIView):
     """
     Emergency view to create/reset superadmin credentials on production
@@ -43,26 +45,41 @@ class CreateSuperAdminView(APIView):
             email = 'admin@cleverbiz.ai'
             password = 'password123'
             
-            # Check by username OR email
-            user = User.objects.filter(username=username).first()
-            if not user:
-                user = User.objects.filter(email=email).first()
+            # Find potentially conflicting users
+            email_user = User.objects.filter(email=email).first()
+            username_user = User.objects.filter(username=username).first()
             
-            if user:
-                # User exists (by username or email) -> Update them
-                user.username = username # Ensure username is admin
-                user.email = email
-                user.set_password(password)
-                user.is_superuser = True
-                user.is_staff = True
-                user.is_active = True
-                user.save()
+            target_user = None
+
+            if email_user:
+                # Prioritize the user that already has the correct email
+                target_user = email_user
+                
+                # If 'admin' username is taken by a DIFFERENT user, rename that user to free up the name
+                if username_user and username_user.id != email_user.id:
+                    old_name = username_user.username
+                    new_name = f"{old_name}_backup_{int(time.time())}"
+                    username_user.username = new_name
+                    username_user.save()
+                    logger.warning(f"Renamed conflicting user {old_name} to {new_name}")
+
+            elif username_user:
+                # No one has the email, but 'admin' username exists. Use that user.
+                target_user = username_user
+            
+            if target_user:
+                target_user.username = username
+                target_user.email = email
+                target_user.set_password(password)
+                target_user.is_superuser = True
+                target_user.is_staff = True
+                target_user.is_active = True
+                target_user.save()
                 return Response({
-                    "message": "Admin exists (found by username or email). Updated password and permissions.",
+                    "message": f"Admin exists (id={target_user.id}). Credentials updated. Conflicting users resolved.",
                     "credentials": {"email": email, "password": password}
                 })
             else:
-                # Create entirely new
                 User.objects.create_superuser(username=username, email=email, password=password)
                 return Response({
                     "message": "Successfully created new Super Admin.",
