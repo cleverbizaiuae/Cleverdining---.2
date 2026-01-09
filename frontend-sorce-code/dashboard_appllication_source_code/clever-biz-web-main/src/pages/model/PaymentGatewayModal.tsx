@@ -164,8 +164,8 @@ export default function PaymentGatewayModal({
 
             {/* Modal Panel */}
             <div className="absolute inset-0 flex items-center justify-center p-4">
-                <div className="w-full max-w-md rounded-2xl bg-sidebar/90 backdrop-blur-xl p-6 shadow-2xl border border-white/10">
-                    <h3 className="text-lg font-semibold text-white mb-4">
+                <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         {isUpdate
                             ? `Update ${getProviderName(provider)}`
                             : `Add ${getProviderName(provider)}`}
@@ -173,7 +173,7 @@ export default function PaymentGatewayModal({
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div>
-                            <label className="block text-sm text-gray-300 mb-1">
+                            <label className="block text-sm text-slate-700 mb-1">
                                 {getKeyIdLabel(provider)}
                             </label>
                             <input
@@ -181,12 +181,12 @@ export default function PaymentGatewayModal({
                                 placeholder="..."
                                 {...register("key_id", { required: true })}
                                 disabled={loading}
-                                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
+                                className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 outline-none border border-slate-200 focus:border-[#0055FE]"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm text-gray-300 mb-1">
+                            <label className="block text-sm text-slate-700 mb-1">
                                 {getKeySecretLabel(provider)}
                             </label>
                             <input
@@ -194,7 +194,7 @@ export default function PaymentGatewayModal({
                                 placeholder="..."
                                 {...register("key_secret", { required: true })}
                                 disabled={loading}
-                                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
+                                className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 outline-none border border-slate-200 focus:border-[#0055FE]"
                             />
                         </div>
 
@@ -204,9 +204,9 @@ export default function PaymentGatewayModal({
                                 id="is_active"
                                 {...register("is_active")}
                                 disabled={loading}
-                                className="rounded bg-slate-700 border-slate-600 text-[#0055FE] focus:ring-[#0055FE]"
+                                className="rounded border-slate-200 text-[#0055FE] focus:ring-[#0055FE]"
                             />
-                            <label htmlFor="is_active" className="text-sm text-gray-300">
+                            <label htmlFor="is_active" className="text-sm text-slate-700">
                                 Set as Active Gateway
                             </label>
                         </div>
@@ -217,7 +217,7 @@ export default function PaymentGatewayModal({
                             <button
                                 type="button"
                                 onClick={() => !loading && onClose()}
-                                className="px-4 py-2 border border-white/20 rounded-lg text-white hover:bg-white/5"
+                                className="px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
                                 disabled={loading}
                             >
                                 Cancel

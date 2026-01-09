@@ -116,14 +116,14 @@ export default function StripeConnectModal({
 
       {/* Modal Panel */}
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-2xl bg-sidebar/90 backdrop-blur-xl p-6 shadow-2xl border border-white/10">
-          <h3 className="text-lg font-semibold text-white mb-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">
             {isUpdate ? "Update Stripe Keys" : "Add Stripe Keys"}
           </h3>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-300 mb-1">
+              <label className="block text-sm text-slate-700 mb-1">
                 Stripe Secret Key
               </label>
               <input
@@ -132,12 +132,12 @@ export default function StripeConnectModal({
                 // value={secretkey}
                 {...register("stripe_secret_key")}
                 disabled={loading}
-                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
+                className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 outline-none border border-slate-200 focus:border-[#0055FE]"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">
+              <label className="block text-sm text-slate-700 mb-1">
                 Stripe Publishable Key
               </label>
               <input
@@ -146,7 +146,7 @@ export default function StripeConnectModal({
                 // value={publisher||""}
                 {...register("stripe_publishable_key")}
                 disabled={loading}
-                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
+                className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 outline-none border border-slate-200 focus:border-[#0055FE]"
               />
             </div>
 
@@ -156,7 +156,7 @@ export default function StripeConnectModal({
               <button
                 type="button"
                 onClick={() => !loading && onClose()}
-                className="px-4 py-2 border border-white/20 rounded-lg text-white"
+                className="px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
                 disabled={loading}
               >
                 Cancel
