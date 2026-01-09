@@ -595,8 +595,8 @@ const ScreenRestaurantDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {categories.length > 0 ? (
-                  categories.map((cat: any) => (
+                {categories.filter((c: any) => c.parent_category === null || c.parent_category === undefined).length > 0 ? (
+                  categories.filter((c: any) => c.parent_category === null || c.parent_category === undefined).map((cat: any) => (
                     <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
