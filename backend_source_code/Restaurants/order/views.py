@@ -222,7 +222,14 @@ class ConfirmCashPaymentAPIView(APIView):
                 # Check if payment already exists for this order
                 existing_payment = Payment.objects.filter(order=o).first()
                 if existing_payment:
-                    logger.info(f"Payment already exists for order {o.id}: {existing_payment.id}")
+                    # Update existing payment status to completed
+                    if existing_payment.status != 'completed':
+                        existing_payment.status = 'completed'
+                        existing_payment.confirmed_at = timezone.now()
+                        existing_payment.save()
+                        logger.info(f"Payment {existing_payment.id} updated to completed for order {o.id}")
+                    else:
+                        logger.info(f"Payment already completed for order {o.id}: {existing_payment.id}")
                     payment_created = True
                 else:
                     payment = Payment.objects.create(
