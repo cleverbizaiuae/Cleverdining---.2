@@ -83,7 +83,10 @@ export default function CheckoutPage() {
         })
         .catch(err => console.error("Failed to fetch orders", err));
     } else if (orderId) {
-      axiosInstance.get(`/api/customer/uncomplete/orders/${orderId}/`)
+      const guestToken = localStorage.getItem("guest_session_token");
+      axiosInstance.get(`/api/customer/uncomplete/orders/${orderId}/`, {
+        headers: guestToken ? { "X-Guest-Session-Token": guestToken } : {}
+      })
         .then(res => {
           setOrderData(res.data);
         })
