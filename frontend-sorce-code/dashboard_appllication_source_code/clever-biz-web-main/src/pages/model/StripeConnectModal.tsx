@@ -91,7 +91,7 @@ export default function StripeConnectModal({
         }
       } else {
         resp = await axiosInstance.post(`/owners/stripe/`, payload);
-        if(resp.status === 201) {
+        if (resp.status === 201) {
           toast.success("Stripe added successfully");
         }
       }
@@ -132,7 +132,7 @@ export default function StripeConnectModal({
                 // value={secretkey}
                 {...register("stripe_secret_key")}
                 disabled={loading}
-                className="w-full rounded-lg bg-[#201C3F] text-white px-3 py-2.5 outline-none"
+                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
               />
             </div>
 
@@ -146,7 +146,7 @@ export default function StripeConnectModal({
                 // value={publisher||""}
                 {...register("stripe_publishable_key")}
                 disabled={loading}
-                className="w-full rounded-lg bg-[#201C3F] text-white px-3 py-2.5 outline-none"
+                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
               />
             </div>
 
@@ -164,7 +164,7 @@ export default function StripeConnectModal({
               <button
                 type="submit"
                 disabled={loading}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white"
+                className="px-4 py-2 rounded-lg bg-[#0055FE] hover:bg-[#0047D1] text-white"
               >
                 {loading ? "Saving..." : isUpdate ? "Update Keys" : "Add Keys"}
               </button>

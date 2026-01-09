@@ -181,7 +181,7 @@ export default function PaymentGatewayModal({
                                 placeholder="..."
                                 {...register("key_id", { required: true })}
                                 disabled={loading}
-                                className="w-full rounded-lg bg-[#201C3F] text-white px-3 py-2.5 outline-none border border-white/10 focus:border-indigo-500"
+                                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
                             />
                         </div>
 
@@ -194,7 +194,7 @@ export default function PaymentGatewayModal({
                                 placeholder="..."
                                 {...register("key_secret", { required: true })}
                                 disabled={loading}
-                                className="w-full rounded-lg bg-[#201C3F] text-white px-3 py-2.5 outline-none border border-white/10 focus:border-indigo-500"
+                                className="w-full rounded-lg bg-slate-700 text-white px-3 py-2.5 outline-none border border-slate-600 focus:border-[#0055FE]"
                             />
                         </div>
 
@@ -204,7 +204,7 @@ export default function PaymentGatewayModal({
                                 id="is_active"
                                 {...register("is_active")}
                                 disabled={loading}
-                                className="rounded bg-[#201C3F] border-white/10 text-indigo-600 focus:ring-indigo-500"
+                                className="rounded bg-slate-700 border-slate-600 text-[#0055FE] focus:ring-[#0055FE]"
                             />
                             <label htmlFor="is_active" className="text-sm text-gray-300">
                                 Set as Active Gateway
@@ -225,7 +225,7 @@ export default function PaymentGatewayModal({
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg shadow-indigo-600/20 hover:shadow-xl hover:brightness-110"
+                                className="px-4 py-2 rounded-lg bg-[#0055FE] hover:bg-[#0047D1] text-white shadow-lg shadow-[#0055FE]/20 hover:shadow-xl"
                             >
                                 {loading ? "Saving..." : "Save"}
                             </button>
