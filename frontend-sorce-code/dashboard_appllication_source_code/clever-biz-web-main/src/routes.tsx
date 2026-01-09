@@ -78,11 +78,12 @@ function App() {
       <Route path="/superadmin" element={<SuperAdminLayout />}>
         <Route index element={<ScreenSuperAdminDashboard />} />
         <Route path="management" element={<ScreenSuperAdminManagement />} />
+        <Route path="register-restaurant" element={<ScreenAdminRegister />} />
       </Route>
 
       <Route path="login" element={<ScreenAdminLogin />} />
       <Route path="adminlogin" element={<ScreenAdminLogin />} />
-      <Route path="adminregister" element={<ScreenAdminRegister />} />
+      {/* <Route path="adminregister" element={<ScreenAdminRegister />} />  <-- Removed public access */}
 
       {/* Entry screens */}
       <Route element={<Layout />}>

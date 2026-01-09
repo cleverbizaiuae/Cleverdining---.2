@@ -223,9 +223,14 @@ const ScreenAdminLogin = () => {
                     <div className="mt-8 text-center">
                         <p className="text-xs text-slate-500">
                             Don&apos;t have an account?{" "}
-                            <Link to="/adminregister" className="text-[#0055FE] font-medium hover:underline">
+                            <a
+                                href="https://wa.me/971503163378"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[#0055FE] font-medium hover:underline"
+                            >
                                 Contact admin
-                            </Link>
+                            </a>
                         </p>
                     </div>
 

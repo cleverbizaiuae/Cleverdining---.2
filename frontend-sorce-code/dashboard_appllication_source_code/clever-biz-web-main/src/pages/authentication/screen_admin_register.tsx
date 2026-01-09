@@ -1,19 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router";
 import { Store, MapPin, Upload, Phone as PhoneIcon, Lock, Loader2, User, Eye, EyeOff, CheckCircle } from "lucide-react";
 import logo from "../../assets/cleverbiz_full_logo.png";
 import registerBg from "../../assets/register-bg.jpg";
 import toast from "react-hot-toast";
+import axiosInstance from "../../lib/axios";
 
 const ScreenAdminRegister = () => {
     const navigate = useNavigate();
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-
-    // Gate State
-    const [accessCode, setAccessCode] = useState("");
-    const [accessError, setAccessError] = useState(""); // Spec requirement
 
     // Registration State
     const [formData, setFormData] = useState({
@@ -26,27 +23,30 @@ const ScreenAdminRegister = () => {
         logo: null as File | null,
         email: "",
         password: "",
-        // confirmPassword: "", // Spec implies single, logic can be simple
     });
 
-    // Access Code Logic
-    const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (!/^\d*$/.test(value)) return;
-        if (value.length > 4) return;
-        setAccessCode(value);
-        if (accessError) setAccessError(""); // Clear error on retry
-    };
-
-    const verifyCode = () => {
-        if (accessCode === "2468") {
-            setIsUnlocked(true);
+    // Role Verification
+    useEffect(() => {
+        const userInfo = localStorage.getItem("userInfo");
+        if (userInfo) {
+            try {
+                const user = JSON.parse(userInfo);
+                // Check for Super Admin role
+                if (user.is_superuser || user.role === "super_admin") {
+                    setIsUnlocked(true);
+                } else {
+                    toast.error("Unauthorized access.");
+                    navigate("/");
+                }
+            } catch (e) {
+                console.error("Error parsing user info", e);
+                navigate("/adminlogin");
+            }
         } else {
-            setAccessError("Invalid access code. Please try again.");
-            toast.error("Invalid access code. Please try again.");
-            // Don't clear code per spec ("Input remains populated")
+            toast.error("Please login as Super Admin.");
+            navigate("/superadmin/login");
         }
-    };
+    }, [navigate]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -56,85 +56,30 @@ const ScreenAdminRegister = () => {
         e.preventDefault();
         setIsLoading(true);
 
-        // Simulated Network Request
-        setTimeout(() => {
+        try {
+            await axiosInstance.post('/restaurant/create/', {
+                name: formData.restaurantName,
+                owner_name: formData.customerName,
+                email: formData.email,
+                password: formData.password,
+                phone_number: formData.phoneNumber,
+                address: formData.location,
+                table_count: formData.numberOfTables,
+                payment_processor: formData.paymentProcessor
+                // Note: File upload for logo typically requires FormData, 
+                // but respecting current JSON structure unless backend explicitly needs multipart/form-data.
+            });
+
+            toast.success("Restaurant registered successfully!");
+            navigate("/superadmin/management");
+        } catch (error: any) {
+            console.error("Registration failed:", error);
+            const msg = error.response?.data?.detail || "Registration failed.";
+            toast.error(msg);
+        } finally {
             setIsLoading(false);
-            // navigate("/admindashboard");
-            // The prompt says "Redirect to /admindashboard regardless of what data they entered"
-            // But usually admin dashboard requires login.
-            // Since this is a "Simulated" demo flow, maybe directly to dashboard is intended?
-            // "The user is automatically redirected to /admindashboard"
-            // I will follow the instruction.
-
-            // Note: In a real app, we'd log them in. 
-            // Since we can't create a real session without backend, we might hit a 401 on the dashboard if it checks auth.
-            // But I must follow the spec.
-            navigate("/admindashboard");
-            toast.success("Account created successfully (Simulated)");
-        }, 1500);
+        }
     };
-
-    // --- RENDER STEPS ---
-
-    const renderGate = () => (
-        <div className="min-h-screen w-full flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-blue-50 font-inter">
-            <div className="w-full max-w-md bg-white rounded-3xl border border-slate-100 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] p-8 text-center animate-fadeIn">
-                {/* Logo */}
-                <div className="flex justify-center mb-6">
-                    <img
-                        src={logo}
-                        alt="CleverBiz"
-                        className="h-10 w-auto object-contain cursor-pointer hover:opacity-80 transition-opacity duration-200"
-                        onClick={() => navigate('/')}
-                    />
-                </div>
-
-                {/* Lock Icon */}
-                <div className="w-16 h-16 rounded-full bg-[#0055FE]/10 flex items-center justify-center mx-auto mb-4">
-                    <Lock className="w-8 h-8 text-[#0055FE]" />
-                </div>
-
-                {/* Heading */}
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-3">Access Required</h1>
-                <p className="text-sm text-slate-500 font-normal">Enter the access code to register a new account.</p>
-
-                {/* Input */}
-                <div className="mt-8 mb-4 text-left">
-                    <label className="block text-sm font-medium text-slate-900 mb-2">Access Code</label>
-                    <input
-                        type="password"
-                        value={accessCode}
-                        onChange={handleCodeChange}
-                        maxLength={4}
-                        className={`w-full h-12 bg-slate-50 border rounded-lg px-3 text-lg text-center tracking-[0.25em] text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all ${accessError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-[#0055FE]"
-                            }`}
-                        placeholder="Enter 4-digit code"
-                    />
-                    {accessError && (
-                        <p className="text-sm text-red-500 text-center mt-2">{accessError}</p>
-                    )}
-                </div>
-
-                {/* Verify Button */}
-                <button
-                    onClick={verifyCode}
-                    className="w-full h-12 mt-4 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-[0_10px_15px_rgba(0,85,254,0.2)] transition-all flex items-center justify-center"
-                >
-                    Verify Access
-                </button>
-
-                {/* Back Link */}
-                <div className="mt-6">
-                    <button
-                        onClick={() => navigate('/')}
-                        className="text-sm font-medium text-[#0055FE] hover:underline"
-                    >
-                        Back to Home
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
 
     const renderForm = () => (
         <div className="w-full max-w-md mx-auto py-8">
@@ -145,14 +90,14 @@ const ScreenAdminRegister = () => {
                     className="h-10 mx-auto mb-6 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => navigate('/')}
                 />
-                <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Enter your information</h1>
-                <p className="text-base text-slate-500">Create your admin account to get started.</p>
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Register New Restaurant</h1>
+                <p className="text-base text-slate-500">Add a new restaurant to the platform.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Customer Name */}
                 <div className="space-y-2">
-                    <label className="block text-sm font-medium text-slate-900">Customer Name</label>
+                    <label className="block text-sm font-medium text-slate-900">Owner Name</label>
                     <input
                         type="text"
                         name="customerName"
@@ -160,7 +105,7 @@ const ScreenAdminRegister = () => {
                         value={formData.customerName}
                         onChange={handleInputChange}
                         className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
-                        placeholder="Kawsar Hossain"
+                        placeholder="Owner Name"
                     />
                 </div>
 
@@ -300,29 +245,25 @@ const ScreenAdminRegister = () => {
                     </div>
                 </div>
 
-                {/* Sign Up Button */}
+                {/* Submit Button */}
                 <button
                     type="submit"
                     disabled={isLoading}
                     className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-[0_10px_15px_rgba(0,85,254,0.2)] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all text-lg"
                 >
                     {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : null}
-                    {!isLoading && "Sign Up"}
+                    {!isLoading && "Register Restaurant"}
                 </button>
-
-                {/* Login Link */}
-                <div className="text-center pt-2 pb-6">
-                    <span className="text-slate-500 text-sm">Already have an account? </span>
-                    <Link to="/adminlogin" className="text-[#0055FE] font-bold text-sm hover:underline">
-                        Login
-                    </Link>
-                </div>
             </form>
         </div>
     );
 
     if (!isUnlocked) {
-        return renderGate();
+        return (
+            <div className="min-h-screen w-full flex items-center justify-center p-6 bg-slate-50 font-inter">
+                <Loader2 className="w-8 h-8 text-[#0055FE] animate-spin" />
+            </div>
+        );
     }
 
     return (
@@ -344,10 +285,10 @@ const ScreenAdminRegister = () => {
                 {/* Promotional Text */}
                 <div className="absolute bottom-12 left-12 right-12 z-20">
                     <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
-                        Join thousands of restaurants.
+                        Grow your network.
                     </h2>
                     <p className="text-white/80 text-lg">
-                        Start your journey with the most advanced restaurant management OS.
+                        Add more restaurants to the most advanced management OS.
                     </p>
                 </div>
             </div>
