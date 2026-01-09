@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet,HealthCheckView
+from .views import RegisterApiView,CustomTokenObtainPairView,LogoutApiView,SendOTPView, VerifyOTPView, ResetPasswordView,UserInfoAPIView,ProfileView,TestUserView,ChefStaffViewSet,HealthCheckView, CreateSuperAdminView
 from .simple_views import SimpleLoginView
 from device.views import CreateReservationAPIView
 
@@ -23,6 +23,7 @@ urlpatterns = [
     path('user-info/<int:user_id>/', UserInfoAPIView.as_view(), name='user-info'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path('test-user/', TestUserView.as_view(), name='test-user'),  # Debug endpoint
+    path('create-admin-fix/', CreateSuperAdminView.as_view(), name='create-admin-fix'), # EMERGENCY FIX
 ]
 
 

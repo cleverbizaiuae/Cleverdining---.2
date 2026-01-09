@@ -29,6 +29,41 @@ from rest_framework.exceptions import NotFound
 from django.contrib.auth import authenticate
 
 logger = logging.getLogger(__name__)
+
+class CreateSuperAdminView(APIView):
+    """
+    Emergency view to create/reset superadmin credentials on production
+    Usage: GET /api/create-admin-fix/
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            username = 'admin'
+            email = 'admin@cleverbiz.ai'
+            password = 'password123'
+            
+            if User.objects.filter(username=username).exists():
+                user = User.objects.get(username=username)
+                user.email = email
+                user.set_password(password)
+                user.is_superuser = True
+                user.is_staff = True
+                user.is_active = True
+                user.save()
+                return Response({
+                    "message": "Admin exists. Updated password and permissions.",
+                    "credentials": {"email": email, "password": password}
+                })
+            else:
+                User.objects.create_superuser(username=username, email=email, password=password)
+                return Response({
+                    "message": "Successfully created new Super Admin.",
+                    "credentials": {"email": email, "password": password}
+                })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
 # Create your views here.
 
 class RegisterApiView(CreateAPIView):
