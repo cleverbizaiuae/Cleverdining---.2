@@ -104,8 +104,11 @@ class PaymentAdminViewSet(ModelViewSet):
         if not rest_ids:
             return Payment.objects.none()
         # Optimized: Use select_related to avoid N+1 queries
+        # EXCLUDE cancelled orders to keep Payments tab clean
         return Payment.objects.filter(
             restaurant_id__in=rest_ids
+        ).exclude(
+            order__status='cancelled'
         ).select_related(
             'order', 'order__device', 'restaurant'
         ).order_by('-created_at')
@@ -128,6 +131,8 @@ class PaymentAdminViewSet(ModelViewSet):
             payment_status='paid'
         ).exclude(
             id__in=orders_with_payments
+        ).exclude(
+            status='cancelled' # Ensure cancelled orders don't appear
         ).select_related('device', 'restaurant').order_by('-updated_time')
         
         return orphaned_orders
