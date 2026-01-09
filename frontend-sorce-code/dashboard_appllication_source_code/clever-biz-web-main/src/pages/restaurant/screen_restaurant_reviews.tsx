@@ -47,7 +47,7 @@ const ReviewDetailModal = ({ isOpen, onClose, review }: { isOpen: boolean, onClo
     setLoadingItems(true);
     try {
       const res = await axiosInstance.get(`/owners/orders/${orderId}/?includeItems=true`);
-      setOrderItems(res.data.items || []);
+      setOrderItems(res.data.order_items || []);
     } catch (error) {
       console.error("Failed to load items", error);
     } finally {

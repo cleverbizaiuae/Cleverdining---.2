@@ -12,11 +12,13 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 class GetReviewSerializer(serializers.ModelSerializer):
     order_id = serializers.IntegerField(source='order.id', read_only=True)
-    device_table = serializers.CharField(source='device.table_name', read_only=True)
+    table_name = serializers.CharField(source='device.table_name', read_only=True)
+    customer_name = serializers.CharField(source='name', read_only=True)
+    created_at = serializers.DateTimeField(source='created_time', read_only=True)
     
     class Meta:
         model = Review
         fields = [
-            'id', 'order_id', 'device_table',
-            'guest_no', 'name', 'rating', 'comment', 'created_time'
+            'id', 'order_id', 'table_name',
+            'guest_no', 'customer_name', 'rating', 'comment', 'created_at'
         ]

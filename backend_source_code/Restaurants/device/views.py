@@ -181,6 +181,17 @@ class CloseTableSessionView(APIView):
                     "message": "Session closed by staff"
                 }
             )
+
+            # Notify Chat Listeners (Mobile Chat + Dashboard Chat View)
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_chat_{restaurant.id}",
+                {
+                    "type": "session_closed",
+                    "session_id": session.id,
+                    "table_id": session.device.id,
+                    "message": "Session closed by staff"
+                }
+            )
         except Exception as e:
             print(f"Warning: Failed to broadcast session_close: {e}")
         

@@ -733,6 +733,13 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
             "order": event["order"]
         }))
 
+    # --- Session Events ---
+    async def session_started(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def session_closed(self, event):
+         await self.send(text_data=json.dumps(event))
+
     # ----------------------------
     # ChefStaff events (NEW)
     # ----------------------------
