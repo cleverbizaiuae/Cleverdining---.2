@@ -130,19 +130,7 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                     </div>
                 </div>
 
-                {/* D. Action Buttons */}
-                <div className="p-5 pt-0 flex gap-3">
-                    {/* Pay Button - Show if UNPAID, regardless of status */}
-                    {(!order.payment_status || order.payment_status === 'unpaid' || order.payment_status === 'pending' || order.payment_status === 'failed') && (
-                        <button
-                            onClick={() => onCheckout(order)}
-                            className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold text-sm hover:bg-green-700 transition-colors shadow-lg shadow-green-200 flex items-center justify-center gap-2"
-                        >
-                            <Receipt size={16} />
-                            Pay Now
-                        </button>
-                    )}
-                </div>
+                {/* D. Action Buttons removed to enforce 'Pay All' flow */}
             </div>
         </>
     );
