@@ -43,8 +43,14 @@ class CreateSuperAdminView(APIView):
             email = 'admin@cleverbiz.ai'
             password = 'password123'
             
-            if User.objects.filter(username=username).exists():
-                user = User.objects.get(username=username)
+            # Check by username OR email
+            user = User.objects.filter(username=username).first()
+            if not user:
+                user = User.objects.filter(email=email).first()
+            
+            if user:
+                # User exists (by username or email) -> Update them
+                user.username = username # Ensure username is admin
                 user.email = email
                 user.set_password(password)
                 user.is_superuser = True
@@ -52,10 +58,11 @@ class CreateSuperAdminView(APIView):
                 user.is_active = True
                 user.save()
                 return Response({
-                    "message": "Admin exists. Updated password and permissions.",
+                    "message": "Admin exists (found by username or email). Updated password and permissions.",
                     "credentials": {"email": email, "password": password}
                 })
             else:
+                # Create entirely new
                 User.objects.create_superuser(username=username, email=email, password=password)
                 return Response({
                     "message": "Successfully created new Super Admin.",
