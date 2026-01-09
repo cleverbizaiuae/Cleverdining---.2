@@ -61,6 +61,12 @@ const ScreenRestaurantOrderList = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const handleClickOutside = () => setOpenActionMenuId(null);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
     // Load Closed Day Timestamp
     const savedClosedDay = localStorage.getItem('closedDayDate');
     if (savedClosedDay) {
@@ -505,17 +511,22 @@ const ScreenRestaurantOrderList = () => {
                         >
                           <Eye size={16} />
                         </button>
-                        {/* More Options Dropdown - Click to open */}
                         <div className="relative">
                           <button
-                            onClick={() => setOpenActionMenuId(openActionMenuId === order.id ? null : order.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(openActionMenuId === order.id ? null : order.id);
+                            }}
                             className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors"
                           >
                             <MoreHorizontal size={16} />
                           </button>
                           {/* Click-based Menu */}
                           {openActionMenuId === order.id && (
-                            <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 z-10">
+                            <div
+                              className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 z-10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {order.status !== 'completed' && (
                                 <button onClick={() => { handleStatusChange(order.id, 'completed'); setOpenActionMenuId(null); }} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Close Tab</button>
                               )}
