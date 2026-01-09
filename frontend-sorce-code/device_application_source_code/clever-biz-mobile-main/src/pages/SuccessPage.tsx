@@ -62,7 +62,10 @@ const SuccessPage = () => {
       });
       toast.success("Thanks for your feedback!");
       setSubmitted(true);
-      cleanupSession();
+      setTimeout(() => {
+        cleanupSession();
+        window.location.href = "https://officialcleverdiningcustomer.netlify.app/scan-table";
+      }, 2000);
     } catch (error: any) {
       console.error("Review failed", error);
       if (error?.response?.status === 401 || error?.response?.status === 403) {
@@ -117,8 +120,8 @@ const SuccessPage = () => {
                   <Star
                     size={32}
                     className={`transition-colors ${(hoverRating || rating) >= i
-                        ? "text-yellow-400 fill-yellow-400 drop-shadow-sm"
-                        : "text-slate-200 fill-slate-50"
+                      ? "text-yellow-400 fill-yellow-400 drop-shadow-sm"
+                      : "text-slate-200 fill-slate-50"
                       }`}
                   />
                 </button>
@@ -170,15 +173,7 @@ const SuccessPage = () => {
             </div>
           )}
 
-          <button
-            onClick={() => {
-              cleanupSession();
-              window.location.href = "/login";
-            }}
-            className="w-full py-3.5 rounded-xl font-bold text-sm text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
-          >
-            Back to Home
-          </button>
+
 
           <p className="text-[10px] text-slate-300 mt-2">Session ends automatically</p>
         </div>
