@@ -60,6 +60,18 @@ class ChatMessageViewSet(ModelViewSet):
                         qs = queryset.filter(device_id=device_id)
                         if restaurant_id:
                             qs = qs.filter(restaurant_id=restaurant_id)
+                        
+                        # Filter by active guest session to only show current conversation
+                        from device.models import GuestSession
+                        active_session = GuestSession.objects.filter(
+                            device_id=device_id, 
+                            is_active=True
+                        ).order_by('-created_at').first()
+                        
+                        if active_session:
+                            # Only show messages from the current session
+                            qs = qs.filter(timestamp__gte=active_session.created_at)
+                        
                         return qs.order_by('timestamp')
                     else:
                         return ChatMessage.objects.none()
