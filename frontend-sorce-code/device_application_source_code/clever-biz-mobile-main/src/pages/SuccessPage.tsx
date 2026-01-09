@@ -78,98 +78,111 @@ const SuccessPage = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 items-center justify-center p-4 sm:p-6 text-center">
+    <div className="flex flex-col h-screen w-full bg-white sm:bg-slate-50 items-center justify-center sm:p-4">
+      {/* 
+        Mobile: Full screen content 
+        Desktop: Card 
+      */}
       <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
+        initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl w-full max-w-sm flex flex-col items-center border border-slate-100"
+        transition={{ duration: 0.4 }}
+        className="w-full h-full sm:h-auto sm:max-w-md bg-white sm:rounded-3xl sm:shadow-xl sm:border sm:border-slate-100 flex flex-col p-6 overflow-y-auto sm:overflow-visible"
       >
-        {/* Success Icon - Blue Theme */}
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4 sm:mb-6">
-          <CheckCircle2 size={36} className="text-blue-600 sm:w-10 sm:h-10" strokeWidth={3} />
-        </div>
+        <div className="flex-1 flex flex-col items-center justify-center min-h-0">
 
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Payment Successful!</h1>
-        <p className="text-slate-500 text-sm sm:text-base mb-4 sm:mb-6 leading-relaxed">
-          Thanks for dining with us today. We hope everything was delicious. See you again soon!
-        </p>
-
-        {/* Rate Your Experience */}
-        <div className="flex flex-col items-center gap-2 mb-4 sm:mb-6 w-full">
-          <p className="text-sm font-bold text-slate-700">Rate your experience</p>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <button
-                key={i}
-                onClick={() => !submitted && setRating(i)}
-                onMouseEnter={() => !submitted && setHoverRating(i)}
-                onMouseLeave={() => setHoverRating(0)}
-                disabled={submitted || submitting}
-                className="transition-transform hover:scale-110 focus:outline-none disabled:cursor-default"
-              >
-                <Star
-                  size={28}
-                  className={`transition-colors sm:w-8 sm:h-8 ${(hoverRating || rating) >= i
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-slate-300 fill-slate-100"
-                    }`}
-                />
-              </button>
-            ))}
+          {/* Success Icon */}
+          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6 shadow-sm animate-bounce-short">
+            <CheckCircle2 size={40} className="text-blue-600" strokeWidth={3} />
           </div>
+
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Payment Successful!</h1>
+          <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[80%] mx-auto">
+            Thanks for dining with us! We hope you enjoyed your meal.
+          </p>
+
+          {/* Rating Section */}
+          <div className="w-full bg-slate-50 rounded-2xl p-4 mb-4 border border-slate-100">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Rate Experience</p>
+            <div className="flex justify-center gap-2 mb-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <button
+                  key={i}
+                  onClick={() => !submitted && setRating(i)}
+                  onMouseEnter={() => !submitted && setHoverRating(i)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  disabled={submitted || submitting}
+                  className="focus:outline-none transition-transform active:scale-90"
+                >
+                  <Star
+                    size={32}
+                    className={`transition-colors ${(hoverRating || rating) >= i
+                        ? "text-yellow-400 fill-yellow-400 drop-shadow-sm"
+                        : "text-slate-200 fill-slate-50"
+                      }`}
+                  />
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-center text-slate-400 font-medium h-4">
+              {rating === 5 ? "Excellent!" : rating === 4 ? "Good" : rating === 3 ? "Okay" : rating > 0 ? "Could be better" : ""}
+            </div>
+          </div>
+
+          {/* Inputs - Show compacted if low space? No, ensure good UX */}
+          {!submitted && (
+            <div className="w-full space-y-3">
+              <input
+                type="text"
+                placeholder="Your Name (Optional)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+              />
+              <textarea
+                placeholder="Any feedback for the chef? (Optional)"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={2} // Reduced rows to save space
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+              />
+            </div>
+          )}
         </div>
 
-        {/* Comment Section */}
-        <div className="w-full space-y-3 mb-4 sm:mb-6">
-          <input
-            type="text"
-            placeholder="Your name (optional)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={submitted}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-          />
-          <textarea
-            placeholder="Share your thoughts... (optional)"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            disabled={submitted}
-            rows={3}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-          />
-        </div>
+        {/* Footer Actions */}
+        <div className="mt-6 space-y-3">
+          {!submitted ? (
+            <button
+              onClick={handleSubmitReview}
+              disabled={submitting || rating === 0}
+              className={`w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all shadow-lg shadow-blue-200
+                ${rating === 0
+                  ? "bg-slate-300 cursor-not-allowed text-slate-50 shadow-none"
+                  : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]"
+                }`}
+            >
+              {submitting ? "Sending..." : "Submit Review"}
+            </button>
+          ) : (
+            <div className="bg-green-50 text-green-700 py-3 rounded-xl font-bold text-sm border border-green-100 animate-in fade-in zoom-in">
+              Review Submitted!
+            </div>
+          )}
 
-        {/* Submit Button - Blue Theme */}
-        {!submitted ? (
           <button
-            onClick={handleSubmitReview}
-            disabled={submitting || rating === 0}
-            className={`w-full py-2.5 sm:py-3 px-6 rounded-xl font-bold text-white transition-all mb-4
-              ${rating === 0
-                ? "bg-slate-300 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]"
-              } disabled:opacity-70`}
+            onClick={() => {
+              cleanupSession();
+              window.location.href = "/login";
+            }}
+            className="w-full py-3.5 rounded-xl font-bold text-sm text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
           >
-            {submitting ? "Submitting..." : "Submit Review"}
+            Back to Home
           </button>
-        ) : (
-          <p className="text-sm text-blue-600 font-bold mb-4 animate-pulse">Thank you for your feedback!</p>
-        )}
 
-        <div className="w-full h-px bg-slate-100 mb-4"></div>
+          <p className="text-[10px] text-slate-300 mt-2">Session ends automatically</p>
+        </div>
 
-        <p className="text-xs text-slate-400 mb-2">You will be logged out automatically.</p>
-
-        <button
-          onClick={() => {
-            cleanupSession();
-            window.location.href = "/login";
-          }}
-          className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 px-6 rounded-xl hover:bg-slate-800 transition-colors"
-        >
-          Back to Home
-        </button>
       </motion.div>
     </div>
   );
