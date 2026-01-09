@@ -197,6 +197,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "message": event.get("message", "Session ended")
         }))
 
+    async def chat_cleared(self, event):
+        await self.send(text_data=json.dumps(event))
+
     @database_sync_to_async
     def _save_message(self, sender, receiver, message, device_id, restaurant_id, is_from_device,room_name, guest_session=None):
         try:

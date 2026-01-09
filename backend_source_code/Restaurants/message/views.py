@@ -71,10 +71,10 @@ class ChatMessageViewSet(ModelViewSet):
                         if active_session:
                             # Only show messages from the current session
                             qs = qs.filter(timestamp__gte=active_session.created_at)
-                        
-                        return qs.order_by('timestamp')
-                    else:
-                        return ChatMessage.objects.none()
+                            return qs.order_by('timestamp')
+                        else:
+                            # If no active session, show NO messages (Clean Dashboard)
+                            return ChatMessage.objects.none()
 
             # B. Guest Session (Token Provided)
             if session_token:
@@ -232,11 +232,29 @@ class ChatMessageViewSet(ModelViewSet):
                 return Response({'error': 'You do not have permission to perform this action.'}, status=403)
             
             # Delete messages
+            # Delete messages
             deleted_count, _ = ChatMessage.objects.filter(
                 device_id=device_id,
                 restaurant_id__in=restaurant_ids
             ).delete()
             
+            # Broadcast Clear Event to Mobile App
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            
+            for rid in restaurant_ids:
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_chat_{rid}",
+                        {
+                            "type": "chat_cleared",
+                            "device_id": device_id
+                        }
+                    )
+                except Exception as ws_err:
+                    print(f"WS Emit Error: {ws_err}")
+
             return Response({'status': 'chat cleared', 'count': deleted_count})
         except Exception as e:
             import traceback

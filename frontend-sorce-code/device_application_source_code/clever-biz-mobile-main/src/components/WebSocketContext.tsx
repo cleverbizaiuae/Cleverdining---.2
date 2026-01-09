@@ -150,6 +150,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           return;
         }
 
+        if (data.type === 'chat_cleared') {
+          // Check if this clearance is for ME
+          if (String(data.device_id) === String(device_id)) {
+            console.log("Chat cleared by remote admin");
+            setMessages([]);
+            localStorage.removeItem("chat_messages_cache");
+            return;
+          }
+        }
+
         if (data.message && typeof data.message === "string") {
           // Set the newMessage flag when a new message arrives
           setNewMessageFlag(true);
