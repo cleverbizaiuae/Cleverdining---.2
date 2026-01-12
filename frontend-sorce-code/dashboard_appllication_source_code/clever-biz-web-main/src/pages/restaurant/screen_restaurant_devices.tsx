@@ -221,7 +221,7 @@ export const ScreenRestaurantDevices = () => {
   // };
 
   return (
-    <div className="min-h-screen bg-white font-inter">
+    <div className="min-h-screen font-inter">
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 w-full md:w-2/3">
         <MetricCard

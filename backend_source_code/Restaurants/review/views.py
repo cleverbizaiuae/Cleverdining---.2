@@ -10,7 +10,7 @@ from rest_framework.exceptions import PermissionDenied
 from .pagination import TenPerPagePagination
 from django.utils.timezone import now
 from rest_framework.decorators import action
-from django.db.models import Avg
+from django.db.models import Avg, Q
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -38,9 +38,20 @@ class CreateReviewAPIView(generics.CreateAPIView):
             session_token = self.request.headers.get('X-Guest-Session-Token')
             if session_token:
                 try:
-                    session = GuestSession.objects.get(session_token=session_token, is_active=True)
-                    device = session.device
-                except GuestSession.DoesNotExist:
+                    # Allow active OR recently closed sessions (within 30 mins) to submit reviews
+                    from django.utils import timezone
+                    from datetime import timedelta
+                    cutoff = timezone.now() - timedelta(minutes=30)
+                    session = GuestSession.objects.filter(
+                        session_token=session_token
+                    ).filter(
+                        # Active OR closed within last 30 mins
+                        Q(is_active=True) | Q(ended_at__gte=cutoff)
+                    ).order_by('-created_at').first()
+                    if session:
+                        device = session.device
+                except Exception as e:
+                    print(f"Session lookup error: {e}")
                     pass
         
         if not device:

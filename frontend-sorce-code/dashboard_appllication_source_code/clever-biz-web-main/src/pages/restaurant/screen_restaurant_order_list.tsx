@@ -1,6 +1,7 @@
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useContext } from "react";
+import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import StripeConnectModal from "../model/StripeConnectModal";
 import PaymentGatewayModal from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
@@ -44,6 +45,23 @@ const ScreenRestaurantOrderList = () => {
     setOrdersSearchQuery,
     updateOrderStatus,
   } = useOwner();
+
+  // Real-time WebSocket updates
+  const { response } = useContext(WebSocketContext) || {};
+
+  // Real-time: Refresh orders when cash payment or order status changes
+  useEffect(() => {
+    if (response && (
+      response.type === 'cash_payment_alert' ||
+      response.type === 'order_paid' ||
+      response.type === 'order_updated' ||
+      response.type === 'order_status_update' ||
+      response.type === 'payment:created'
+    )) {
+      console.log("Real-time OrderList refresh triggered by:", response.type);
+      fetchOrders(ordersCurrentPage, ordersSearchQuery);
+    }
+  }, [response, fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [closedDayDate, setClosedDayDate] = useState<string | null>(null);
@@ -527,9 +545,6 @@ const ScreenRestaurantOrderList = () => {
                               className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 z-10"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {order.status !== 'completed' && (
-                                <button onClick={() => { handleStatusChange(order.id, 'completed'); setOpenActionMenuId(null); }} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Close Tab</button>
-                              )}
                               <button onClick={() => { handleStatusChange(order.id, 'cancelled'); setOpenActionMenuId(null); }} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel Order</button>
                             </div>
                           )}

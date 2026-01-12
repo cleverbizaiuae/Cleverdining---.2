@@ -141,7 +141,7 @@ const ScreenOrders = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-4 pb-32">
+      <div className="flex-1 p-4 pb-40">
         {loading && (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-2"></div>

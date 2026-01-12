@@ -171,14 +171,14 @@ export default function CheckoutPage() {
       </div>
 
       {/* 2. SCROLLABLE CONTENT */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
         {/* ORDER SUMMARY */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-sm font-bold text-gray-500 uppercase mb-3">
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+          <h2 className="text-xs font-bold text-gray-500 uppercase mb-2">
             Order Summary {isBulkCheckout && allOrders.length > 1 && `(${allOrders.length} orders)`}
           </h2>
-          <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+          <div className="space-y-1 mb-2 max-h-32 overflow-y-auto">
             {allItems.map((item: any, index: number) => (
               <div key={`${item.id}-${index}`} className="flex justify-between text-sm">
                 <span>{item.quantity}x {item.item_name}</span>
@@ -186,12 +186,12 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
-          <div className="border-t border-dashed border-gray-200 pt-2 space-y-1">
+          <div className="border-t border-dashed border-gray-200 pt-1 space-y-0.5">
             <div className="flex justify-between text-sm text-gray-600">
               <span>Subtotal</span>
               <span>AED {subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-lg font-bold text-gray-900 mt-2">
+            <div className="flex justify-between text-base font-bold text-gray-900 mt-1">
               <span>Total</span>
               <span>AED {finalTotal}</span>
             </div>
@@ -199,12 +199,12 @@ export default function CheckoutPage() {
         </div>
 
         {/* TIP SECTION */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 transition-all duration-300">
-          <h2 className="text-lg font-semibold mb-3 text-blue-600 flex items-center gap-2">
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 transition-all duration-300">
+          <h2 className="text-base font-semibold mb-2 text-blue-600 flex items-center gap-2">
             Add a Tip for the Staff 💛 <span className="text-xs text-gray-400 font-normal">(Optional)</span>
           </h2>
 
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-2">
             {[5, 10, 15].map((pct) => (
               <button
                 key={pct}
@@ -255,12 +255,12 @@ export default function CheckoutPage() {
         </div>
 
         {/* PAYMENT METHOD SELECTION */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Payment Method</h2>
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+          <h2 className="text-base font-semibold mb-2 text-gray-800">Payment Method</h2>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <label
-              className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all duration-200
+              className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
               ${paymentMethod === 'card' ? 'border-green-500 bg-green-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
             `}
             >
@@ -280,7 +280,7 @@ export default function CheckoutPage() {
             </label>
 
             <label
-              className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all duration-200
+              className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
               ${paymentMethod === 'cash' ? 'border-yellow-500 bg-yellow-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
             `}
             >
@@ -303,9 +303,9 @@ export default function CheckoutPage() {
       </div>
 
       {/* 3. FIXED FOOTER */}
-      <div className="bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
-        <div className="mb-4 flex justify-between items-center px-1">
-          <span className="text-gray-500 font-medium">Grand Total</span>
+      <div className="bg-white border-t border-gray-200 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
+        <div className="mb-2 flex justify-between items-center px-1">
+          <span className="text-gray-500 text-sm font-medium">Grand Total</span>
           <span className="text-2xl font-bold text-gray-900">AED {finalTotal}</span>
         </div>
 

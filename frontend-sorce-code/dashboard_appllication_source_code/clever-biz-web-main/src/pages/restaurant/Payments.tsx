@@ -92,8 +92,8 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scaleIn flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-6 border-b border-slate-100">
                     <div>
-                        <h3 className="text-xl font-bold text-slate-900">Payment Details</h3>
-                        <p className="text-sm text-slate-500">Transaction ID: #{payment.id}</p>
+                        <h3 className="text-xl font-bold text-slate-900">Order #{payment.order_id}</h3>
+                        <p className="text-sm text-slate-500">Payment Details</p>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50 transition-colors">
                         <X size={20} />
@@ -260,7 +260,7 @@ export const Payments = () => {
     return (
         <div className="flex flex-col gap-6 font-inter">
             {/* METRIC CARDS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 w-full md:w-1/2">
                 <MetricCard
                     title="Total Revenue"
                     value={`AED ${totalRevenue}`}
@@ -268,14 +268,6 @@ export const Payments = () => {
                     colorClass="text-[#0055FE]"
                     bgClass="bg-white"
                     iconBgClass="bg-[#0055FE]/10"
-                />
-                <MetricCard
-                    title="Received Amount"
-                    value={`AED ${receivedAmount}`}
-                    icon={Wallet}
-                    colorClass="text-green-600"
-                    bgClass="bg-white"
-                    iconBgClass="bg-green-100"
                 />
             </div>
 
@@ -312,7 +304,7 @@ export const Payments = () => {
                         <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
                             <tr>
                                 {/* Checkbox Column Removed */}
-                                <th className="px-5 py-3">ID</th>
+                                <th className="px-5 py-3">Order ID</th>
                                 <th className="px-5 py-3">Table</th>
                                 <th className="px-5 py-3">Provider</th>
                                 <th className="px-5 py-3">Amount</th>
@@ -325,7 +317,7 @@ export const Payments = () => {
                             {filteredPayments.length > 0 ? filteredPayments.map(p => (
                                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                                     {/* Checkbox Cell Removed */}
-                                    <td className="px-5 py-3 text-sm font-medium text-slate-900">#{p.id}</td>
+                                    <td className="px-5 py-3 text-sm font-medium text-slate-900">#{p.order_id}</td>
                                     <td className="px-5 py-3 text-xs text-slate-600">{p.table_name || "N/A"}</td>
                                     <td className="px-5 py-3">
                                         <div className="flex items-center gap-2 text-xs font-medium text-slate-700 capitalize">
