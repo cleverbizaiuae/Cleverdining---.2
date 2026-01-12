@@ -7,14 +7,17 @@ import {
     LogOut,
     Menu,
     X,
-    UserCircle
+    UserCircle,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react";
-import logo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
+import logo from "../../assets/cleverbiz_full_logo.png";
 
 const SuperAdminLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     // --- Authentication Check ---
     useEffect(() => {
@@ -24,7 +27,7 @@ const SuperAdminLayout = () => {
         }
     }, [navigate]);
 
-    // Format Date: "Thursday, 12 December, 2024"
+    // Format Date: "Monday, 12 January 2026"
     const today = new Date();
     const formattedDate = new Intl.DateTimeFormat('en-GB', {
         weekday: 'long',
@@ -35,6 +38,7 @@ const SuperAdminLayout = () => {
 
     const handleLogout = () => {
         localStorage.removeItem("superAdminAuth");
+        localStorage.removeItem("superAdminToken");
         navigate("/superadmin/login");
     };
 
@@ -44,7 +48,7 @@ const SuperAdminLayout = () => {
     ];
 
     return (
-        <div className="flex min-h-screen bg-[#F8FAFC]">
+        <div className="flex min-h-screen bg-slate-50">
             {/* --- Mobile Sidebar Overlay --- */}
             {sidebarOpen && (
                 <div
@@ -55,28 +59,45 @@ const SuperAdminLayout = () => {
 
             {/* --- Sidebar --- */}
             <aside className={`
-                fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 shadow-xl z-50 transition-transform duration-300
+                fixed top-0 left-0 h-full bg-white border-r border-slate-200 shadow-xl z-50 transition-all duration-300
                 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+                ${isCollapsed ? "w-20" : "w-64"}
             `}>
-                <div className="flex flex-col h-full">
+                <div className="flex flex-col h-full relative">
+                    {/* Collapse Toggle Button - Desktop Only */}
+                    <button
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 bg-white border border-slate-200 rounded-full items-center justify-center text-slate-400 hover:text-[#0055FE] hover:border-[#0055FE] shadow-sm transition-colors z-10"
+                    >
+                        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                    </button>
+
                     {/* Sidebar Header */}
-                    <div className="h-16 flex items-center px-6 border-b border-slate-700/50">
-                        <img src={logo} alt="CleverBiz AI" className="h-8 w-auto" /> {/* Logo */}
+                    <div className="h-16 flex items-center justify-center px-4 border-b border-slate-100">
+                        {isCollapsed ? (
+                            <div className="w-10 h-10 bg-gradient-to-br from-[#0055FE] to-cyan-400 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+                                C
+                            </div>
+                        ) : (
+                            <img src={logo} alt="CleverBiz AI" className="h-8 w-auto" />
+                        )}
                     </div>
                     <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-600 absolute top-4 right-4">
                         <X size={24} />
                     </button>
 
                     {/* Navigation */}
-                    <nav className="flex-1 px-4 py-4 space-y-2">
+                    <nav className="flex-1 px-3 py-4 space-y-2">
                         {navItems.map((item) => {
                             const isActive = location.pathname === item.path;
                             return (
                                 <Link
                                     key={item.path}
                                     to={item.path}
+                                    title={isCollapsed ? item.label : undefined}
                                     className={`
                                         flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
+                                        ${isCollapsed ? "justify-center" : ""}
                                         ${isActive
                                             ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
                                             : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE]"
@@ -84,27 +105,31 @@ const SuperAdminLayout = () => {
                                     `}
                                 >
                                     {item.icon}
-                                    {item.label}
+                                    {!isCollapsed && item.label}
                                 </Link>
                             );
                         })}
                     </nav>
 
                     {/* Logout */}
-                    <div className="p-4 border-t border-slate-100">
+                    <div className="p-3 border-t border-slate-100">
                         <button
                             onClick={handleLogout}
-                            className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all"
+                            title={isCollapsed ? "Logout" : undefined}
+                            className={`
+                                flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all
+                                ${isCollapsed ? "justify-center" : ""}
+                            `}
                         >
                             <LogOut size={20} />
-                            Logout
+                            {!isCollapsed && "Logout"}
                         </button>
                     </div>
                 </div>
             </aside>
 
             {/* --- Main Content --- */}
-            <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
+            <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
                 {/* Header */}
                 <header className="sticky top-0 z-30 h-16 sm:h-20 bg-white border-b border-slate-200 shadow-sm px-4 sm:px-8 flex items-center justify-between">
                     <div className="flex items-center gap-4">
