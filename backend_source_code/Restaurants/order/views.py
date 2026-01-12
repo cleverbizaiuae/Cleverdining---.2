@@ -356,7 +356,7 @@ class MyOrdersAPIView(generics.ListAPIView):
         if user.is_authenticated:
             return base_qs.filter(
                 device__user=user,
-                status__in=['pending', 'preparing', 'served']
+                status__in=['pending', 'preparing', 'served', 'delivered']
             ).exclude(
                 payment_status__in=['paid', 'completed']
             ).order_by('-created_time')
@@ -368,7 +368,7 @@ class MyOrdersAPIView(generics.ListAPIView):
                     session = GuestSession.objects.get(session_token=session_token, is_active=True)
                     return base_qs.filter(
                         guest_session=session,
-                        status__in=['pending', 'preparing', 'served']
+                        status__in=['pending', 'preparing', 'served', 'delivered']
                     ).exclude(
                         payment_status__in=['paid', 'completed']
                     ).order_by('-created_time')
@@ -380,7 +380,7 @@ class MyOrdersAPIView(generics.ListAPIView):
             if device_id:
                 return base_qs.filter(
                     device_id=device_id,
-                    status__in=['pending', 'preparing', 'served']
+                    status__in=['pending', 'preparing', 'served', 'delivered']
                 ).exclude(
                     payment_status__in=['paid', 'completed']
                 ).order_by('-created_time')
