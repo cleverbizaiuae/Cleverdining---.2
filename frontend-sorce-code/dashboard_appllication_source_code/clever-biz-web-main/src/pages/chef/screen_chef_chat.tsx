@@ -159,26 +159,6 @@ const ScreenChefChat = () => {
   return (
     <div className="flex flex-col gap-6 h-[calc(100vh-6rem)]">
 
-      {/* ALERT BANNER */}
-      {/* Spec: Blue/Indigo Gradient - Light Theme */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-[#0055FE]/10 flex items-center justify-center">
-            <Bell size={20} className="text-[#0055FE]" />
-          </div>
-          <div>
-            <h3 className="font-bold text-lg text-[#0055FE]">New Messages</h3>
-            <p className="text-slate-600 text-sm">You have unread requests. Check table list.</p>
-          </div>
-        </div>
-        <button
-          onClick={() => toast.success("All messages acknowledged")}
-          className="px-4 py-2 bg-[#0055FE] text-white font-semibold rounded-lg text-sm hover:bg-[#0047D1] transition-colors shadow-md shadow-blue-500/10"
-        >
-          Acknowledge
-        </button>
-      </div>
-
       {/* CHAT INTERFACE */}
       <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex overflow-hidden relative">
 

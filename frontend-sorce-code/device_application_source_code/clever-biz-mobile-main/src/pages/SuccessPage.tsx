@@ -140,14 +140,14 @@ const SuccessPage = () => {
                 placeholder="Your Name (Optional)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
               />
               <textarea
                 placeholder="Any feedback for the chef? (Optional)"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={2} // Reduced rows to save space
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-base resize-none focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
               />
             </div>
           )}
