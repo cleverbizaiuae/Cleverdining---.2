@@ -71,6 +71,10 @@ const ScreenSuperAdminManagement = () => {
 
     // Edit Form
     const [editForm, setEditForm] = useState({
+        phone: "",
+        email: "",
+        city: "",
+        country: "",
         qrCodes: 10,
         tableCount: 10,
         paymentProcessor: "stripe",
@@ -262,6 +266,10 @@ const ScreenSuperAdminManagement = () => {
     const handleViewRestaurant = (restaurant: RegisteredRestaurant) => {
         setSelectedRestaurant(restaurant);
         setEditForm({
+            phone: restaurant.phone || "",
+            email: restaurant.email || "",
+            city: restaurant.city || "",
+            country: restaurant.country || "",
             qrCodes: restaurant.qrCodes,
             tableCount: restaurant.tableCount,
             paymentProcessor: restaurant.paymentProcessor || "stripe",
@@ -485,19 +493,55 @@ const ScreenSuperAdminManagement = () => {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <p className="text-xs text-slate-500 mb-1">Phone</p>
-                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.phone}</div>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editForm.phone}
+                                            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.phone}</div>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-500 mb-1">Email</p>
-                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 truncate">{selectedRestaurant.email || '-'}</div>
+                                    {isEditing ? (
+                                        <input
+                                            type="email"
+                                            value={editForm.email}
+                                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 truncate">{selectedRestaurant.email || '-'}</div>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-500 mb-1">City</p>
-                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.city}</div>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editForm.city}
+                                            onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.city}</div>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-500 mb-1">Country</p>
-                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.country}</div>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editForm.country}
+                                            onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.country}</div>
+                                    )}
                                 </div>
                             </div>
 
