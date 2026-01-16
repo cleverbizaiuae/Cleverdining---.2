@@ -344,7 +344,7 @@ const ScreenSuperAdminManagement = () => {
                     </div>
                     {/* Add Button */}
                     <button
-                        onClick={() => setIsAddOpen(true)}
+                        onClick={() => window.open('https://officialcleverdining.netlify.app/adminregister', '_blank')}
                         className="h-10 px-4 bg-[#0055FE] hover:bg-[#0047D1] text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
                     >
                         <Plus className="h-4 w-4" />
