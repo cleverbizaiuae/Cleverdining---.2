@@ -1,25 +1,24 @@
 import { useState, useMemo } from "react";
 import {
     Search,
-    Eye,
-    Edit2,
     Star,
-    Calendar,
-    Check,
+    Eye,
+    ChevronDown,
     X,
     QrCode,
+    CreditCard,
+    Calendar,
+    Edit2,
     Plus,
     Trash2,
-    ChevronDown,
-    Users,
     AlertTriangle,
     Loader2,
-    Grid3X3,
-    CreditCard
+    Grid3X3
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
+import { format } from "date-fns";
 
 // --- Types ---
 interface RegisteredRestaurant {
@@ -57,16 +56,6 @@ const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
     { id: "rest-011", name: "Kuwait Kitchen", location: "The Avenues Mall", city: "Kuwait City", country: "Kuwait", phone: "+965 2 678 9012", email: "kitchen@kuwait.kw", rating: 4.1, package: "Professional", status: "on_hold", qrCodes: 14, tableCount: 11, paymentProcessor: "paytabs", subscriptionStart: "2024-12-01", createdAt: "2025-08-10T10:30:00.000Z" },
     { id: "rest-012", name: "Bahrain Brasserie", location: "Seef Mall", city: "Manama", country: "Bahrain", phone: "+973 1789 0123", email: "brasserie@bahrain.bh", rating: 4.5, package: "Professional", status: "active", qrCodes: 16, tableCount: 13, paymentProcessor: "stripe", subscriptionStart: "2024-11-10", createdAt: "2025-08-01T09:00:00.000Z" },
 ];
-
-const COUNTRIES = ["UAE", "Saudi Arabia", "Egypt", "Qatar", "Kuwait", "Bahrain"];
-const CITIES: Record<string, string[]> = {
-    "UAE": ["Dubai", "Abu Dhabi", "Sharjah"],
-    "Saudi Arabia": ["Riyadh", "Jeddah", "Dammam"],
-    "Egypt": ["Cairo", "Alexandria", "Giza"],
-    "Qatar": ["Doha"],
-    "Kuwait": ["Kuwait City"],
-    "Bahrain": ["Manama"]
-};
 
 const ScreenSuperAdminManagement = () => {
     const queryClient = useQueryClient();
@@ -127,9 +116,7 @@ const ScreenSuperAdminManagement = () => {
             queryClient.invalidateQueries({ queryKey: ['registered-restaurants'] });
             toast.success("Status updated");
         },
-        onError: () => {
-            toast.error("Failed to update status");
-        }
+        onError: () => toast.error("Failed to update status")
     });
 
     const updateRestaurantMutation = useMutation({
@@ -142,9 +129,7 @@ const ScreenSuperAdminManagement = () => {
             toast.success("Restaurant updated");
             setIsEditing(false);
         },
-        onError: () => {
-            toast.error("Failed to update");
-        }
+        onError: () => toast.error("Failed to update")
     });
 
     const createRestaurantMutation = useMutation({
@@ -156,14 +141,9 @@ const ScreenSuperAdminManagement = () => {
             queryClient.invalidateQueries({ queryKey: ['registered-restaurants'] });
             toast.success("Restaurant added");
             setIsAddOpen(false);
-            setNewRestaurant({
-                name: "", location: "", city: "Dubai", country: "UAE", phone: "", email: "",
-                qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Starter", subscriptionMonths: 12
-            });
+            resetNewRestaurant();
         },
-        onError: () => {
-            toast.error("Failed to add restaurant");
-        }
+        onError: () => toast.error("Failed to add restaurant")
     });
 
     const deleteRestaurantMutation = useMutation({
@@ -179,12 +159,14 @@ const ScreenSuperAdminManagement = () => {
             setDeleteConfirmText("");
             setSelectedRestaurant(null);
         },
-        onError: () => {
-            toast.error("Failed to delete");
-        }
+        onError: () => toast.error("Failed to delete")
     });
 
     // --- Computed ---
+    const totalRestaurants = restaurants.length;
+    const onHoldCount = restaurants.filter(r => r.status === 'on_hold').length;
+    const activeToday = restaurants.filter(r => r.status === 'active').length;
+
     const filteredRestaurants = useMemo(() => {
         const lowerQ = searchQuery.toLowerCase();
         return restaurants.filter(r =>
@@ -194,27 +176,32 @@ const ScreenSuperAdminManagement = () => {
         );
     }, [restaurants, searchQuery]);
 
-    const stats = {
-        total: restaurants.length,
-        onHold: restaurants.filter(r => r.status === 'on_hold').length,
-        active: restaurants.filter(r => r.status === 'active').length,
+    // --- Handlers ---
+    const handleStatusChange = (id: string, status: string) => {
+        updateStatusMutation.mutate({ id, status });
     };
 
-    // --- Handlers ---
-    const handleView = (r: RegisteredRestaurant) => {
-        setSelectedRestaurant(r);
+    const handleViewRestaurant = (restaurant: RegisteredRestaurant) => {
+        setSelectedRestaurant(restaurant);
         setEditForm({
-            qrCodes: r.qrCodes,
-            tableCount: r.tableCount,
-            paymentProcessor: r.paymentProcessor,
-            package: r.package
+            qrCodes: restaurant.qrCodes,
+            tableCount: restaurant.tableCount,
+            paymentProcessor: restaurant.paymentProcessor || "stripe",
+            package: restaurant.package
         });
         setIsEditing(false);
     };
 
-    const handleCloseModal = () => {
-        setSelectedRestaurant(null);
-        setIsEditing(false);
+    const handleOpenDelete = (restaurant: RegisteredRestaurant) => {
+        setRestaurantToDelete(restaurant);
+        setDeleteConfirmText("");
+        setIsDeleteOpen(true);
+    };
+
+    const handleConfirmDelete = () => {
+        if (restaurantToDelete && deleteConfirmText.toLowerCase() === "delete") {
+            deleteRestaurantMutation.mutate(restaurantToDelete.id);
+        }
     };
 
     const handleSaveChanges = () => {
@@ -226,45 +213,27 @@ const ScreenSuperAdminManagement = () => {
         }
     };
 
-    const handleStatusChange = (id: string, newStatus: string) => {
-        updateStatusMutation.mutate({ id, status: newStatus });
+    const resetNewRestaurant = () => {
+        setNewRestaurant({
+            name: "", location: "", city: "Dubai", country: "UAE", phone: "", email: "",
+            qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Starter", subscriptionMonths: 12
+        });
     };
 
-    const handleOpenDelete = (r: RegisteredRestaurant) => {
-        setRestaurantToDelete(r);
-        setDeleteConfirmText("");
-        setIsDeleteOpen(true);
-    };
-
-    const handleConfirmDelete = () => {
-        if (restaurantToDelete && deleteConfirmText.toLowerCase() === "delete") {
-            deleteRestaurantMutation.mutate(restaurantToDelete.id);
-        }
-    };
-
-    const handleAddSubmit = () => {
-        if (newRestaurant.name && newRestaurant.location) {
-            createRestaurantMutation.mutate(newRestaurant);
-        }
-    };
-
-    // Package badge styling
-    const getPackageStyle = (pkg: string) => {
-        switch (pkg) {
-            case 'Starter': return 'bg-slate-100 text-slate-600';
-            case 'Professional': return 'bg-blue-100 text-blue-700';
-            case 'Enterprise': return 'bg-purple-100 text-purple-700';
-            case 'Premium': return 'bg-amber-100 text-amber-700';
-            default: return 'bg-slate-100 text-slate-600';
-        }
-    };
-
-    // Status styling
-    const getStatusStyle = (status: string) => {
+    const getStatusColor = (status: string) => {
         switch (status) {
             case 'active': return 'bg-green-100 text-green-700';
             case 'on_hold': return 'bg-amber-100 text-amber-700';
             case 'inactive': return 'bg-red-100 text-red-700';
+            default: return 'bg-slate-100 text-slate-600';
+        }
+    };
+
+    const getPackageColor = (pkg: string) => {
+        switch (pkg) {
+            case 'Enterprise': return 'bg-purple-100 text-purple-700';
+            case 'Professional': return 'bg-blue-100 text-blue-700';
+            case 'Premium': return 'bg-amber-100 text-amber-700';
             default: return 'bg-slate-100 text-slate-600';
         }
     };
@@ -280,231 +249,288 @@ const ScreenSuperAdminManagement = () => {
     return (
         <div className="space-y-6 animate-fadeIn">
 
-            {/* --- Stats Cards --- */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <StatCard label="Total Restaurants" value={stats.total} icon={<Users size={18} />} color="blue" />
-                <StatCard label="On Hold" value={stats.onHold} icon={<AlertTriangle size={18} />} color="amber" />
-                <StatCard label="Active Today" value={stats.active} icon={<Check size={18} />} color="green" />
-            </div>
-
-            {/* --- Search & Add Section --- */}
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <h2 className="text-lg font-semibold text-slate-900">Subscriber Management</h2>
-                <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* --- Header Row --- */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h2 className="text-lg font-semibold text-slate-900">Restaurant Management</h2>
+                <div className="flex gap-3 w-full sm:w-auto">
+                    {/* Search Input */}
                     <div className="relative flex-1 sm:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <input
                             type="text"
-                            placeholder="Search by name, city, country..."
+                            placeholder="Search restaurants..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full h-10 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] focus:border-[#0055FE] outline-none"
+                            className="w-full pl-10 pr-4 py-2 h-10 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"
                         />
                     </div>
+                    {/* Add Button */}
                     <button
                         onClick={() => setIsAddOpen(true)}
                         className="h-10 px-4 bg-[#0055FE] hover:bg-[#0047D1] text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
                     >
-                        <Plus size={16} />
-                        Add
+                        <Plus className="h-4 w-4" />
+                        Add Restaurant
                     </button>
                 </div>
             </div>
 
-            {/* --- Restaurant Table --- */}
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-xs font-medium uppercase text-slate-500">
-                            <tr>
-                                <th className="px-6 py-3">Restaurant</th>
-                                <th className="px-6 py-3">Location</th>
-                                <th className="px-6 py-3">Package</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {filteredRestaurants.length > 0 ? filteredRestaurants.map((r) => (
-                                <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                                    {/* Restaurant Column - Name, Email, Rating */}
-                                    <td className="px-6 py-4">
-                                        <div className="text-sm font-medium text-slate-900">{r.name}</div>
-                                        <div className="text-xs text-slate-500">{r.email || '-'}</div>
-                                        {r.rating && (
-                                            <div className="flex items-center gap-1 mt-1">
-                                                <Star size={12} className="text-amber-400 fill-amber-400" />
-                                                <span className="text-xs text-slate-600">{r.rating}</span>
-                                            </div>
-                                        )}
-                                    </td>
-                                    {/* Location Column */}
-                                    <td className="px-6 py-4 text-sm text-slate-600">
-                                        {r.city}, {r.country}
-                                    </td>
-                                    {/* Package Badge */}
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${getPackageStyle(r.package)}`}>
-                                            {r.package}
-                                        </span>
-                                    </td>
-                                    {/* Status Dropdown */}
-                                    <td className="px-6 py-4">
-                                        <div className="relative">
-                                            <select
-                                                value={r.status}
-                                                onChange={(e) => handleStatusChange(r.id, e.target.value)}
-                                                className={`appearance-none cursor-pointer text-xs font-medium px-3 py-1.5 pr-7 rounded-full outline-none ${getStatusStyle(r.status)}`}
-                                            >
-                                                <option value="active">Active</option>
-                                                <option value="on_hold">On Hold</option>
-                                                <option value="inactive">Inactive</option>
-                                            </select>
-                                            <ChevronDown className="absolute right-2 top-2 pointer-events-none" size={12} />
-                                        </div>
-                                    </td>
-                                    {/* Actions */}
-                                    <td className="px-6 py-4">
-                                        <button
-                                            onClick={() => handleView(r)}
-                                            className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors"
-                                            title="View Details"
-                                        >
-                                            <Eye size={16} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
-                                        No restaurants found
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+            {/* --- Stats Cards --- */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Total Restaurants</p>
+                    <p className="text-2xl font-bold text-slate-900">{totalRestaurants}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">On Hold</p>
+                    <p className="text-2xl font-bold text-amber-600">{onHoldCount}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Active Today</p>
+                    <p className="text-2xl font-bold text-green-600">{activeToday}</p>
                 </div>
             </div>
 
-            {/* --- View/Edit Modal --- */}
+            {/* --- Table Container --- */}
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                {/* Table Header */}
+                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <div className="col-span-4">Restaurant</div>
+                    <div className="col-span-2">Location</div>
+                    <div className="col-span-2 text-center">Package</div>
+                    <div className="col-span-2 text-center">Status</div>
+                    <div className="col-span-2 text-center">Actions</div>
+                </div>
+
+                {/* Table Rows */}
+                {filteredRestaurants.length > 0 ? filteredRestaurants.map((restaurant) => (
+                    <div
+                        key={restaurant.id}
+                        className="grid grid-cols-12 gap-4 px-4 py-4 border-b border-slate-100 hover:bg-slate-50 items-center transition-colors"
+                    >
+                        {/* Restaurant Column - Name, Email, Rating */}
+                        <div className="col-span-4">
+                            <p className="text-sm font-medium text-slate-900">{restaurant.name}</p>
+                            <p className="text-xs text-slate-500">{restaurant.email || '-'}</p>
+                            {restaurant.rating && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
+                                    <span className="text-xs text-slate-600">{restaurant.rating}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Location Column */}
+                        <div className="col-span-2">
+                            <p className="text-sm text-slate-600">{restaurant.city}, {restaurant.country}</p>
+                        </div>
+
+                        {/* Package Column */}
+                        <div className="col-span-2 text-center">
+                            <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${getPackageColor(restaurant.package)}`}>
+                                {restaurant.package}
+                            </span>
+                        </div>
+
+                        {/* Status Column (Dropdown) */}
+                        <div className="col-span-2 flex justify-center">
+                            <div className="relative">
+                                <select
+                                    value={restaurant.status}
+                                    onChange={(e) => handleStatusChange(restaurant.id, e.target.value)}
+                                    className={`appearance-none cursor-pointer px-3 py-1 pr-7 text-xs font-medium rounded-full ${getStatusColor(restaurant.status)} border-0 focus:ring-2 focus:ring-offset-1 focus:ring-[#0055FE] outline-none`}
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="on_hold">On Hold</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none" />
+                            </div>
+                        </div>
+
+                        {/* Actions Column */}
+                        <div className="col-span-2 flex justify-center">
+                            <button
+                                onClick={() => handleViewRestaurant(restaurant)}
+                                className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                                <Eye className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                )) : (
+                    <div className="px-4 py-12 text-center text-slate-400 text-sm">
+                        No restaurants found
+                    </div>
+                )}
+            </div>
+
+            {/* --- View/Edit Restaurant Modal --- */}
             {selectedRestaurant && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
                         {/* Modal Header */}
-                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start bg-slate-50">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Restaurant Details</h3>
-                                <p className="text-xs text-slate-500">{selectedRestaurant.name}</p>
+                                <h3 className="text-lg font-semibold text-slate-900">{selectedRestaurant.name}</h3>
+                                <p className="text-xs text-slate-500">{selectedRestaurant.location}</p>
                             </div>
-                            <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
-                                <X size={20} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsEditing(!isEditing)}
+                                    className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg"
+                                >
+                                    <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button onClick={() => setSelectedRestaurant(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Modal Content */}
-                        <div className="p-6 overflow-y-auto space-y-6">
-                            {/* Read-Only Fields */}
-                            <div className="space-y-4">
-                                <ReadOnlyField label="Restaurant Name" value={selectedRestaurant.name} />
-                                <ReadOnlyField label="Email" value={selectedRestaurant.email || '-'} />
-                                <ReadOnlyField label="Location" value={`${selectedRestaurant.location}, ${selectedRestaurant.city}, ${selectedRestaurant.country}`} />
-                                <div className="grid grid-cols-2 gap-4">
-                                    <ReadOnlyField label="Phone" value={selectedRestaurant.phone} />
-                                    <ReadOnlyField label="Subscription Start" value={selectedRestaurant.subscriptionStart || '-'} icon={<Calendar size={14} className="text-[#0055FE]" />} />
-                                </div>
-                            </div>
-
-                            {/* Editable Settings Section */}
-                            <div className="pt-4 border-t border-slate-100">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="text-sm font-bold text-slate-900">Settings</h4>
-                                    <button
-                                        onClick={() => setIsEditing(!isEditing)}
-                                        className="text-xs font-medium text-[#0055FE] hover:underline flex items-center gap-1"
-                                    >
-                                        <Edit2 size={12} />
-                                        {isEditing ? "Cancel" : "Edit"}
-                                    </button>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <SettingField
-                                        label="QR Codes"
-                                        isEditing={isEditing}
-                                        value={isEditing ? editForm.qrCodes : selectedRestaurant.qrCodes}
-                                        onChange={(v) => setEditForm({ ...editForm, qrCodes: Number(v) })}
-                                        icon={<QrCode size={14} />}
-                                        type="number"
-                                    />
-                                    <SettingField
-                                        label="Tables"
-                                        isEditing={isEditing}
-                                        value={isEditing ? editForm.tableCount : selectedRestaurant.tableCount}
-                                        onChange={(v) => setEditForm({ ...editForm, tableCount: Number(v) })}
-                                        icon={<Grid3X3 size={14} />}
-                                        type="number"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 mt-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-medium text-slate-500">Payment</label>
-                                        {isEditing ? (
-                                            <select
-                                                value={editForm.paymentProcessor}
-                                                onChange={(e) => setEditForm({ ...editForm, paymentProcessor: e.target.value })}
-                                                className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
-                                            >
-                                                <option value="stripe">Stripe</option>
-                                                <option value="checkout">Checkout</option>
-                                                <option value="paytabs">PayTabs</option>
-                                            </select>
-                                        ) : (
-                                            <div className="h-10 px-3 bg-slate-100 rounded-lg flex items-center text-sm text-slate-700 capitalize">
-                                                <CreditCard size={14} className="mr-2 text-slate-400" />
-                                                {selectedRestaurant.paymentProcessor}
-                                            </div>
-                                        )}
+                        <div className="p-6 overflow-y-auto space-y-4">
+                            {/* Status & Rating Row */}
+                            <div className="flex items-center gap-3">
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full capitalize ${getStatusColor(selectedRestaurant.status)}`}>
+                                    {selectedRestaurant.status.replace('_', ' ')}
+                                </span>
+                                {selectedRestaurant.rating && (
+                                    <div className="flex items-center gap-1">
+                                        <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
+                                        <span className="text-xs text-slate-600">{selectedRestaurant.rating}</span>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-medium text-slate-500">Package</label>
-                                        {isEditing ? (
-                                            <select
-                                                value={editForm.package}
-                                                onChange={(e) => setEditForm({ ...editForm, package: e.target.value })}
-                                                className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
-                                            >
-                                                <option value="Starter">Starter</option>
-                                                <option value="Professional">Professional</option>
-                                                <option value="Enterprise">Enterprise</option>
-                                            </select>
-                                        ) : (
-                                            <div className="h-10 px-3 bg-slate-100 rounded-lg flex items-center text-sm text-slate-700">
-                                                {selectedRestaurant.package}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {isEditing && (
-                                    <button
-                                        onClick={handleSaveChanges}
-                                        disabled={updateRestaurantMutation.isPending}
-                                        className="w-full mt-6 h-10 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        {updateRestaurantMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
-                                        Save Changes
-                                    </button>
                                 )}
                             </div>
 
-                            {/* Delete Button */}
-                            <div className="pt-4 border-t border-slate-100">
+                            {/* Contact Grid */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1">Phone</p>
+                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.phone}</div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1">Email</p>
+                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 truncate">{selectedRestaurant.email || '-'}</div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1">City</p>
+                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.city}</div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1">Country</p>
+                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900">{selectedRestaurant.country}</div>
+                                </div>
+                            </div>
+
+                            {/* Subscription Info */}
+                            {selectedRestaurant.subscriptionStart && (
+                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>
+                                        Subscribed: {format(new Date(selectedRestaurant.subscriptionStart), 'MMM d, yyyy')}
+                                        {selectedRestaurant.subscriptionEnd && ` - ${format(new Date(selectedRestaurant.subscriptionEnd), 'MMM d, yyyy')}`}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Configuration Grid (Editable) */}
+                            <div className="grid grid-cols-3 gap-3">
+                                {/* QR Codes */}
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1 flex items-center gap-1">
+                                        <QrCode className="h-3 w-3 text-[#0055FE]" /> QR Codes
+                                    </p>
+                                    {isEditing ? (
+                                        <input
+                                            type="number"
+                                            value={editForm.qrCodes}
+                                            onChange={(e) => setEditForm({ ...editForm, qrCodes: parseInt(e.target.value) || 0 })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 text-center">{selectedRestaurant.qrCodes}</div>
+                                    )}
+                                </div>
+
+                                {/* Tables */}
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1 flex items-center gap-1">
+                                        <Grid3X3 className="h-3 w-3 text-[#0055FE]" /> Tables
+                                    </p>
+                                    {isEditing ? (
+                                        <input
+                                            type="number"
+                                            value={editForm.tableCount}
+                                            onChange={(e) => setEditForm({ ...editForm, tableCount: parseInt(e.target.value) || 0 })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 text-center">{selectedRestaurant.tableCount}</div>
+                                    )}
+                                </div>
+
+                                {/* Payment */}
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-1 flex items-center gap-1">
+                                        <CreditCard className="h-3 w-3 text-[#0055FE]" /> Payment
+                                    </p>
+                                    {isEditing ? (
+                                        <select
+                                            value={editForm.paymentProcessor}
+                                            onChange={(e) => setEditForm({ ...editForm, paymentProcessor: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        >
+                                            <option value="stripe">Stripe</option>
+                                            <option value="checkout">Checkout</option>
+                                            <option value="paytabs">PayTabs</option>
+                                        </select>
+                                    ) : (
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 text-center capitalize">{selectedRestaurant.paymentProcessor || 'stripe'}</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Package (Editable) */}
+                            <div>
+                                <p className="text-xs text-slate-500 mb-1">Package (Upgrade/Downgrade)</p>
+                                {isEditing ? (
+                                    <select
+                                        value={editForm.package}
+                                        onChange={(e) => setEditForm({ ...editForm, package: e.target.value })}
+                                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    >
+                                        <option value="Starter">Starter</option>
+                                        <option value="Professional">Professional</option>
+                                        <option value="Enterprise">Enterprise</option>
+                                    </select>
+                                ) : (
+                                    <div className="bg-slate-100 rounded-lg px-3 py-2 text-sm text-slate-900 text-center">{selectedRestaurant.package}</div>
+                                )}
+                            </div>
+
+                            {/* Save Button (Edit Mode) */}
+                            {isEditing && (
                                 <button
-                                    onClick={() => handleOpenDelete(selectedRestaurant)}
-                                    className="w-full h-10 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                    onClick={handleSaveChanges}
+                                    disabled={updateRestaurantMutation.isPending}
+                                    className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                                 >
-                                    <Trash2 size={16} />
+                                    {updateRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : null}
+                                    Save Changes
+                                </button>
+                            )}
+
+                            {/* Delete Button */}
+                            <div className="pt-4 border-t border-slate-200">
+                                <button
+                                    onClick={() => {
+                                        handleOpenDelete(selectedRestaurant);
+                                        setSelectedRestaurant(null);
+                                    }}
+                                    className="w-full h-10 bg-white border border-red-200 hover:bg-red-50 text-red-600 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 className="h-4 w-4" />
                                     Delete Restaurant
                                 </button>
                             </div>
@@ -518,40 +544,162 @@ const ScreenSuperAdminManagement = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <h3 className="text-lg font-bold text-slate-900">Add New Restaurant</h3>
-                            <button onClick={() => setIsAddOpen(false)} className="text-slate-400 hover:text-slate-600">
-                                <X size={20} />
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900">Register New Restaurant</h3>
+                                <p className="text-xs text-slate-500">Add a new restaurant to the CleverBiz platform</p>
+                            </div>
+                            <button onClick={() => setIsAddOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                                <X className="h-4 w-4" />
                             </button>
                         </div>
 
                         <div className="p-6 overflow-y-auto space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputField label="Restaurant Name *" value={newRestaurant.name} onChange={(v) => setNewRestaurant({ ...newRestaurant, name: v })} />
-                                <InputField label="Email" value={newRestaurant.email} onChange={(v) => setNewRestaurant({ ...newRestaurant, email: v })} type="email" />
-                            </div>
-                            <InputField label="Location *" value={newRestaurant.location} onChange={(v) => setNewRestaurant({ ...newRestaurant, location: v })} />
-                            <div className="grid grid-cols-2 gap-4">
-                                <SelectField label="Country" value={newRestaurant.country} options={COUNTRIES} onChange={(v) => setNewRestaurant({ ...newRestaurant, country: v, city: CITIES[v]?.[0] || "" })} />
-                                <SelectField label="City" value={newRestaurant.city} options={CITIES[newRestaurant.country] || []} onChange={(v) => setNewRestaurant({ ...newRestaurant, city: v })} />
-                            </div>
-                            <InputField label="Phone" value={newRestaurant.phone} onChange={(v) => setNewRestaurant({ ...newRestaurant, phone: v })} />
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputField label="QR Codes" value={newRestaurant.qrCodes} onChange={(v) => setNewRestaurant({ ...newRestaurant, qrCodes: Number(v) })} type="number" />
-                                <InputField label="Tables" value={newRestaurant.tableCount} onChange={(v) => setNewRestaurant({ ...newRestaurant, tableCount: Number(v) })} type="number" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <SelectField label="Payment Processor" value={newRestaurant.paymentProcessor} options={["stripe", "checkout", "paytabs"]} onChange={(v) => setNewRestaurant({ ...newRestaurant, paymentProcessor: v })} />
-                                <SelectField label="Package" value={newRestaurant.package} options={["Starter", "Professional", "Enterprise"]} onChange={(v) => setNewRestaurant({ ...newRestaurant, package: v })} />
+                            {/* Name */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-slate-600">Restaurant Name *</label>
+                                <input
+                                    value={newRestaurant.name}
+                                    onChange={(e) => setNewRestaurant({ ...newRestaurant, name: e.target.value })}
+                                    placeholder="e.g. The Golden Fork"
+                                    className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                />
                             </div>
 
-                            <button
-                                onClick={handleAddSubmit}
-                                disabled={!newRestaurant.name || !newRestaurant.location || createRestaurantMutation.isPending}
-                                className="w-full mt-4 h-10 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                            >
-                                {createRestaurantMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-                                Add Restaurant
-                            </button>
+                            {/* Location */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-slate-600">Location / Address *</label>
+                                <input
+                                    value={newRestaurant.location}
+                                    onChange={(e) => setNewRestaurant({ ...newRestaurant, location: e.target.value })}
+                                    placeholder="e.g. Dubai Mall, Level 2"
+                                    className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                />
+                            </div>
+
+                            {/* City & Country */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">City *</label>
+                                    <input
+                                        value={newRestaurant.city}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, city: e.target.value })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">Country *</label>
+                                    <input
+                                        value={newRestaurant.country}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, country: e.target.value })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Phone & Email */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">Phone *</label>
+                                    <input
+                                        value={newRestaurant.phone}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, phone: e.target.value })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">Email *</label>
+                                    <input
+                                        type="email"
+                                        value={newRestaurant.email}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, email: e.target.value })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Package */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-slate-600">Package</label>
+                                <select
+                                    value={newRestaurant.package}
+                                    onChange={(e) => setNewRestaurant({ ...newRestaurant, package: e.target.value })}
+                                    className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                >
+                                    <option value="Starter">Starter</option>
+                                    <option value="Professional">Professional</option>
+                                    <option value="Enterprise">Enterprise</option>
+                                </select>
+                            </div>
+
+                            {/* QR & Tables */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">QR Codes</label>
+                                    <input
+                                        type="number"
+                                        value={newRestaurant.qrCodes}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, qrCodes: parseInt(e.target.value) || 0 })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">Table Count</label>
+                                    <input
+                                        type="number"
+                                        value={newRestaurant.tableCount}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, tableCount: parseInt(e.target.value) || 0 })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Subscription & Payment */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">Subscription Length</label>
+                                    <select
+                                        value={newRestaurant.subscriptionMonths}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, subscriptionMonths: parseInt(e.target.value) })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    >
+                                        <option value={1}>1 Month</option>
+                                        <option value={3}>3 Months</option>
+                                        <option value={6}>6 Months</option>
+                                        <option value={12}>12 Months</option>
+                                        <option value={24}>24 Months</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-600">Payment Processor</label>
+                                    <select
+                                        value={newRestaurant.paymentProcessor}
+                                        onChange={(e) => setNewRestaurant({ ...newRestaurant, paymentProcessor: e.target.value })}
+                                        className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    >
+                                        <option value="stripe">Stripe</option>
+                                        <option value="checkout">Checkout</option>
+                                        <option value="paytabs">PayTabs</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Buttons */}
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    onClick={() => setIsAddOpen(false)}
+                                    className="flex-1 h-10 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => createRestaurantMutation.mutate(newRestaurant)}
+                                    disabled={!newRestaurant.name || !newRestaurant.location || createRestaurantMutation.isPending}
+                                    className="flex-1 h-10 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {createRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                    Add Restaurant
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -560,33 +708,43 @@ const ScreenSuperAdminManagement = () => {
             {/* --- Delete Confirmation Modal --- */}
             {isDeleteOpen && restaurantToDelete && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-sm border border-slate-200 shadow-2xl p-6">
+                    <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6">
+                        {/* Header */}
                         <div className="flex items-center gap-3 mb-4">
                             <div className="p-3 bg-red-100 rounded-full">
-                                <AlertTriangle className="text-red-600" size={24} />
+                                <AlertTriangle className="h-5 w-5 text-red-600" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Delete Restaurant</h3>
+                                <h3 className="text-lg font-semibold text-red-600">Delete Restaurant</h3>
                                 <p className="text-xs text-slate-500">This action cannot be undone</p>
                             </div>
                         </div>
 
-                        <p className="text-sm text-slate-600 mb-4">
-                            Are you sure you want to delete <strong>{restaurantToDelete.name}</strong>? Type <strong>"delete"</strong> to confirm.
-                        </p>
+                        {/* Restaurant Info */}
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                            <p className="text-sm text-red-800 font-medium">{restaurantToDelete.name}</p>
+                            <p className="text-xs text-red-600 mt-1">{restaurantToDelete.location}, {restaurantToDelete.city}</p>
+                        </div>
 
-                        <input
-                            type="text"
-                            value={deleteConfirmText}
-                            onChange={(e) => setDeleteConfirmText(e.target.value)}
-                            placeholder='Type "delete" to confirm'
-                            className="w-full h-10 px-4 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-red-500 outline-none mb-4"
-                        />
+                        {/* Confirmation Input */}
+                        <div className="space-y-2 mb-4">
+                            <label className="text-sm text-slate-700">
+                                Type <span className="font-bold text-red-600">delete</span> to confirm
+                            </label>
+                            <input
+                                type="text"
+                                value={deleteConfirmText}
+                                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                placeholder="Type 'delete' to confirm"
+                                className="w-full h-10 px-4 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-red-500 outline-none"
+                            />
+                        </div>
 
+                        {/* Buttons */}
                         <div className="flex gap-3">
                             <button
                                 onClick={() => { setIsDeleteOpen(false); setDeleteConfirmText(""); }}
-                                className="flex-1 h-10 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
+                                className="flex-1 h-10 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                             >
                                 Cancel
                             </button>
@@ -595,8 +753,8 @@ const ScreenSuperAdminManagement = () => {
                                 disabled={deleteConfirmText.toLowerCase() !== "delete" || deleteRestaurantMutation.isPending}
                                 className="flex-1 h-10 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                             >
-                                {deleteRestaurantMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                                Delete
+                                {deleteRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                Delete Restaurant
                             </button>
                         </div>
                     </div>
@@ -605,76 +763,5 @@ const ScreenSuperAdminManagement = () => {
         </div>
     );
 };
-
-// --- Sub-Components ---
-
-const StatCard = ({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) => {
-    const colorStyles: Record<string, string> = {
-        blue: "bg-blue-50 text-[#0055FE]",
-        amber: "bg-amber-50 text-amber-600",
-        green: "bg-green-50 text-green-600"
-    };
-    return (
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-                <div className={`p-2 rounded-lg ${colorStyles[color]}`}>{icon}</div>
-                <span className="text-xs font-medium text-slate-500">{label}</span>
-            </div>
-            <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
-        </div>
-    );
-};
-
-const ReadOnlyField = ({ label, value, icon }: { label: string; value: string | number; icon?: React.ReactNode }) => (
-    <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-500">{label}</label>
-        <div className="px-4 py-2.5 bg-slate-100 rounded-lg text-sm text-slate-900 flex items-center gap-2">
-            {icon}{value || '-'}
-        </div>
-    </div>
-);
-
-const SettingField = ({ label, isEditing, value, onChange, icon, type = "text" }: any) => (
-    <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-500">{label}</label>
-        {isEditing ? (
-            <input
-                type={type}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
-            />
-        ) : (
-            <div className="h-10 px-3 bg-slate-100 rounded-lg flex items-center text-sm text-slate-700">
-                <span className="mr-2 text-slate-400">{icon}</span>{value}
-            </div>
-        )}
-    </div>
-);
-
-const InputField = ({ label, value, onChange, type = "text" }: { label: string; value: string | number; onChange: (v: string) => void; type?: string }) => (
-    <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-500">{label}</label>
-        <input
-            type={type}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
-        />
-    </div>
-);
-
-const SelectField = ({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) => (
-    <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-500">{label}</label>
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-[#0055FE] outline-none capitalize"
-        >
-            {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
-    </div>
-);
 
 export default ScreenSuperAdminManagement;
