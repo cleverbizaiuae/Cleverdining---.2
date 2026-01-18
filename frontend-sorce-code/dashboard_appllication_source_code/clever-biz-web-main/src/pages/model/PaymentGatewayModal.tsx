@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 type Props = {
     open: boolean;
     onClose: () => void;
-    provider: "stripe" | "razorpay" | "checkout" | "paytabs";
+    provider: "stripe" | "checkout" | "paytabs";
     onSuccess?: (data: any) => void;
 };
 
@@ -40,8 +40,6 @@ export default function PaymentGatewayModal({
         switch (p) {
             case "stripe":
                 return "Stripe";
-            case "razorpay":
-                return "Razorpay";
             case "checkout":
                 return "Checkout.com";
             case "paytabs":
@@ -55,8 +53,6 @@ export default function PaymentGatewayModal({
         switch (p) {
             case "stripe":
                 return "Publishable Key";
-            case "razorpay":
-                return "Key ID";
             case "checkout":
                 return "Public Key";
             case "paytabs":
@@ -70,8 +66,6 @@ export default function PaymentGatewayModal({
         switch (p) {
             case "stripe":
                 return "Secret Key";
-            case "razorpay":
-                return "Key Secret";
             case "checkout":
                 return "Secret Key";
             case "paytabs":

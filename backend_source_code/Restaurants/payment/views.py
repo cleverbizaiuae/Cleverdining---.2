@@ -1,5 +1,4 @@
 import stripe
-import razorpay
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from order.models import Order
@@ -436,12 +435,12 @@ class VerifyPaymentView(APIView):
     def post(self, request):
         data = request.data
         # We need to identify the payment to verify. 
-        # For Razorpay, we get order_id (transaction_id). For Stripe, we might get session_id.
+        # For Checkout.com, we get cko-session-id. For Stripe, we get session_id.
         
-        transaction_id = data.get('razorpay_order_id') or data.get('session_id')
+        transaction_id = data.get('cko-session-id') or data.get('session_id')
         
         if not transaction_id:
-             return Response({'error': 'Transaction ID (session_id or razorpay_order_id) is required'}, status=status.HTTP_400_BAD_REQUEST)
+             return Response({'error': 'Transaction ID (session_id or cko-session-id) is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Try to find payment by transaction_id (or stripe_payment_intent_id for legacy)
@@ -496,7 +495,8 @@ class PaymentCancelView(APIView):
     def get(self, request):
         return Response({'message': 'Payment was canceled'}, status=status.HTTP_200_OK)
 
-class VerifyRazorpayPaymentView(APIView):
+class VerifyCheckoutPaymentView(APIView):
+     """Checkout.com payment verification - redirects to unified view"""
      def post(self, request):
          return VerifyPaymentView().post(request)
 

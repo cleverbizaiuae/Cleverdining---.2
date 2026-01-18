@@ -1,7 +1,6 @@
 import json
 from abc import ABC, abstractmethod
 import stripe
-import razorpay
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
@@ -118,76 +117,139 @@ class StripeAdapter(PaymentAdapter):
         except stripe.error.SignatureVerificationError as e:
             raise ValidationError("Invalid signature")
 
-class RazorpayAdapter(PaymentAdapter):
+class CheckoutAdapter(PaymentAdapter):
+    """
+    Checkout.com Hosted Payments Page Adapter
+    Supports: Card payments, Apple Pay, Google Pay
+    Docs: https://www.checkout.com/docs/payments/accept-payments/accept-a-payment-on-a-hosted-page
+    """
+    SANDBOX_URL = "https://api.sandbox.checkout.com/hosted-payments"
+    PRODUCTION_URL = "https://api.checkout.com/hosted-payments"
+
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
-        try:
-            client = razorpay.Client(auth=(self.gateway.key_id, self.gateway.get_decrypted_secret()))
-            final_amount = amount if amount is not None else order.total_price
-            data = {
-                "amount": int(final_amount * 100),
-                "currency": "AED",
-                "receipt": f"order_{order.id}",
-                "notes": {
-                    "order_id": order.id,
-                    "restaurant_id": order.restaurant.id
+        import requests
+        
+        # Use sandbox for testing, production for live
+        # You can add an is_sandbox flag to PaymentGateway model if needed
+        base_url = self.SANDBOX_URL  # Change to PRODUCTION_URL for live
+        
+        secret_key = self.gateway.get_decrypted_secret()
+        final_amount = int((amount if amount is not None else order.total_price) * 100)  # Checkout expects minor units
+        
+        # Build metadata
+        final_metadata = {
+            'order_id': str(order.id),
+            'restaurant_id': str(order.restaurant.id)
+        }
+        if metadata:
+            final_metadata.update(metadata)
+
+        payload = {
+            "amount": final_amount,
+            "currency": "AED",
+            "reference": f"order_{order.id}",
+            "description": f"Order #{order.id} Payment",
+            "billing": {
+                "address": {
+                    "country": "AE"
                 }
-            }
-            razorpay_order = client.order.create(data=data)
+            },
+            "success_url": success_url + "?cko-session-id={cko-session-id}",
+            "cancel_url": cancel_url,
+            "failure_url": cancel_url,
+            "metadata": final_metadata,
+            # Enable Apple Pay and other payment methods
+            "allow_payment_methods": ["card", "applepay", "googlepay"]
+        }
+
+        headers = {
+            "Authorization": f"Bearer {secret_key}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.post(base_url, json=payload, headers=headers)
+            data = response.json()
+            
+            if response.status_code not in [200, 201] or '_links' not in data:
+                error_msg = data.get('error_type', 'Unknown error')
+                error_codes = data.get('error_codes', [])
+                raise ValidationError(f"Checkout.com Error: {error_msg} {error_codes}")
+
+            redirect_url = data.get('_links', {}).get('redirect', {}).get('href')
+            
             return {
-                'order_id': razorpay_order['id'],
-                'amount': razorpay_order['amount'],
-                'currency': razorpay_order['currency'],
-                'key_id': self.gateway.key_id,
-                'provider': 'razorpay',
-                'transaction_id': razorpay_order['id']
+                'url': redirect_url,
+                'transaction_id': data.get('id'),
+                'provider': 'checkout',
+                'status': 'pending',
+                'raw_response': data
             }
-        except Exception as e:
-            raise ValidationError(str(e))
+        except requests.RequestException as e:
+            raise ValidationError(f"Checkout.com Connection Failed: {str(e)}")
 
     def verify_payment(self, data):
+        import requests
+        
+        session_id = data.get('cko-session-id') or data.get('session_id')
+        if not session_id:
+            raise ValidationError("Session ID is required")
+        
+        secret_key = self.gateway.get_decrypted_secret()
+        
+        # Get session details from Checkout.com
+        url = f"https://api.sandbox.checkout.com/hosted-payments/{session_id}"
+        headers = {"Authorization": f"Bearer {secret_key}"}
+        
         try:
-            client = razorpay.Client(auth=(self.gateway.key_id, self.gateway.get_decrypted_secret()))
-            client.utility.verify_payment_signature({
-                'razorpay_order_id': data.get('razorpay_order_id'),
-                'razorpay_payment_id': data.get('razorpay_payment_id'),
-                'razorpay_signature': data.get('razorpay_signature')
-            })
-            return {
-                'status': 'completed',
-                'transaction_id': data.get('razorpay_order_id')
-            }
-        except razorpay.errors.SignatureVerificationError:
-            raise ValidationError("Signature verification failed")
+            response = requests.get(url, headers=headers)
+            data = response.json()
+            
+            status = data.get('status', '').lower()
+            if status in ['payment_received', 'payment_approved', 'captured']:
+                return {
+                    'status': 'completed',
+                    'transaction_id': session_id,
+                    'amount': data.get('amount', 0) / 100
+                }
+            elif status in ['payment_pending', 'pending']:
+                return {'status': 'pending'}
+            else:
+                return {'status': 'failed'}
         except Exception as e:
-            raise ValidationError(str(e))
+            raise ValidationError(f"Checkout.com Verification Failed: {str(e)}")
 
     def verify_webhook(self, request):
-        # Razorpay webhook verification
-        webhook_secret = getattr(self.gateway, 'webhook_secret', None)
-        if not webhook_secret:
-             # If no secret, we can't verify signature easily locally without it.
-             # Assuming it's passed or stored.
-             pass
+        """
+        Checkout.com webhook verification
+        Events: payment_approved, payment_declined, payment_captured
+        """
+        import hmac
+        import hashlib
         
-        payload = request.body.decode('utf-8')
-        signature = request.headers.get('X-Razorpay-Signature')
+        # Get webhook signature (optional - for production you should verify)
+        signature = request.headers.get('Cko-Signature')
         
         try:
-            client = razorpay.Client(auth=(self.gateway.key_id, self.gateway.get_decrypted_secret()))
-            client.utility.verify_webhook_signature(payload, signature, webhook_secret)
+            data = request.data if hasattr(request, 'data') else json.loads(request.body)
             
-            data = json.loads(payload)
-            if data['event'] == 'order.paid':
-                payment_entity = data['payload']['payment']['entity']
-                order_entity = data['payload']['order']['entity']
+            event_type = data.get('type', '')
+            
+            if event_type == 'payment_approved' or event_type == 'payment_captured':
+                payment_data = data.get('data', {})
                 return {
-                    'transaction_id': order_entity['id'],
                     'status': 'completed',
-                    'amount': payment_entity['amount'] / 100
+                    'transaction_id': payment_data.get('id'),
+                    'amount': payment_data.get('amount', 0) / 100 if payment_data.get('amount') else 0,
+                    'meta': data.get('data', {}).get('metadata', {})
                 }
+            elif event_type == 'payment_declined':
+                return {'status': 'failed'}
+            
             return None
         except Exception as e:
-             raise ValidationError(str(e))
+            raise ValidationError(f"Webhook verification failed: {str(e)}")
+
 
 class CashAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):

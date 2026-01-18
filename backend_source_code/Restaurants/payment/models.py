@@ -108,7 +108,6 @@ class StripeDetails(models.Model):
 class PaymentGateway(models.Model):
     PROVIDER_CHOICES = [
         ('stripe', 'Stripe'),
-        ('razorpay', 'Razorpay'),
         ('checkout', 'Checkout.com'),
         ('paytabs', 'PayTabs'),
     ]
@@ -117,8 +116,8 @@ class PaymentGateway(models.Model):
     is_active = models.BooleanField(default=False)
     
     # Common fields for keys
-    key_id = models.CharField(max_length=255) # Publishable Key (Stripe) / Key ID (Razorpay)
-    key_secret = models.CharField(max_length=255) # Secret Key (Stripe) / Key Secret (Razorpay)
+    key_id = models.CharField(max_length=255) # Public Key (Stripe/Checkout) / Profile ID (PayTabs)
+    key_secret = models.CharField(max_length=255) # Secret Key (Stripe/Checkout) / Server Key (PayTabs)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

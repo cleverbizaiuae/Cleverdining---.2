@@ -1,5 +1,5 @@
 from .models import PaymentGateway, Payment, StripeDetails
-from .adapters import StripeAdapter, RazorpayAdapter, CashAdapter, PayTabsAdapter
+from .adapters import StripeAdapter, CheckoutAdapter, CashAdapter, PayTabsAdapter
 from rest_framework.exceptions import ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -10,7 +10,7 @@ channel_layer = get_channel_layer()
 class PaymentService:
     ADAPTERS = {
         'stripe': StripeAdapter,
-        'razorpay': RazorpayAdapter,
+        'checkout': CheckoutAdapter,
         'cash': CashAdapter,
         'paytabs': PayTabsAdapter
     }
@@ -57,15 +57,15 @@ class PaymentService:
                         'key_id': "PROFILE_ID_MISSING",
                         'key_secret': "SERVER_KEY_MISSING"
                     }
-                elif provider == 'razorpay':
+                elif provider == 'checkout':
                     defaults = {
-                         'key_id': "rzp_test_missing",
-                         'key_secret': "secret_missing"
+                         'key_id': "pk_test_missing",
+                         'key_secret': "sk_test_missing"
                     }
                 
                 if defaults:
                      # Auto-Create
-                     if not provider in ['stripe', 'paytabs', 'razorpay']:
+                     if not provider in ['stripe', 'paytabs', 'checkout']:
                           # Don't auto-create unknown providers without defaults
                           pass
                      else:
@@ -255,9 +255,9 @@ class PaymentService:
                  restaurant_id = payload['data']['object']['metadata']['restaurant_id']
              except:
                  pass
-        elif provider == 'razorpay':
+        elif provider == 'checkout':
              try:
-                 restaurant_id = payload['payload']['payment']['entity']['notes']['restaurant_id']
+                 restaurant_id = payload.get('data', {}).get('metadata', {}).get('restaurant_id')
              except:
                  pass
                  

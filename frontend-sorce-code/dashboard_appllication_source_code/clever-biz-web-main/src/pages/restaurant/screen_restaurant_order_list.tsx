@@ -73,7 +73,7 @@ const ScreenRestaurantOrderList = () => {
   // Payment States
   const [openStripe, setOpenStripe] = useState(false);
   const [openGatewayModal, setOpenGatewayModal] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<"stripe" | "razorpay" | "checkout" | "paytabs">("stripe");
+  const [selectedProvider, setSelectedProvider] = useState<"stripe" | "checkout" | "paytabs">("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
