@@ -341,7 +341,9 @@ class PayTabsAdapter(PaymentAdapter):
             "cart_amount": float(amount if amount is not None else order.total_price),
             "callback": "https://cleverdining-2.onrender.com/api/payment/webhook/paytabs/",
             "return": "https://cleverdining-2.onrender.com/api/customer/payment/paytabs/return/", 
-            "hide_shipping": True
+            "hide_shipping": True,
+            # Explicitly enable Apple Pay and card payments
+            "payment_methods": ["all", "applepay"]
         }
 
         # 3. Connection (HTTP Headers)
