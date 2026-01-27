@@ -208,7 +208,7 @@ const ScreenRestaurantDashboard = () => {
 
 
   useEffect(() => {
-    if (userRole === 'owner') {
+    if (userRole === 'owner' || userRole === 'manager') {
       fetchMostSellingItems();
       fetchAnalytics();
     }
@@ -316,8 +316,8 @@ const ScreenRestaurantDashboard = () => {
   return (
     <div className="flex flex-col gap-6">
 
-      {/* METRICS GRID - OWNER ONLY */}
-      {userRole === 'owner' && (
+      {/* METRICS GRID - OWNER & MANAGER */}
+      {(userRole === 'owner' || userRole === 'manager') && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Total Revenue"
@@ -534,8 +534,8 @@ const ScreenRestaurantDashboard = () => {
 
 
 
-        {/* MOST SELLING ITEMS - OWNER ONLY */}
-        {userRole === 'owner' && (
+        {/* MOST SELLING ITEMS - OWNER & MANAGER */}
+        {(userRole === 'owner' || userRole === 'manager') && (
           <div className="bg-white p-5 rounded-lg border border-slate-200 h-fit">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-semibold text-slate-900">Most Selling</h3>

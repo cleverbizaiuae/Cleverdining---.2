@@ -101,6 +101,7 @@ export const useRole = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("userInfo");
+    sessionStorage.removeItem("profile_synced"); // Clear profile cache flag
     setUserRole(null);
     setUserInfo(null);
   };
@@ -137,12 +138,17 @@ export const useRole = () => {
           ? localStorage.getItem("accessToken")
           : null;
 
-      if (hasToken) {
+      // OPTIMIZATION: Only fetch profile if not already synced this session
+      // This prevents redundant API calls on every navigation
+      const profileSynced = sessionStorage.getItem("profile_synced");
+
+      if (hasToken && !profileSynced && user) {
         try {
           const response = await axiosInstance.get<UserInfo>("/profile/");
           if (isMounted && response?.data) {
             const profile = response.data;
             localStorage.setItem("userInfo", JSON.stringify(profile));
+            sessionStorage.setItem("profile_synced", "true"); // Mark as synced for this session
             setUserInfo(profile);
             setUserRole(profile?.role || null);
           }

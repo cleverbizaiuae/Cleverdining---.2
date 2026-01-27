@@ -5,6 +5,7 @@ from item.views import CustomerItemViewSet
 from order.views import OrderCreateAPIView, OrderCancelAPIView,MyOrdersAPIView,MySingleOrderAPIView, CartViewSet
 from review.views import CreateReviewAPIView
 from payment.views import CreateCheckoutSessionView, CreateBulkCheckoutSessionView, PaymentSuccessView, PaymentCancelView, VerifyCheckoutPaymentView, VerifyPaymentView, PaymentWebhookView, PayTabsReturnView
+from payment.wallet_views import WalletAvailabilityView, WalletPaymentConfirmView
 from restaurant.views import PublicRestaurantListView
 from device.views import PublicDeviceListView, PublicDeviceByUUIDView, ResolveTableView
 
@@ -34,4 +35,7 @@ urlpatterns = [
     path('create-checkout-session/<int:order_id>/', CreateCheckoutSessionView.as_view(), name='create_checkout_session'),
     path('create-bulk-checkout-session/', CreateBulkCheckoutSessionView.as_view(), name='create_bulk_checkout_session'),
     path('payment/paytabs/return/', PayTabsReturnView.as_view(), name='paytabs_return'),
+    # Wallet Payment Endpoints
+    path('wallet-availability/', WalletAvailabilityView.as_view(), name='wallet_availability'),
+    path('payment/wallet/confirm/', WalletPaymentConfirmView.as_view(), name='wallet_payment_confirm'),
 ]

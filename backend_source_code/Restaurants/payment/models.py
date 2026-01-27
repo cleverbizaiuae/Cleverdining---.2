@@ -22,13 +22,25 @@ fernet = Fernet(SECRET_KEY.encode())
 
 
 class Payment(models.Model):
+    PROVIDER_CHOICES = [
+        ('stripe', 'Stripe'),
+        ('checkout', 'Checkout.com'),
+        ('paytabs', 'PayTabs'),
+        ('cash', 'Cash'),
+        ('apple_pay', 'Apple Pay'),
+        ('google_pay', 'Google Pay'),
+    ]
+    
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='payments')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payments')
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payments')
     
     # Generic fields
-    provider = models.CharField(max_length=20, default='stripe')
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default='stripe')
     transaction_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    
+    # Wallet-specific fields
+    wallet_token_reference = models.CharField(max_length=255, null=True, blank=True)
     
     # Legacy / Specific fields
     stripe_payment_intent_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
@@ -111,6 +123,12 @@ class PaymentGateway(models.Model):
         ('checkout', 'Checkout.com'),
         ('paytabs', 'PayTabs'),
     ]
+    
+    GOOGLE_PAY_ENVIRONMENT_CHOICES = [
+        ('TEST', 'Test'),
+        ('PRODUCTION', 'Production'),
+    ]
+    
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payment_gateways')
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
     is_active = models.BooleanField(default=False)
@@ -118,6 +136,20 @@ class PaymentGateway(models.Model):
     # Common fields for keys
     key_id = models.CharField(max_length=255) # Public Key (Stripe/Checkout) / Profile ID (PayTabs)
     key_secret = models.CharField(max_length=255) # Secret Key (Stripe/Checkout) / Server Key (PayTabs)
+    
+    # Apple Pay Configuration
+    apple_pay_enabled = models.BooleanField(default=False)
+    apple_merchant_id = models.CharField(max_length=255, null=True, blank=True)
+    apple_domain_verified = models.BooleanField(default=False)
+    
+    # Google Pay Configuration
+    google_pay_enabled = models.BooleanField(default=False)
+    google_merchant_id = models.CharField(max_length=255, null=True, blank=True)
+    google_environment = models.CharField(
+        max_length=10, 
+        choices=GOOGLE_PAY_ENVIRONMENT_CHOICES,
+        default='TEST'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

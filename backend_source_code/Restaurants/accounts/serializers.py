@@ -41,7 +41,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class RestaurantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Restaurant
-        fields = ['id', 'resturent_name', 'location', 'phone_number', 'package', 'image']
+        fields = ['id', 'resturent_name', 'location', 'phone_number', 'package', 'image', 'google_review_url']
 
 
 

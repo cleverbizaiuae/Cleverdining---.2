@@ -3,6 +3,7 @@ import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import CheckoutButton from "./CheckoutButton";
 import axiosInstance from "../lib/axios";
+import { ApplePayButton, GooglePayButton, useWalletAvailability } from "../components/WalletPayment";
 // import CheckoutButton from "../components/CheckoutButton";
 
 export default function CheckoutPage() {
@@ -51,13 +52,17 @@ export default function CheckoutPage() {
     );
   }
 
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | 'apple_pay' | 'google_pay'>('card');
   const [orderData, setOrderData] = useState<any>(null);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [tipType, setTipType] = useState<'percentage' | 'custom_amount' | 'custom_percentage' | null>(null);
   const [tipValue, setTipValue] = useState<number | string>(''); // 5, 10, 15, or custom input
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [customInput, setCustomInput] = useState<string>('');
+
+  // Get restaurant ID from order data for wallet availability check
+  const restaurantId = orderData?.restaurant || allOrders[0]?.restaurant || null;
+  const { availability: walletAvailability, loading: walletLoading } = useWalletAvailability(restaurantId);
 
   // Fetch Order Data to get Subtotal
   useEffect(() => {
@@ -100,9 +105,10 @@ export default function CheckoutPage() {
     : Number(orderData?.total_price || 0);
 
   // Collect all items from all orders for display
+  // Backend uses 'order_items' field, fallback to 'items' for compatibility
   const allItems = isBulkCheckout
-    ? allOrders.flatMap((o) => (o.items || []).map((item: any) => ({ ...item, orderId: o.id })))
-    : (orderData?.items || []);
+    ? allOrders.flatMap((o) => (o.order_items || o.items || []).map((item: any) => ({ ...item, orderId: o.id })))
+    : (orderData?.order_items || orderData?.items || []);
   // If Tax/Service exists, we should ideally get them.
   // Assuming Subtotal for Tip = Item Total.
 
@@ -279,6 +285,57 @@ export default function CheckoutPage() {
               <span className="text-2xl">💳</span>
             </label>
 
+            {/* WALLET PAYMENT OPTIONS */}
+            {!walletLoading && (walletAvailability.apple_pay_available || walletAvailability.google_pay_available) && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-400 uppercase font-medium mb-2">Express Checkout</p>
+                <div className="space-y-2">
+                  {walletAvailability.apple_pay_available && (
+                    <label
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
+                      ${paymentMethod === 'apple_pay' ? 'border-black bg-gray-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+                    `}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="apple_pay"
+                        checked={paymentMethod === 'apple_pay'}
+                        onChange={() => setPaymentMethod('apple_pay')}
+                        className="mr-3 h-5 w-5 text-black focus:ring-gray-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-semibold block text-gray-800">Apple Pay</span>
+                        <span className="text-sm text-gray-500">Fast & secure</span>
+                      </div>
+                      <span className="text-2xl"></span>
+                    </label>
+                  )}
+                  {walletAvailability.google_pay_available && (
+                    <label
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
+                      ${paymentMethod === 'google_pay' ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+                    `}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="google_pay"
+                        checked={paymentMethod === 'google_pay'}
+                        onChange={() => setPaymentMethod('google_pay')}
+                        className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-semibold block text-gray-800">Google Pay</span>
+                        <span className="text-sm text-gray-500">Fast & secure</span>
+                      </div>
+                      <span className="text-xl">G Pay</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+
             <label
               className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
               ${paymentMethod === 'cash' ? 'border-yellow-500 bg-yellow-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
@@ -309,13 +366,71 @@ export default function CheckoutPage() {
           <span className="text-2xl font-bold text-gray-900">AED {finalTotal}</span>
         </div>
 
-        <CheckoutButton
-          orderId={orderId}
-          provider={paymentMethod === 'card' ? undefined : 'cash'}
-          tipAmount={tipAmount}
-          tipType={tipType}
-          tipValue={tipValue}
-        />
+        {/* Card or Cash Payment */}
+        {(paymentMethod === 'card' || paymentMethod === 'cash') && (
+          <CheckoutButton
+            orderId={orderId}
+            provider={paymentMethod === 'card' ? undefined : 'cash'}
+            tipAmount={tipAmount}
+            tipType={tipType}
+            tipValue={tipValue}
+          />
+        )}
+
+        {/* Apple Pay Button */}
+        {paymentMethod === 'apple_pay' && (
+          <ApplePayButton
+            amount={parseFloat(finalTotal)}
+            orderId={orderId}
+            restaurantName={orderData?.restaurant_name || 'CleverDining'}
+            onSuccess={(result) => {
+              console.log('Apple Pay Success:', result);
+              // Navigate to success page
+              navigate('/payment-success', {
+                state: {
+                  orderId,
+                  paymentMethod: 'apple_pay',
+                  transactionId: result.transactionId
+                }
+              });
+            }}
+            onError={(error) => {
+              console.error('Apple Pay Error:', error);
+              alert(`Payment failed: ${error}`);
+            }}
+            onCancel={() => {
+              console.log('Apple Pay Cancelled');
+            }}
+          />
+        )}
+
+        {/* Google Pay Button */}
+        {paymentMethod === 'google_pay' && (
+          <GooglePayButton
+            amount={parseFloat(finalTotal)}
+            orderId={orderId}
+            restaurantName={orderData?.restaurant_name || 'CleverDining'}
+            onSuccess={(result) => {
+              console.log('Google Pay Success:', result);
+              // Navigate to success page
+              navigate('/payment-success', {
+                state: {
+                  orderId,
+                  paymentMethod: 'google_pay',
+                  transactionId: result.transactionId
+                }
+              });
+            }}
+            onError={(error) => {
+              console.error('Google Pay Error:', error);
+              alert(`Payment failed: ${error}`);
+            }}
+            onCancel={() => {
+              console.log('Google Pay Cancelled');
+            }}
+          />
+        )}
+
         {paymentMethod === 'cash' && (
           <p className="text-center text-xs text-gray-500 mt-2">
             A staff member will come to your table.

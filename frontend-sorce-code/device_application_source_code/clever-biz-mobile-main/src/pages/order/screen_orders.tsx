@@ -28,6 +28,7 @@ const ScreenOrders = () => {
       try {
         setLoading(true);
         setErr(null);
+        setOrders([]); // Clear stale state before fetch to ensure fresh data
 
         // Use session token for proper session-based filtering
         const guestSessionToken = localStorage.getItem("guest_session_token");

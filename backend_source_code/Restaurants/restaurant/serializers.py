@@ -6,7 +6,7 @@ from restaurant.models import Restaurant
 class RestaurantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Restaurant
-        fields = ['resturent_name', 'location', 'phone_number', 'package', 'image', 'logo', 'owner']
+        fields = ['resturent_name', 'location', 'phone_number', 'package', 'image', 'logo', 'owner', 'google_review_url']
 
 class OwnerRegisterSerializer(serializers.ModelSerializer):
     # restaurant fields

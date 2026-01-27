@@ -47,10 +47,21 @@ const TableEntry = () => {
                 };
 
                 // 4. Store session & info
+                // CRITICAL: Clear ALL previous session data first to ensure session isolation
+                localStorage.removeItem("guest_session_token");
+                localStorage.removeItem("pending_order_id");
+                localStorage.removeItem("bulk_checkout");
+                localStorage.removeItem("userInfo");
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem('cart');
+                // Clear chat/messages state for session isolation
+                localStorage.removeItem("chat_messages_cache");
+                localStorage.removeItem("newMessage");
+                // Old session cleanup complete - now store new session
+
                 localStorage.setItem("userInfo", JSON.stringify(mockUserInfo));
                 localStorage.setItem("accessToken", "guest_token"); // Marker for axios interceptor (optional but keeps flow)
                 localStorage.setItem("guest_session_token", session_token); // CRITICAL for backend auth
-                localStorage.removeItem('cart'); // Clear old cart to be safe
 
                 // 5. Redirect to dashboard (Force reload)
                 window.location.href = "/dashboard";

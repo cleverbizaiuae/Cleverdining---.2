@@ -13,6 +13,9 @@ import {
   Eye,
   X,
   RefreshCw,
+  Settings,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 
 // --- COMPONENTS ---
@@ -30,7 +33,122 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass
   </div>
 );
 
-// 2. MODAL
+// 2. GOOGLE REVIEW SETTINGS CARD
+const GoogleReviewSettingsCard = () => {
+  const [googleReviewUrl, setGoogleReviewUrl] = useState("");
+  const [originalUrl, setOriginalUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await axiosInstance.get("/owners/restaurant-settings/");
+      const url = res.data.google_review_url || "";
+      setGoogleReviewUrl(url);
+      setOriginalUrl(url);
+    } catch (error) {
+      console.error("Failed to load settings", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await axiosInstance.patch("/owners/restaurant-settings/", {
+        google_review_url: googleReviewUrl.trim() || null
+      });
+      setOriginalUrl(googleReviewUrl);
+      toast.success("Google review link saved successfully");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hasChanges = googleReviewUrl !== originalUrl;
+
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+      <div className="p-5 border-b border-slate-200 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+          <Settings size={20} className="text-[#0055FE]" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">Review Settings</h3>
+          <p className="text-sm text-slate-500">Configure where customers leave reviews</p>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {loading ? (
+          <div className="text-sm text-slate-400 py-4 text-center">Loading settings...</div>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Google Review URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={googleReviewUrl}
+                  onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                  placeholder="https://g.page/your-restaurant/review"
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 transition-all"
+                />
+                {googleReviewUrl && (
+                  <a
+                    href={googleReviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center gap-1"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                This link will appear on the payment success screen. Customers can tap to leave a Google review.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges || saving}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${hasChanges
+                    ? "bg-[#0055FE] text-white hover:bg-[#0047D1] shadow-lg shadow-[#0055FE]/20"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  }`}
+              >
+                {saving ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    Save Review Link
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// 3. MODAL
 const ReviewDetailModal = ({ isOpen, onClose, review }: { isOpen: boolean, onClose: () => void, review: any }) => {
   const [loadingItems, setLoadingItems] = useState(false);
   const [orderItems, setOrderItems] = useState<any[]>([]);
@@ -213,6 +331,9 @@ const ScreenRestaurantReviews = () => {
         />
       </div>
 
+      {/* GOOGLE REVIEW SETTINGS */}
+      <GoogleReviewSettingsCard />
+
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
         {/* TOOLBAR */}
         <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -307,9 +428,9 @@ const ScreenRestaurantReviews = () => {
       </div>
 
       <ReviewDetailModal isOpen={!!selectedReview} onClose={() => setSelectedReview(null)} review={selectedReview} />
-      <div className="text-center text-xs text-slate-400 mt-4">Powered by CleverBiz AI</div>
     </div>
   );
 };
 
 export default ScreenRestaurantReviews;
+

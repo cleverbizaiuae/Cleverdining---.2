@@ -195,9 +195,9 @@ const ScreenRestaurantManagement = () => {
 
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 font-inter">
+    <div className="flex flex-col gap-4 font-inter">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="text-[#0055FE]" size={24} />
@@ -320,11 +320,6 @@ const ScreenRestaurantManagement = () => {
             <div className="p-12 text-center text-slate-400">No team members found</div>
           )}
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="text-center mt-6">
-        <p className="text-xs text-slate-400">Powered by CleverBiz AI</p>
       </div>
 
       {/* --- MODALS --- */}

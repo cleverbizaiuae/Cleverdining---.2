@@ -21,8 +21,14 @@ class StripeDetailsSerializer(serializers.ModelSerializer):
 class PaymentGatewaySerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentGateway
-        fields = ['id', 'provider', 'is_active', 'key_id', 'key_secret', 'created_at']
+        fields = [
+            'id', 'provider', 'is_active', 'key_id', 'key_secret', 'created_at',
+            # Apple Pay fields
+            'apple_pay_enabled', 'apple_merchant_id', 'apple_domain_verified',
+            # Google Pay fields
+            'google_pay_enabled', 'google_merchant_id', 'google_environment'
+        ]
         extra_kwargs = {
             'key_secret': {'write_only': True},
         }
-        read_only_fields = ['id', 'restaurant']
+        read_only_fields = ['id', 'restaurant', 'apple_domain_verified']

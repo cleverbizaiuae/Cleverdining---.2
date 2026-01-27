@@ -221,8 +221,17 @@ export const Payments = () => {
     }, [startDate, endDate]);
 
     useEffect(() => { fetchPayments(); }, [fetchPayments]);
+
+    // Real-time updates: Listen for payment-related WebSocket events
     useEffect(() => {
-        if (response && (response.type === 'payment:created' || response.type === 'payment:updated')) {
+        if (response && (
+            response.type === 'order_paid' ||
+            response.type === 'cash_payment_alert' ||
+            response.type === 'payment_status_change' ||
+            response.type === 'payment:created' ||
+            response.type === 'payment:updated'
+        )) {
+            console.log('Payment event received, refreshing payments:', response.type);
             fetchPayments();
         }
     }, [response, fetchPayments]);

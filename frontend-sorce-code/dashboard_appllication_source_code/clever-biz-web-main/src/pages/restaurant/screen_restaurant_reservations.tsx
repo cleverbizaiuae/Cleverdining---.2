@@ -19,17 +19,18 @@ import toast from "react-hot-toast";
 
 // --- COMPONENTS ---
 
-const MetricCard = ({ title, value, subtext }: any) => (
-  <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex items-start gap-4 h-full relative overflow-hidden group hover:shadow-md transition-shadow">
-    {/* Vertical Bar */}
-    <div className="w-1.5 h-12 bg-[#0055FE] rounded-full shrink-0"></div>
-    <div className="flex-1">
-      <h3 className="text-3xl font-bold text-slate-900 mb-1">{value}</h3>
-      <p className="text-xs text-slate-500 font-medium mb-1">{title}</p>
-      <div className="flex items-center text-slate-400 group-hover:text-[#0055FE] transition-colors text-[10px] cursor-pointer gap-1 font-medium">
-        Details <ChevronRight size={12} />
-      </div>
+// MetricCard - Standard style matching Dashboard/Payments
+const MetricCard = ({ title, value, icon: Icon, colorClass = "text-[#0055FE]", iconBgClass = "bg-[#0055FE]/10" }: any) => (
+  <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex items-start justify-between">
+    <div>
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{title}</p>
+      <h3 className="text-2xl font-semibold text-slate-900">{value}</h3>
     </div>
+    {Icon && (
+      <div className={`w-10 h-10 rounded-lg ${iconBgClass} flex items-center justify-center ${colorClass}`}>
+        <Icon size={20} />
+      </div>
+    )}
   </div>
 );
 
@@ -56,7 +57,7 @@ const AddAssistantModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               <input
                 type="tel"
                 placeholder="+1 (555) 000-0000"
-                className="flex-1 h-10 bg-[#0055FE] text-white placeholder-blue-200 px-4 rounded-lg outline-none focus:ring-2 focus:ring-blue-400/50"
+                className="flex-1 h-10 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 px-4 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
               />
             </div>
           </div>
@@ -66,7 +67,7 @@ const AddAssistantModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =
             <input
               type="text"
               placeholder="AC..."
-              className="w-full h-10 bg-[#0055FE] text-white placeholder-blue-200 px-4 rounded-lg outline-none focus:ring-2 focus:ring-blue-400/50 font-mono text-sm"
+              className="w-full h-10 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 px-4 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 font-mono text-sm"
             />
           </div>
 
@@ -75,7 +76,7 @@ const AddAssistantModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =
             <input
               type="password"
               placeholder="••••••••••••••••"
-              className="w-full h-10 bg-[#0055FE] text-white placeholder-blue-200 px-4 rounded-lg outline-none focus:ring-2 focus:ring-blue-400/50 font-mono text-sm"
+              className="w-full h-10 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 px-4 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 font-mono text-sm"
             />
           </div>
 
@@ -136,18 +137,21 @@ const ScreenRestaurantReservations = () => {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <MetricCard
-          title="Active booking"
+          title="Active Bookings"
           value={reservationStatusReport?.total_active_accepted_reservations || 0}
+          icon={Users}
         />
         <MetricCard
-          title="Booking last month"
+          title="Last Month"
           value={reservationStatusReport?.last_month_reservations || 0}
+          icon={CalendarIcon}
         />
         <MetricCard
-          title="Total booking (Jun)"
+          title="This Month"
           value={reservationStatusReport?.running_month_reservations || 0}
+          icon={CalendarIcon}
         />
       </div>
 
