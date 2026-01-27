@@ -58,12 +58,17 @@ const ScreenRestaurantChat = () => {
   // 1. Fetch Chat List (Tables)
   useEffect(() => {
     const fetchChats = async () => {
+      // Wait for userInfo to be loaded
+      if (!userInfo?.role) return;
+
       try {
         let endpoint;
-        const role = userInfo?.role; // userInfo from useRole hook
+        const role = userInfo.role;
 
         if (role === "owner") {
           endpoint = "/owners/devicesall/";
+        } else if (role === "manager") {
+          endpoint = "/owners/devicesall/"; // Managers use same endpoint as owners
         } else if (role === "staff") {
           endpoint = "/api/staff/devicesall/";
         } else if (role === "chef") {
@@ -76,10 +81,11 @@ const ScreenRestaurantChat = () => {
         setChatList(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to load chat list", error);
+        toast.error("Failed to load tables");
       }
     };
     fetchChats();
-  }, []);
+  }, [userInfo]);
 
   // 2. Unified WebSocket Connection (With Auto-Reconnect)
   const wsRef = useRef<WebSocket | null>(null);
