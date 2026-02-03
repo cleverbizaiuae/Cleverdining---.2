@@ -93,10 +93,10 @@ const ScreenLanding = () => {
           {/* Background Blur Spot */}
           <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-blue-50 blur-[120px] rounded-full opacity-60 -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
 
-          <div className="container mx-auto px-6 flex flex-col md:flex-row items-center relative gap-12">
+          <div className="container mx-auto px-4 sm:px-6 flex flex-col lg:flex-row items-center relative gap-8 lg:gap-12">
 
             {/* Left Content */}
-            <div className="flex-1 flex flex-col items-start z-10">
+            <div className="flex-1 flex flex-col items-center lg:items-start z-10 text-center lg:text-left">
 
               {/* Badge */}
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100/80 mb-6">
@@ -107,22 +107,22 @@ const ScreenLanding = () => {
                 <span className="text-xs font-semibold text-[#0055FE] uppercase tracking-wide">Restaurant Management OS</span>
               </div>
 
-              <h1 className="text-[56px] md:text-[64px] font-bold leading-[1.1] text-slate-900 mb-6">
+              <h1 className="text-[36px] sm:text-[48px] lg:text-[56px] xl:text-[64px] font-bold leading-[1.1] text-slate-900 mb-6">
                 Dine Smarter With <br />
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#0055FE] to-cyan-500">
                   Cleverbiz AI
                 </span>
               </h1>
 
-              <p className="text-lg md:text-xl text-slate-500 mb-10 max-w-lg leading-relaxed">
+              <p className="text-base sm:text-lg lg:text-xl text-slate-500 mb-8 lg:mb-10 max-w-lg leading-relaxed">
                 Revolutionize your restaurant management with intelligent insights, seamless ordering, and automated workflows.
               </p>
 
-              <div className="flex items-center gap-4">
-                <a href="https://cleverbiz.ai" target="_blank" rel="noopener noreferrer" className="px-8 py-4 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold text-lg shadow-xl shadow-blue-600/20 hover:shadow-blue-600/30 hover:-translate-y-0.5 transition-all duration-300">
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                <a href="https://cleverbiz.ai" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold text-base sm:text-lg shadow-xl shadow-blue-600/20 hover:shadow-blue-600/30 hover:-translate-y-0.5 transition-all duration-300 text-center">
                   Visit Cleverbiz AI Website
                 </a>
-                <div className="h-full w-[1px] bg-slate-200 mx-2"></div>
+                <div className="hidden sm:block h-8 w-[1px] bg-slate-200 mx-2"></div>
                 <SocialContactButtons className="text-slate-400 hover:text-[#0055FE] transition-colors" />
               </div>
 
