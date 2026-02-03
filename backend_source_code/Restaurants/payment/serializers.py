@@ -7,7 +7,8 @@ class PaymentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Payment
-        fields = '__all__'
+        model = Payment
+        fields = ['id', 'order', 'device', 'amount', 'currency', 'provider', 'status', 'transaction_id', 'created_at', 'order_id', 'table_name']
 
 class StripeDetailsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,11 +23,7 @@ class PaymentGatewaySerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentGateway
         fields = [
-            'id', 'provider', 'is_active', 'key_id', 'key_secret', 'created_at',
-            # Apple Pay fields
-            'apple_pay_enabled', 'apple_merchant_id', 'apple_domain_verified',
-            # Google Pay fields
-            'google_pay_enabled', 'google_merchant_id', 'google_environment'
+            'id', 'provider', 'is_active', 'key_id', 'key_secret', 'created_at'
         ]
         extra_kwargs = {
             'key_secret': {'write_only': True},
