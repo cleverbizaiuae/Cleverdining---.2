@@ -1,6 +1,7 @@
 from django.db import models
 from accounts.models import User
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 class Restaurant(models.Model):
     resturent_name = models.CharField(max_length=255)
@@ -14,6 +15,41 @@ class Restaurant(models.Model):
     # Google Review URL - configured by owner in dashboard
     # google_review_url = models.URLField(max_length=500, null=True, blank=True, help_text="Google Business Profile review URL")
     
+    # Plan & Status
+    PLAN_CHOICES = [
+        ('standard', 'Standard'),
+        ('pro', 'Pro'),
+        ('enterprise', 'Enterprise'),
+    ]
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('on_hold', 'On Hold'),
+        ('inactive', 'Inactive'),
+    ]
+
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='standard')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    
+    # Capacity
+    qr_codes = models.PositiveIntegerField(default=10)
+    table_count = models.PositiveIntegerField(default=10)
+    
+    # Subscription
+    subscription_start = models.DateTimeField(default=timezone.now)
+    subscription_end = models.DateTimeField(null=True, blank=True)
+    
+    # WhatsApp Configuration (Enterprise)
+    whatsapp_enabled = models.BooleanField(default=False)
+    whatsapp_waba_id = models.CharField(max_length=255, null=True, blank=True)
+    whatsapp_phone_number_id = models.CharField(max_length=255, null=True, blank=True)
+    whatsapp_business_display_number = models.CharField(max_length=50, null=True, blank=True)
+    whatsapp_access_token = models.TextField(null=True, blank=True) # Encrypt in production!
+    whatsapp_app_id = models.CharField(max_length=255, null=True, blank=True)
+    whatsapp_app_secret = models.CharField(max_length=255, null=True, blank=True)
+    whatsapp_webhook_verify_token = models.CharField(max_length=255, null=True, blank=True)
+    whatsapp_webhook_callback_url = models.URLField(max_length=500, null=True, blank=True)
+    whatsapp_api_version = models.CharField(max_length=10, default="v20.0")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
