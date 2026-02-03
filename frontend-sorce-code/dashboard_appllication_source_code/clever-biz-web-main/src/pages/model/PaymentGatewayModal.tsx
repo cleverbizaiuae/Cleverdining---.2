@@ -240,6 +240,7 @@ export default function PaymentGatewayModal({
                         </div>
 
                         {/* APPLE PAY SECTION */}
+                        {/* 
                         <div className="border-t border-slate-200 pt-4 mt-4">
                             <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
@@ -286,8 +287,10 @@ export default function PaymentGatewayModal({
                                 </div>
                             )}
                         </div>
+                         */}
 
                         {/* GOOGLE PAY SECTION */}
+                        {/* 
                         <div className="border-t border-slate-200 pt-4">
                             <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
@@ -337,6 +340,7 @@ export default function PaymentGatewayModal({
                                 </div>
                             )}
                         </div>
+                         */}
 
                         {serverMsg && <p className="text-sm text-red-400">{serverMsg}</p>}
 

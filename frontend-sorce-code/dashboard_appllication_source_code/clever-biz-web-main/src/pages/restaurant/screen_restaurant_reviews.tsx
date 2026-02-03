@@ -91,6 +91,7 @@ const GoogleReviewSettingsCard = () => {
           <div className="text-sm text-slate-400 py-4 text-center">Loading settings...</div>
         ) : (
           <>
+            {/*
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Google Review URL
@@ -141,6 +142,7 @@ const GoogleReviewSettingsCard = () => {
                 )}
               </button>
             </div>
+             */}
           </>
         )}
       </div>
