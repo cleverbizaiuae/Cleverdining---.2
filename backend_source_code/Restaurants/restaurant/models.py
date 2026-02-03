@@ -12,7 +12,7 @@ class Restaurant(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='restaurants')
     
     # Google Review URL - configured by owner in dashboard
-    google_review_url = models.URLField(max_length=500, null=True, blank=True, help_text="Google Business Profile review URL")
+    # google_review_url = models.URLField(max_length=500, null=True, blank=True, help_text="Google Business Profile review URL")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

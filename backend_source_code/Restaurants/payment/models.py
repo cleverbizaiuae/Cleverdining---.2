@@ -40,7 +40,7 @@ class Payment(models.Model):
     transaction_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     
     # Wallet-specific fields
-    wallet_token_reference = models.CharField(max_length=255, null=True, blank=True)
+    # wallet_token_reference = models.CharField(max_length=255, null=True, blank=True)
     
     # Legacy / Specific fields
     stripe_payment_intent_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
@@ -138,18 +138,18 @@ class PaymentGateway(models.Model):
     key_secret = models.CharField(max_length=255) # Secret Key (Stripe/Checkout) / Server Key (PayTabs)
     
     # Apple Pay Configuration
-    apple_pay_enabled = models.BooleanField(default=False)
-    apple_merchant_id = models.CharField(max_length=255, null=True, blank=True)
-    apple_domain_verified = models.BooleanField(default=False)
+    # apple_pay_enabled = models.BooleanField(default=False)
+    # apple_merchant_id = models.CharField(max_length=255, null=True, blank=True)
+    # apple_domain_verified = models.BooleanField(default=False)
     
-    # Google Pay Configuration
-    google_pay_enabled = models.BooleanField(default=False)
-    google_merchant_id = models.CharField(max_length=255, null=True, blank=True)
-    google_environment = models.CharField(
-        max_length=10, 
-        choices=GOOGLE_PAY_ENVIRONMENT_CHOICES,
-        default='TEST'
-    )
+    # # Google Pay Configuration
+    # google_pay_enabled = models.BooleanField(default=False)
+    # google_merchant_id = models.CharField(max_length=255, null=True, blank=True)
+    # google_environment = models.CharField(
+    #     max_length=10, 
+    #     choices=GOOGLE_PAY_ENVIRONMENT_CHOICES,
+    #     default='TEST'
+    # )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
