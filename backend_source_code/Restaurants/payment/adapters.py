@@ -278,7 +278,8 @@ class CashAdapter(PaymentAdapter):
         )
 
         # Cash payments are implicitly "initiated" but require manual confirmation
-        transaction_id = f"cash_{order.id}"
+        import uuid
+        transaction_id = f"cash_{order.id}_{uuid.uuid4().hex[:8]}"
         
         # Append session_id to URL so SuccessPage can pick it up
         from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
