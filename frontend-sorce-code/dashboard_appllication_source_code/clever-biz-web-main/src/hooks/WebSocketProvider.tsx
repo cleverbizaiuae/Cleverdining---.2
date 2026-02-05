@@ -29,10 +29,10 @@ const WebSocketProvider = ({ children }) => {
 
     const fetchUnreadCount = async () => {
       try {
-        // Use the correct API path - /api/message/chat/unread-count/
+        // Use direct backend URL without /api prefix (axios already adds it via baseURL)
         const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
         const res = await fetch(
-          `${baseUrl}/api/message/chat/unread-count/`,
+          `${baseUrl}/message/chat/unread-count/`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,

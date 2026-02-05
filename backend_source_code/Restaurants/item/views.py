@@ -37,99 +37,137 @@ class ItemViewSet(viewsets.ModelViewSet):
     search_fields = ['item_name', 'category__Category_name']
 
     def get_queryset(self):
-        user = self.request.user
-        # Optimized: Use select_related to avoid N+1 queries
-        base_qs = Item.objects.select_related('category', 'restaurant', 'sub_category')
-        
-        if user.role == 'owner':
-            return base_qs.filter(restaurant__owner=user)
-        elif user.role in ['chef', 'staff', 'manager']:
-            restaurant_ids = ChefStaff.objects.filter(
-                user=user,
-                action='accepted'
-            ).values_list('restaurant_id', flat=True)
-            return base_qs.filter(restaurant_id__in=restaurant_ids)
-        return Item.objects.none()
+        try:
+            user = self.request.user
+            role = getattr(user, 'role', None)
+            
+            # Optimized: Use select_related to avoid N+1 queries
+            base_qs = Item.objects.select_related('category', 'restaurant', 'sub_category')
+            
+            if role == 'owner':
+                return base_qs.filter(restaurant__owner=user)
+            elif role in ['chef', 'staff', 'manager']:
+                restaurant_ids = ChefStaff.objects.filter(
+                    user=user,
+                    action='accepted'
+                ).values_list('restaurant_id', flat=True)
+                return base_qs.filter(restaurant_id__in=restaurant_ids)
+            return Item.objects.none()
+        except Exception as e:
+            print(f"ItemViewSet.get_queryset error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Item.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure it never crashes."""
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            print(f"ItemViewSet.list error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': []
+            })
 
     def perform_create(self, serializer):
-        user = self.request.user
+        try:
+            user = self.request.user
+            role = getattr(user, 'role', None)
 
-        if user.role == 'owner':
-            restaurant = Restaurant.objects.filter(owner=user).first()
-            if not restaurant:
-                raise ValidationError("You do not own a restaurant.")
-        elif user.role in ['chef', 'staff', 'manager']:
-            chef_staff = ChefStaff.objects.filter(
-                user=user,
-                action='accepted'
-            ).first()
-            if not chef_staff:
-                raise ValidationError("You are not associated with any accepted restaurant.")
-            restaurant = chef_staff.restaurant
-        else:
-            raise PermissionDenied("You are not authorized to add items.")
+            if role == 'owner':
+                restaurant = Restaurant.objects.filter(owner=user).first()
+                if not restaurant:
+                    raise ValidationError("You do not own a restaurant.")
+            elif role in ['chef', 'staff', 'manager']:
+                chef_staff = ChefStaff.objects.filter(
+                    user=user,
+                    action='accepted'
+                ).first()
+                if not chef_staff:
+                    raise ValidationError("You are not associated with any accepted restaurant.")
+                restaurant = chef_staff.restaurant
+            else:
+                raise PermissionDenied("You are not authorized to add items.")
 
-        item = serializer.save(restaurant=restaurant)
-        self.send_ws_event("item_created", item)
+            item = serializer.save(restaurant=restaurant)
+            self.send_ws_event("item_created", item)
+        except (ValidationError, PermissionDenied):
+            raise
+        except Exception as e:
+            print(f"ItemViewSet.perform_create error: {e}")
+            raise ValidationError(f"Failed to create item: {str(e)}")
 
     def is_user_authorized(self, item):
-        user = self.request.user
-        if item.restaurant.owner == user:
-            return True
-        elif user.role in ['chef', 'staff', 'manager']:
-            return ChefStaff.objects.filter(
-                user=user,
-                restaurant=item.restaurant,
-                action='accepted'
-            ).exists()
-        return False
+        try:
+            user = self.request.user
+            if item.restaurant.owner == user:
+                return True
+            role = getattr(user, 'role', None)
+            if role in ['chef', 'staff', 'manager']:
+                return ChefStaff.objects.filter(
+                    user=user,
+                    restaurant=item.restaurant,
+                    action='accepted'
+                ).exists()
+            return False
+        except Exception as e:
+            print(f"ItemViewSet.is_user_authorized error: {e}")
+            return False
 
     def perform_update(self, serializer):
-        item = self.get_object()
-        if not self.is_user_authorized(item):
-            raise PermissionDenied("You don't have permission to update this item.")
-        item = serializer.save()
-        self.send_ws_event("item_updated", item)
+        try:
+            item = self.get_object()
+            if not self.is_user_authorized(item):
+                raise PermissionDenied("You don't have permission to update this item.")
+            item = serializer.save()
+            self.send_ws_event("item_updated", item)
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"ItemViewSet.perform_update error: {e}")
+            raise PermissionDenied(f"Failed to update item: {str(e)}")
 
     def perform_destroy(self, instance):
-        if not self.is_user_authorized(instance):
-            raise PermissionDenied("You don't have permission to delete this item.")
-        
-        restaurant_id = instance.restaurant.id
-        item_id = instance.id
-        instance.delete()
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant_id}",
-            {
-                "type": "item_deleted",
-                "item_id": item_id
-            }
-        )
-
-    def is_user_authorized(self, item):
-        user = self.request.user
-        if item.restaurant.owner == user:
-            return True
-        elif user.role in ['chef', 'staff', 'owner' , 'customer']:
-            return ChefStaff.objects.filter(
-                user=user,
-                restaurant=item.restaurant,
-                action='accepted'
-            ).exists()
-        return False
+        try:
+            if not self.is_user_authorized(instance):
+                raise PermissionDenied("You don't have permission to delete this item.")
+            
+            restaurant_id = instance.restaurant.id
+            item_id = instance.id
+            instance.delete()
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant_id}",
+                {
+                    "type": "item_deleted",
+                    "item_id": item_id
+                }
+            )
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"ItemViewSet.perform_destroy error: {e}")
+            raise PermissionDenied(f"Failed to delete item: {str(e)}")
     
     def send_ws_event(self, event_type, item):
         """Helper method to broadcast item events"""
-        restaurant_id = item.restaurant.id
-        data = ItemSerializer(item).data
+        try:
+            restaurant_id = item.restaurant.id
+            data = ItemSerializer(item).data
 
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant_id}",
-            {
-                "type": event_type,
-                "item": data
-            }
-        )
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant_id}",
+                {
+                    "type": event_type,
+                    "item": data
+                }
+            )
+        except Exception as e:
+            print(f"ItemViewSet.send_ws_event error: {e}")
 
 
 

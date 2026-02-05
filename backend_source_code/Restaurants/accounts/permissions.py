@@ -72,15 +72,17 @@ class IsCustomerRole(BasePermission):
 
 class IsChefOrStaff(BasePermission):
     def has_permission(self, request, view):
+        role = getattr(request.user, 'role', None)
         return hasattr(request.user, 'is_authenticated') and request.user.is_authenticated and (
-            request.user.role == 'chef' or request.user.role == 'staff'
+            role == 'chef' or role == 'staff'
         )
     
 
 class IsAllowedRole(BasePermission):
     def has_permission(self, request, view):
+        role = getattr(request.user, 'role', None)
         return hasattr(request.user, 'is_authenticated') and request.user.is_authenticated and (
-            request.user.role == 'chef' or request.user.role == 'staff' or request.user.role == 'customer' or request.user.role == 'owner'
+            role in ['chef', 'staff', 'customer', 'owner']
         )
     
 
@@ -99,15 +101,16 @@ class IsAllowedRoleAndAdmin(BasePermission):
     def has_permission(self, request, view):
         user = request.user
         
-        # Must be authenticated and must have a role
-        if not (user and user.is_authenticated and hasattr(user, 'role')):
+        # Must be authenticated
+        if not (user and user.is_authenticated):
             return False
 
-        if user.role not in self.allowed_roles:
+        role = getattr(user, 'role', None)
+        if role not in self.allowed_roles:
             return False
         
         # Admin has full access
-        if user.role == 'admin':
+        if role == 'admin':
             return True
 
         # Others can only read
@@ -119,8 +122,9 @@ class IsAllowedRoleAndAdmin(BasePermission):
 
 class IsOwnerORStaff(BasePermission):
     def has_permission(self, request, view):
+        role = getattr(request.user, 'role', None)
         return hasattr(request.user, 'is_authenticated') and request.user.is_authenticated and (
-            request.user.role == 'staff' or request.user.role == 'owner'
+            role == 'staff' or role == 'owner'
         )
     
 
