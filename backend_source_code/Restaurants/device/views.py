@@ -135,12 +135,12 @@ class CloseTableSessionView(APIView):
         user = request.user
         restaurant = session.device.restaurant
         
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
              if restaurant.owner != user:
                  return Response({'error': 'Unauthorized'}, status=403)
         
         # Explicit Staff Check
-        elif user.role in ['staff', 'chef', 'manager']:
+        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
              is_authorized = ChefStaff.objects.filter(user=user, restaurant=restaurant, action='accepted').exists()
              if not is_authorized:
                   # Legacy fallback
@@ -243,7 +243,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
         
         try:
-            if user.role == 'owner':
+            if getattr(user, 'role', None) == 'owner':
                 return base_qs.filter(restaurant__owner=user).order_by('-id')
             
             # Staff/Chef/Manager Logic
@@ -261,7 +261,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 return base_qs.filter(restaurant=legacy_staff.restaurant).order_by('-id')
                 
             # 3. Fallback: Owner check (in case role is mismatched but is actually owner)
-            if user.role == 'owner': # Redundant check but safe
+            if getattr(user, 'role', None) == 'owner': # Redundant check but safe
                 return base_qs.filter(restaurant__owner=user).order_by('-id')
 
         except Exception as e:
@@ -275,7 +275,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         restaurant = None
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             restaurant = Restaurant.objects.filter(owner=user).first()
             if not restaurant:
                 raise serializers.ValidationError("Restaurant not found for this owner.")
@@ -320,7 +320,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         device = serializer.save(user=device_user, restaurant=restaurant)
 
         # Notify owner if possible, or log it
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
              owner_email = user.email
         elif restaurant.owner:
              owner_email = restaurant.owner.email
@@ -386,7 +386,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             
             restaurant = None
             
-            if user.role == 'owner':
+            if getattr(user, 'role', None) == 'owner':
                 restaurant = Restaurant.objects.filter(owner=user).first()
             else:
                 # Check ChefStaff
@@ -472,9 +472,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Reservation.objects.none()
 
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             queryset = Reservation.objects.filter(restaurant__owner=user)
-        elif user.role in ['staff', 'chef', 'manager']:
+        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
              # Consolidated Staff/Chef lookup with Fallback
             chef_staff = ChefStaff.objects.filter(user=user).first()
             if chef_staff:
@@ -503,9 +503,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation = self.get_object()
         user = request.user
 
-        if user.role == 'owner' and reservation.restaurant.owner == user:
+        if getattr(user, 'role', None) == 'owner' and reservation.restaurant.owner == user:
             pass
-        elif user.role == 'staff':
+        elif getattr(user, 'role', None) == 'staff':
             is_chef = ChefStaff.objects.filter(user=user, restaurant=reservation.restaurant).exists()
             if not is_chef:
                 raise PermissionDenied("You're not assigned to this restaurant.")
@@ -531,9 +531,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
         user = request.user
 
         # Determine restaurant based on role
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             restaurants = user.restaurants.all()
-        elif user.role in ['staff', 'chef', 'manager']:
+        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
             chef_staff = ChefStaff.objects.filter(user=user)
             if chef_staff.exists():
                 restaurants = [cs.restaurant for cs in chef_staff]
@@ -591,9 +591,9 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             return Device.objects.filter(restaurant__owner=user)
-        elif user.role in ['staff', 'chef', 'manager']:
+        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
             # Relaxed check
             restaurant_ids = list(ChefStaff.objects.filter(user=user).values_list('restaurant_id', flat=True))
             

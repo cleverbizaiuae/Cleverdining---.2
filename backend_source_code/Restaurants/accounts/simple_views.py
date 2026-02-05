@@ -120,9 +120,9 @@ class SimpleLoginView(APIView):
             
             # Get owner_id safely
             try:
-                if user.role == 'owner':
+                if getattr(user, 'role', None) == 'owner':
                     user_data['owner_id'] = user.id
-                elif user.role in ['chef', 'staff']:
+                elif getattr(user, 'role', None) in ['chef', 'staff']:
                     # Try to get owner from restaurant
                     staff_role = user.staff_roles.first()
                     if staff_role and staff_role.restaurant:
@@ -131,7 +131,7 @@ class SimpleLoginView(APIView):
                 pass
             
             # Get restaurants safely (only for owners)
-            if user.role == 'owner':
+            if getattr(user, 'role', None) == 'owner':
                 try:
                     restaurant = user.restaurants.first()
                     if restaurant:

@@ -26,9 +26,9 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             queryset = Category.objects.filter(restaurant__owner=user)
-        elif user.role in ['chef', 'staff', 'manager']:
+        elif getattr(user, 'role', None) in ['chef', 'staff', 'manager']:
             restaurant_ids = ChefStaff.objects.filter(
                 user=user,
                 action='accepted'
@@ -101,9 +101,9 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         # Return only subcategories (level > 0)
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             return Category.objects.filter(restaurant__owner=user, level__gt=0)
-        elif user.role in ['chef', 'staff', 'manager']:
+        elif getattr(user, 'role', None) in ['chef', 'staff', 'manager']:
             restaurant_ids = ChefStaff.objects.filter(
                 user=user,
                 action='accepted'

@@ -125,7 +125,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         
         # Get first restaurant ID safely (if exists)
         try:
-            if user.role == 'owner':
+            if getattr(user, 'role', None) == 'owner':
                 first_restaurant = user.restaurants.first()
                 if first_restaurant:
                     first_restaurant_id = first_restaurant.id
@@ -244,7 +244,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 user_data['owner_id'] = None
             
             # Load restaurants for owners, staff, and chefs
-            if user.role == 'owner':
+            if getattr(user, 'role', None) == 'owner':
                 try:
                     first_restaurant = user.restaurants.first()
                     if first_restaurant:
@@ -264,7 +264,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 except Exception as rest_error:
                     logger.warning(f"Could not load restaurants for owner {user.email}: {str(rest_error)}")
             
-            elif user.role in ['staff', 'chef']:
+            elif getattr(user, 'role', None) in ['staff', 'chef']:
                 try:
                     # Find accepted employment
                     employment = ChefStaff.objects.filter(user=user, action='accepted').first()

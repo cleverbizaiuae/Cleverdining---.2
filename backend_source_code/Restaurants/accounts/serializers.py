@@ -208,7 +208,7 @@ class ChefStaffCreateSerializer(serializers.ModelSerializer):
         if not restaurant and user.role == 'owner':
             restaurant = user.restaurants.first()
             
-        if not restaurant and user.role in ['chef', 'staff']:
+        if not restaurant and getattr(user, 'role', None) in ['chef', 'staff']:
              employment = ChefStaff.objects.filter(user=user, action='accepted').first()
              if employment:
                  restaurant = employment.restaurant

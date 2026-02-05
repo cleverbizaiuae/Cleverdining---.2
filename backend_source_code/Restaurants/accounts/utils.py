@@ -26,7 +26,7 @@ def get_restaurant_owner_id(user):
     """
     try:
         # Case 1: User is a restaurant owner
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
             try:
                 owned_restaurants = user.restaurants.all()
                 if owned_restaurants.exists():

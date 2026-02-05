@@ -54,7 +54,7 @@ class ChatMessageViewSet(ModelViewSet):
             # 2. Logic Cascade (Priority: Auth > Session > Device Fallback)
 
             # A. Authenticated Staff/Owner
-            if user.is_authenticated and hasattr(user, 'role') and user.role in ['owner', 'staff', 'chef', 'manager']:
+            if user.is_authenticated and hasattr(user, 'role') and getattr(user, 'role', None) in ['owner', 'staff', 'chef', 'manager']:
                  if self.action == 'list':
                     if device_id:
                         qs = queryset.filter(device_id=device_id)

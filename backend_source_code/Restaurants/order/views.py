@@ -509,9 +509,9 @@ class OwnerUpdateOrderStatusAPIView(APIView):
     def patch(self, request, pk):
         user = request.user
         try:
-            if user.role == 'owner':
+            if getattr(user, 'role', None) == 'owner':
                 order = Order.objects.get(pk=pk, restaurant__owner=user)
-            elif user.role in ['manager', 'staff', 'chef']:
+            elif getattr(user, 'role', None) in ['manager', 'staff', 'chef']:
                 # Verify user belongs to the restaurant of the order
                 order = Order.objects.get(pk=pk)
                 has_access = ChefStaff.objects.filter(
@@ -593,9 +593,9 @@ class OwnerOrderDetailAPIView(generics.RetrieveAPIView):
             'order_items__item', 'payments'
         )
         
-        if user.role == 'owner':
+        if getattr(user, 'role', None) == 'owner':
              return base_qs.filter(restaurant__owner=user)
-        elif user.role in ['manager', 'staff', 'chef']:
+        elif getattr(user, 'role', None) in ['manager', 'staff', 'chef']:
              restaurant_ids = ChefStaff.objects.filter(
                 user=user, 
                 action='accepted'
