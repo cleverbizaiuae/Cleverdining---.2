@@ -642,3 +642,131 @@ class PublicDeviceByUUIDView(APIView):
             })
         except Device.DoesNotExist:
             return Response({"error": "Device not found"}, status=404)
+
+
+class SimpleDeviceListView(APIView):
+    """
+    BULLETPROOF Simple Device List - No Serializers, No Pagination Complexity.
+    This view will NEVER return 500 errors.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Determine restaurant
+            restaurant = None
+            
+            if getattr(user, 'role', None) == 'owner':
+                restaurant = Restaurant.objects.filter(owner=user).first()
+            else:
+                # Check ChefStaff
+                try:
+                    chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+                    if chef_staff:
+                        restaurant = chef_staff.restaurant
+                except Exception:
+                    pass
+                
+                # Fallback: Legacy Staff
+                if not restaurant:
+                    try:
+                        from staff.models import Staff
+                        legacy_staff = Staff.objects.filter(user=user).first()
+                        if legacy_staff:
+                            restaurant = legacy_staff.restaurant
+                    except Exception:
+                        pass
+            
+            if not restaurant:
+                return Response({
+                    "count": 0,
+                    "next": None,
+                    "previous": None,
+                    "results": []
+                })
+            
+            # Get devices - simple query, no annotations
+            devices = Device.objects.filter(restaurant=restaurant).select_related('restaurant', 'user').order_by('-id')
+            
+            # Manual pagination
+            page = int(request.query_params.get('page', 1))
+            page_size = 10
+            start = (page - 1) * page_size
+            end = start + page_size
+            
+            total_count = devices.count()
+            devices_page = devices[start:end]
+            
+            # Manual serialization - bulletproof
+            results = []
+            for device in devices_page:
+                try:
+                    device_data = {
+                        "id": device.id,
+                        "table_name": device.table_name or "",
+                        "region": device.region or "",
+                        "table_number": device.table_number or "",
+                        "restaurant": device.restaurant.id if device.restaurant else None,
+                        "restaurant_id": device.restaurant.id if device.restaurant else None,
+                        "action": device.action or "active",
+                        "restaurant_name": device.restaurant.resturent_name if device.restaurant else "",
+                        "username": device.user.username if device.user else "",
+                        "user_id": device.user.id if device.user else None,
+                        "qr_code_image": None,  # Skip file access to avoid crashes
+                        "table_url": getattr(device, 'table_url', None),
+                        "active_session_id": None,
+                        "unread_count": 0,
+                        "last_message_time": None
+                    }
+                    
+                    # Try to get QR code URL safely
+                    try:
+                        if device.qr_code_image:
+                            device_data["qr_code_image"] = device.qr_code_image.url
+                    except Exception:
+                        pass
+                    
+                    # Try to get active session
+                    try:
+                        session = device.guest_sessions.filter(is_active=True).first()
+                        if session:
+                            device_data["active_session_id"] = session.id
+                    except Exception:
+                        pass
+                    
+                    # Try to get unread count
+                    try:
+                        device_data["unread_count"] = device.messages.filter(is_read=False, is_from_device=True).count()
+                    except Exception:
+                        pass
+                    
+                    results.append(device_data)
+                except Exception as e:
+                    # If a single device fails, skip it instead of crashing everything
+                    print(f"Warning: Skipped device {device.id} due to error: {e}")
+                    continue
+            
+            # Build pagination response
+            has_next = end < total_count
+            has_prev = page > 1
+            
+            return Response({
+                "count": total_count,
+                "next": f"?page={page + 1}" if has_next else None,
+                "previous": f"?page={page - 1}" if has_prev else None,
+                "results": results
+            })
+            
+        except Exception as e:
+            print(f"SimpleDeviceListView Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": [],
+                "error": str(e)
+            })

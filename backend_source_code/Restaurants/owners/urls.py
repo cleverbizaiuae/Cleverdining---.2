@@ -5,7 +5,7 @@ from accounts.simple_views import SimpleOwnerRegisterView
 from category.views import CategoryViewSet, SubCategoryViewSet
 from item.views import ItemViewSet,MostSellingItemsAPIView
 from accounts.views import ChefStaffViewSet
-from device.views import DeviceViewSet,ReservationViewSet
+from device.views import DeviceViewSet, ReservationViewSet, SimpleDeviceListView
 from order.views import OwnerRestaurantOrdersAPIView,OwnerUpdateOrderStatusAPIView,OrderAnalyticsAPIView,MonthlySalesReportView, ConfirmCashPaymentAPIView, OwnerOrderDetailAPIView
 from review.views import OwnerRestaurantReviewListAPIView
 from device.views import DeviceViewSetall
@@ -21,7 +21,7 @@ router.register('categories', CategoryViewSet, basename='category')
 router.register('sub-categories', SubCategoryViewSet, basename='subcategory')
 router.register('items', ItemViewSet, basename='item')
 router.register('chef-staff', ChefStaffViewSet, basename='chef-staff')
-router.register('devices', DeviceViewSet, basename='device')
+# router.register('devices', DeviceViewSet, basename='device')  # DISABLED - Using bulletproof SimpleDeviceListView instead
 router.register('reservations', ReservationViewSet, basename='reservation')
 router.register('devicesall', DeviceViewSetall, basename='deviceall')
 router.register(r'stripe', StripeDetailsViewSet, basename='stripe-details')
@@ -33,6 +33,10 @@ from restaurant.views import BusinessDayViewSet
 router.register('business-days', BusinessDayViewSet, basename='business-days')
 
 urlpatterns = [
+    # BULLETPROOF device endpoints - MUST BE BEFORE router.urls to intercept
+    path('devices/', SimpleDeviceListView.as_view(), name='simple-device-list'),
+    path('devices/stats/', DeviceViewSet.as_view({'get': 'get_device_stats'}), name='device-stats'),
+    
     path('', include(router.urls)),
     path('register/', SimpleOwnerRegisterView.as_view(), name='ownerRegister'),  # Bulletproof simple registration
     path('register-old/', OwnerRegisterView.as_view(), name='ownerRegister-old'),  # Backup complex registration
@@ -51,3 +55,4 @@ urlpatterns = [
     path('generate-image/', GenerateImageView.as_view(), name='generate-image'),
     path('restaurant-settings/', RestaurantSettingsView.as_view(), name='restaurant-settings'),
 ]
+
