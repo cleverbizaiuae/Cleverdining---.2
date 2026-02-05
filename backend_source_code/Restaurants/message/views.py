@@ -133,9 +133,10 @@ class ChatMessageViewSet(ModelViewSet):
 
             # Identify restaurant(s) for the user
             restaurant_ids = []
-            if user.role == 'owner':
-                restaurant_ids = list(user.restaurants.values_list('id', flat=True))
-            elif user.role in ['staff', 'chef', 'manager']:
+            role = getattr(user, 'role', None)
+            if role == 'owner':
+                restaurant_ids = list(user.restaurants.values_list('id', flat=True)) if hasattr(user, 'restaurants') and user.restaurants.exists() else []
+            elif role in ['staff', 'chef', 'manager']:
                 from accounts.models import ChefStaff
                 cs = ChefStaff.objects.filter(user=user).first()
                 if cs:
@@ -214,10 +215,11 @@ class ChatMessageViewSet(ModelViewSet):
                 
             # Identify restaurant(s) for the user to ensure permission
             restaurant_ids = []
-            if user.role == 'owner':
+            role = getattr(user, 'role', None)
+            if role == 'owner':
                 if hasattr(user, 'restaurants') and user.restaurants.exists():
                      restaurant_ids = list(user.restaurants.values_list('id', flat=True))
-            elif user.role in ['staff', 'chef', 'manager']:
+            elif role in ['staff', 'chef', 'manager']:
                 from accounts.models import ChefStaff
                 cs = ChefStaff.objects.filter(user=user).first()
                 if cs:
