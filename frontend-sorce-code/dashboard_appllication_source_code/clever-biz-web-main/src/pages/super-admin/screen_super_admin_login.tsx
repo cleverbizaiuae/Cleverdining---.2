@@ -8,9 +8,7 @@ const ScreenSuperAdminLogin = () => {
     const navigate = useNavigate();
 
     // State
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
+    const [accessCode, setAccessCode] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -19,22 +17,24 @@ const ScreenSuperAdminLogin = () => {
         setError("");
         setLoading(true);
 
+        // 1. Check PIN
+        if (accessCode !== "2468") {
+            setError("Invalid Access Code");
+            setLoading(false);
+            return;
+        }
+
         try {
+            // 2. Perform background login to get real JWT
+            // Using standard dev credentials associated with this PIN
             const response = await axiosInstance.post("/login/", {
-                email,
-                password,
+                email: "admin@cleverbiz.ai",
+                password: "password123",
             });
 
-            const { access, refresh, user } = response.data;
-
-            // STRICT CHECK: Ensure user is actually authorized for Super Admin
-            // Adjust this condition based on actual backend 'Super Admin' role string
-            // For now, assuming 'admin' or 'super_admin' or specific email check if role is missing
-            if (user.role !== 'admin' && user.role !== 'super_admin' && user.email !== 'admin@cleverbiz.ai') {
-                setError("Access Denied: You do not have Super Admin privileges.");
-                setLoading(false);
-                return;
-            }
+            const { access } = response.data;
+            // Note: We skip strict role check here as '2468' is the master key for this user
+            // But we could check response.data.user.role if needed.
 
             localStorage.setItem("superAdminToken", access);
             localStorage.setItem("superAdminAuth", "true");
@@ -43,90 +43,72 @@ const ScreenSuperAdminLogin = () => {
 
         } catch (err: any) {
             console.error("Super Admin Login Error:", err);
-            setError(err.response?.data?.detail || "Invalid email or password.");
+            // If the actual backend auth fails (changed password?), fallback or show error
+            setError("System Authentication Failed. Please verify admin credentials.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 p-4 font-inter">
-            {/* Header Section */}
-            <div className="flex flex-col items-center mb-8">
-                <img src={logo} alt="CleverBiz AI" className="h-12 w-auto mb-4" /> {/* Adjusted size for full logo */}
-                <h1 className="text-2xl font-bold text-slate-900">Super Admin</h1>
-                <p className="text-sm text-slate-500 mt-1">Sign in to manage restaurants</p>
-            </div>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4 font-inter">
+            {/* Card */}
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 text-center">
 
-            {/* Form Card */}
-            <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 p-6 shadow-xl">
+                {/* Logo & Header */}
+                <div className="flex flex-col items-center mb-8">
+                    <img src={logo} alt="CleverBiz AI" className="h-8 w-auto mb-6" />
+
+                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-[#0055FE]">
+                        <Lock size={24} strokeWidth={2.5} />
+                    </div>
+
+                    <h1 className="text-xl font-bold text-slate-900 mb-2">Access Required</h1>
+                    <p className="text-sm text-slate-500 max-w-[260px]">
+                        Enter the access code to manage the super admin dashboard.
+                    </p>
+                </div>
 
                 {/* Error Alert */}
                 {error && (
-                    <div className="mb-6 bg-red-500/20 border border-red-500/30 rounded-lg p-3 flex items-center justify-center gap-2 text-red-400 text-sm animate-fadeIn">
-                        <AlertCircle size={16} />
+                    <div className="mb-6 bg-red-50 border border-red-100 rounded-xl p-3 flex items-center justify-center gap-2 text-red-600 text-xs font-medium animate-in fade-in slide-in-from-top-1">
+                        <AlertCircle size={14} />
                         <span>{error}</span>
                     </div>
                 )}
 
-                <form onSubmit={handleLogin} className="space-y-4">
-
-                    {/* Email Input */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs text-slate-700 font-medium">Email</label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input
-                                type="email"
-                                required
-                                placeholder="admin@cleverbiz.ai"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-10 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 text-sm focus:border-[#0055FE] focus:ring-1 focus:ring-[#0055FE] outline-none transition-all"
-                            />
-                        </div>
+                <form onSubmit={handleLogin} className="space-y-6">
+                    <div className="space-y-2 text-left">
+                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">Access Code</label>
+                        <input
+                            type="password"
+                            inputMode="numeric"
+                            maxLength={4}
+                            required
+                            placeholder="Enter 4-digit code"
+                            value={accessCode}
+                            onChange={(e) => setAccessCode(e.target.value)}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-center text-lg tracking-[0.5em] font-bold text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-blue-500/10 outline-none transition-all placeholder:text-slate-300 placeholder:tracking-normal placeholder:font-normal placeholder:text-sm"
+                        />
                     </div>
 
-                    {/* Password Input */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs text-slate-700 font-medium">Password</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                required
-                                placeholder="Enter password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full h-10 pl-10 pr-10 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 text-sm focus:border-[#0055FE] focus:ring-1 focus:ring-[#0055FE] outline-none transition-all"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
-                            >
-                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Sign In Button */}
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                        className="w-full h-12 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98] flex items-center justify-center gap-2"
                     >
-                        {loading && <Loader2 className="animate-spin" size={16} />}
-                        {loading ? "Signing in..." : "Sign In"}
+                        {loading ? <Loader2 className="animate-spin" size={20} /> : "Verify Access"}
                     </button>
 
+                    <button
+                        type="button"
+                        onClick={() => navigate('/')}
+                        className="text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors"
+                    >
+                        Back to Home
+                    </button>
                 </form>
             </div>
-
-            {/* Footer */}
-            <p className="mt-8 text-xs text-slate-400 text-center">
-                Powered by CleverBiz AI
-            </p>
         </div>
     );
 };
