@@ -760,7 +760,7 @@ class SimpleDeviceListView(APIView):
             })
             
         except Exception as e:
-            print(f"SimpleDeviceListView Error: {e}")
+            print(f"SimpleDeviceListView GET Error: {e}")
             import traceback
             traceback.print_exc()
             return Response({
@@ -770,6 +770,132 @@ class SimpleDeviceListView(APIView):
                 "results": [],
                 "error": str(e)
             })
+
+    def post(self, request):
+        """BULLETPROOF Device Creation - handles table/device creation."""
+        try:
+            user = request.user
+            role = getattr(user, 'role', None)
+            
+            # Determine restaurant
+            restaurant = None
+            if role == 'owner':
+                restaurant = Restaurant.objects.filter(owner=user).first()
+            else:
+                # Check ChefStaff
+                chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if chef_staff:
+                    restaurant = chef_staff.restaurant
+                else:
+                    # Check Legacy Staff
+                    try:
+                        from staff.models import Staff
+                        legacy_staff = Staff.objects.filter(user=user).first()
+                        if legacy_staff:
+                            restaurant = legacy_staff.restaurant
+                    except Exception:
+                        pass
+            
+            if not restaurant:
+                return Response({"error": "No restaurant found for this user"}, status=400)
+            
+            # Get device data from request
+            table_name = request.data.get('table_name', '')
+            table_number = request.data.get('table_number', '')
+            region = request.data.get('region', '')
+            
+            if not table_name:
+                return Response({"error": "table_name is required"}, status=400)
+            
+            # Generate unique device user
+            username = None
+            password = generate_password()
+            
+            max_retries = 5
+            for _ in range(max_retries):
+                temp_username = generate_username(restaurant.resturent_name)
+                if not User.objects.filter(username=temp_username).exists():
+                    username = temp_username
+                    break
+            
+            if not username:
+                return Response({"error": "Failed to generate device credentials"}, status=500)
+            
+            # Create device user
+            email = f"{username}@example.com"
+            device_user = User.objects.create_user(
+                email=email,
+                username=username,
+                password=password,
+                role='customer'
+            )
+            
+            # Create device
+            device = Device.objects.create(
+                table_name=table_name,
+                table_number=table_number,
+                region=region,
+                user=device_user,
+                restaurant=restaurant,
+                action='active'
+            )
+            
+            # Try to send email notification (non-blocking)
+            try:
+                owner_email = user.email if role == 'owner' else (restaurant.owner.email if restaurant.owner else "admin@cleverbiz.ai")
+                send_mail(
+                    subject="New Device User Created",
+                    message=f"Username: {username}\nPassword: {password}",
+                    from_email=settings.EMAIL_HOST_USER,
+                    recipient_list=[owner_email],
+                    fail_silently=True
+                )
+            except Exception as email_err:
+                print(f"Email notification failed (non-blocking): {email_err}")
+            
+            # Try to broadcast WebSocket event (non-blocking)
+            try:
+                device_data = {
+                    "id": device.id,
+                    "table_name": device.table_name,
+                    "table_number": device.table_number,
+                    "region": device.region,
+                    "restaurant": restaurant.id,
+                    "restaurant_name": restaurant.resturent_name,
+                    "action": device.action,
+                    "username": username
+                }
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{restaurant.id}",
+                    {
+                        "type": "device_created",
+                        "device": device_data
+                    }
+                )
+            except Exception as ws_err:
+                print(f"WebSocket notification failed (non-blocking): {ws_err}")
+            
+            # Return success response
+            return Response({
+                "id": device.id,
+                "table_name": device.table_name,
+                "table_number": device.table_number,
+                "region": device.region,
+                "restaurant": restaurant.id,
+                "restaurant_name": restaurant.resturent_name,
+                "action": device.action,
+                "username": username,
+                "message": "Device created successfully"
+            }, status=201)
+            
+        except Exception as e:
+            print(f"SimpleDeviceListView POST Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                "error": str(e),
+                "message": "Failed to create device"
+            }, status=500)
 
 
 class SimpleDeviceListAllView(APIView):
