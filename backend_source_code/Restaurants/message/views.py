@@ -281,30 +281,49 @@ class FastUnreadCountView(APIView):
         try:
             user = request.user
             
-            # Get restaurant IDs for this user
+            # Get restaurant IDs for this user - BULLETPROOF
             restaurant_ids = []
-            if getattr(user, 'role', '') == 'owner':
-                restaurant_ids = list(user.restaurants.values_list('id', flat=True)) if hasattr(user, 'restaurants') else []
-            elif getattr(user, 'role', '') in ['staff', 'chef', 'manager']:
-                from accounts.models import ChefStaff
-                cs = ChefStaff.objects.filter(user=user, action='accepted').first()
-                if cs:
-                    restaurant_ids = [cs.restaurant_id]
-                else:
-                    from staff.models import Staff
-                    ls = Staff.objects.filter(user=user).first()
-                    if ls and ls.restaurant:
-                        restaurant_ids = [ls.restaurant.id]
+            role = getattr(user, 'role', None)
+            
+            try:
+                if role == 'owner':
+                    # Safely get restaurants
+                    if hasattr(user, 'restaurants'):
+                        try:
+                            restaurant_ids = list(user.restaurants.values_list('id', flat=True))
+                        except Exception:
+                            # Fallback: direct query
+                            from restaurant.models import Restaurant
+                            restaurant_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
+                elif role in ['staff', 'chef', 'manager']:
+                    from accounts.models import ChefStaff
+                    cs = ChefStaff.objects.filter(user=user, action='accepted').first()
+                    if cs:
+                        restaurant_ids = [cs.restaurant_id]
+                    else:
+                        try:
+                            from staff.models import Staff
+                            ls = Staff.objects.filter(user=user).first()
+                            if ls and ls.restaurant:
+                                restaurant_ids = [ls.restaurant.id]
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"Error getting restaurant_ids: {e}")
             
             if not restaurant_ids:
                 return Response({'unread_count': 0})
             
             # Count unread messages FROM devices (customer messages) for all devices in user's restaurants
-            total_unread = ChatMessage.objects.filter(
-                restaurant_id__in=restaurant_ids,
-                is_read=False,
-                is_from_device=True
-            ).count()
+            try:
+                total_unread = ChatMessage.objects.filter(
+                    restaurant_id__in=restaurant_ids,
+                    is_read=False,
+                    is_from_device=True
+                ).count()
+            except Exception as e:
+                print(f"Error counting messages: {e}")
+                total_unread = 0
             
             return Response({'unread_count': total_unread})
             
