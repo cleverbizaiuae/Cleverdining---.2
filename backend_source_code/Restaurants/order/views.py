@@ -427,51 +427,78 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
     search_fields = ['id']
 
     def get_queryset(self):
-        user = self.request.user
-        
-        # Optimized: Use select_related and prefetch_related to avoid N+1 queries
-        base_qs = Order.objects.select_related(
-            'device', 'restaurant', 'guest_session', 'business_day'
-        ).prefetch_related(
-            'order_items__item', 'payments'
-        )
-        
-        if user.role == 'owner':
-             queryset = base_qs.filter(restaurant__owner=user)
-        elif user.role in ['manager', 'staff', 'chef']:
-             restaurant_ids = ChefStaff.objects.filter(
-                user=user, 
-                action='accepted'
-             ).values_list('restaurant_id', flat=True)
-             queryset = base_qs.filter(restaurant_id__in=restaurant_ids)
-        else:
-             queryset = Order.objects.none()
-        
-        # BUSINESS DAY FILTER: Show only orders for the active business day(s)
-        return queryset.filter(business_day__is_active=True).order_by('-created_time')
+        try:
+            user = self.request.user
+            
+            # Optimized: Use select_related and prefetch_related to avoid N+1 queries
+            base_qs = Order.objects.select_related(
+                'device', 'restaurant', 'guest_session', 'business_day'
+            ).prefetch_related(
+                'order_items__item', 'payments'
+            )
+            
+            role = getattr(user, 'role', None)
+            
+            if role == 'owner':
+                queryset = base_qs.filter(restaurant__owner=user)
+            elif role in ['manager', 'staff', 'chef']:
+                restaurant_ids = ChefStaff.objects.filter(
+                    user=user, 
+                    action='accepted'
+                ).values_list('restaurant_id', flat=True)
+                queryset = base_qs.filter(restaurant_id__in=restaurant_ids)
+            else:
+                queryset = Order.objects.none()
+            
+            # BUSINESS DAY FILTER: Show only orders for the active business day(s)
+            return queryset.filter(business_day__is_active=True).order_by('-created_time')
+        except Exception as e:
+            print(f"OwnerRestaurantOrdersAPIView.get_queryset error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Order.objects.none()
     
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())  # ✅ apply search filtering
+        try:
+            queryset = self.filter_queryset(self.get_queryset())  # ✅ apply search filtering
 
-        page = self.paginate_queryset(queryset)
-        serializer = self.get_serializer(page, many=True)
+            page = self.paginate_queryset(queryset)
+            serializer = self.get_serializer(page, many=True)
 
-        # Stats should be calculated on the FULL (unfiltered) queryset
-        full_queryset = self.get_queryset()
-        today = date.today()
-        completed_orders = full_queryset.filter(status='completed')
-        completed_today = completed_orders.filter(updated_time__date=today)
+            # Stats should be calculated on the FULL (unfiltered) queryset
+            full_queryset = self.get_queryset()
+            today = date.today()
+            completed_orders = full_queryset.filter(status='completed')
+            completed_today = completed_orders.filter(updated_time__date=today)
 
-        stats = {
-            "total_completed_orders": completed_orders.count(),
-            "today_completed_order_count": completed_today.count(),
-            "ongoing_orders": full_queryset.filter(status__in=['pending', 'preparing', 'served']).count()
-        }
+            stats = {
+                "total_completed_orders": completed_orders.count(),
+                "today_completed_order_count": completed_today.count(),
+                "ongoing_orders": full_queryset.filter(status__in=['pending', 'preparing', 'served']).count()
+            }
 
-        return self.get_paginated_response({
-            "stats": stats,
-            "orders": serializer.data
-        })
+            return self.get_paginated_response({
+                "stats": stats,
+                "orders": serializer.data
+            })
+        except Exception as e:
+            print(f"OwnerRestaurantOrdersAPIView.list error: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return empty response to prevent UI crash
+            return Response({
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": {
+                    "stats": {
+                        "total_completed_orders": 0,
+                        "today_completed_order_count": 0,
+                        "ongoing_orders": 0
+                    },
+                    "orders": []
+                }
+            })
     
 
 

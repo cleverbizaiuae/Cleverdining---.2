@@ -29,8 +29,10 @@ const WebSocketProvider = ({ children }) => {
 
     const fetchUnreadCount = async () => {
       try {
+        // Use the correct API path - /api/message/chat/unread-count/
+        const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/message/chat/unread-count/`,
+          `${baseUrl}/api/message/chat/unread-count/`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -40,9 +42,15 @@ const WebSocketProvider = ({ children }) => {
         if (res.ok) {
           const data = await res.json();
           setUnreadCount(data.unread_count || 0);
+        } else {
+          // Don't crash on non-200 responses
+          console.warn("Unread count returned non-OK status:", res.status);
+          setUnreadCount(0);
         }
       } catch (error) {
-        console.error("Failed to fetch unread count:", error);
+        // Fail silently - don't spam console or crash UI
+        console.warn("Failed to fetch unread count (non-blocking):", error);
+        setUnreadCount(0);
       }
     };
 
