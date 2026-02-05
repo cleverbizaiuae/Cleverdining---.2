@@ -219,47 +219,56 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        print(f"DEBUG_DEVICES: Fetching devices for {user.email} Role: {getattr(user, 'role', 'N/A')}")
         
-        # Optimized: Use select_related and prefetch_related to avoid N+1 queries
-        from django.db.models import Count, Q, Prefetch, Max
-        from .models import GuestSession
-        
-        base_qs = Device.objects.select_related(
-            'restaurant', 'user'
-        ).prefetch_related(
-            Prefetch(
-                'guest_sessions',
-                queryset=GuestSession.objects.filter(is_active=True),
-                to_attr='active_sessions_cache'
+        try:
+            # Optimized: Use select_related and prefetch_related to avoid N+1 queries
+            from django.db.models import Count, Q, Prefetch, Max
+            from .models import GuestSession
+            
+            base_qs = Device.objects.select_related(
+                'restaurant', 'user'
+            ).prefetch_related(
+                Prefetch(
+                    'guest_sessions',
+                    queryset=GuestSession.objects.filter(is_active=True),
+                    to_attr='active_sessions_cache'
+                )
+            ).annotate(
+                unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True)),
+                last_message_time=Max('messages__timestamp')
             )
-        ).annotate(
-            unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True)),
-            last_message_time=Max('messages__timestamp')
-        )
-        
-        if user.role == 'owner':
-            return base_qs.filter(restaurant__owner=user).order_by('-id')
-        
-        # Staff/Chef/Manager Logic
-        # 1. Preferred: ChefStaff model
-        chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-        if chef_staff:
-             print(f"DEBUG_DEVICES: Found ChefStaff for rest {chef_staff.restaurant.id}")
-             return base_qs.filter(restaurant=chef_staff.restaurant).order_by('-id')
-        
-        # 2. Fallback: Legacy Staff model
-        from staff.models import Staff
-        legacy_staff = Staff.objects.filter(user=user).first()
-        if legacy_staff:
-             print(f"DEBUG_DEVICES: Found Legacy Staff for rest {legacy_staff.restaurant.id}")
-             return base_qs.filter(restaurant=legacy_staff.restaurant).order_by('-id')
-             
-        # 3. Fallback: Owner check (in case role is mismatched but is actually owner)
-        if user.role == 'owner': # Redundant check but safe
-             return base_qs.filter(restaurant__owner=user).order_by('-id')
+        except Exception as e:
+            print(f"DEBUG_DEVICES: Optimization failed, falling back. Error: {e}")
+            base_qs = Device.objects.select_related('restaurant', 'user')
 
-        print("DEBUG_DEVICES: No access found. Returning empty.")
+        
+        try:
+            if user.role == 'owner':
+                return base_qs.filter(restaurant__owner=user).order_by('-id')
+            
+            # Staff/Chef/Manager Logic
+            # 1. Preferred: ChefStaff model
+            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+            if chef_staff:
+                # print(f"DEBUG_DEVICES: Found ChefStaff for rest {chef_staff.restaurant.id}")
+                return base_qs.filter(restaurant=chef_staff.restaurant).order_by('-id')
+            
+            # 2. Fallback: Legacy Staff model
+            from staff.models import Staff
+            legacy_staff = Staff.objects.filter(user=user).first()
+            if legacy_staff:
+                # print(f"DEBUG_DEVICES: Found Legacy Staff for rest {legacy_staff.restaurant.id}")
+                return base_qs.filter(restaurant=legacy_staff.restaurant).order_by('-id')
+                
+            # 3. Fallback: Owner check (in case role is mismatched but is actually owner)
+            if user.role == 'owner': # Redundant check but safe
+                return base_qs.filter(restaurant__owner=user).order_by('-id')
+
+        except Exception as e:
+             print(f"DEBUG_DEVICES: Queryset filtering failed: {e}")
+             return Device.objects.none()
+
+        # print("DEBUG_DEVICES: No access found. Returning empty.")
         return Device.objects.none()
 
     def perform_create(self, serializer):
@@ -372,39 +381,49 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='stats')
     def get_device_stats(self, request):
-        user = request.user
-        
-        restaurant = None
-        
-        if user.role == 'owner':
-            restaurant = Restaurant.objects.filter(owner=user).first()
-        else:
-            # Check ChefStaff
-            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-            if chef_staff:
-                restaurant = chef_staff.restaurant
+        try:
+            user = request.user
+            
+            restaurant = None
+            
+            if user.role == 'owner':
+                restaurant = Restaurant.objects.filter(owner=user).first()
             else:
-                # Check Legacy Staff
-                from staff.models import Staff
-                legacy_staff = Staff.objects.filter(user=user).first()
-                if legacy_staff:
-                    restaurant = legacy_staff.restaurant
-        
-        if not restaurant:
-             return Response({
-                "restaurant": "N/A",
+                # Check ChefStaff
+                chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if chef_staff:
+                    restaurant = chef_staff.restaurant
+                else:
+                    # Check Legacy Staff
+                    from staff.models import Staff
+                    legacy_staff = Staff.objects.filter(user=user).first()
+                    if legacy_staff:
+                        restaurant = legacy_staff.restaurant
+            
+            if not restaurant:
+                return Response({
+                    "restaurant": "N/A",
+                    "total_devices": 0,
+                    "active_devices": 0,
+                    "hold_devices": 0,
+                })
+
+            all_devices = Device.objects.filter(restaurant=restaurant)
+            return Response({
+                "restaurant": restaurant.resturent_name,
+                "total_devices": all_devices.count(),
+                "active_devices": all_devices.filter(action='active').count(),
+                "hold_devices": all_devices.filter(action='hold').count(),
+            })
+        except Exception as e:
+            print(f"DeviceStats Error: {e}")
+            return Response({
+                "restaurant": "Error",
                 "total_devices": 0,
                 "active_devices": 0,
                 "hold_devices": 0,
-            })
-
-        all_devices = Device.objects.filter(restaurant=restaurant)
-        return Response({
-            "restaurant": restaurant.resturent_name,
-            "total_devices": all_devices.count(),
-            "active_devices": all_devices.filter(action='active').count(),
-            "hold_devices": all_devices.filter(action='hold').count(),
-        })
+                "error": str(e)
+            }, status=200) # Return 200 with empty stats to prevent UI crash
 
 
 
