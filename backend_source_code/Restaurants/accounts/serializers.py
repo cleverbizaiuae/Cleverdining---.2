@@ -39,14 +39,22 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class RestaurantSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = Restaurant
         fields = ['id', 'resturent_name', 'location', 'phone_number', 'package', 'image']
 
-
-
-
-
+    def get_image(self, obj):
+        try:
+            if obj.image:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(obj.image.url)
+                return obj.image.url
+        except Exception:
+            return None
+        return None
 
 
 class UserWithRestaurantSerializer(serializers.ModelSerializer):
@@ -63,23 +71,26 @@ class UserWithRestaurantSerializer(serializers.ModelSerializer):
 
     def get_restaurants(self, obj):
         def get_subscription_info(restaurant):
-            # Try to get an active subscription
-            active_subscription = restaurant.subscriptions.filter(is_active=True).order_by('-current_period_end').first()
-            if active_subscription:
-                return {
-                    'package_name': active_subscription.package_name,
-                    'current_period_end': active_subscription.current_period_end,
-                    'status': active_subscription.status,
-                }
+            try:
+                # Try to get an active subscription
+                active_subscription = restaurant.subscriptions.filter(is_active=True).order_by('-current_period_end').first()
+                if active_subscription:
+                    return {
+                        'package_name': active_subscription.package_name,
+                        'current_period_end': active_subscription.current_period_end,
+                        'status': active_subscription.status,
+                    }
 
-            # Fallback to the latest subscription (inactive or expired)
-            latest_subscription = restaurant.subscriptions.order_by('-current_period_end').first()
-            if latest_subscription:
-                return {
-                    'package_name': latest_subscription.package_name,
-                    'current_period_end': latest_subscription.current_period_end,
-                    'status': latest_subscription.status,
-                }
+                # Fallback to the latest subscription (inactive or expired)
+                latest_subscription = restaurant.subscriptions.order_by('-current_period_end').first()
+                if latest_subscription:
+                    return {
+                        'package_name': latest_subscription.package_name,
+                        'current_period_end': latest_subscription.current_period_end,
+                        'status': latest_subscription.status,
+                    }
+            except Exception:
+                pass
 
             # No subscription available
             return {
@@ -88,49 +99,74 @@ class UserWithRestaurantSerializer(serializers.ModelSerializer):
                 'status': None,
             }
 
-        # 1. Owned restaurants
-        owned = obj.restaurants.all()
-        owned_data = RestaurantSerializer(owned, many=True).data
-        for r in owned_data:
-            restaurant_obj = owned.get(id=r['id'])
-            r['source'] = 'owner'
-            r['table_name'] = None
-            r['device_id'] = None
-            r['subscription'] = get_subscription_info(restaurant_obj)
-
-        # 2. Staff restaurants
-        staff_links = obj.staff_roles.all()
-        staff_restaurants = Restaurant.objects.filter(chefstaffs__in=staff_links)
-        staff_data = RestaurantSerializer(staff_restaurants, many=True).data
-        for r in staff_data:
-            restaurant_obj = staff_restaurants.get(id=r['id'])
-            r['source'] = 'staff'
-            r['table_name'] = None
-            r['device_id'] = None
-            r['subscription'] = get_subscription_info(restaurant_obj)
-
-        # 3. Device-linked restaurants
-        device_links = obj.devices.select_related('restaurant').all()
-        device_data = []
-        for device in device_links:
-            rest = device.restaurant
-            if rest is None:  # Skip devices without restaurants
-                continue
-            rest_data = RestaurantSerializer(rest).data
-            rest_data['source'] = 'device'
-            rest_data['table_name'] = device.table_name
-            rest_data['device_id'] = device.id
-            rest_data['subscription'] = get_subscription_info(rest)
-            device_data.append(rest_data)
-
-        # Combine all and remove duplicates by restaurant ID
-        all_data = owned_data + staff_data + device_data
-        seen = set()
         unique_restaurants = []
-        for r in all_data:
-            if r['id'] not in seen:
-                seen.add(r['id'])
-                unique_restaurants.append(r)
+        seen = set()
+
+        try:
+            # 1. Owned restaurants
+            if hasattr(obj, 'restaurants'):
+                owned = obj.restaurants.all()
+                owned_data = RestaurantSerializer(owned, many=True, context=self.context).data
+                for r in owned_data:
+                    try:
+                        if r['id'] not in seen:
+                            restaurant_obj = owned.get(id=r['id'])
+                            r['source'] = 'owner'
+                            r['table_name'] = None
+                            r['device_id'] = None
+                            r['subscription'] = get_subscription_info(restaurant_obj)
+                            unique_restaurants.append(r)
+                            seen.add(r['id'])
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        try:
+            # 2. Staff restaurants
+            if hasattr(obj, 'staff_roles'):
+                staff_links = obj.staff_roles.all()
+                staff_restaurants = Restaurant.objects.filter(chefstaffs__in=staff_links)
+                if staff_restaurants.exists():
+                    staff_data = RestaurantSerializer(staff_restaurants, many=True, context=self.context).data
+                    for r in staff_data:
+                        try:
+                            if r['id'] not in seen:
+                                restaurant_obj = staff_restaurants.get(id=r['id'])
+                                r['source'] = 'staff'
+                                r['table_name'] = None
+                                r['device_id'] = None
+                                r['subscription'] = get_subscription_info(restaurant_obj)
+                                unique_restaurants.append(r)
+                                seen.add(r['id'])
+                        except Exception:
+                            continue
+        except Exception:
+            pass
+
+        try:
+            # 3. Device-linked restaurants
+            if hasattr(obj, 'devices'):
+                device_links = obj.devices.select_related('restaurant').all()
+                for device in device_links:
+                    try:
+                        rest = device.restaurant
+                        if rest is None:  # Skip devices without restaurants
+                            continue
+                        
+                        if rest.id not in seen:
+                             # Serializing single object manually to avoid crashing whole list
+                            rest_data = RestaurantSerializer(rest, context=self.context).data
+                            rest_data['source'] = 'device'
+                            rest_data['table_name'] = device.table_name
+                            rest_data['device_id'] = device.id
+                            rest_data['subscription'] = get_subscription_info(rest)
+                            unique_restaurants.append(rest_data)
+                            seen.add(rest.id)
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
         return unique_restaurants
 
