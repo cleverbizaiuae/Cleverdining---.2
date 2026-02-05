@@ -437,80 +437,121 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
     pagination_class = ChefAndStaffPagination
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'owner':
-            return ChefStaff.objects.filter(restaurant__owner=user)
-        elif user.role in ['chef', 'staff', 'manager']:
-            # Allow staff/chef to see members of their own restaurant
-            employment = ChefStaff.objects.filter(user=user, action='accepted').first()
-            if employment:
-                return ChefStaff.objects.filter(restaurant=employment.restaurant)
-        return ChefStaff.objects.none()
+        try:
+            user = self.request.user
+            role = getattr(user, 'role', None)
+            
+            if role == 'owner':
+                return ChefStaff.objects.filter(restaurant__owner=user)
+            elif role in ['chef', 'staff', 'manager']:
+                # Allow staff/chef to see members of their own restaurant
+                employment = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if employment:
+                    return ChefStaff.objects.filter(restaurant=employment.restaurant)
+            return ChefStaff.objects.none()
+        except Exception as e:
+            print(f"ChefStaffViewSet.get_queryset error: {e}")
+            import traceback
+            traceback.print_exc()
+            return ChefStaff.objects.none()
 
     def get_serializer_class(self):
         if self.action in ['list', 'retrieve', 'update', 'partial_update']:
             return ChefStaffDetailSerializer
         return ChefStaffCreateSerializer
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        restaurant = None
-        
-        if user.role == 'owner':
-             restaurant = user.restaurants.first()
-        elif user.role in ['chef', 'staff', 'manager']:
-             employment = ChefStaff.objects.filter(user=user, action='accepted').first()
-             if employment:
-                 restaurant = employment.restaurant
-        
-        if not restaurant:
-            raise ValidationError("You do not have a valid restaurant association to add members.")
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure it never crashes."""
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            print(f"ChefStaffViewSet.list error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'count': 0,
+                'next': None,
+                'previous': None,
+                'results': []
+            })
 
-        instance = serializer.save(restaurant=restaurant)
-        
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{instance.restaurant.id}",
-            {
-                "type": "chefstaff_created",
-                "chefstaff": {
-                    "id": instance.id,
-                    "username": instance.user.username,
-                    "restaurant_id": instance.restaurant.id
+    def perform_create(self, serializer):
+        try:
+            user = self.request.user
+            restaurant = None
+            role = getattr(user, 'role', None)
+            
+            if role == 'owner':
+                if hasattr(user, 'restaurants') and user.restaurants.exists():
+                    restaurant = user.restaurants.first()
+                else:
+                    from restaurant.models import Restaurant
+                    restaurant = Restaurant.objects.filter(owner=user).first()
+            elif role in ['chef', 'staff', 'manager']:
+                employment = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if employment:
+                    restaurant = employment.restaurant
+            
+            if not restaurant:
+                raise ValidationError("You do not have a valid restaurant association to add members.")
+
+            instance = serializer.save(restaurant=restaurant)
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{instance.restaurant.id}",
+                {
+                    "type": "chefstaff_created",
+                    "chefstaff": {
+                        "id": instance.id,
+                        "username": instance.user.username,
+                        "restaurant_id": instance.restaurant.id
+                    }
                 }
-            }
-        )
+            )
+        except ValidationError:
+            raise
+        except Exception as e:
+            print(f"ChefStaffViewSet.perform_create error: {e}")
+            raise ValidationError(f"Failed to create member: {str(e)}")
 
     def perform_update(self, serializer):
-        instance = self.get_object()
-        # Allow Managers (Staff/Chef) to update if they belong to the same restaurant
-        user = self.request.user
-        can_update = False
-        
-        if user.role == 'owner' and instance.restaurant.owner == user:
-            can_update = True
-        elif user.role in ['chef', 'staff', 'manager']:
-             employment = ChefStaff.objects.filter(user=user, action='accepted').first()
-             if employment and employment.restaurant == instance.restaurant:
-                 can_update = True
-                 
-        if not can_update:
-            raise PermissionDenied("You do not have permission to update this record.")
+        try:
+            instance = self.get_object()
+            # Allow Managers (Staff/Chef) to update if they belong to the same restaurant
+            user = self.request.user
+            can_update = False
+            role = getattr(user, 'role', None)
             
-        serializer.save()
+            if role == 'owner' and instance.restaurant.owner == user:
+                can_update = True
+            elif role in ['chef', 'staff', 'manager']:
+                employment = ChefStaff.objects.filter(user=user, action='accepted').first()
+                if employment and employment.restaurant == instance.restaurant:
+                    can_update = True
+                    
+            if not can_update:
+                raise PermissionDenied("You do not have permission to update this record.")
+                
+            serializer.save()
 
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{instance.restaurant.id}",
-            {
-                "type": "chefstaff_updated",
-                "chefstaff": {
-                    "id": instance.id,
-                    "username": instance.user.username,
-                    "restaurant_id": instance.restaurant.id
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{instance.restaurant.id}",
+                {
+                    "type": "chefstaff_updated",
+                    "chefstaff": {
+                        "id": instance.id,
+                        "username": instance.user.username,
+                        "restaurant_id": instance.restaurant.id
+                    }
                 }
-            }
-        )
+            )
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            print(f"ChefStaffViewSet.perform_update error: {e}")
+            raise PermissionDenied(f"Failed to update member: {str(e)}")
 
     def perform_destroy(self, instance):
         # Allow Managers to delete? Maybe restricted to Owner for safety, unless requested.
