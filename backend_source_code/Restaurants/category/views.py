@@ -25,21 +25,29 @@ class CategoryViewSet(viewsets.ModelViewSet):
         return CategorySerializer
 
     def get_queryset(self):
-        user = self.request.user
-        if getattr(user, 'role', None) == 'owner':
-            queryset = Category.objects.filter(restaurant__owner=user)
-        elif getattr(user, 'role', None) in ['chef', 'staff', 'manager']:
-            restaurant_ids = ChefStaff.objects.filter(
-                user=user,
-                action='accepted'
-            ).values_list('restaurant_id', flat=True)
-            queryset = Category.objects.filter(restaurant_id__in=restaurant_ids)
-        else:
-            queryset = Category.objects.none()
+        try:
+            user = self.request.user
+            role = getattr(user, 'role', None)
+            
+            if role == 'owner':
+                queryset = Category.objects.filter(restaurant__owner=user)
+            elif role in ['chef', 'staff', 'manager']:
+                restaurant_ids = ChefStaff.objects.filter(
+                    user=user,
+                    action='accepted'
+                ).values_list('restaurant_id', flat=True)
+                queryset = Category.objects.filter(restaurant_id__in=restaurant_ids)
+            else:
+                queryset = Category.objects.none()
 
-        if self.request.query_params.get('hierarchy') == 'true':
-            return queryset.filter(level=0)
-        return queryset
+            if self.request.query_params.get('hierarchy') == 'true':
+                return queryset.filter(level=0)
+            return queryset
+        except Exception as e:
+            print(f"CategoryViewSet.get_queryset error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Category.objects.none()
 
     def perform_create(self, serializer):
         # Use filter().first() to avoid MultipleObjectsReturned error
@@ -99,18 +107,26 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        user = self.request.user
-        # Return only subcategories (level > 0)
-        if getattr(user, 'role', None) == 'owner':
-            return Category.objects.filter(restaurant__owner=user, level__gt=0)
-        elif getattr(user, 'role', None) in ['chef', 'staff', 'manager']:
-            restaurant_ids = ChefStaff.objects.filter(
-                user=user,
-                action='accepted'
-            ).values_list('restaurant_id', flat=True)
-            return Category.objects.filter(restaurant_id__in=restaurant_ids, level__gt=0)
-        
-        return Category.objects.none()
+        try:
+            user = self.request.user
+            role = getattr(user, 'role', None)
+            
+            # Return only subcategories (level > 0)
+            if role == 'owner':
+                return Category.objects.filter(restaurant__owner=user, level__gt=0)
+            elif role in ['chef', 'staff', 'manager']:
+                restaurant_ids = ChefStaff.objects.filter(
+                    user=user,
+                    action='accepted'
+                ).values_list('restaurant_id', flat=True)
+                return Category.objects.filter(restaurant_id__in=restaurant_ids, level__gt=0)
+            
+            return Category.objects.none()
+        except Exception as e:
+            print(f"SubCategoryViewSet.get_queryset error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Category.objects.none()
 
     def perform_create(self, serializer):
         # Use filter().first() to avoid MultipleObjectsReturned error
@@ -139,30 +155,39 @@ class CustomerCategoryListView(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        user = self.request.user
-        
-        # Allow anonymous access for customer-facing endpoint
-        # Return categories from first restaurant for anonymous users
-        if user.is_anonymous:
-            restaurant_id = self.request.query_params.get('restaurant_id')
-            if restaurant_id:
-                return Category.objects.filter(restaurant_id=restaurant_id)
+        try:
+            user = self.request.user
+            
+            # Allow anonymous access for customer-facing endpoint
+            # Return categories from first restaurant for anonymous users
+            if user.is_anonymous:
+                restaurant_id = self.request.query_params.get('restaurant_id')
+                if restaurant_id:
+                    return Category.objects.filter(restaurant_id=restaurant_id)
 
-            first_restaurant = Restaurant.objects.first()
-            if first_restaurant:
-                return Category.objects.filter(restaurant=first_restaurant)
+                first_restaurant = Restaurant.objects.first()
+                if first_restaurant:
+                    return Category.objects.filter(restaurant=first_restaurant)
+                return Category.objects.none()
+
+            # Only allow customers
+            role = getattr(user, 'role', None)
+            if role != 'customer':
+                # Don't raise - just return empty
+                return Category.objects.none()
+
+            # Find restaurant via Device model
+            device = user.devices.first()
+            if not device or not device.restaurant:
+                # Don't raise - just return empty
+                return Category.objects.none()
+
+            return Category.objects.filter(restaurant=device.restaurant)
+        except Exception as e:
+            print(f"CustomerCategoryListView.get_queryset error: {e}")
+            import traceback
+            traceback.print_exc()
             return Category.objects.none()
-
-        # Only allow customers
-        if user.role != 'customer':
-            raise PermissionDenied("Only customers can access this endpoint.")
-
-        # Find restaurant via Device model
-        device = user.devices.first()
-        if not device or not device.restaurant:
-            raise PermissionDenied("No restaurant associated with this customer device.")
-
-        return Category.objects.filter(restaurant=device.restaurant)
     
 
 
@@ -172,8 +197,14 @@ class ChefOrStaffRestaurantCategoriesView(APIView):
     pagination_class=None
 
     def get(self, request):
-        user = request.user
-        restaurant_ids = ChefStaff.objects.filter(user=user).values_list('restaurant_id', flat=True)
-        categories = Category.objects.filter(restaurant_id__in=restaurant_ids)
-        serializer = CategorySerializer(categories, many=True)
-        return Response(serializer.data)
+        try:
+            user = request.user
+            restaurant_ids = ChefStaff.objects.filter(user=user).values_list('restaurant_id', flat=True)
+            categories = Category.objects.filter(restaurant_id__in=restaurant_ids)
+            serializer = CategorySerializer(categories, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"ChefOrStaffRestaurantCategoriesView error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response([])
