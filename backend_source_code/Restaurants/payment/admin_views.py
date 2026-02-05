@@ -134,6 +134,7 @@ class PaymentAdminViewSet(ModelViewSet):
             )
             
             # Find PAID orders without payments
+            # CRITICAL: Limit to 500 most recent to prevent timeout on large datasets
             orphaned_orders = Order.objects.filter(
                 restaurant_id__in=rest_ids,
                 payment_status='paid'
@@ -141,7 +142,7 @@ class PaymentAdminViewSet(ModelViewSet):
                 id__in=orders_with_payments
             ).exclude(
                 status='cancelled' # Ensure cancelled orders don't appear
-            ).select_related('device', 'restaurant').order_by('-updated_time')
+            ).select_related('device', 'restaurant').order_by('-updated_time')[:500]  # LIMIT 500
             
             return orphaned_orders
         except Exception as e:
