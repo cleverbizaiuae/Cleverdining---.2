@@ -770,3 +770,90 @@ class SimpleDeviceListView(APIView):
                 "results": [],
                 "error": str(e)
             })
+
+
+class SimpleDeviceListAllView(APIView):
+    """
+    BULLETPROOF Simple Device List ALL - No Pagination, No Serializers.
+    Returns all devices for the user's restaurant without any DRF machinery.
+    This is a direct replacement for DeviceViewSetall.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Determine restaurant IDs
+            restaurant_ids = []
+            
+            if getattr(user, 'role', None) == 'owner':
+                restaurant = Restaurant.objects.filter(owner=user).first()
+                if restaurant:
+                    restaurant_ids = [restaurant.id]
+            else:
+                # Check ChefStaff
+                try:
+                    chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
+                    if chef_staff:
+                        restaurant_ids = [chef_staff.restaurant_id]
+                except Exception:
+                    pass
+                
+                # Fallback: Legacy Staff
+                if not restaurant_ids:
+                    try:
+                        from staff.models import Staff
+                        legacy_staff = Staff.objects.filter(user=user).first()
+                        if legacy_staff and legacy_staff.restaurant:
+                            restaurant_ids = [legacy_staff.restaurant.id]
+                    except Exception:
+                        pass
+            
+            if not restaurant_ids:
+                return Response([])
+            
+            # Get devices - simple query
+            devices = Device.objects.filter(restaurant_id__in=restaurant_ids).select_related('restaurant', 'user').order_by('-id')
+            
+            # Manual serialization - bulletproof
+            results = []
+            for device in devices:
+                try:
+                    device_data = {
+                        "id": device.id,
+                        "table_name": device.table_name or "",
+                        "region": device.region or "",
+                        "table_number": device.table_number or "",
+                        "restaurant": device.restaurant.id if device.restaurant else None,
+                        "restaurant_id": device.restaurant.id if device.restaurant else None,
+                        "action": device.action or "active",
+                        "restaurant_name": device.restaurant.resturent_name if device.restaurant else "",
+                        "username": device.user.username if device.user else "",
+                        "user_id": device.user.id if device.user else None,
+                        "qr_code_image": None,
+                        "table_url": getattr(device, 'table_url', None),
+                        "active_session_id": None,
+                        "unread_count": 0,
+                        "last_message_time": None
+                    }
+                    
+                    # Try to get QR code URL safely
+                    try:
+                        if device.qr_code_image:
+                            device_data["qr_code_image"] = device.qr_code_image.url
+                    except Exception:
+                        pass
+                    
+                    results.append(device_data)
+                except Exception as e:
+                    print(f"Warning: Skipped device {device.id} in ListAll: {e}")
+                    continue
+            
+            return Response(results)
+            
+        except Exception as e:
+            print(f"SimpleDeviceListAllView Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response([])

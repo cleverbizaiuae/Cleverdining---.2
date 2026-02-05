@@ -5,7 +5,7 @@ from accounts.simple_views import SimpleOwnerRegisterView
 from category.views import CategoryViewSet, SubCategoryViewSet
 from item.views import ItemViewSet,MostSellingItemsAPIView
 from accounts.views import ChefStaffViewSet
-from device.views import DeviceViewSet, ReservationViewSet, SimpleDeviceListView
+from device.views import DeviceViewSet, ReservationViewSet, SimpleDeviceListView, SimpleDeviceListAllView
 from order.views import OwnerRestaurantOrdersAPIView,OwnerUpdateOrderStatusAPIView,OrderAnalyticsAPIView,MonthlySalesReportView, ConfirmCashPaymentAPIView, OwnerOrderDetailAPIView
 from review.views import OwnerRestaurantReviewListAPIView
 from device.views import DeviceViewSetall
@@ -23,7 +23,7 @@ router.register('items', ItemViewSet, basename='item')
 router.register('chef-staff', ChefStaffViewSet, basename='chef-staff')
 # router.register('devices', DeviceViewSet, basename='device')  # DISABLED - Using bulletproof SimpleDeviceListView instead
 router.register('reservations', ReservationViewSet, basename='reservation')
-router.register('devicesall', DeviceViewSetall, basename='deviceall')
+# router.register('devicesall', DeviceViewSetall, basename='deviceall')  # DISABLED - Using bulletproof SimpleDeviceListAllView
 router.register(r'stripe', StripeDetailsViewSet, basename='stripe-details')
 router.register(r'payment-gateways', PaymentGatewayViewSet, basename='payment-gateways')
 router.register('payments', PaymentAdminViewSet, basename='admin-payments')
@@ -36,6 +36,7 @@ urlpatterns = [
     # BULLETPROOF device endpoints - MUST BE BEFORE router.urls to intercept
     path('devices/', SimpleDeviceListView.as_view(), name='simple-device-list'),
     path('devices/stats/', DeviceViewSet.as_view({'get': 'get_device_stats'}), name='device-stats'),
+    path('devicesall/', SimpleDeviceListAllView.as_view(), name='simple-device-list-all'),
     
     path('', include(router.urls)),
     path('register/', SimpleOwnerRegisterView.as_view(), name='ownerRegister'),  # Bulletproof simple registration
