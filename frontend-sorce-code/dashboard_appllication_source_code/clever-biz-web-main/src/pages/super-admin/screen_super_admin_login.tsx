@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
 import axiosInstance from "../../lib/axios";
@@ -11,6 +11,13 @@ const ScreenSuperAdminLogin = () => {
     const [accessCode, setAccessCode] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+
+    // Auto-redirect if already logged in
+    useEffect(() => {
+        if (localStorage.getItem("superAdminAuth")) {
+            navigate("/superadmin");
+        }
+    }, [navigate]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

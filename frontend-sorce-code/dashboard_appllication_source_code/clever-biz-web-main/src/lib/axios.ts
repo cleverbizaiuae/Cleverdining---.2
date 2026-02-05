@@ -8,8 +8,8 @@ const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
 // This ensures requests go directly to Render, avoiding Netlify proxy 500 errors
 const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const API_BASE_URL = normalizeBaseUrl(
-  envApiUrl && envApiUrl !== "/api" 
-    ? envApiUrl 
+  envApiUrl && envApiUrl !== "/api"
+    ? envApiUrl
     : "https://cleverdining-2.onrender.com"
 );
 
@@ -27,7 +27,7 @@ console.log("🔥 VITE_API_URL from env:", import.meta.env.VITE_API_URL);
 console.log("🔥 API_BASE_URL calculated:", API_BASE_URL);
 
 axiosInstance.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
+  const token = localStorage.getItem("accessToken") || localStorage.getItem("superAdminToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -62,6 +62,25 @@ axiosInstance.interceptors.response.use(
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("userInfo");
+
+        // Handle Super Admin Logout
+        if (localStorage.getItem("superAdminAuth")) {
+          localStorage.removeItem("superAdminAuth");
+          localStorage.removeItem("superAdminToken");
+          window.location.href = "/superadmin/login";
+        } else {
+          window.location.href = "/login";
+        }
+      }
+    } else if (error.response?.status === 401) {
+      // Direct 401 without refresh possibility (e.g. invalid super admin token)
+      if (localStorage.getItem("superAdminAuth")) {
+        localStorage.removeItem("superAdminAuth");
+        localStorage.removeItem("superAdminToken");
+        window.location.href = "/superadmin/login";
+      } else {
+        // Only clear/redirect if we were logged in or trying to be
+        localStorage.removeItem("accessToken");
         window.location.href = "/login";
       }
     }
