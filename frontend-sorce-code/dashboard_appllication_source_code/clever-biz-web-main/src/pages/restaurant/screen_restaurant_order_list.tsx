@@ -49,9 +49,11 @@ const ScreenRestaurantOrderList = () => {
   // Real-time WebSocket updates
   const { response } = useContext(WebSocketContext) || {};
 
-  // Real-time: Refresh orders when cash payment or order status changes
+  // Real-time: Refresh orders when new orders arrive or status changes
   useEffect(() => {
     if (response && (
+      response.type === 'new_order' ||
+      response.type === 'order_created' ||
       response.type === 'cash_payment_alert' ||
       response.type === 'order_paid' ||
       response.type === 'order_updated' ||
