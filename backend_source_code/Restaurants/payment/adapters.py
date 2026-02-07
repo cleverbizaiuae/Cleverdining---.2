@@ -266,16 +266,19 @@ class CashAdapter(PaymentAdapter):
         channel_layer = get_channel_layer()
         order_data = OrderDetailSerializer(order).data
         
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "cash_payment_alert",
-                "order": order_data,
-                "table_number": order.device.table_number or order.device.table_name,
-                "total_amount": str(order.total_price),
-                "timestamp": str(order.created_time)
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "cash_payment_alert",
+                    "order": order_data,
+                    "table_number": order.device.table_number or order.device.table_name,
+                    "total_amount": str(order.total_price),
+                    "timestamp": str(order.created_time)
+                }
+            )
+        except Exception as e:
+            print(f"Failed to send cash payment alert: {e}")
 
         # Cash payments are implicitly "initiated" but require manual confirmation
         import uuid

@@ -83,7 +83,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [cart, isInitialized]);
 
-  const addToCart = async (item: Omit<CartItem, "quantity">, quantity: number = 1) => {
+  const addToCart = React.useCallback(async (item: Omit<CartItem, "quantity">, quantity: number = 1) => {
     // Optimistic update
     setCart((prev) => {
       const existing = prev.find((i) => i.id === item.id);
@@ -108,18 +108,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("Failed to add item to server cart", error);
       }
     }
-  };
+  }, []);
 
-  const removeFromCart = async (id: number) => {
+  const removeFromCart = React.useCallback(async (id: number) => {
     setCart((prev) => prev.filter((i) => i.id !== id));
-    // Note: Backend doesn't have remove item endpoint yet, implementing add_item with negative quantity or delete could work, 
-    // but for now we rely on the fact that 'add_item' is the only way to sync. 
-    // TODO: Implement remove item endpoint on backend for full sync.
-    // For now, we just clear locally. If we want to sync remove, we need a delete endpoint.
-    // Let's assume clearCart is used for checkout.
-  };
+    // Note: Backend doesn't have remove item endpoint yet.
+  }, []);
 
-  const incrementQuantity = async (id: number) => {
+  const incrementQuantity = React.useCallback(async (id: number) => {
     setCart((prev) =>
       prev.map((i) =>
         i.id === id ? { ...i, quantity: i.quantity + 1 } : i
@@ -137,9 +133,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("Failed to increment item", error);
       }
     }
-  };
+  }, []);
 
-  const decrementQuantity = async (id: number) => {
+  const decrementQuantity = React.useCallback(async (id: number) => {
     setCart((prev) =>
       prev.map((i) =>
         i.id === id && i.quantity > 1
@@ -147,13 +143,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
           : i
       )
     );
+    // Server sync skipped until backend supports robust decrement/delete
+  }, []);
 
-    // We need to handle decrement on server. Currently add_item adds quantity. 
-    // We might need to send negative quantity or update the endpoint.
-    // For now, let's skip server sync for decrement to avoid issues until backend supports it fully.
-  };
-
-  const clearCart = async () => {
+  const clearCart = React.useCallback(async () => {
     setCart([]);
     const sessionToken = localStorage.getItem("guest_session_token");
     if (sessionToken) {
@@ -163,12 +156,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("Failed to clear server cart", error);
       }
     }
-  };
+  }, []);
+
+  const value = React.useMemo(() => ({
+    cart,
+    addToCart,
+    removeFromCart,
+    incrementQuantity,
+    decrementQuantity,
+    clearCart
+  }), [cart, addToCart, removeFromCart, incrementQuantity, decrementQuantity, clearCart]);
 
   return (
-    <CartContext.Provider
-      value={{ cart, addToCart, removeFromCart, incrementQuantity, decrementQuantity, clearCart }}
-    >
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );

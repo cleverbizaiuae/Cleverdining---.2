@@ -50,6 +50,9 @@ const ScreenRestaurantOrderList = () => {
   const { response } = useContext(WebSocketContext) || {};
 
   // Real-time: Refresh orders when new orders arrive or status changes
+  // Real-time: Refresh orders with Debounce
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (response && (
       response.type === 'new_order' ||
@@ -61,7 +64,15 @@ const ScreenRestaurantOrderList = () => {
       response.type === 'payment:created'
     )) {
       console.log("Real-time OrderList refresh triggered by:", response.type);
-      fetchOrders(ordersCurrentPage, ordersSearchQuery);
+
+      // Debounce the fetch to prevent spamming
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
+      debounceRef.current = setTimeout(() => {
+        fetchOrders(ordersCurrentPage, ordersSearchQuery);
+      }, 2000); // 2-second debounce buffer for bulk updates
     }
   }, [response, fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 

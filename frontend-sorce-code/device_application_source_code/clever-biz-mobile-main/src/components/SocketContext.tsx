@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useState, useEffect, ReactNode, useRef } from "react";
 
 // Type definitions for the response and message data
 interface Message {
@@ -29,7 +29,8 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
 
   // Use optional chaining to safely access the user ID. 
   // For guests, we might not have a typical user ID, but TableLanding sets user.restaurants[0].id
-  const id = parseUser.user?.restaurants?.[0]?.id;
+  // Also check localStorage for 'restaurant_id' which represents 'current restaurant' for guests
+  const id = parseUser.user?.restaurants?.[0]?.id || localStorage.getItem("restaurant_id");
 
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -42,47 +43,88 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
   const wsUrl = `${WS_BASE_URL}/ws/alldatalive/${id}/?token=${tokenToUse}`;
 
   const [response, setResponse] = useState<Message | {}>({});
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
+  const connectWebSocket = () => {
     if (!id || !tokenToUse) {
-      // User not logged in yet - WebSocket will connect after login
       console.warn("WebSocket skipped: Missing ID or Token", { id, hasToken: !!tokenToUse });
       return;
     }
 
+    // Close existing connection if any
+    if (ws) {
+      ws.close();
+    }
+
+    console.log("Connecting to WebSocket:", wsUrl);
     const socket = new WebSocket(wsUrl);
-    setWs(socket); // Store the WebSocket connection
+    setWs(socket);
 
     socket.onopen = () => {
       console.log("WebSocket connected");
+      // Clear any pending reconnect timeout if connection succeeds
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
     };
 
     socket.onmessage = (event) => {
-      setResponse(JSON.parse(event.data)); // Log raw message
+      setResponse(JSON.parse(event.data));
       try {
-        const parsedMessage = JSON.parse(event.data); // assuming it's JSON
-        console.log("Parsed message:", parsedMessage); // Log parsed message
+        const parsedMessage = JSON.parse(event.data);
+        console.log("Parsed message:", parsedMessage);
         setMessages((prevMessages) => [...prevMessages, parsedMessage]);
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
-        setMessages((prevMessages) => [...prevMessages, event.data]); // fallback to raw message
+        setMessages((prevMessages) => [...prevMessages, event.data]);
       }
     };
-    console.log(response);
+
     socket.onerror = (error) => {
       console.error("WebSocket error:", error);
     };
 
     socket.onclose = () => {
-      console.log("WebSocket connection closed");
+      console.log("WebSocket connection closed. Reconnecting in 3s...");
+      // Auto-reconnect
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connectWebSocket();
+      }, 3000);
     };
+  };
 
-    return () => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close();
+  useEffect(() => {
+    connectWebSocket();
+
+    // Reconnect on visibility change (when app comes to foreground)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("App visible, ensuring WebSocket connection...");
+        // Only reconnect if socket is closed or null
+        setWs(prevWs => {
+          if (!prevWs || prevWs.readyState === WebSocket.CLOSED || prevWs.readyState === WebSocket.CLOSING) {
+            connectWebSocket();
+          }
+          return prevWs;
+        });
       }
     };
-  }, [wsUrl, id, accessToken]);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+      // We don't close the socket here on unmount strictly because strict mode might close it prematurely 
+      // but for production cleanliness:
+      setWs(prevWs => {
+        if (prevWs) prevWs.close();
+        return null;
+      });
+    };
+  }, [id, tokenToUse]); // Re-run only if ID or Token changes
 
   const value = {
     ws,

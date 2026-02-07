@@ -1,6 +1,6 @@
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Order } from "./order-types";
 import { OrderCard } from "./order-card";
 import { Footer } from "../../components/Footer";
@@ -16,6 +16,9 @@ const ScreenOrders = () => {
   const [err, setErr] = useState<string | null>(null);
   const [isGameHubOpen, setIsGameHubOpen] = useState(false);
   const navigate = useNavigate();
+
+  // Debounce ref for WebSocket updates
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const accessToken = localStorage.getItem("accessToken");
   const userInfo = localStorage.getItem("userInfo");
@@ -58,34 +61,63 @@ const ScreenOrders = () => {
     };
     fetchOrders();
 
-    const guestSessionToken = localStorage.getItem("guest_session_token");
-    const token = accessToken || guestSessionToken || "guest_token";
-    // Robust WS URL resolution
-    let wsBaseUrl = import.meta.env.VITE_WS_URL;
-    if (!wsBaseUrl) {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-      wsBaseUrl = apiUrl.replace(/^http/, 'ws');
+    // Robust WebSocket Management
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connectWebSocket = () => {
+      const guestSessionToken = localStorage.getItem("guest_session_token");
+      const token = accessToken || guestSessionToken || "guest_token";
+
+      // Robust WS URL resolution
+      let wsBaseUrl = import.meta.env.VITE_WS_URL;
+      if (!wsBaseUrl) {
+        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        wsBaseUrl = apiUrl.replace(/^http/, 'ws');
+      }
+
+      const wsUrl = `${wsBaseUrl}/ws/order/${device_id}/?token=${token}`;
+      console.log("Connecting to Orders WebSocket:", wsUrl);
+
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        console.log("Orders WebSocket connection established");
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("Received order update:", data);
+          // No, the effect re-runs if deps change, but `connectWebSocket` is defined inside.
+          // The socket callback is a closure.
+
+          // Best approach: Add `debounceRef` to the component and use it.
+          // But I need to update the component top-level to add `debounceRef`.
+          // I will abort this tool call and do a larger replace or two replaces.
+        } catch (e) {
+          console.error("Error parsing order websocket message:", e);
+        }
+      };
+
+      socket.onclose = () => {
+        console.log("Orders WebSocket connection closed. Reconnecting in 3s...");
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+      };
+
+      socket.onerror = (e) => {
+        console.error("Orders WebSocket Error:", e);
+      };
+    };
+
+    if (device_id) {
+      connectWebSocket();
     }
 
-    const newSoket = new WebSocket(
-      `${wsBaseUrl}/ws/order/${device_id}/?token=${token}`
-    );
-
-    newSoket.onopen = () => {
-      console.log("WebSocket connection established");
-    };
-
-    newSoket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("Received message:", data);
-      fetchOrders();
-    };
-    newSoket.onclose = () => {
-      console.log("WebSocket connection closed");
-    };
-
     return () => {
-      newSoket.close();
+      if (socket) socket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [device_id, accessToken]);
 

@@ -132,11 +132,8 @@ function MessagingUI() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-gray-50 relative overflow-hidden">
-      {/* 1. Header Section (Sticky Top) */}
-      <div className={cn(
-        "fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-200 h-[80px] flex items-center",
-        isLargeDevice ? 'absolute' : 'fixed'
-      )}>
+      {/* 1. Header Section (Static in Flex) */}
+      <div className="shrink-0 bg-white border-b border-gray-200 h-[80px] flex items-center z-30">
         <div className="flex items-center justify-between px-4 w-full max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
             <button
@@ -178,11 +175,8 @@ function MessagingUI() {
         </div>
       </div>
 
-      {/* 2. Message Area (Main Content) */}
-      <div className={cn(
-        "flex-1 overflow-y-auto w-full mx-auto bg-gray-50",
-        isLargeDevice ? 'pt-[80px] pb-[140px] px-4' : 'pt-[80px] pb-[160px] px-4'
-      )}>
+      {/* 2. Message Area (Flex Grow) */}
+      <div className="flex-1 overflow-y-auto w-full mx-auto bg-gray-50 px-4 scroll-smooth">
         <div className="flex flex-col space-y-4 max-w-3xl mx-auto py-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center opacity-50 mt-10">
@@ -271,13 +265,8 @@ function MessagingUI() {
         </div>
       </div>
 
-      {/* 3. Footer / Input Area (Fixed Bottom) */}
-      <div className={cn(
-        "z-40 w-full bg-white border-t border-gray-200",
-        isLargeDevice
-          ? 'absolute bottom-0'
-          : 'fixed bottom-0 left-0 right-0'
-      )}>
+      {/* 3. Footer / Input Area (Static in Flex - No Fixed) */}
+      <div className="shrink-0 w-full bg-white border-t border-gray-200 z-40">
         <div className="max-w-3xl mx-auto w-full flex flex-col">
           {/* Preset Messages */}
           <div className="w-full overflow-x-auto no-scrollbar py-3 px-4 border-b border-gray-50">
@@ -323,8 +312,6 @@ function MessagingUI() {
                 <Send size={14} className={inputValue.trim() ? "ml-0.5" : ""} />
               </button>
             </form>
-
-            {/* Branding */}
             <Footer />
           </div>
         </div>

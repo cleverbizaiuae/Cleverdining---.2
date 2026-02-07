@@ -130,16 +130,19 @@ class PaymentService:
         )
 
         # Notify Restaurant of new payment
-        from .serializers import PaymentSerializer
-        payment_data = PaymentSerializer(payment).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "payment_update",
-                "event": "payment:created",
-                "payment": payment_data
-            }
-        )
+        try:
+            from .serializers import PaymentSerializer
+            payment_data = PaymentSerializer(payment).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "payment_update",
+                    "event": "payment:created",
+                    "payment": payment_data
+                }
+            )
+        except Exception as e:
+            print(f"Failed to send payment notification: {e}")
         
         return result
 
