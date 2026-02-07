@@ -183,6 +183,7 @@ const ScreenRestaurantDashboard = () => {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [showDeleteItem, setShowDeleteItem] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handlers
   useEffect(() => {
@@ -940,10 +941,13 @@ const ScreenRestaurantDashboard = () => {
           </div>
 
           <button
+            disabled={isSubmitting}
             onClick={async () => {
+              if (isSubmitting) return; // Prevent double-click
               if (!itemFormData.category) return toast.error("Please select a category");
               if (!itemFormData.price) return toast.error("Please enter a price");
 
+              setIsSubmitting(true);
               const formData = new FormData();
               formData.append('item_name', itemFormData.item_name);
               formData.append('price', itemFormData.price);
@@ -977,10 +981,12 @@ const ScreenRestaurantDashboard = () => {
               } catch (e: any) {
                 console.error(e);
                 toast.error("Failed to save item: " + (e.response?.data?.detail || e.response?.data?.error || JSON.stringify(e.response?.data) || e.message));
+              } finally {
+                setIsSubmitting(false);
               }
             }}
-            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center">
-            {editingItem ? "Update Item" : "Create Item"}
+            className={`w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}>
+            {isSubmitting ? "Saving..." : (editingItem ? "Update Item" : "Create Item")}
           </button>
         </div>
       </Modal>
