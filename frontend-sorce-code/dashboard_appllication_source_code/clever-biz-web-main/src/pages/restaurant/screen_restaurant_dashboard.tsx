@@ -184,6 +184,8 @@ const ScreenRestaurantDashboard = () => {
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [showDeleteItem, setShowDeleteItem] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Handlers
   useEffect(() => {
@@ -708,24 +710,30 @@ const ScreenRestaurantDashboard = () => {
           />
 
           <button
+            disabled={isCategorySubmitting}
             onClick={async () => {
-              const formData = new FormData();
-              if (showEditCategory) {
-                formData.append('Category_name', editingCategory.Category_name);
-                // formData.append('image', ...); // Image update logic omitted for brevity/complexity
-                await updateCategory(editingCategory.id, formData);
-                setShowEditCategory(false);
-              } else {
-                formData.append('Category_name', catFormData.name);
-                if (catFormData.image) formData.append('image', catFormData.image);
-                await createCategory(formData);
-                setShowAddCategory(false);
-                setCatFormData({ name: "", image: null });
+              if (isCategorySubmitting) return;
+              setIsCategorySubmitting(true);
+              try {
+                const formData = new FormData();
+                if (showEditCategory) {
+                  formData.append('Category_name', editingCategory.Category_name);
+                  await updateCategory(editingCategory.id, formData);
+                  setShowEditCategory(false);
+                } else {
+                  formData.append('Category_name', catFormData.name);
+                  if (catFormData.image) formData.append('image', catFormData.image);
+                  await createCategory(formData);
+                  setShowAddCategory(false);
+                  setCatFormData({ name: "", image: null });
+                }
+              } finally {
+                setIsCategorySubmitting(false);
               }
             }}
-            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+            className={`w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center ${isCategorySubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            Submit
+            {isCategorySubmitting ? "Saving..." : "Submit"}
           </button>
         </div>
       </Modal>
@@ -738,7 +746,7 @@ const ScreenRestaurantDashboard = () => {
           </p>
           <div className="flex gap-3">
             <button onClick={() => setShowDeleteCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
-            <button onClick={async () => { await deleteCategory(categoryToDelete.id); setShowDeleteCategory(false); }} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
+            <button disabled={isDeleting} onClick={async () => { if (isDeleting) return; setIsDeleting(true); try { await deleteCategory(categoryToDelete.id); setShowDeleteCategory(false); } finally { setIsDeleting(false); } }} className={`flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg ${isDeleting ? 'opacity-70 cursor-not-allowed' : ''}`}>{isDeleting ? "Deleting..." : "Delete"}</button>
           </div>
         </div>
       </Modal>
@@ -776,24 +784,31 @@ const ScreenRestaurantDashboard = () => {
 
 
           <button
+            disabled={isCategorySubmitting}
             onClick={async () => {
-              const formData = new FormData();
-              if (showEditSubCategory) {
-                formData.append('Category_name', editingSubCategory.Category_name);
-                formData.append('parent_category', editingSubCategory.parent_category);
-                await updateSubCategory(editingSubCategory.id, formData);
-                setShowEditSubCategory(false);
-              } else {
-                formData.append('Category_name', subCatFormData.Category_name);
-                formData.append('parent_category', subCatFormData.parent_category);
-                await createSubCategory(formData);
-                setShowAddSubCategory(false);
-                setSubCatFormData({ Category_name: "", parent_category: "", image: null });
+              if (isCategorySubmitting) return;
+              setIsCategorySubmitting(true);
+              try {
+                const formData = new FormData();
+                if (showEditSubCategory) {
+                  formData.append('Category_name', editingSubCategory.Category_name);
+                  formData.append('parent_category', editingSubCategory.parent_category);
+                  await updateSubCategory(editingSubCategory.id, formData);
+                  setShowEditSubCategory(false);
+                } else {
+                  formData.append('Category_name', subCatFormData.Category_name);
+                  formData.append('parent_category', subCatFormData.parent_category);
+                  await createSubCategory(formData);
+                  setShowAddSubCategory(false);
+                  setSubCatFormData({ Category_name: "", parent_category: "", image: null });
+                }
+              } finally {
+                setIsCategorySubmitting(false);
               }
             }}
-            className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+            className={`w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors flex items-center justify-center ${isCategorySubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            Submit
+            {isCategorySubmitting ? "Saving..." : "Submit"}
           </button>
         </div>
       </Modal>
@@ -806,7 +821,7 @@ const ScreenRestaurantDashboard = () => {
           </p>
           <div className="flex gap-3">
             <button onClick={() => setShowDeleteSubCategory(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
-            <button onClick={async () => { await deleteSubCategory(subCategoryToDelete.id); setShowDeleteSubCategory(false); }} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
+            <button disabled={isDeleting} onClick={async () => { if (isDeleting) return; setIsDeleting(true); try { await deleteSubCategory(subCategoryToDelete.id); setShowDeleteSubCategory(false); } finally { setIsDeleting(false); } }} className={`flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg ${isDeleting ? 'opacity-70 cursor-not-allowed' : ''}`}>{isDeleting ? "Deleting..." : "Delete"}</button>
           </div>
         </div>
       </Modal>
@@ -819,7 +834,9 @@ const ScreenRestaurantDashboard = () => {
           </p>
           <div className="flex gap-3">
             <button onClick={() => setShowDeleteItem(false)} className="flex-1 h-10 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50">Cancel</button>
-            <button onClick={async () => {
+            <button disabled={isDeleting} onClick={async () => {
+              if (isDeleting) return;
+              setIsDeleting(true);
               try {
                 await axiosInstance.delete(`/owners/items/${itemToDelete.id}/`);
                 toast.success("Item deleted");
@@ -827,9 +844,11 @@ const ScreenRestaurantDashboard = () => {
                 fetchFoodItems(currentPage, debouncedSearchQuery);
               } catch (e: any) {
                 toast.error("Failed to delete item: " + (e.response?.data?.error || e.message));
+              } finally {
+                setIsDeleting(false);
               }
             }}
-              className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">Delete</button>
+              className={`flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg ${isDeleting ? 'opacity-70 cursor-not-allowed' : ''}`}>{isDeleting ? "Deleting..." : "Delete"}</button>
           </div>
         </div>
       </Modal>
