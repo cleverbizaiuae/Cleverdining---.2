@@ -426,21 +426,47 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "U
     if (!searchQuery) return;
 
     setIsGenerating(true);
-    try {
-      const prompt = `${searchQuery} food high quality delicious professional photography`;
-      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const generatedFile = new File([blob], `${searchQuery.replace(/\s+/g, "_")}_generated.jpg`, { type: "image/jpeg" });
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-      setFile(generatedFile);
-    } catch (error) {
-      console.error("Failed to generate image:", error);
-      // You might want to show a toast here if you have access to it
-    } finally {
-      setIsGenerating(false);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const prompt = `${searchQuery} food high quality delicious professional photography`;
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        // Validate that we got an actual image
+        if (!blob.type.startsWith('image/')) {
+          throw new Error('Invalid response format');
+        }
+
+        const generatedFile = new File([blob], `${searchQuery.replace(/\s+/g, "_")}_generated.jpg`, { type: "image/jpeg" });
+        setFile(generatedFile);
+        setIsGenerating(false);
+        return; // Success - exit the function
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.error(`AI image generation attempt ${attempt} failed:`, error);
+
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff: 1s, 2s, 4s)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000));
+        }
+      }
     }
+
+    // All retries failed - show user-friendly error
+    setIsGenerating(false);
+    alert(`Image generation failed after ${maxRetries} attempts. The AI service may be temporarily unavailable. Please try again later or upload an image manually.`);
   };
 
   useEffect(() => {
