@@ -500,15 +500,15 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (response.type === "reservation_created") {
       fetchReservations();
-    } else if (
-      response.type === "order_created" ||
-      response.type === "order_updated" ||
-      response.type === "order_status_update" ||
-      response.type === "order_paid" ||
-      response.type === "cash_payment_alert"
-    ) {
-      console.log("WebSocket Order Event Received:", response.type);
-      fetchOrders();
+      // } else if (
+      //   response.type === "order_created" ||
+      //   response.type === "order_updated" ||
+      //   response.type === "order_status_update" ||
+      //   response.type === "order_paid" ||
+      //   response.type === "cash_payment_alert"
+      // ) {
+      //   console.log("WebSocket Order Event Received:", response.type);
+      //   fetchOrders();
     }
   }, [fetchReservations, fetchOrders, response]);
 
@@ -978,11 +978,11 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       response.type === "item_deleted"
     ) {
       fetchFoodItems(currentPage, searchQuery);
-    } else if (
-      response.type === "order_created" ||
-      response.type === "order_updated"
-    ) {
-      fetchOrders(ordersCurrentPage, ordersSearchQuery);
+      // } else if (
+      //   response.type === "order_created" ||
+      //   response.type === "order_updated"
+      // ) {
+      //   fetchOrders(ordersCurrentPage, ordersSearchQuery);
     } else if (
       response.type === "reservation_created" ||
       response.type === "reservation_updated"

@@ -999,7 +999,28 @@ const ScreenRestaurantDashboard = () => {
                 fetchFoodItems(currentPage, debouncedSearchQuery);
               } catch (e: any) {
                 console.error(e);
-                toast.error("Failed to save item: " + (e.response?.data?.detail || e.response?.data?.error || JSON.stringify(e.response?.data) || e.message));
+                let errorMsg = "Failed to save item";
+                const data = e.response?.data;
+
+                if (data) {
+                  if (data.description) {
+                    errorMsg = "Add Description before adding an item";
+                  } else if (typeof data === 'object') {
+                    // Extract first error message from any field
+                    const firstError = Object.values(data).flat()[0];
+                    if (typeof firstError === 'string') {
+                      errorMsg = firstError;
+                    } else {
+                      errorMsg = JSON.stringify(data);
+                    }
+                  } else {
+                    errorMsg = data.detail || data.error || e.message;
+                  }
+                } else {
+                  errorMsg = e.message;
+                }
+
+                toast.error(errorMsg);
               } finally {
                 setIsSubmitting(false);
               }
