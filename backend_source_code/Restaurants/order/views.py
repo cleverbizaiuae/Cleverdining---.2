@@ -198,13 +198,17 @@ class ConfirmCashPaymentAPIView(APIView):
         # Update Order (and all other session orders ONLY if they are also awaiting cash)
         orders_to_update = [order]
         
-        # if order.guest_session:
-        #      # Only auto-confirm other orders if they are ALSO waiting for cash (Bulk Cash Payment Case)
-        #      session_orders = Order.objects.filter(
-        #          guest_session=order.guest_session,
-        #          status='awaiting_cash'
-        #      ).exclude(pk=order.pk).exclude(payment_status='paid')
-        #      orders_to_update.extend(list(session_orders))
+        if order.guest_session:
+             # Auto-confirm ALL other unpaid orders for this session (Bulk Cash Payment)
+             # This ensures that if the customer paid "Table 2" total, all orders for Table 2 are marked paid.
+             session_orders = Order.objects.filter(
+                 guest_session=order.guest_session,
+                 # We should include 'pending', 'preparing', 'served' too, not just 'awaiting_cash',
+                 # because often staff just takes cash without user clicking "Pay by Cash".
+                 status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
+             ).exclude(pk=order.pk).exclude(payment_status='paid')
+             
+             orders_to_update.extend(list(session_orders))
         
         for o in orders_to_update:
             o.status = 'completed'
@@ -375,15 +379,8 @@ class MyOrdersAPIView(generics.ListAPIView):
                 except GuestSession.DoesNotExist:
                     return Order.objects.none()
 
-            # Fallback to device_id (Legacy/Insecure - consider deprecating)
-            device_id = self.request.query_params.get('device_id')
-            if device_id:
-                return base_qs.filter(
-                    device_id=device_id,
-                    status__in=['pending', 'preparing', 'served', 'delivered']
-                ).exclude(
-                    payment_status__in=['paid', 'completed']
-                ).order_by('-created_time')
+            # Fallback to device_id REMOVED for security/isolation. 
+            # Orders must be accessed via Session Token or User Auth.
             return Order.objects.none()
 
 

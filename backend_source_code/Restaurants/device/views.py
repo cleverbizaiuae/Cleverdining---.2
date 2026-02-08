@@ -68,21 +68,34 @@ class ResolveTableView(APIView):
         existing_session = GuestSession.objects.filter(device=device, is_active=True).first()
         
         if existing_session:
-            # Check if session should be expired? (e.g. > 24 hours inactive?)
-            # For now, we trust is_active and just return it.
-            # We can update last_seen_at automatically due to auto_now=True if we save?
-            existing_session.save() # Update last_seen
-            
-            return Response({
-                'guest_session_id': existing_session.id,
-                'session_token': existing_session.session_token,
-                'table_id': device.id,
-                'table_name': device.table_name,
-                'restaurant_id': device.restaurant.id,
-                'restaurant_name': device.restaurant.resturent_name,
-                'expires_at': existing_session.expires_at.isoformat() if existing_session.expires_at else None,
-                'is_resumed': True
-            })
+            # AUTO-EXPIRE check: If session is active but has NO unpaid/active orders, 
+            # it implies the previous customers left without the session being closed.
+            # We should close it and start a fresh one for the new customer.
+            from order.models import Order
+            has_pending_orders = Order.objects.filter(
+                guest_session=existing_session,
+                status__in=['pending', 'preparing', 'served', 'delivered'],
+            ).exclude(payment_status__in=['paid', 'completed']).exists()
+
+            if not has_pending_orders:
+                # Session is stale/finished. Close it.
+                existing_session.is_active = False
+                existing_session.save()
+                existing_session = None # Proceed to create NEW session
+            else:
+                # Session is genuinely active with orders. Resume it.
+                existing_session.save() # Update last_seen
+                
+                return Response({
+                    'guest_session_id': existing_session.id,
+                    'session_token': existing_session.session_token,
+                    'table_id': device.id,
+                    'table_name': device.table_name,
+                    'restaurant_id': device.restaurant.id,
+                    'restaurant_name': device.restaurant.resturent_name,
+                    'expires_at': existing_session.expires_at.isoformat() if existing_session.expires_at else None,
+                    'is_resumed': True
+                })
 
         # Create new guest session
         session_token = str(uuid.uuid4())

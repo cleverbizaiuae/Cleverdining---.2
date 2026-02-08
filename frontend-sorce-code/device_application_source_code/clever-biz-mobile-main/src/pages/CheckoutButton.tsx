@@ -11,13 +11,15 @@ export default function CheckoutButton({
   tipAmount,
   tipType,
   tipValue,
+  isBulkCheckout,
 }: {
-  orderId: number | string;
+  orderId?: number | string; // Make optional for bulk
   disabled?: boolean;
   provider?: string;
   tipAmount?: number;
   tipType?: string | null;
   tipValue?: number | string;
+  isBulkCheckout?: boolean;
 }) {
   console.log(orderId);
   const [loading, setLoading] = useState(false);
@@ -41,20 +43,43 @@ export default function CheckoutButton({
 
       console.log("Using Token:", guestToken.slice(0, 10) + "...");
 
-      const res = await axiosInstance.post(
-        `/api/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
-        {
-          provider,
-          tip_amount: tipAmount,
-          tip_type: tipType,
-          tip_value: tipValue
-        },
-        {
-          headers: {
-            "X-Guest-Session-Token": guestToken
+      let res;
+
+      if (isBulkCheckout) {
+        // BULK CHECKOUT FLOW
+        res = await axiosInstance.post(
+          `/api/customer/create-bulk-checkout-session/`,
+          {
+            provider,
+            tip_amount: tipAmount,
+            tip_type: tipType,
+            tip_value: tipValue
+          },
+          {
+            headers: {
+              "X-Guest-Session-Token": guestToken
+            }
           }
-        }
-      );
+        );
+      } else {
+        // SINGLE ORDER FLOW
+        if (!orderId) throw new Error("Order ID missing for single checkout");
+        res = await axiosInstance.post(
+          `/api/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
+          {
+            provider,
+            tip_amount: tipAmount,
+            tip_type: tipType,
+            tip_value: tipValue
+          },
+          {
+            headers: {
+              "X-Guest-Session-Token": guestToken
+            }
+          }
+        );
+      }
+
       const url: string | undefined = res?.data?.url;
       const sessionId: string | undefined = res?.data?.sessionId; // Stripe session ID
       const transactionId: string | undefined = res?.data?.transaction_id; // Unified ID

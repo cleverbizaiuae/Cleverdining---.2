@@ -374,6 +374,7 @@ export default function CheckoutPage() {
             tipAmount={tipAmount}
             tipType={tipType}
             tipValue={tipValue}
+            isBulkCheckout={isBulkCheckout}
           />
         )}
 

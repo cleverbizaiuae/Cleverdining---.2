@@ -312,21 +312,12 @@ class CreateBulkCheckoutSessionView(APIView):
                         'type': 'bulk_session',
                         'guest_session_id': session.id,
                         'primary_order_id': primary_order.id
-                     }
+                     },
+                     created_by='guest_bulk' # Explicitly set created_by for verification logic
                  )
                  
                  # The result from PaymentService already contains 'url', 'transaction_id', etc.
-                 # But PaymentService creates a Payment record attached to 'primary_order'.
-                 # We might want to update that payment record to indicate it's a BULK payment 'created_by'='guest_bulk'
-                 # to help verification later.
-                 
-                 # Fetch the payment just created (latest for this order)
-                 # Or update create_payment to return the payment object? 
-                 # Currently returns dict.
-                 
-                 # We can update the payment based on transaction_id
-                 if result.get('transaction_id'):
-                     Payment.objects.filter(transaction_id=result['transaction_id']).update(created_by='guest_bulk')
+                 # We no longer need to manually update the payment record as create_payment handles it.
                  
                  return Response(result)
 

@@ -114,9 +114,12 @@ class PaymentService:
         return adapter_class(gateway)
 
     @staticmethod
-    def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None):
+    def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None, created_by=None):
         adapter = PaymentService.get_adapter(order.restaurant, provider=provider)
-        result = adapter.create_payment_session(order, success_url, cancel_url, amount=amount, metadata=metadata)
+        # Use passed amount if available, else usage order total
+        final_amount = amount if amount is not None else order.total_price
+        
+        result = adapter.create_payment_session(order, success_url, cancel_url, amount=final_amount, metadata=metadata)
         
         # Create Payment Record
         payment = Payment.objects.create(
@@ -125,8 +128,9 @@ class PaymentService:
             device=order.device,
             provider=result.get('provider', 'unknown'),
             transaction_id=result.get('transaction_id'),
-            amount=order.total_price,
-            status=result.get('status', 'pending')
+            amount=final_amount, # Use the actual transaction amount
+            status=result.get('status', 'pending'),
+            created_by=created_by # Store who initiated (e.g., 'guest_bulk')
         )
 
         # Notify Restaurant of new payment
@@ -176,6 +180,7 @@ class PaymentService:
             # Logic for Single vs Bulk
             main_order = payment.order
             
+            # Always mark the primary order as paid
             orders_to_update = [main_order]
             
             if payment.created_by == 'guest_bulk' and main_order.guest_session:
@@ -184,14 +189,31 @@ class PaymentService:
                 from order.models import Order
                 bulk_orders = Order.objects.filter(
                     guest_session=main_order.guest_session,
-                    status__in=['pending', 'preparing', 'served', 'awaiting_cash'],
+                    status__in=['pending', 'preparing', 'served', 'completed', 'awaiting_cash'],
                 ).exclude(id=main_order.id).exclude(payment_status='paid')
                 
                 orders_to_update.extend(list(bulk_orders))
 
             for order in orders_to_update:
-                order.status = 'paid'
+                user_updated = False
+                if order.status != 'completed':
+                     # Do not auto-complete orders if they are just paid? 
+                     # Actually for "Fast Food" flow maybe? 
+                     # But for dining, paying doesn't mean eating is done.
+                     # However, current logic sets it to 'paid'.
+                     # Let's keep status as is, but update payment_status.
+                     # UNLESS it was 'awaiting_cash', then revert to 'served' or keep 'served'?
+                     # 'paid' is a valid status in constants.
+                     pass
+
+                # Update Payment Status
                 order.payment_status = 'paid'
+                if order.status == 'awaiting_cash':
+                    order.status = 'preparing' # or 'served'? If it was 'awaiting_cash', it was likely new.
+                
+                # If we want to show it as "Paid" in dashboard column:
+                # The dashboard uses payment_status.
+                
                 order.save()
                 
                 # Notify Restaurant
