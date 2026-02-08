@@ -177,12 +177,37 @@ const ScreenRestaurantChat = () => {
   // 3. Global WebSocket Listener for Real-time List Updates
   const { messages: globalMessages } = useContext(WebSocketContext) || {};
 
+  // Ref to track selected chat without triggering re-renders in useEffect
+  const selectedChatRef = useRef<ChatRoomItem | null>(null);
+
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
+
+  // Track processed messages to avoid double counting
+  const processedMessageIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (!globalMessages || globalMessages.length === 0) return;
 
     const lastMsg = globalMessages[globalMessages.length - 1];
 
     if (lastMsg && lastMsg.type === 'chat_message') {
+      // Generate a unique ID for the message if not present
+      const msgId = lastMsg.id || `${lastMsg.device_id}-${lastMsg.timestamp}-${lastMsg.message}`;
+
+      // If we already processed this message, skip
+      if (processedMessageIdsRef.current.has(msgId)) {
+        return;
+      }
+      processedMessageIdsRef.current.add(msgId);
+
+      // Clean up old IDs to prevent memory leak (keep last 100)
+      if (processedMessageIdsRef.current.size > 100) {
+        const it = processedMessageIdsRef.current.values();
+        processedMessageIdsRef.current.delete(it.next().value);
+      }
+
       // Only process INCOMING messages (from device/customer)
       const isIncoming = lastMsg.is_from_device === true || lastMsg.is_from_device === "true";
 
@@ -191,7 +216,9 @@ const ScreenRestaurantChat = () => {
         setChatList(prevList => {
           return prevList.map(chat => {
             if (String(chat.id) === String(lastMsg.device_id)) {
-              const isCurrentlyOpen = selectedChat?.id === chat.id;
+              // Use REF to check current selection to avoid stale closure or dependency re-run issues
+              const currentSelectedId = selectedChatRef.current?.id;
+              const isCurrentlyOpen = String(currentSelectedId) === String(chat.id);
 
               // Increment badge only if incoming and not currently open
               const shouldIncrement = isIncoming && !isCurrentlyOpen;
@@ -208,7 +235,8 @@ const ScreenRestaurantChat = () => {
       }
 
       // 2. Redundancy: If this message belongs to the CURRENT OPEN chat, append it to 'messages' locally
-      if (selectedChat && String(selectedChat.id) === String(lastMsg.device_id)) {
+      // Check against REF
+      if (selectedChatRef.current && String(selectedChatRef.current.id) === String(lastMsg.device_id)) {
         setMessages(prev => {
           // Dedup check
           const alreadyExists = prev.some(m =>
@@ -229,7 +257,7 @@ const ScreenRestaurantChat = () => {
         });
       }
     }
-  }, [globalMessages, selectedChat]); // Re-run when globalMessages changes
+  }, [globalMessages]); // Dependency on selectedChat REMOVED to prevent re-runs on switch
 
   // Cache for chat messages: { [deviceId]: Message[] }
   const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
