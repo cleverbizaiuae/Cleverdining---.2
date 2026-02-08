@@ -231,6 +231,9 @@ const ScreenRestaurantChat = () => {
     }
   }, [globalMessages, selectedChat]); // Re-run when globalMessages changes
 
+  // Cache for chat messages: { [deviceId]: Message[] }
+  const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
+
   // 4. Fetch History on Selection + Clear Badge
   useEffect(() => {
     if (!selectedChat) return;
@@ -244,11 +247,27 @@ const ScreenRestaurantChat = () => {
       setUnreadCount((prev: number) => Math.max(0, prev - currentUnread));
     }
 
+    // LOAD FROM CACHE FIRST (Instant Load)
+    if (messageCache[selectedChat.id]) {
+      console.log(`Loaded ${selectedChat.id} from cache`);
+      setMessages(messageCache[selectedChat.id]);
+    } else {
+      setMessages([]); // Clear if no cache to prevent showing wrong chat
+    }
+
     const fetchHistory = async () => {
       try {
         const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
         const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
-        setMessages(Array.isArray(data) ? data : []);
+        const fetchedMessages = Array.isArray(data) ? data : [];
+
+        setMessages(fetchedMessages);
+
+        // Update Cache
+        setMessageCache(prev => ({
+          ...prev,
+          [selectedChat.id]: fetchedMessages
+        }));
 
         // Mark all as read on server (fire and forget, badge already cleared locally)
         axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`).catch(err => {
