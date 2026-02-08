@@ -90,12 +90,21 @@ const ScreenOrders = () => {
         try {
           const data = JSON.parse(event.data);
           console.log("Received order update:", data);
-          // No, the effect re-runs if deps change, but `connectWebSocket` is defined inside.
-          // The socket callback is a closure.
 
-          // Best approach: Add `debounceRef` to the component and use it.
-          // But I need to update the component top-level to add `debounceRef`.
-          // I will abort this tool call and do a larger replace or two replaces.
+          if (
+            data.type === 'order_created' ||
+            data.type === 'order_updated' ||
+            data.type === 'order_status_update' ||
+            data.type === 'payment_status_update'
+          ) {
+            console.log("Triggering order refresh...");
+            if (debounceRef.current) {
+              clearTimeout(debounceRef.current);
+            }
+            debounceRef.current = setTimeout(() => {
+              fetchOrders();
+            }, 1000);
+          }
         } catch (e) {
           console.error("Error parsing order websocket message:", e);
         }
