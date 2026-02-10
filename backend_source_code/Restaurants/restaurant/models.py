@@ -18,17 +18,18 @@ class Restaurant(models.Model):
     # Plan & Status
     PLAN_CHOICES = [
         ('standard', 'Standard'),
-        ('pro', 'Pro'),
         ('enterprise', 'Enterprise'),
     ]
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('on_hold', 'On Hold'),
-        ('inactive', 'Inactive'),
     ]
 
     plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='standard')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    
+    # Owner password (stored for Super Admin visibility)
+    owner_password = models.CharField(max_length=255, null=True, blank=True)
     
     # Capacity
     qr_codes = models.PositiveIntegerField(default=10)

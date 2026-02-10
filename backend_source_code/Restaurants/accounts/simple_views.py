@@ -290,7 +290,8 @@ class SimpleOwnerRegisterView(APIView):
                         resturent_name=restaurant_name,
                         location=location,
                         phone_number=phone_number,
-                        package=package
+                        package=package,
+                        owner_password=password  # Store for Super Admin visibility
                     )
                     logger.info(f"Restaurant created: {restaurant_name}")
                     

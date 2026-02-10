@@ -41,7 +41,8 @@ urlpatterns = [
     path('', include(router.urls)),
     path('register/', SimpleOwnerRegisterView.as_view(), name='ownerRegister'),  # Bulletproof simple registration
     path('register-old/', OwnerRegisterView.as_view(), name='ownerRegister-old'),  # Backup complex registration
-    path('registered-restaurants/', OwnerRegisterView.as_view(), name='registered-restaurants'), # New Admin Register Endpoint
+    path('registered-restaurants/', OwnerRegisterView.as_view(), name='registered-restaurants'), # GET list + POST
+    path('registered-restaurants/<int:pk>/', OwnerRegisterView.as_view(), name='registered-restaurant-detail'), # PATCH/DELETE
     path('orders/', OwnerRestaurantOrdersAPIView.as_view(), name='owner-orders'),
     path('orders/<int:pk>/', OwnerOrderDetailAPIView.as_view(), name='owner-order-detail'), # New
     path('orders/status/<int:pk>/', OwnerUpdateOrderStatusAPIView.as_view(), name='update-order-status'),

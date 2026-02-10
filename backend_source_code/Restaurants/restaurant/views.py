@@ -16,6 +16,80 @@ from rest_framework.permissions import AllowAny
 
 class OwnerRegisterView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request, pk=None):
+        """List all restaurants for Super Admin dashboard"""
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            restaurants = Restaurant.objects.select_related('owner').all().order_by('-created_at')
+            data = []
+            for r in restaurants:
+                data.append({
+                    'id': str(r.id),
+                    'name': r.resturent_name,
+                    'location': r.location or '',
+                    'city': '',  # Not stored separately yet
+                    'country': '',
+                    'phone': r.phone_number or '',
+                    'email': r.owner.email if r.owner else '',
+                    'logoUrl': r.logo.url if r.logo else None,
+                    'rating': None,
+                    'package': r.package or 'Starter',
+                    'status': r.status or 'active',
+                    'qrCodes': r.qr_codes,
+                    'tableCount': r.table_count,
+                    'paymentProcessor': 'stripe',
+                    'subscriptionStart': r.subscription_start.isoformat() if r.subscription_start else None,
+                    'subscriptionEnd': r.subscription_end.isoformat() if r.subscription_end else None,
+                    'createdAt': r.created_at.isoformat() if r.created_at else None,
+                    'ownerPassword': r.owner_password or '',
+                })
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error listing restaurants: {str(e)}", exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def patch(self, request, pk=None):
+        """Update a restaurant (status, etc.) for Super Admin"""
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            restaurant = Restaurant.objects.get(pk=pk)
+            data = request.data
+
+            if 'status' in data:
+                restaurant.status = data['status']
+            if 'package' in data:
+                restaurant.package = data['package']
+            if 'owner_password' in data:
+                restaurant.owner_password = data['owner_password']
+
+            restaurant.save()
+            return Response({'message': 'Restaurant updated successfully'}, status=status.HTTP_200_OK)
+        except Restaurant.DoesNotExist:
+            return Response({'error': 'Restaurant not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error updating restaurant: {str(e)}", exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, pk=None):
+        """Delete a restaurant for Super Admin"""
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            restaurant = Restaurant.objects.get(pk=pk)
+            owner = restaurant.owner
+            restaurant.delete()
+            # Optionally delete the owner user too
+            if owner and not Restaurant.objects.filter(owner=owner).exists():
+                owner.delete()
+            return Response({'message': 'Restaurant deleted successfully'}, status=status.HTTP_200_OK)
+        except Restaurant.DoesNotExist:
+            return Response({'error': 'Restaurant not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting restaurant: {str(e)}", exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def dispatch(self, request, *args, **kwargs):
         """Override dispatch to catch ALL exceptions"""
