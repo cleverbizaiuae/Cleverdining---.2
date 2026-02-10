@@ -3,6 +3,7 @@ import {
     Search,
     Star,
     Eye,
+    EyeOff,
     ChevronDown,
     X,
     QrCode,
@@ -13,7 +14,11 @@ import {
     Trash2,
     AlertTriangle,
     Loader2,
-    Grid3X3
+    Grid3X3,
+    Lock,
+    Mail,
+    Phone,
+    MapPin
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axiosInstance from "@/lib/axios";
@@ -32,29 +37,30 @@ interface RegisteredRestaurant {
     logoUrl?: string;
     rating?: number;
     package: string;
-    status: 'active' | 'on_hold' | 'inactive';
+    status: 'active' | 'on_hold';
     qrCodes: number;
     tableCount: number;
     paymentProcessor: string;
     subscriptionStart?: string;
     subscriptionEnd?: string;
     createdAt: string;
+    ownerPassword?: string;
 }
 
 // Seeded Sample Data (12 restaurants)
 const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
-    { id: "rest-001", name: "The Golden Fork", location: "Dubai Mall, Level 2", city: "Dubai", country: "UAE", phone: "+971 4 123 4567", email: "contact@goldenfork.ae", rating: 4.8, package: "Professional", status: "active", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-10-10", createdAt: "2026-01-10T20:39:25.775Z" },
-    { id: "rest-002", name: "Spice Route Kitchen", location: "JBR Walk", city: "Dubai", country: "UAE", phone: "+971 4 234 5678", email: "info@spiceroute.ae", rating: 4.5, package: "Enterprise", status: "active", qrCodes: 20, tableCount: 18, paymentProcessor: "stripe", subscriptionStart: "2025-09-15", createdAt: "2026-01-08T15:20:00.000Z" },
-    { id: "rest-003", name: "Marina Bites", location: "Dubai Marina", city: "Dubai", country: "UAE", phone: "+971 4 345 6789", email: "hello@marinabites.ae", rating: 3.9, package: "Starter", status: "inactive", qrCodes: 10, tableCount: 8, paymentProcessor: "paytabs", subscriptionStart: "2025-08-01", createdAt: "2025-12-20T10:00:00.000Z" },
-    { id: "rest-004", name: "Abu Dhabi Grill House", location: "Yas Mall", city: "Abu Dhabi", country: "UAE", phone: "+971 2 456 7890", email: "reservations@adgrill.ae", rating: 4.7, package: "Enterprise", status: "active", qrCodes: 25, tableCount: 20, paymentProcessor: "stripe", subscriptionStart: "2025-07-20", createdAt: "2025-12-15T14:30:00.000Z" },
-    { id: "rest-005", name: "The Corniche Cafe", location: "Corniche Road", city: "Abu Dhabi", country: "UAE", phone: "+971 2 567 8901", email: "info@corniche.ae", rating: 4.2, package: "Enterprise", status: "on_hold", qrCodes: 12, tableCount: 10, paymentProcessor: "checkout", subscriptionStart: "2025-06-10", createdAt: "2025-11-25T09:15:00.000Z" },
-    { id: "rest-006", name: "Riyadh Palace Restaurant", location: "Kingdom Centre", city: "Riyadh", country: "Saudi Arabia", phone: "+966 11 123 4567", email: "palace@riyadhpalace.sa", rating: 4.9, package: "Enterprise", status: "active", qrCodes: 30, tableCount: 25, paymentProcessor: "stripe", subscriptionStart: "2025-05-01", createdAt: "2025-11-10T12:00:00.000Z" },
-    { id: "rest-007", name: "Jeddah Seafood House", location: "Red Sea Mall", city: "Jeddah", country: "Saudi Arabia", phone: "+966 12 234 5678", email: "jeddah@seafood.sa", rating: 4.3, package: "Professional", status: "active", qrCodes: 18, tableCount: 15, paymentProcessor: "paytabs", subscriptionStart: "2025-04-15", createdAt: "2025-10-20T08:45:00.000Z" },
-    { id: "rest-008", name: "Cairo Mezze", location: "City Stars Mall", city: "Cairo", country: "Egypt", phone: "+20 2 345 6789", email: "info@cairomezze.eg", rating: 4.0, package: "Professional", status: "inactive", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-03-20", createdAt: "2025-09-15T16:30:00.000Z" },
-    { id: "rest-009", name: "Nile View Dining", location: "Zamalek", city: "Cairo", country: "Egypt", phone: "+20 2 456 7890", email: "dining@nileview.eg", rating: 4.6, package: "Enterprise", status: "active", qrCodes: 20, tableCount: 16, paymentProcessor: "stripe", subscriptionStart: "2025-02-28", createdAt: "2025-09-01T11:00:00.000Z" },
-    { id: "rest-010", name: "Doha Delights", location: "The Pearl Qatar", city: "Doha", country: "Qatar", phone: "+974 4 567 8901", email: "info@dohadelights.qa", rating: 4.4, package: "Enterprise", status: "active", qrCodes: 22, tableCount: 18, paymentProcessor: "checkout", subscriptionStart: "2025-01-15", createdAt: "2025-08-20T13:15:00.000Z" },
-    { id: "rest-011", name: "Kuwait Kitchen", location: "The Avenues Mall", city: "Kuwait City", country: "Kuwait", phone: "+965 2 678 9012", email: "kitchen@kuwait.kw", rating: 4.1, package: "Professional", status: "on_hold", qrCodes: 14, tableCount: 11, paymentProcessor: "paytabs", subscriptionStart: "2024-12-01", createdAt: "2025-08-10T10:30:00.000Z" },
-    { id: "rest-012", name: "Bahrain Brasserie", location: "Seef Mall", city: "Manama", country: "Bahrain", phone: "+973 1789 0123", email: "brasserie@bahrain.bh", rating: 4.5, package: "Professional", status: "active", qrCodes: 16, tableCount: 13, paymentProcessor: "stripe", subscriptionStart: "2024-11-10", createdAt: "2025-08-01T09:00:00.000Z" },
+    { id: "rest-001", name: "The Golden Fork", location: "Dubai Mall, Level 2", city: "Dubai", country: "UAE", phone: "+971 4 123 4567", email: "contact@goldenfork.ae", rating: 4.8, package: "Enterprise", status: "active", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-10-10", createdAt: "2026-01-10T20:39:25.775Z", ownerPassword: "GoldenFork@2026" },
+    { id: "rest-002", name: "Spice Route Kitchen", location: "JBR Walk", city: "Dubai", country: "UAE", phone: "+971 4 234 5678", email: "info@spiceroute.ae", rating: 4.5, package: "Enterprise", status: "active", qrCodes: 20, tableCount: 18, paymentProcessor: "stripe", subscriptionStart: "2025-09-15", createdAt: "2026-01-08T15:20:00.000Z", ownerPassword: "SpiceRoute@2026" },
+    { id: "rest-003", name: "Marina Bites", location: "Dubai Marina", city: "Dubai", country: "UAE", phone: "+971 4 345 6789", email: "hello@marinabites.ae", rating: 3.9, package: "Starter", status: "on_hold", qrCodes: 10, tableCount: 8, paymentProcessor: "paytabs", subscriptionStart: "2025-08-01", createdAt: "2025-12-20T10:00:00.000Z", ownerPassword: "MarinaBites@2026" },
+    { id: "rest-004", name: "Abu Dhabi Grill House", location: "Yas Mall", city: "Abu Dhabi", country: "UAE", phone: "+971 2 456 7890", email: "reservations@adgrill.ae", rating: 4.7, package: "Enterprise", status: "active", qrCodes: 25, tableCount: 20, paymentProcessor: "stripe", subscriptionStart: "2025-07-20", createdAt: "2025-12-15T14:30:00.000Z", ownerPassword: "ADGrill@2026" },
+    { id: "rest-005", name: "The Corniche Cafe", location: "Corniche Road", city: "Abu Dhabi", country: "UAE", phone: "+971 2 567 8901", email: "info@corniche.ae", rating: 4.2, package: "Enterprise", status: "on_hold", qrCodes: 12, tableCount: 10, paymentProcessor: "checkout", subscriptionStart: "2025-06-10", createdAt: "2025-11-25T09:15:00.000Z", ownerPassword: "Corniche@2026" },
+    { id: "rest-006", name: "Riyadh Palace Restaurant", location: "Kingdom Centre", city: "Riyadh", country: "Saudi Arabia", phone: "+966 11 123 4567", email: "palace@riyadhpalace.sa", rating: 4.9, package: "Enterprise", status: "active", qrCodes: 30, tableCount: 25, paymentProcessor: "stripe", subscriptionStart: "2025-05-01", createdAt: "2025-11-10T12:00:00.000Z", ownerPassword: "Palace@2026" },
+    { id: "rest-007", name: "Jeddah Seafood House", location: "Red Sea Mall", city: "Jeddah", country: "Saudi Arabia", phone: "+966 12 234 5678", email: "jeddah@seafood.sa", rating: 4.3, package: "Starter", status: "active", qrCodes: 18, tableCount: 15, paymentProcessor: "paytabs", subscriptionStart: "2025-04-15", createdAt: "2025-10-20T08:45:00.000Z", ownerPassword: "Seafood@2026" },
+    { id: "rest-008", name: "Cairo Mezze", location: "City Stars Mall", city: "Cairo", country: "Egypt", phone: "+20 2 345 6789", email: "info@cairomezze.eg", rating: 4.0, package: "Starter", status: "on_hold", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-03-20", createdAt: "2025-09-15T16:30:00.000Z", ownerPassword: "CairoMezze@2026" },
+    { id: "rest-009", name: "Nile View Dining", location: "Zamalek", city: "Cairo", country: "Egypt", phone: "+20 2 456 7890", email: "dining@nileview.eg", rating: 4.6, package: "Enterprise", status: "active", qrCodes: 20, tableCount: 16, paymentProcessor: "stripe", subscriptionStart: "2025-02-28", createdAt: "2025-09-01T11:00:00.000Z", ownerPassword: "NileView@2026" },
+    { id: "rest-010", name: "Doha Delights", location: "The Pearl Qatar", city: "Doha", country: "Qatar", phone: "+974 4 567 8901", email: "info@dohadelights.qa", rating: 4.4, package: "Enterprise", status: "active", qrCodes: 22, tableCount: 18, paymentProcessor: "checkout", subscriptionStart: "2025-01-15", createdAt: "2025-08-20T13:15:00.000Z", ownerPassword: "Doha@2026" },
+    { id: "rest-011", name: "Kuwait Kitchen", location: "The Avenues Mall", city: "Kuwait City", country: "Kuwait", phone: "+965 2 678 9012", email: "kitchen@kuwait.kw", rating: 4.1, package: "Starter", status: "on_hold", qrCodes: 14, tableCount: 11, paymentProcessor: "paytabs", subscriptionStart: "2024-12-01", createdAt: "2025-08-10T10:30:00.000Z", ownerPassword: "Kuwait@2026" },
+    { id: "rest-012", name: "Bahrain Brasserie", location: "Seef Mall", city: "Manama", country: "Bahrain", phone: "+973 1789 0123", email: "brasserie@bahrain.bh", rating: 4.5, package: "Enterprise", status: "active", qrCodes: 16, tableCount: 13, paymentProcessor: "stripe", subscriptionStart: "2024-11-10", createdAt: "2025-08-01T09:00:00.000Z", ownerPassword: "Bahrain@2026" },
 ];
 
 const ScreenSuperAdminManagement = () => {
@@ -68,6 +74,7 @@ const ScreenSuperAdminManagement = () => {
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [restaurantToDelete, setRestaurantToDelete] = useState<RegisteredRestaurant | null>(null);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const [credentialModalOpen, setCredentialModalOpen] = useState(false);
     const [createdCredentials, setCreatedCredentials] = useState<any>(null);
@@ -101,7 +108,8 @@ const ScreenSuperAdminManagement = () => {
         package: "Starter", // UI Package Name
         plan: "standard",   // Backend Plan ID
         subscriptionMonths: 12,
-        whatsappEnabled: false
+        whatsappEnabled: false,
+        ownerPassword: ""
     });
 
     // --- Queries ---
@@ -140,7 +148,7 @@ const ScreenSuperAdminManagement = () => {
 
             // Optimistically update the cache
             queryClient.setQueryData<RegisteredRestaurant[]>(['registered-restaurants'], (old) =>
-                old?.map(r => r.id === id ? { ...r, status: status as 'active' | 'on_hold' | 'inactive' } : r) || []
+                old?.map(r => r.id === id ? { ...r, status: status as 'active' | 'on_hold' } : r) || []
             );
 
             return { previousRestaurants };
@@ -205,7 +213,8 @@ const ScreenSuperAdminManagement = () => {
                 qr_codes: data.qrCodes,
                 table_count: data.tableCount,
                 payment_processor: data.paymentProcessor,
-                whatsapp_enabled: data.whatsappEnabled
+                whatsapp_enabled: data.whatsappEnabled,
+                owner_password: data.ownerPassword
             };
 
             try {
@@ -346,7 +355,7 @@ const ScreenSuperAdminManagement = () => {
     const resetNewRestaurant = () => {
         setNewRestaurant({
             name: "", location: "", city: "Dubai", country: "UAE", phone: "", email: "", ownerName: "",
-            qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Starter", plan: "standard", subscriptionMonths: 12, whatsappEnabled: false
+            qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Starter", plan: "standard", subscriptionMonths: 12, whatsappEnabled: false, ownerPassword: ""
         });
     };
 
@@ -354,7 +363,6 @@ const ScreenSuperAdminManagement = () => {
         switch (status) {
             case 'active': return 'bg-green-100 text-green-700';
             case 'on_hold': return 'bg-amber-100 text-amber-700';
-            case 'inactive': return 'bg-red-100 text-red-700';
             default: return 'bg-slate-100 text-slate-600';
         }
     };
@@ -362,8 +370,7 @@ const ScreenSuperAdminManagement = () => {
     const getPackageColor = (pkg: string) => {
         switch (pkg) {
             case 'Enterprise': return 'bg-purple-100 text-purple-700';
-            case 'Professional': return 'bg-blue-100 text-blue-700';
-            case 'Premium': return 'bg-amber-100 text-amber-700';
+            case 'Starter': return 'bg-blue-100 text-blue-700';
             default: return 'bg-slate-100 text-slate-600';
         }
     };
@@ -472,7 +479,6 @@ const ScreenSuperAdminManagement = () => {
                                 >
                                     <option value="active">Active</option>
                                     <option value="on_hold">On Hold</option>
-                                    <option value="inactive">Inactive</option>
                                 </select>
                                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none" />
                             </div>
@@ -617,12 +623,22 @@ const ScreenSuperAdminManagement = () => {
                                             className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
                                         />
                                     </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Owner Password <span className="text-red-500">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={newRestaurant.ownerPassword}
+                                            onChange={(e) => setNewRestaurant({ ...newRestaurant, ownerPassword: e.target.value })}
+                                            placeholder="Set owner login password"
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        />
+                                    </div>
                                     <div className="col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
                                         <div className="mt-0.5 text-blue-600"><AlertTriangle size={14} /></div>
                                         <div>
-                                            <p className="text-xs text-blue-700 font-medium">Automatic Account Generation</p>
+                                            <p className="text-xs text-blue-700 font-medium">Account Creation</p>
                                             <p className="text-[11px] text-blue-600 mt-0.5">
-                                                A manager account will be automatically created using the email provided above. The password will be generated and shown after registration.
+                                                A manager account will be created using the email and password you provide above.
                                             </p>
                                         </div>
                                     </div>
@@ -646,14 +662,12 @@ const ScreenSuperAdminManagement = () => {
                                                 onChange={(e) => {
                                                     const plan = e.target.value;
                                                     let pkg = "Starter";
-                                                    if (plan === 'pro') pkg = "Professional";
                                                     if (plan === 'enterprise') pkg = "Enterprise";
                                                     setNewRestaurant({ ...newRestaurant, plan, package: pkg });
                                                 }}
                                                 className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
                                             >
                                                 <option value="standard">Starter Plan</option>
-                                                <option value="pro">Professional Plan</option>
                                                 <option value="enterprise">Enterprise Plan</option>
                                             </select>
                                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
@@ -799,6 +813,117 @@ const ScreenSuperAdminManagement = () => {
                             >
                                 {deleteRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                                 Delete Restaurant
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- VIEW / PREVIEW Modal (Eye Button) --- */}
+            {selectedRestaurant && !isEditing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900">{selectedRestaurant.name}</h3>
+                                <p className="text-xs text-slate-500">{selectedRestaurant.city}, {selectedRestaurant.country}</p>
+                            </div>
+                            <button onClick={() => setSelectedRestaurant(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6 space-y-4">
+                            {/* Status & Package Row */}
+                            <div className="flex items-center gap-3">
+                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedRestaurant.status)}`}>
+                                    {selectedRestaurant.status === 'active' ? 'Active' : 'On Hold'}
+                                </span>
+                                <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${getPackageColor(selectedRestaurant.package)}`}>
+                                    {selectedRestaurant.package}
+                                </span>
+                                {selectedRestaurant.rating && (
+                                    <div className="flex items-center gap-1 ml-auto">
+                                        <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                                        <span className="text-sm font-medium text-slate-700">{selectedRestaurant.rating}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Contact Info */}
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <Mail className="h-4 w-4 text-slate-400" />
+                                    <span className="text-sm text-slate-700">{selectedRestaurant.email || '-'}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Phone className="h-4 w-4 text-slate-400" />
+                                    <span className="text-sm text-slate-700">{selectedRestaurant.phone || '-'}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <MapPin className="h-4 w-4 text-slate-400" />
+                                    <span className="text-sm text-slate-700">{selectedRestaurant.location || '-'}</span>
+                                </div>
+                            </div>
+
+                            {/* Owner Password */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <label className="text-xs font-medium text-blue-500 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Lock className="h-3 w-3" /> Owner Password
+                                </label>
+                                <div className="flex items-center justify-between mt-2">
+                                    <code className="text-sm font-bold text-slate-900">
+                                        {showPassword ? (selectedRestaurant.ownerPassword || 'Not Set') : '••••••••••'}
+                                    </code>
+                                    <button
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+                                    <p className="text-lg font-bold text-slate-900">{selectedRestaurant.tableCount}</p>
+                                    <p className="text-[11px] text-slate-500">Tables</p>
+                                </div>
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+                                    <p className="text-lg font-bold text-slate-900">{selectedRestaurant.qrCodes}</p>
+                                    <p className="text-[11px] text-slate-500">QR Codes</p>
+                                </div>
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+                                    <p className="text-lg font-bold text-slate-900 capitalize">{selectedRestaurant.paymentProcessor}</p>
+                                    <p className="text-[11px] text-slate-500">Processor</p>
+                                </div>
+                            </div>
+
+                            {/* Subscription Info */}
+                            {selectedRestaurant.subscriptionStart && (
+                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    Subscribed since {format(new Date(selectedRestaurant.subscriptionStart), 'MMM dd, yyyy')}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between">
+                            <button
+                                onClick={() => handleOpenDelete(selectedRestaurant)}
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </button>
+                            <button
+                                onClick={() => { setSelectedRestaurant(null); setShowPassword(false); }}
+                                className="px-5 py-2 bg-[#0055FE] hover:bg-[#0047D1] text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>
