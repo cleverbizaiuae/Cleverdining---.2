@@ -448,7 +448,17 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
                 queryset = Order.objects.none()
             
             # BUSINESS DAY FILTER: Show only orders for the active business day(s)
-            return queryset.filter(business_day__is_active=True).order_by('-created_time')
+            # If there's an active business day, filter to it; otherwise show all orders
+            from restaurant.models import BusinessDay
+            active_days = BusinessDay.objects.filter(
+                restaurant__in=queryset.values_list('restaurant', flat=True).distinct(),
+                is_active=True
+            )
+            if active_days.exists():
+                return queryset.filter(business_day__in=active_days).order_by('-created_time')
+            else:
+                # No active business day — show all orders (don't hide everything)
+                return queryset.order_by('-created_time')
         except Exception as e:
             print(f"OwnerRestaurantOrdersAPIView.get_queryset error: {e}")
             import traceback

@@ -217,6 +217,78 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         }
       };
       fetchCategoriesDirectly();
+
+      // Also fetch food items directly to avoid race condition with fetchFoodItems callback
+      const fetchItemsDirectly = async () => {
+        try {
+          const endpoint =
+            userRole === "chef"
+              ? `/owners/items/?page=1&search=`
+              : `/owners/items/?page=1&search=`;
+          const res = await axiosInstance.get(endpoint);
+          const { results, count } = res.data;
+          const formattedItems = results.map((item: any) => ({
+            id: item.id,
+            image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
+            image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
+            item_name: item.item_name,
+            price: parseFloat(item.price),
+            category: item.category_name,
+            category_id: item.category,
+            category_name: item.category_name,
+            availability: item.availability,
+            description: item.description,
+          }));
+          setFoodItems(formattedItems);
+          setFoodItemsCount(count || 0);
+          setCurrentPage(1);
+        } catch (err) {
+          console.error("Failed to load food items on init.", err);
+        }
+      };
+      fetchItemsDirectly();
+
+      // Also fetch orders directly
+      const fetchOrdersDirectly = async () => {
+        try {
+          const endpoint =
+            userRole === "owner" || userRole === "manager"
+              ? "/owners/orders/"
+              : "/api/staff/orders/";
+          const res = await axiosInstance.get(endpoint);
+          const { results, count } = res.data;
+          if (results?.stats) setOrdersStats(results.stats);
+          const ordersData = Array.isArray(results)
+            ? results
+            : results?.orders || [];
+          const formattedOrders = ordersData.map((order: any) => ({
+            ...order,
+            tableNo: order.device_name || "N/A",
+            timeOfOrder: order.created_time,
+          }));
+          setOrders(formattedOrders);
+          setOrdersCount(count || 0);
+          setOrdersCurrentPage(1);
+        } catch (err) {
+          console.error("Failed to load orders on init.", err);
+        }
+      };
+      fetchOrdersDirectly();
+
+      // Fetch sub-categories
+      const fetchSubCatsDirectly = async () => {
+        try {
+          const endpoint =
+            userRole === "chef"
+              ? "/chef/sub-categories/"
+              : "/owners/sub-categories/";
+          const res = await axiosInstance.get(endpoint);
+          setSubCategories(res.data);
+        } catch (err) {
+          console.error("Failed to load sub-categories.", err);
+        }
+      };
+      fetchSubCatsDirectly();
     }
   }, [userRole, isLoading]);
 
