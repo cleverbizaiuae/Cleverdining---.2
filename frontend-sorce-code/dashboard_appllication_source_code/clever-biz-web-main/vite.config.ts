@@ -81,8 +81,15 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Cache app shell only — NOT API data
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+
+        // Handle SPA navigation (serve index.html for all routes)
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//, /^\/owners\//, /^\/message\//],
+
         runtimeCaching: [
+          // Google Fonts: cache forever
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
@@ -100,17 +107,9 @@ export default defineConfig({
               expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
-          },
-          {
-            urlPattern: /\/api\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 },
-              cacheableResponse: { statuses: [0, 200] },
-              networkTimeoutSeconds: 10
-            }
           }
+          // Intentionally NO API caching — dashboard data must always be fresh
+          // Auth tokens, orders, items, messages = never cached by SW
         ]
       }
     })
@@ -119,6 +118,22 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  build: {
+    // Vendor chunk splitting for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router"],
+          "vendor-charts": ["chart.js", "react-chartjs-2"],
+          "vendor-ui": ["react-hot-toast", "lucide-react"],
+        }
+      }
+    },
+    // Target modern browsers for smaller bundles
+    target: "es2020",
+    // Enable source maps for debugging (optional)
+    sourcemap: false,
   },
   server: {
     host: true,
