@@ -53,7 +53,9 @@ export const useRole = () => {
   const [userRole, setUserRole] = useState<UserRole>(
     () => initialUser?.role || null
   );
-  const [isLoading, setIsLoading] = useState(true);
+  // If user is already in localStorage, don't block data loading with isLoading=true
+  // The /profile/ fetch is just a background sync, not a blocker
+  const [isLoading, setIsLoading] = useState(!initialUser);
   // Get user role from localStorage
   const getUserRole = (): UserRole => {
     try {
