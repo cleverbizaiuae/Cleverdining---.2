@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Generate PWA Icons</title>
+</head>
+
+<body>
+    <h2>CleverBiz PWA Icon Generator</h2>
+    <p>Right-click each image and "Save Image As" to the public/ folder</p>
+    <div id="icons"></div>
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        const container = document.getElementById('icons');
+
+        sizes.forEach(size => {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#0066FF');
+            grad.addColorStop(1, '#0044CC');
+
+            // Rounded rect
+            const r = size * 0.18;
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(size - r, 0);
+            ctx.quadraticCurveTo(size, 0, size, r);
+            ctx.lineTo(size, size - r);
+            ctx.quadraticCurveTo(size, size, size - r, size);
+            ctx.lineTo(r, size);
+            ctx.quadraticCurveTo(0, size, 0, size - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // CB text
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.45}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('CB', size / 2, size / 2);
+
+            // Display
+            const div = document.createElement('div');
+            div.style.margin = '10px';
+            div.style.display = 'inline-block';
+            div.innerHTML = `<p><strong>icon-${size}x${size}.png</strong></p>`;
+            const img = new Image();
+            img.src = canvas.toDataURL('image/png');
+            img.style.border = '1px solid #ccc';
+            div.appendChild(img);
+
+            // Auto download link
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = `icon-${size}x${size}.png`;
+            link.textContent = `Download ${size}x${size}`;
+            link.style.display = 'block';
+            div.appendChild(link);
+
+            container.appendChild(div);
+        });
+    </script>
+</body>
+
+</html>
