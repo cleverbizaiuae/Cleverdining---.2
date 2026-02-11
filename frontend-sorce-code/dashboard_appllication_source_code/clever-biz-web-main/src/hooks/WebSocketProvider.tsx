@@ -30,7 +30,13 @@ const WebSocketProvider = ({ children }) => {
     const fetchUnreadCount = async () => {
       try {
         // Use direct backend URL without /api prefix (axios already adds it via baseURL)
-        const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        // Use direct backend URL without /api prefix (axios already adds it via baseURL)
+        // Match logic from axios.ts to bypass Netlify proxy
+        const envApiUrl = import.meta.env.VITE_API_URL;
+        const baseUrl = envApiUrl && envApiUrl !== "/api"
+          ? envApiUrl
+          : "https://cleverdining-2.onrender.com";
+
         const res = await fetch(
           `${baseUrl}/message/chat/unread-count/`,
           {

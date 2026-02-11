@@ -1,2 +1,2 @@
-/api/*  http://193.160.119.200:8000/:splat  200
-
+# Proxy API calls to Render backend
+/api/*  https://cleverdining-2.onrender.com/:splat  200
