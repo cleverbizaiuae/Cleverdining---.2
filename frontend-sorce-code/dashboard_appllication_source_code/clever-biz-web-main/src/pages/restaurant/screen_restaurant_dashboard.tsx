@@ -26,70 +26,7 @@ import {
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
 
-// TEMPORARY DEBUG PANEL - Remove after fixing
-const DebugPanel = ({ userRole, isLoading, foodItems }: any) => {
-  const [debugData, setDebugData] = useState<any>(null);
-  const [show, setShow] = useState(true);
 
-  useEffect(() => {
-    const runDebug = async () => {
-      const results: any = {
-        timestamp: new Date().toISOString(),
-        localStorage: {
-          accessToken: localStorage.getItem('accessToken') ? 'EXISTS (' + (localStorage.getItem('accessToken') || '').substring(0, 20) + '...)' : 'MISSING',
-          refreshToken: localStorage.getItem('refreshToken') ? 'EXISTS' : 'MISSING',
-          userInfo: localStorage.getItem('userInfo') ? JSON.parse(localStorage.getItem('userInfo') || '{}') : 'MISSING',
-          role: localStorage.getItem('role'),
-          adminRole: localStorage.getItem('adminRole'),
-          restaurantId: localStorage.getItem('restaurantId'),
-        },
-        hookState: { userRole, isLoading, foodItemsCount: foodItems?.length || 0 },
-        apiTests: {}
-      };
-
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        const base = 'https://cleverdining-2.onrender.com';
-        const headers: any = { 'Authorization': 'Bearer ' + token };
-        const endpoints = [
-          { name: 'profile', url: '/profile/' },
-          { name: 'items', url: '/owners/items/?page=1&search=' },
-          { name: 'categories', url: '/owners/categories/' },
-          { name: 'orders', url: '/owners/orders/' },
-          { name: 'devices', url: '/owners/devices/' },
-          { name: 'chefStaff', url: '/owners/chef-staff/' },
-        ];
-        for (const ep of endpoints) {
-          try {
-            const resp = await fetch(base + ep.url, { headers });
-            const text = await resp.text();
-            results.apiTests[ep.name] = { status: resp.status, preview: text.substring(0, 200) };
-          } catch (e: any) {
-            results.apiTests[ep.name] = { error: e.message };
-          }
-        }
-      }
-      setDebugData(results);
-    };
-    runDebug();
-  }, [userRole, isLoading, foodItems]);
-
-  if (!show) return <button onClick={() => setShow(true)} style={{ position: 'fixed', bottom: 10, right: 10, zIndex: 9999, background: 'red', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: 10 }}>Show Debug</button>;
-
-  return (
-    <div style={{ background: '#1a1a2e', color: '#0f0', padding: 12, borderRadius: 8, fontSize: 11, fontFamily: 'monospace', maxHeight: 300, overflow: 'auto', position: 'relative', zIndex: 100, border: '2px solid #ff0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <b style={{ color: '#ff0', fontSize: 13 }}>🔧 DEBUG PANEL (temporary)</b>
-        <button onClick={() => setShow(false)} style={{ color: '#ff0', background: 'none', border: '1px solid #ff0', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 10 }}>Hide</button>
-      </div>
-      {debugData ? (
-        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debugData, null, 2)}</pre>
-      ) : (
-        <p>Running API tests...</p>
-      )}
-    </div>
-  );
-};
 
 
 const Modal = ({ isOpen, onClose, title, children }: any) => {
@@ -386,7 +323,7 @@ const ScreenRestaurantDashboard = () => {
     <div className="flex flex-col gap-6">
 
       {/* TEMPORARY DEBUG PANEL - REMOVE AFTER FIXING */}
-      <DebugPanel userRole={userRole} isLoading={isLoading} foodItems={foodItems} />
+
 
       {/* METRICS GRID - OWNER & MANAGER */}
       {(userRole === 'owner' || userRole === 'manager') && (
