@@ -37,7 +37,10 @@ class Device(models.Model):
         super().save(*args, **kwargs)  # Save first to get ID if new
         
         if is_new or not self.qr_code_image:
-            self.generate_qr_code()
+            try:
+                self.generate_qr_code()
+            except Exception as e:
+                print(f"CRITICAL: Failed to generate QR code: {e}")
 
     def generate_qr_code(self):
         qr_url = self.table_url
@@ -57,8 +60,11 @@ class Device(models.Model):
         img.save(buffer, format="PNG")
         file_name = f"qr_table_{self.id}_{self.uuid}.png"
         
-        self.qr_code_image.save(file_name, ContentFile(buffer.getvalue()), save=False)
-        super().save(update_fields=['qr_code_image'])
+        try:
+             self.qr_code_image.save(file_name, ContentFile(buffer.getvalue()), save=False)
+             super().save(update_fields=['qr_code_image'])
+        except Exception as e:
+             print(f"CRITICAL: Failed to save QR code for device {self.id}: {e}")
 
     def __str__(self):
         return f"{self.table_name}"
