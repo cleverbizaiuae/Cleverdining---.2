@@ -233,6 +233,22 @@ class DeviceViewSet(viewsets.ModelViewSet):
     search_fields = ['table_name'] 
     ordering = ['-id']
     pagination_class = DevicePagination
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"CRITICAL API FAILURE: {str(e)}\n{error_trace}")
+            return Response(
+                {
+                    "error": "Device creation failed", 
+                    "detail": str(e),
+                    "trace": error_trace # Temporary for debugging
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     def get_queryset(self):
         user = self.request.user
