@@ -107,16 +107,20 @@ class ResolveTableView(APIView):
         )
 
         # Broadcast New Session Started (Optional, for Dashboard)
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{device.restaurant.id}",
-            {
-                "type": "session_started",
-                "table_id": device.id,
-                "table_name": device.table_name,
-                "session_id": session.id,
-                "timestamp": str(now())
-            }
-        )
+        # Broadcast New Session Started (Optional, for Dashboard)
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{device.restaurant.id}",
+                {
+                    "type": "session_started",
+                    "table_id": device.id,
+                    "table_name": device.table_name,
+                    "session_id": session.id,
+                    "timestamp": str(now())
+                }
+            )
+        except Exception as e:
+            print(f"WARNING: Failed to broadcast session_started: {e}")
 
         return Response({
             'guest_session_id': session.id,
@@ -330,7 +334,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
             role='customer'
         )
 
-        device = serializer.save(user=device_user, restaurant=restaurant)
+        try:
+            device = serializer.save(user=device_user, restaurant=restaurant)
+        except Exception as e:
+            print(f"CRITICAL: Device creation failed (likely QR code/Storage): {e}")
+            # Delete the user we just created to avoid orphans
+            device_user.delete()
+            raise serializers.ValidationError(f"Failed to create table/QR code. Error: {str(e)}")
 
         # Notify owner if possible, or log it
         if getattr(user, 'role', None) == 'owner':
@@ -340,22 +350,28 @@ class DeviceViewSet(viewsets.ModelViewSet):
         else:
              owner_email = "admin@cleverbiz.ai"
 
-        send_mail(
-            subject="New Device User Created",
-            message=f"Username: {username}\nPassword: {password}",
-            from_email=settings.EMAIL_HOST_USER,
-            recipient_list=[owner_email],
-            fail_silently=False
-        )
+        try:
+            send_mail(
+                subject="New Device User Created",
+                message=f"Username: {username}\nPassword: {password}",
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[owner_email],
+                fail_silently=False
+            )
+        except Exception as e:
+            print(f"WARNING: Failed to send email: {e}")
 
         data = DeviceSerializer(device).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant.id}",
-            {
-                "type": "device_created",
-                "device": data
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant.id}",
+                {
+                    "type": "device_created",
+                    "device": data
+                }
+            )
+        except Exception as e:
+            print(f"WARNING: Failed to broadcast device_created: {e}")
     
     def perform_update(self, serializer):
         device = serializer.save()
