@@ -354,39 +354,36 @@ class MostSellingItemsAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        restaurants = []
+        restaurant_ids = []
         if getattr(user, 'role', '') == 'owner':
-            restaurants = Restaurant.objects.filter(owner=user)
+            restaurant_ids = Restaurant.objects.filter(owner=user).values_list('id', flat=True)
         elif getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
             restaurant_ids = ChefStaff.objects.filter(
                 user=user,
                 action='accepted'
             ).values_list('restaurant_id', flat=True)
-            restaurants = Restaurant.objects.filter(id__in=restaurant_ids)
 
-        # Step 2: Get all items in those restaurants
-        items = Item.objects.filter(restaurant__in=restaurants)
+        if not restaurant_ids:
+             return Response([])
 
-        # Step 3: Aggregate total quantity sold per item
-        item_sales = (
+        # Optimised: Aggregate in DB, Limit to Top 6
+        top_items = (
             OrderItem.objects
-            .filter(item__in=items)
+            .filter(order__restaurant_id__in=restaurant_ids)
             .values(item_name=F('item__item_name'))
             .annotate(total_quantity=Sum('quantity'))
-            .order_by('-total_quantity')
+            .order_by('-total_quantity')[:6]
         )
 
-        # Step 4: Calculate total sold quantity
-        total_quantity = sum(item['total_quantity'] for item in item_sales) or 0
+        total_quantity_all = sum(item['total_quantity'] for item in top_items) or 1 # Avoid div/0
 
-        # Step 5: Add percentage to each item
         data = [
             {
                 "item_name": item['item_name'],
                 "total_quantity_sold": item['total_quantity'],
-                "percentage": round((item['total_quantity'] / total_quantity) * 100, 2)
+                "percentage": round((item['total_quantity'] / total_quantity_all) * 100, 2)
             }
-            for item in item_sales
+            for item in top_items
         ]
 
         return Response(data)

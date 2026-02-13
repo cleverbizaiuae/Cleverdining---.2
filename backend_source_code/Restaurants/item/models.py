@@ -35,3 +35,8 @@ class Item(models.Model):
         super().save(*args, **kwargs)
     def __str__(self):
         return self.item_name
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['restaurant']),
+        ]

@@ -756,168 +756,119 @@ class OrderAnalyticsAPIView(APIView):
         import traceback
         try:
             user = request.user
-            user = request.user
             restaurant_ids = []
             
+            # --- IDENTIFY RESTAURANTS ---
             # 1. Direct Owner Check
-            # Use explicit import to avoid circular dep issues if any
-            from restaurant.models import Restaurant
-            owned_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
-            if owned_ids:
-                restaurant_ids = owned_ids
-            else:
+            try:
+                if getattr(user, 'role', '') == 'owner':
+                    restaurant_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
                 # 2. Staff/Manager check
-                if getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
+                elif getattr(user, 'role', '') in ['manager', 'staff', 'chef']:
                     chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
                     if chef_staff:
                         restaurant_ids = [chef_staff.restaurant_id]
                     elif hasattr(user, 'staff_profile') and user.staff_profile:
                         restaurant_ids = [user.staff_profile.restaurant_id]
-            
+            except Exception as e:
+                print(f"Error identifying user restaurants: {e}")
+
             if not restaurant_ids:
                   return Response({"status": {}, "chart_data": {}})
 
-            # restaurant = restaurants[0] # Focus on single restaurant for analytics for now (DEPRECATED - Using filtered list)
-            
-            # --- FILTERS ---
+            # --- PARSE PARAMETERS ---
             time_range = request.query_params.get('time_range', 'year') # today, week, month, year
-            aggregation = request.query_params.get('aggregation', 'monthly') # daily, monthly
             compare = request.query_params.get('compare', 'true') == 'true'
 
             from django.utils import timezone
-            import calendar
-            from django.db.models import Sum
+            from django.db.models import Sum, Count, F
+            from django.db.models.functions import TruncHour, TruncDay, TruncMonth
             
             now_dt = timezone.now()
-            print(f"DEBUG_ANALYTICS: Range={time_range} Agg={aggregation} Compare={compare} Now={now_dt}")
             
-            # Helper to get data for a specific range
-            def get_data_for_range(start_d, end_d, agg_type):
-                try:
-                    l, r_data, o_data = [], [], []
-                    curr_q = Order.objects.filter(
-                        restaurant_id__in=restaurant_ids, 
-                        created_time__range=[start_d, end_d]
-                    ).filter(Q(status='completed') | Q(payment_status='paid'))
-                    
-                    if agg_type == 'hourly':
-                        query_date = start_d.date()
-                        # Iterate 0 to 23 hours
-                        for h in range(0, 24):
-                            l.append(f"{h:02d}:00")
-                            hour_orders = curr_q.filter(created_time__hour=h, created_time__date=query_date)
-                            rev = hour_orders.aggregate(r=Sum('total_price'))['r'] or 0
-                            cnt = hour_orders.count()
-                            r_data.append(float(rev))
-                            o_data.append(cnt)
-
-                    elif agg_type == 'daily':
-                        curr = start_d.date()
-                        end = end_d.date()
-                        while curr <= end:
-                            l.append(curr.strftime("%d %b"))
-                            day_orders = curr_q.filter(created_time__date=curr)
-                            rev = day_orders.aggregate(r=Sum('total_price'))['r'] or 0
-                            cnt = day_orders.count()
-                            r_data.append(float(rev))
-                            o_data.append(cnt)
-                            curr += timedelta(days=1)
-                            
-                    elif agg_type == 'monthly':
-                         target_year = start_d.year
-                         for m in range(1, 13):
-                             l.append(calendar.month_name[m][:3])
-                             month_orders = curr_q.filter(created_time__month=m, created_time__year=target_year)
-                             rev = month_orders.aggregate(r=Sum('total_price'))['r'] or 0
-                             cnt = month_orders.count()
-                             r_data.append(float(rev))
-                             o_data.append(cnt)
-                    
-                    return l, r_data, o_data
-                except Exception as help_err:
-                     print(f"DEBUG_ANALYTICS: Helper Error: {help_err}")
-                     return [], [], []
-
-            # 1. Determine Current Date Range
+            # 1. Determine Date Ranges
             start_date = now_dt
-            if time_range == 'day':
-                start_date = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                aggregation = 'hourly'
-            elif time_range == 'today': # Legacy support
-                start_date = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                aggregation = 'hourly'
-            elif time_range == 'week':
-                start_date = now_dt - timedelta(days=7)
-                aggregation = 'daily'
+            trunc_func = TruncMonth
+            date_format = "%b" # Month name
+
+            if time_range == 'year':
+                start_date = now_dt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                trunc_func = TruncMonth
+                date_format = "%b"
             elif time_range == 'month':
                 start_date = now_dt - timedelta(days=30)
-                aggregation = 'daily'
-            elif time_range == 'year':
-                start_date = now_dt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-                aggregation = 'monthly'
+                trunc_func = TruncDay
+                date_format = "%d %b"
+            elif time_range == 'week':
+                start_date = now_dt - timedelta(days=7)
+                trunc_func = TruncDay
+                date_format = "%d %b"
+            elif time_range == 'today' or time_range == 'day':
+                start_date = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                trunc_func = TruncHour
+                date_format = "%H:00"
 
             # 2. Comparison Date Range
             comp_start = None
             comp_end = None
-            
             if compare:
-                if time_range == 'today':
-                    comp_start = start_date - timedelta(days=1)
-                    comp_end = comp_start.replace(hour=23, minute=59, second=59)
-                elif time_range == 'week':
-                    comp_start = start_date - timedelta(days=7)
-                    comp_end = start_date # Up to start of current period
-                elif time_range == 'month':
-                    comp_start = start_date - timedelta(days=30)
-                    comp_end = start_date
-                elif time_range == 'year':
-                    comp_start = start_date.replace(year=start_date.year - 1)
-                    comp_end = now_dt.replace(year=now_dt.year - 1)
+                duration = now_dt - start_date
+                comp_end = start_date
+                comp_start = start_date - duration
 
-
-            # 3. Fetch Data (Refactored logic)
-            labels, revenue_data, orders_count_data = get_data_for_range(start_date, now_dt, aggregation)
-
-
-            # 4. Fetch Comparison Data
-            comp_revenue = []
-            comp_orders = []
-            
-            if compare and comp_start:
-                 _, comp_revenue, comp_orders = get_data_for_range(comp_start, comp_end or now_dt, aggregation)
-
-
-            # ---- METRIC CARDS (Using selected time range) ----
-            # Total Revenue - Apply the SAME time filter as orders
-            # 1. Sum real Payment amounts for this restaurant WITHIN THE SELECTED TIME RANGE
-            from payment.models import Payment
-            real_payment_revenue = Payment.objects.filter(
-                restaurant_id__in=restaurant_ids,
-                created_at__range=[start_date, now_dt]  # Apply time filter
-            ).aggregate(s=Sum('amount'))['s'] or 0
-            
-            # 2. Find orphaned PAID orders (no Payment record) WITHIN THE SELECTED TIME RANGE
-            orders_with_payments = set(
-                Payment.objects.filter(
+            # --- OPTIMIZED DATA FETCHING (Single Query) ---
+            def get_aggregated_data(s_date, e_date, t_func):
+                # Filter Base Query
+                qs = Order.objects.filter(
                     restaurant_id__in=restaurant_ids,
-                    created_at__range=[start_date, now_dt]  # Apply time filter
-                ).values_list('order_id', flat=True)
-            )
-            orphan_revenue = Order.objects.filter(
-                restaurant_id__in=restaurant_ids,
-                payment_status='paid',
-                created_time__range=[start_date, now_dt]  # Apply time filter
-            ).exclude(
-                id__in=orders_with_payments
-            ).aggregate(s=Sum('total_price'))['s'] or 0
+                    created_time__range=[s_date, e_date]
+                ).filter(Q(status='completed') | Q(payment_status='paid'))
+
+                # Aggregate by Time Unit
+                aggregated = (
+                    qs.annotate(period=t_func('created_time'))
+                    .values('period')
+                    .annotate(revenue=Sum('total_price'), count=Count('id'))
+                    .order_by('period')
+                )
+                return aggregated
+
+            # Main Data
+            main_agg = get_aggregated_data(start_date, now_dt, trunc_func)
             
-            # 3. Total revenue = real payments + orphan order amounts (both filtered by time range)
-            total_revenue = float(real_payment_revenue) + float(orphan_revenue)
+            # Comparison Data
+            comp_agg = []
+            if compare and comp_start:
+                 comp_agg = get_aggregated_data(comp_start, comp_end, trunc_func)
+
+            # --- FORMATTING RESPONSE ---
+            # We need to fill in missing periods if we want a perfect graph, 
+            # OR we just send the data points we have. 
+            # For simplicity/speed, we'll map the aggregated results to arrays.
             
-            # Total orders count (from chart data)
+            labels = []
+            revenue_data = []
+            orders_count_data = []
+            
+            # Helper to format data
+            for entry in main_agg:
+                labels.append(entry['period'].strftime(date_format))
+                revenue_data.append(float(entry['revenue'] or 0))
+                orders_count_data.append(entry['count'])
+
+            comp_revenue = [float(x['revenue'] or 0) for x in comp_agg]
+            comp_orders = [x['count'] for x in comp_agg]
+
+
+            # --- METRIC CARDS (Optimized) ---
+            # Calculate Totals from the Aggregated Data (Avoids extra queries if range covers it)
+            # Actually for 'total_revenue' we want the sum of the range.
+            total_revenue = sum(revenue_data)
             total_orders_count = sum(orders_count_data)
-            
-            # Weekly Growth (Compare this week vs last week)
+
+            # Weekly Growth (Compare this week vs last week - Standard Metric)
+            # We can run 2 quick queries for this specific metric or cache it.
+            # Let's run it standardly as it's small.
             start_week = now_dt.date() - timedelta(days=now_dt.weekday())
             this_week_rev = Order.objects.filter(
                 restaurant_id__in=restaurant_ids, 
@@ -938,11 +889,10 @@ class OrderAnalyticsAPIView(APIView):
             # Active staff count
             active_staff = ChefStaff.objects.filter(restaurant_id__in=restaurant_ids, action='accepted').count()
             
-            
             return Response({
                 "status": {
-                    "total_revenue": total_revenue, # Filtered sum
-                    "total_orders": total_orders_count, # Filtered sum
+                    "total_revenue": total_revenue, 
+                    "total_orders": total_orders_count,
                     "weekly_growth": round(growth, 2),
                     "active_staff": active_staff
                 },

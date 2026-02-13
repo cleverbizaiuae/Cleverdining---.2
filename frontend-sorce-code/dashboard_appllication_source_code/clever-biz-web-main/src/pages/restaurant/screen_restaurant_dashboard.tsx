@@ -83,7 +83,7 @@ const ScreenRestaurantDashboard = () => {
     searchQuery,
     setSearchQuery,
     fetchFoodItems,
-    updateAvailability, // Added
+    updateAvailability,
 
     categories,
     subCategories,
@@ -94,7 +94,14 @@ const ScreenRestaurantDashboard = () => {
     deleteCategory,
     createSubCategory,
     updateSubCategory,
-    deleteSubCategory
+    deleteSubCategory,
+
+    // Consumed from Context (Render-First)
+    analytics,
+    sellingItems: sellingItemData, // Alias to match existing usage
+    isAnalyticsLoading: analyticsLoading, // Alias
+    fetchAnalytics,
+    fetchMostSellingItems
   } = useOwner();
 
   const { userRole, isLoading } = useRole();
@@ -102,10 +109,9 @@ const ScreenRestaurantDashboard = () => {
 
   // State
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [sellingItemData, setSellingItemData] = useState([]);
-  // Analytics State
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  // Removed local sellingItemData state (using Context)
+  // Removed local analytics state (using Context)
+
   const [timeRange, setTimeRange] = useState("year");
   const [compareEnabled, setCompareEnabled] = useState(true);
 
@@ -136,51 +142,37 @@ const ScreenRestaurantDashboard = () => {
   const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
   const [isViewAll, setIsViewAll] = useState(false);
 
-  // Fetch Analytics
-  const fetchAnalytics = useCallback(async () => {
-    // if (userRole !== 'owner' && (userRole as string) !== 'manager') return;
-    try {
-      setAnalyticsLoading(true);
-      const response = await axiosInstance.get(`/owners/orders/analytics/?time_range=${timeRange}&compare=${compareEnabled}`);
-      setAnalytics(response.data);
-    } catch (error: any) {
-      console.error("Error fetching analytics:", error);
-      const msg = error.response?.data?.error || error.response?.data?.detail || "Failed to load analytics";
-      const trace = error.response?.data?.traceback || "";
-      toast.error(
-        <div>
-          <p className="font-bold">{msg}</p>
-          {trace && <p className="text-[10px] mt-1 whitespace-pre-wrap">{trace.substring(0, 100)}...</p>}
-        </div>
-      );
-    } finally {
-      setAnalyticsLoading(false);
+  // Trigger Analytics Fetch when filters change (Context handles the fetch)
+  useEffect(() => {
+    if (userRole === 'owner' || userRole === 'manager') {
+      fetchAnalytics(timeRange, compareEnabled);
     }
-  }, [timeRange, compareEnabled]);
+  }, [timeRange, compareEnabled, fetchAnalytics, userRole]);
 
-  // Real-time Updates
+  // Real-time Updates (Context already lists for updates, but if we need to re-trigger analytics specifically)
   useEffect(() => {
     if (
       response?.type === "order_paid" ||
       response?.type === "cash_payment_confirmed" ||
-      response?.type === "order_completed" ||
-      response?.type === "chefstaff_created" ||
-      response?.type === "chefstaff_deleted"
+      response?.type === "order_completed"
     ) {
-      console.log("Real-time Dashboard Update:", response.type);
-      fetchAnalytics();
+      // Re-fetch analytics on order updates
+      fetchAnalytics(timeRange, compareEnabled);
+      fetchMostSellingItems();
     }
-  }, [response, fetchAnalytics]);
+  }, [response, fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled]);
 
-  // Add Item State
+  // NOTE: Initial Fetch is now handled by OwnerContext (Background Fetch)
+  // We DO NOT fetch here on mount to avoid waterfall.
 
 
-
-  // Effects for initial load
+  // Effects for initial load (Categories handled by Context too, but keeping for safety if needed, 
+  // though Context should handle it. We can leave it as Context debounces/checks loading props)
   useEffect(() => {
-    fetchCategories();
-    fetchSubCategories();
-  }, [fetchCategories, fetchSubCategories]);
+    // Optional: Context already fetches this. Redundant but harmless if check exists.
+    // fetchCategories(); 
+    // fetchSubCategories();
+  }, []);
 
   // Edit/Delete State
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -200,25 +192,10 @@ const ScreenRestaurantDashboard = () => {
     fetchFoodItems(currentPage, debouncedSearchQuery);
   }, [currentPage, debouncedSearchQuery, fetchFoodItems]);
 
-  const fetchMostSellingItems = useCallback(async () => {
-    try {
-      const response = await axiosInstance.get("/owners/most-selling-items/");
-      setSellingItemData(response.data);
-    } catch (error) {
-      console.error("Failed to fetch most selling items:", error);
-    }
-  }, []);
 
+  // Removed fetchMostSellingItems local definition
+  // Removed local initial useEffect for analytics/selling items
 
-
-
-
-  useEffect(() => {
-    if (userRole === 'owner' || userRole === 'manager') {
-      fetchMostSellingItems();
-      fetchAnalytics();
-    }
-  }, [fetchMostSellingItems, fetchAnalytics, userRole]);
 
   // Chart Data Preparation
   const chartLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -229,7 +206,6 @@ const ScreenRestaurantDashboard = () => {
     const [prompt, setPrompt] = useState('');
     const [generating, setGenerating] = useState(false);
     const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
-
     const handleGenerate = async () => {
       if (!prompt) return toast.error("Please enter a prompt");
       setGenerating(true);
@@ -237,8 +213,6 @@ const ScreenRestaurantDashboard = () => {
         const res = await axiosInstance.post('/owners/generate-image/', { prompt });
         const base64 = res.data.image;
         setGeneratedPreview(base64);
-
-        // Convert to File
         const resBlob = await fetch(base64).then(r => r.blob());
         const file = new File([resBlob], "ai-generated-image.png", { type: "image/png" });
         onImageSelected(file);
@@ -246,16 +220,11 @@ const ScreenRestaurantDashboard = () => {
       } catch (e: any) {
         console.error(e);
         toast.error("Generation failed: " + (e.response?.data?.error || e.message));
-      } finally {
-        setGenerating(false);
-      }
+      } finally { setGenerating(false); }
     };
-
-    // Preview image: new file > generated > existing URL
     const previewUrl = currentImage
       ? (typeof currentImage === 'string' ? currentImage : URL.createObjectURL(currentImage))
       : (generatedPreview || existingImageUrl || null);
-
     return (
       <div>
         <div className="flex justify-between items-center mb-1">
@@ -265,18 +234,9 @@ const ScreenRestaurantDashboard = () => {
             <button onClick={() => setMode('ai')} className={`px-2 py-1 rounded ${mode === 'ai' ? 'bg-[#0055FE]/10 text-[#0055FE] font-bold' : 'text-slate-500'}`}>Generate with AI</button>
           </div>
         </div>
-
         {mode === 'upload' ? (
           <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
-            <input
-              type="file"
-              accept="image/*"
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              onChange={e => {
-                const file = e.target.files?.[0] || null;
-                onImageSelected(file);
-              }}
-            />
+            <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => { const file = e.target.files?.[0] || null; onImageSelected(file); }} />
             {previewUrl ? (
               <div className="w-full">
                 <img src={previewUrl} alt="Preview" className="w-full h-24 object-cover rounded-md border border-slate-200 mb-2" />
@@ -293,17 +253,8 @@ const ScreenRestaurantDashboard = () => {
           </div>
         ) : (
           <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <textarea
-              className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-16 outline-none focus:border-[#0055FE]"
-              placeholder="Describe the image (e.g., 'A delicious pepperoni pizza')..."
-              value={prompt}
-              onChange={e => setPrompt(e.target.value)}
-            />
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="w-full py-1.5 bg-[#0055FE] text-white text-xs rounded hover:bg-[#0047D1] disabled:opacity-50 flex items-center justify-center gap-2"
-            >
+            <textarea className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-16 outline-none focus:border-[#0055FE]" placeholder="Describe the image..." value={prompt} onChange={e => setPrompt(e.target.value)} />
+            <button onClick={handleGenerate} disabled={generating} className="w-full py-1.5 bg-[#0055FE] text-white text-xs rounded hover:bg-[#0047D1] disabled:opacity-50 flex items-center justify-center gap-2">
               {generating ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <TrendingUp size={12} />}
               Generate Image
             </button>
@@ -316,38 +267,36 @@ const ScreenRestaurantDashboard = () => {
           </div>
         )}
       </div>
-    )
+    );
   }
+
 
   return (
     <div className="flex flex-col gap-6">
-
-      {/* TEMPORARY DEBUG PANEL - REMOVE AFTER FIXING */}
-
 
       {/* METRICS GRID - OWNER & MANAGER */}
       {(userRole === 'owner' || userRole === 'manager') && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Total Revenue"
-            value={analyticsLoading ? "..." : `AED ${analytics?.status?.total_revenue || 0}`}
+            value={analyticsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : `AED ${analytics?.status?.total_revenue || 0}`}
             trend={`${analytics?.status?.weekly_growth || 0}%`}
             isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
-            subtext="vs last week"
+            subtext={analyticsLoading ? "" : "vs last week"}
             icon={TrendingUp}
           />
           <MetricCard
             title="Total Orders"
-            value={analyticsLoading ? "..." : analytics?.status?.total_orders || 0}
-            subtext="Processed today"
+            value={analyticsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : (analytics?.status?.total_orders || 0)}
+            subtext={analyticsLoading ? "" : "Processed today"}
             trend="12%"
             isPositive={true}
             icon={ShoppingBag}
           />
           <MetricCard
             title="Active Staff"
-            value={analyticsLoading ? "..." : analytics?.status?.active_staff || 0}
-            subtext="Currently online"
+            value={analyticsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : (analytics?.status?.active_staff || 0)}
+            subtext={analyticsLoading ? "" : "Currently online"}
             trend="0%"
             isPositive={true}
             icon={Users}

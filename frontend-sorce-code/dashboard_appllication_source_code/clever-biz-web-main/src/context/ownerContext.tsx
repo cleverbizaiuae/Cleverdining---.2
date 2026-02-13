@@ -154,6 +154,12 @@ interface OwnerContextType {
   setOrders: React.Dispatch<React.SetStateAction<OrderItem[]>>;
   setReservations: React.Dispatch<React.SetStateAction<ReservationItem[]>>;
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
+  // Analytics & Selling Items State
+  analytics: any;
+  sellingItems: any[];
+  isAnalyticsLoading: boolean;
+  fetchAnalytics: (timeRange?: string, compare?: boolean) => Promise<void>;
+  fetchMostSellingItems: () => Promise<void>;
 }
 
 // Create the context
@@ -193,32 +199,120 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const [members, setMembers] = useState<Member[]>([]);
   const [membersSearchQuery, setMembersSearchQuery] = useState("");
   const { response } = useContext(WebSocketContext);
+
+  // New State for Analytics & Selling Items
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [sellingItems, setSellingItems] = useState<any[]>([]);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+
+  // Define fetchAnalytics functions (hoisted for usage in effect)
+  const fetchAnalytics = useCallback(async (timeRange = "year", compare = true) => {
+    if (!userRole) return;
+    try {
+      setIsAnalyticsLoading(true);
+      const res = await axiosInstance.get(`/owners/orders/analytics/?time_range=${timeRange}&compare=${compare}`);
+      setAnalytics(res.data);
+    } catch (err) {
+      console.error("Failed to load analytics", err);
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
+  }, [userRole]);
+
+  const fetchMostSellingItems = useCallback(async () => {
+    if (!userRole) return;
+    try {
+      const res = await axiosInstance.get("/owners/most-selling-items/");
+      setSellingItemDataState(res.data); // Use local state setter wrapper if needed, or direct setSellingItems
+    } catch (err) {
+      console.error("Failed to load selling items", err);
+    }
+  }, [userRole]);
+
+  // Wrapper to match interface (modify setSellingItems to match expected type if needed)
+  const setSellingItemDataState = (data: any[]) => setSellingItems(data);
+
+
   useEffect(() => {
     if (!isLoading && userRole) {
-      // Fetch categories directly here to avoid dependency issues
-      const fetchCategoriesDirectly = async () => {
+      const fetchInitialData = async () => {
         try {
-          let endpoint;
+          let endpointCategory;
+          let endpointItems;
+          let endpointOrders;
+
           if (userRole === "owner" || userRole === "manager") {
-            endpoint = "/owners/categories/";
+            endpointCategory = "/owners/categories/";
+            endpointItems = "/owners/items/";
+            endpointOrders = "/owners/orders/";
           } else if (userRole === "staff") {
-            endpoint = "/owners/categories/";
+            endpointCategory = "/owners/categories/";
+            endpointItems = "/owners/items/";
+            endpointOrders = "/api/staff/orders/";
           } else if (userRole === "chef") {
-            endpoint = "/chef/categories/";
+            endpointCategory = "/chef/categories/";
+            endpointItems = "/chef/items/";
+            endpointOrders = "/api/chef/orders/";
           } else {
             throw new Error("Invalid user role");
           }
 
-          const res = await axiosInstance.get(endpoint);
+          // 1. CRITICAL DATA - Wait for this (Layout depends on it)
+          const [catRes, itemRes, orderRes] = await Promise.all([
+            axiosInstance.get(endpointCategory),
+            axiosInstance.get(endpointItems),
+            axiosInstance.get(endpointOrders)
+          ]);
 
-          setCategories(res.data);
+          setCategories(catRes.data);
+
+          // Set Food Items
+          const { results: itemResults, count: itemCount } = itemRes.data;
+          const formattedItems = itemResults.map((item: any) => ({
+            id: item.id,
+            image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
+            image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
+            item_name: item.item_name,
+            price: parseFloat(item.price),
+            category: item.category_name,
+            category_id: item.category,
+            category_name: item.category_name,
+            availability: item.availability,
+            description: item.description
+          }));
+          setFoodItems(formattedItems);
+          setFoodItemsCount(itemCount || 0);
+
+          // Set Orders
+          const { results: orderResults, count: orderCount } = orderRes.data;
+          if (orderResults?.stats) setOrdersStats(orderResults.stats);
+
+          const ordersData = Array.isArray(orderResults)
+            ? orderResults
+            : orderResults?.orders || [];
+
+          const formattedOrders = ordersData.map((order: any) => ({
+            ...order,
+            tableNo: order.device_name || 'N/A',
+            timeOfOrder: order.created_time
+          }));
+          setOrders(formattedOrders);
+          setOrdersCount(orderCount || 0);
+
+          // 2. SECONDARY DATA - Background Fetch (Don't block UI)
+          if (userRole === 'owner' || userRole === 'manager') {
+            fetchAnalytics();
+            fetchMostSellingItems();
+          }
+
         } catch (err) {
-          console.error("Failed to load categories.");
+          console.error("Failed to load initial dashboard data.", err);
         }
       };
-      fetchCategoriesDirectly();
+
+      fetchInitialData();
     }
-  }, [userRole, isLoading]);
+  }, [userRole, isLoading, fetchAnalytics, fetchMostSellingItems]);
 
   const fetchCategories = useCallback(async () => {
     if (isLoading || !userRole) return;
@@ -1073,6 +1167,14 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     setDevicesCurrentPage,
     setMembersSearchQuery,
     updateDeviceStatus,
+
+    // Analytics & Selling Items (Render-First)
+    analytics,
+    sellingItems,
+    isAnalyticsLoading,
+    fetchAnalytics,
+    fetchMostSellingItems,
+
     setOrders,
     setReservations,
     setMembers,

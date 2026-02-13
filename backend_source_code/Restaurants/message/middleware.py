@@ -73,7 +73,7 @@ class JWTAuthMiddleware(BaseMiddleware):
                                 "restaurants_id": None
                             }
                             
-                            # Resolve Restaurant ID based on Role
+                            # Resolve Restaurant ID based on Role (Optimized)
                             try:
                                 if info["role"] == 'owner':
                                     # Use safe access
@@ -83,12 +83,14 @@ class JWTAuthMiddleware(BaseMiddleware):
                                             info["restaurants_id"] = first_rest.id
                                 elif info["role"] in ['staff', 'manager']:
                                     from staff.models import Staff
-                                    staff_profile = Staff.objects.filter(user=user).first()
+                                    # Optimize: Fetch related restaurant in one query
+                                    staff_profile = Staff.objects.select_related('restaurant').filter(user=user).first()
                                     if staff_profile and staff_profile.restaurant:
                                         info["restaurants_id"] = staff_profile.restaurant.id
                                 elif info["role"] == 'chef':
                                     from accounts.models import ChefStaff
-                                    chef_profile = ChefStaff.objects.filter(user=user).first()
+                                    # Optimize: Fetch related restaurant in one query
+                                    chef_profile = ChefStaff.objects.select_related('restaurant').filter(user=user).first()
                                     if chef_profile:
                                         info["restaurants_id"] = chef_profile.restaurant_id
                             except Exception as e:

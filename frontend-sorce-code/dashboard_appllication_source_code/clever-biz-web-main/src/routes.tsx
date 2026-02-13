@@ -89,91 +89,141 @@ ChartJS.register(
 
 function App() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/" element={<ScreenLanding />} />
-        <Route path="adminlanding" element={<ScreenLanding />} />
-        <Route path="admin" element={<ScreenLanding />} />
+    <Routes>
+      <Route path="/" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenLanding />
+        </Suspense>
+      } />
+      <Route path="adminlanding" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenLanding />
+        </Suspense>
+      } />
+      <Route path="admin" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenLanding />
+        </Suspense>
+      } />
 
-        {/* Super Admin Login */}
-        <Route path="superadmin/login" element={<ScreenSuperAdminLogin />} />
+      {/* Super Admin Login */}
+      <Route path="superadmin/login" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenSuperAdminLogin />
+        </Suspense>
+      } />
 
-        {/* Super Admin Dashboard */}
-        <Route path="/superadmin" element={<SuperAdminLayout />}>
-          <Route index element={<ScreenSuperAdminDashboard />} />
-          <Route path="management" element={<ScreenSuperAdminManagement />} />
-          <Route path="register-restaurant" element={<ScreenAdminRegister />} />
-        </Route>
+      {/* Super Admin Dashboard */}
+      <Route path="/superadmin" element={
+        <Suspense fallback={<PageLoader />}>
+          <SuperAdminLayout />
+        </Suspense>
+      }>
+        <Route index element={<ScreenSuperAdminDashboard />} />
+        <Route path="management" element={<ScreenSuperAdminManagement />} />
+        <Route path="register-restaurant" element={<ScreenAdminRegister />} />
+      </Route>
 
-        <Route path="login" element={<ScreenAdminLogin />} />
-        <Route path="adminlogin" element={<ScreenAdminLogin />} />
+      <Route path="login" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenAdminLogin />
+        </Suspense>
+      } />
+      <Route path="adminlogin" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenAdminLogin />
+        </Suspense>
+      } />
 
-        {/* Entry screens */}
-        <Route element={<Layout />}>
-          <Route path="verify-email" element={<ScreenEmailVerification />} />
-          <Route path="create-password" element={<ScreenPassword />} />
-          <Route path="verify-otp" element={<ScreenOtpVerification />} />
-          <Route path="privacy-policy" element={<ScreenPrivacy />} />
-          <Route path="terms-condition" element={<ScreenTermsCondition />} />
-        </Route>
+      {/* Entry screens */}
+      <Route element={<Layout />}>
+        <Route path="verify-email" element={<ScreenEmailVerification />} />
+        <Route path="create-password" element={<ScreenPassword />} />
+        <Route path="verify-otp" element={<ScreenOtpVerification />} />
+        <Route path="privacy-policy" element={<ScreenPrivacy />} />
+        <Route path="terms-condition" element={<ScreenTermsCondition />} />
+      </Route>
 
-        {/* Staff screens */}
-        <Route path="/staff" element={<RestaurantLayout />}>
-          <Route index={true} element={<ScreenRestaurantDashboard />} />
-          <Route path="orders" element={<ScreenRestaurantOrderList />} />
-          <Route path="reservations" element={<ScreenRestaurantReservations />} />
-          <Route path="messages" element={<ScreenRestaurantChat />} />
-          <Route path="management" element={<ScreenRestaurantManagement />} />
-          <Route path="devices" element={<ScreenRestaurantDevices />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="reviews" element={<ScreenRestaurantReviews />} />
-        </Route>
+      {/* Staff screens */}
+      <Route path="/staff" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenRestaurantDashboard />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="reservations" element={<ScreenRestaurantReservations />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="management" element={<ScreenRestaurantManagement />} />
+        <Route path="devices" element={<ScreenRestaurantDevices />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+      </Route>
 
-        {/* Chef screens */}
-        <Route path="/chef" element={<RestaurantLayout />}>
-          <Route index={true} element={<ScreenChefDashboard />} />
-          <Route path="orders" element={<ScreenChefOrderList />} />
-          <Route path="messages" element={<ScreenChefChat />} />
-        </Route>
+      {/* Chef screens */}
+      <Route path="/chef" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenChefDashboard />} />
+        <Route path="orders" element={<ScreenChefOrderList />} />
+        <Route path="messages" element={<ScreenChefChat />} />
+      </Route>
 
-        {/* Restaurant screens */}
-        <Route path="/restaurant" element={<RestaurantLayout />}>
-          <Route index={true} element={<ScreenRestaurantDashboard />} />
-          <Route path="orders" element={<ScreenRestaurantOrderList />} />
-          <Route path="reservations" element={<ScreenRestaurantReservations />} />
-          <Route path="management" element={<ScreenRestaurantManagement />} />
-          <Route path="devices" element={<ScreenRestaurantDevices />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="reviews" element={<ScreenRestaurantReviews />} />
-          <Route path="messages" element={<ScreenRestaurantChat />} />
-        </Route>
+      {/* Restaurant screens */}
+      <Route path="/restaurant" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenRestaurantDashboard />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="reservations" element={<ScreenRestaurantReservations />} />
+        <Route path="management" element={<ScreenRestaurantManagement />} />
+        <Route path="devices" element={<ScreenRestaurantDevices />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+      </Route>
 
-        {/* Staff Dashboard */}
-        <Route path="/staffadmindashboard" element={<RestaurantLayout />}>
-          <Route index={true} element={<ScreenRestaurantOrderList />} />
-          <Route path="orders" element={<ScreenRestaurantOrderList />} />
-          <Route path="reservations" element={<ScreenRestaurantReservations />} />
-          <Route path="messages" element={<ScreenRestaurantChat />} />
-          <Route path="reviews" element={<ScreenRestaurantReviews />} />
-        </Route>
+      {/* Staff Dashboard */}
+      <Route path="/staffadmindashboard" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenRestaurantOrderList />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="reservations" element={<ScreenRestaurantReservations />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+      </Route>
 
-        {/* Chef Dashboard */}
-        <Route path="/chefadmindashboard" element={<RestaurantLayout />}>
-          <Route index={true} element={<ScreenRestaurantOrderList />} />
-          <Route path="orders" element={<ScreenRestaurantOrderList />} />
-          <Route path="messages" element={<ScreenRestaurantChat />} />
-        </Route>
+      {/* Chef Dashboard */}
+      <Route path="/chefadmindashboard" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenRestaurantOrderList />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+      </Route>
 
-        {/* Admin screens */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index={true} element={<ScreenAdminDashboard />} />
-          <Route path="management" element={<ScreenAdminManagement />} />
-          <Route path="terms-condition" element={<ScreenAdminTermsAndCondition />} />
-          <Route path="privacy-policy" element={<ScreenAdminPrivacy />} />
-          <Route path="faq" element={<ScreenAdminFaq />} />
-        </Route>
-      </Routes>
-    </Suspense>
+      {/* Admin screens */}
+      <Route path="/admin" element={
+        <Suspense fallback={<PageLoader />}>
+          <AdminLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenAdminDashboard />} />
+        <Route path="management" element={<ScreenAdminManagement />} />
+        <Route path="terms-condition" element={<ScreenAdminTermsAndCondition />} />
+        <Route path="privacy-policy" element={<ScreenAdminPrivacy />} />
+        <Route path="faq" element={<ScreenAdminFaq />} />
+      </Route>
+    </Routes>
   );
 }
 

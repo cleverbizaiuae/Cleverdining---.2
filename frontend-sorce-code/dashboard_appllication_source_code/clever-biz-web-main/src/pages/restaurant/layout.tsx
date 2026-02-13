@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router';
 import { WebSocketContext } from '@/hooks/WebSocketProvider';
 import {
@@ -233,7 +233,13 @@ const RestaurantLayout = () => {
 
         {/* PAGE CONTENT */}
         <main className="flex-1 bg-slate-50 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-          <Outlet />
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-[calc(100vh-140px)]">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0055FE]"></div>
+            </div>
+          }>
+            <Outlet />
+          </Suspense>
         </main>
 
         {/* Footer (Optional based on original layout, kept for consistency) */}

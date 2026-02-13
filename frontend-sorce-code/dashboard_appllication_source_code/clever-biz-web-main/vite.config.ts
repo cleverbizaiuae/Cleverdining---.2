@@ -124,9 +124,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          "vendor-react": ["react", "react-dom", "react-router"],
+          "vendor-core": ["react", "react-dom", "react-router"],
           "vendor-charts": ["chart.js", "react-chartjs-2"],
-          "vendor-ui": ["react-hot-toast", "lucide-react"],
+          "vendor-ui": ["react-hot-toast", "lucide-react", "framer-motion"],
+          "vendor-utils": ["axios", "date-fns"],
         }
       }
     },

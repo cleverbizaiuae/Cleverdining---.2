@@ -21,6 +21,11 @@ class Order(models.Model):
     
     class Meta:
         ordering = ['-created_time']
+        indexes = [
+            models.Index(fields=['restaurant', 'created_time']),
+            models.Index(fields=['restaurant', 'status']),
+            models.Index(fields=['guest_session']),
+        ]
         
         
     def __str__(self):
