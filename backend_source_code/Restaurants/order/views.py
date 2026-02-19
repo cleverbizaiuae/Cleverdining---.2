@@ -395,8 +395,7 @@ class MySingleOrderAPIView(generics.RetrieveAPIView):
         user = self.request.user
         if user.is_authenticated:
             return Order.objects.filter(
-                device__user=self.request.user,
-                status__in=['pending', 'preparing', 'served']
+                device__user=self.request.user
             )
 
         # Guest Session Logic
@@ -405,8 +404,7 @@ class MySingleOrderAPIView(generics.RetrieveAPIView):
             try:
                 session = GuestSession.objects.get(session_token=session_token, is_active=True)
                 return Order.objects.filter(
-                    guest_session=session,
-                    status__in=['pending', 'preparing', 'served']
+                    guest_session=session
                 )
             except GuestSession.DoesNotExist:
                 return Order.objects.none()
