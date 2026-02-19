@@ -33,6 +33,8 @@ const ScreenAdminRegister = lazy(() => import("./pages/authentication/screen_adm
 const ScreenEmailVerification = lazy(() => import("./pages/authentication/screen_email_verification"));
 const ScreenPassword = lazy(() => import("./pages/authentication/screen_password"));
 const ScreenOtpVerification = lazy(() => import("./pages/authentication/screen_otp_verification"));
+const ScreenForgotPassword = lazy(() => import("./pages/authentication/screen_forgot_password"));
+const ScreenResetPassword = lazy(() => import("./pages/authentication/screen_reset_password"));
 const ScreenPrivacy = lazy(() => import("./pages/authentication/screen_privacy"));
 const ScreenTermsCondition = lazy(() => import("./pages/authentication/screen_terms"));
 
@@ -132,6 +134,21 @@ function App() {
       <Route path="adminlogin" element={
         <Suspense fallback={<PageLoader />}>
           <ScreenAdminLogin />
+        </Suspense>
+      } />
+      <Route path="admin-login" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenAdminLogin />
+        </Suspense>
+      } />
+      <Route path="forgot-password" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenForgotPassword />
+        </Suspense>
+      } />
+      <Route path="reset-password" element={
+        <Suspense fallback={<PageLoader />}>
+          <ScreenResetPassword />
         </Suspense>
       } />
 

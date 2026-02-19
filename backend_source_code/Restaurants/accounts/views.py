@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from .models import User,ChefStaff,PasswordResetOTP
+from .models import User,ChefStaff,PasswordResetOTP,PasswordResetToken
 from rest_framework.generics import CreateAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -691,4 +691,162 @@ class ProfileView(APIView):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+# ─── Token-based Forgot Password Flow ──────────────────────────────────
+import secrets
+import hashlib
+import re
+from datetime import timedelta
+from django.utils import timezone
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.conf import settings as django_settings
+
+
+class ForgotPasswordView(APIView):
+    """Send a password reset link via email.
+    Always returns 200 OK to prevent email enumeration.
+    Rate limited: max 5 requests per email per hour."""
+    permission_classes = [AllowAny]
+
+    FRONTEND_RESET_URL = 'https://officialcleverdining.netlify.app/reset-password'
+    MAX_REQUESTS_PER_HOUR = 5
+    TOKEN_EXPIRY_MINUTES = 15
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+
+        # Basic validation
+        if not email or '@' not in email:
+            return Response({'detail': 'Please provide a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Always return 200 (generic message) regardless of whether user exists
+        generic_response = Response(
+            {'detail': 'If the email is registered, you will receive a password reset link shortly.'},
+            status=status.HTTP_200_OK
+        )
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # User not found — still return 200 (no enumeration)
+            return generic_response
+
+        # Rate limiting: max N requests per hour for this email
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        recent_count = PasswordResetToken.objects.filter(
+            user=user, created_at__gte=one_hour_ago
+        ).count()
+        if recent_count >= self.MAX_REQUESTS_PER_HOUR:
+            return generic_response  # Silently rate-limit
+
+        # Generate crypto-random token
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        expires_at = timezone.now() + timedelta(minutes=self.TOKEN_EXPIRY_MINUTES)
+
+        # Store hashed token
+        PasswordResetToken.objects.create(
+            user=user,
+            token_hash=token_hash,
+            expires_at=expires_at
+        )
+
+        # Build reset link
+        reset_link = f"{self.FRONTEND_RESET_URL}?token={raw_token}"
+
+        # Send email
+        try:
+            subject = 'Reset Your CleverDining Password'
+            text_body = (
+                f'Hi {user.username},\n\n'
+                f'You requested a password reset for your CleverDining account.\n\n'
+                f'Click the link below to reset your password:\n{reset_link}\n\n'
+                f'This link expires in {self.TOKEN_EXPIRY_MINUTES} minutes.\n\n'
+                f'If you did not request this, please ignore this email.\n\n'
+                f'— CleverDining Team'
+            )
+            html_body = f"""
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #ffffff;">
+                <div style="text-align: center; margin-bottom: 32px;">
+                    <h1 style="font-size: 24px; font-weight: 700; color: #0B5ED7; margin: 0;">CleverDining</h1>
+                </div>
+                <h2 style="font-size: 20px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">Password Reset</h2>
+                <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
+                    Hi {user.username}, you requested a password reset. Click the button below to choose a new password.
+                </p>
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="{reset_link}" style="display: inline-block; background: #0B5ED7; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 15px; padding: 14px 32px; border-radius: 8px;">Reset Password</a>
+                </div>
+                <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 32px;">
+                    This link expires in {self.TOKEN_EXPIRY_MINUTES} minutes. If you didn't request this, ignore this email.
+                </p>
+            </div>
+            """
+
+            email_msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=None,  # Uses DEFAULT_FROM_EMAIL
+                to=[email]
+            )
+            email_msg.attach_alternative(html_body, 'text/html')
+            email_msg.send(fail_silently=True)
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {email}: {e}")
+
+        return generic_response
+
+
+class TokenResetPasswordView(APIView):
+    """Reset password using a token received via email."""
+    permission_classes = [AllowAny]
+
+    PASSWORD_REGEX = re.compile(
+        r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]).{8,}$'
+    )
+
+    def post(self, request):
+        raw_token = request.data.get('token', '').strip()
+        new_password = request.data.get('new_password', '')
+        confirm_password = request.data.get('confirm_password', '')
+
+        # Validate inputs
+        if not raw_token:
+            return Response({'detail': 'Reset token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not new_password or not confirm_password:
+            return Response({'detail': 'Both password fields are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_password != confirm_password:
+            return Response({'detail': 'Passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not self.PASSWORD_REGEX.match(new_password):
+            return Response(
+                {'detail': 'Password must be at least 8 characters with 1 uppercase letter, 1 number, and 1 special character.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Lookup token by hash
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        try:
+            token_obj = PasswordResetToken.objects.get(token_hash=token_hash, is_used=False)
+        except PasswordResetToken.DoesNotExist:
+            return Response({'detail': 'Invalid or expired reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check expiry
+        if timezone.now() > token_obj.expires_at:
+            token_obj.is_used = True  # Mark as used to prevent retry
+            token_obj.save()
+            return Response({'detail': 'Reset link has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Reset password
+        user = token_obj.user
+        user.set_password(new_password)
+        user.save()
+
+        # Invalidate ALL tokens for this user (single use + cleanup)
+        PasswordResetToken.objects.filter(user=user).update(is_used=True)
+
+        return Response({'detail': 'Password reset successfully. Redirecting to login...'}, status=status.HTTP_200_OK)
 

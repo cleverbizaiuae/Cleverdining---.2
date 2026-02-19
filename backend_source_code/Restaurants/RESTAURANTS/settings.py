@@ -341,15 +341,20 @@ WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_USE_TLS = True
-# EMAIL_PORT = 587
-# EMAIL_HOST_USER = env("EMAIL", default='')
-# EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default='')
-
-# Use console backend for development to avoid SMTP errors
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Email Configuration — auto-switches between SMTP (production) and Console (dev)
+_email_user = env("EMAIL", default='')
+if _email_user:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_USE_TLS = True
+    EMAIL_PORT = 587
+    EMAIL_HOST_USER = _email_user
+    EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default='')
+    DEFAULT_FROM_EMAIL = f'CleverDining <{_email_user}>'
+else:
+    # Fallback: print emails to terminal (development)
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    DEFAULT_FROM_EMAIL = 'noreply@cleverdining.com'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

@@ -44,8 +44,16 @@ class PasswordResetOTP(models.Model):
         super().save(*args, **kwargs)
 
 
+class PasswordResetToken(models.Model):
+    """Token-based password reset (used for email link flow)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_tokens')
+    token_hash = models.CharField(max_length=64, unique=True)  # SHA-256 hash
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['-created_at']
 
- 
-    
-
+    def __str__(self):
+        return f"ResetToken(user={self.user.email}, used={self.is_used})"
