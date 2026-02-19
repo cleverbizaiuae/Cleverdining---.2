@@ -73,8 +73,8 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
                   {item.icon}
                   <span>{item.title}</span>
                   {item.title === "Messages" && unreadCount > 0 && (
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {unreadCount}
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                      {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
                 </NavLink>
@@ -171,8 +171,8 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
                   {item.icon}
                   <span>{item.title}</span>
                   {item.title === "Messages" && unreadCount > 0 && (
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {unreadCount}
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                      {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
                 </NavLink>
@@ -388,8 +388,8 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
                   {item.icon}
                   <span>{item.title}</span>
                   {item.title === "Messages" && unreadCount > 0 && (
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {unreadCount}
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                      {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
                 </NavLink>

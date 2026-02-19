@@ -262,7 +262,7 @@ const ScreenRestaurantOrderList = () => {
 
   const handleMarkDelivered = async (orderId: number) => {
     try {
-      await updateOrderStatus(orderId, 'completed', false);
+      await updateOrderStatus(orderId, 'delivered', false);
       toast.success(`Order #${orderId} marked as delivered/completed`);
     } catch (error) {
       console.error("Failed to update status", error);
@@ -285,7 +285,7 @@ const ScreenRestaurantOrderList = () => {
       case 'served':
       case 'ready':
         return 'text-green-600';
-      case 'completed':
+      case 'delivered':
         return 'text-green-700';
       case 'preparing':
         return 'text-orange-600';
@@ -393,7 +393,7 @@ const ScreenRestaurantOrderList = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           title="Ongoing Orders"
-          value={activeOrders.filter((o: any) => ['pending', 'preparing', 'awaiting_cash'].includes(o.status.toLowerCase())).length}
+          value={activeOrders.filter((o: any) => ['pending', 'preparing', 'awaiting_cash', 'served', 'delivered'].includes(o.status.toLowerCase())).length}
           icon={Clock}
           colorClass="text-[#0055FE]"
           bgClass="bg-white"
@@ -530,8 +530,8 @@ const ScreenRestaurantOrderList = () => {
                       >
                         <option value="pending" className="text-yellow-600">Pending</option>
                         <option value="preparing" className="text-orange-600">Preparing</option>
-                        <option value="served" className="text-green-600">Ready</option>
-                        <option value="completed" className="text-green-700">Delivered</option>
+                        <option value="served" className="text-green-600">Ready (Served)</option>
+                        <option value="delivered" className="text-green-700">Delivered</option>
                       </select>
                     </td>
                     <td className="px-5 py-3 text-right">

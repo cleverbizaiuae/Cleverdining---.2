@@ -107,6 +107,26 @@ export default defineConfig({
               expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
+          },
+          // Menu item images from Render backend — cache for 30 days
+          {
+            urlPattern: /^https:\/\/cleverdining-2\.onrender\.com\/media\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "menu-images-cache",
+              expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          // Google Cloud Storage images (if used for media)
+          {
+            urlPattern: /^https:\/\/storage\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gcs-images-cache",
+              expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
           }
           // Intentionally NO API caching — dashboard data must always be fresh
           // Auth tokens, orders, items, messages = never cached by SW

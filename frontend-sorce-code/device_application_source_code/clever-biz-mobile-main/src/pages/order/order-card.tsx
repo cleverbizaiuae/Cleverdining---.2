@@ -39,11 +39,8 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                 <div className="p-5 pb-2">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg shadow-sm">
-                                #{order.id}
-                            </div>
                             <div>
-                                <h3 className="font-bold text-gray-900">Table {order.device_name || "05"}</h3>
+                                <h3 className="font-bold text-gray-900">{order.device_name || "Table 05"} (#{order.id})</h3>
                                 <p className="text-xs text-gray-500">
                                     {new Date(order.created_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </p>

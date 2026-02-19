@@ -42,11 +42,20 @@ export default defineConfig({
     },
   },
   build: {
+    // Target modern browsers for smaller bundles
+    target: "es2020",
+    // Use Lightning CSS for faster, smaller CSS minification
+    cssMinify: "lightningcss",
     rollupOptions: {
       output: {
-        entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-        chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-        assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`,
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`,
+        manualChunks: {
+          "vendor-core": ["react", "react-dom", "react-router-dom"],
+          "vendor-ui": ["react-hot-toast", "lucide-react", "motion"],
+          "vendor-utils": ["axios"],
+        }
       },
     },
   },

@@ -10,21 +10,25 @@ import { StaffProvider } from "./context/staffContext.tsx";
 import { AdminProvider } from "./context/adminContext.tsx";
 import WebSocketProvider from "./hooks/WebSocketProvider.tsx";
 import { InstallPrompt } from "./components/InstallPrompt.tsx";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient.ts";
 
 createRoot(document.getElementById("root")!).render(
   <Provider store={store}>
-    <WebSocketProvider>
-      <BrowserRouter>
-        <OwnerProvider>
-          <StaffProvider>
-            <AdminProvider>
-              <App />
-              <Toaster />
-              <InstallPrompt />
-            </AdminProvider>
-          </StaffProvider>
-        </OwnerProvider>
-      </BrowserRouter>
-    </WebSocketProvider>
+    <QueryClientProvider client={queryClient}>
+      <WebSocketProvider>
+        <BrowserRouter>
+          <OwnerProvider>
+            <StaffProvider>
+              <AdminProvider>
+                <App />
+                <Toaster />
+                <InstallPrompt />
+              </AdminProvider>
+            </StaffProvider>
+          </OwnerProvider>
+        </BrowserRouter>
+      </WebSocketProvider>
+    </QueryClientProvider>
   </Provider>
 );

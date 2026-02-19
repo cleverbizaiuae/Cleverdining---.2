@@ -22,9 +22,13 @@ const ScreenOrders = () => {
 
   const accessToken = localStorage.getItem("accessToken");
   const userInfo = localStorage.getItem("userInfo");
-  const device_id = userInfo
-    ? JSON.parse(userInfo).user.restaurants[0].device_id
-    : null;
+  const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
+
+  // Robust device_id extraction (matches WebSocketContext logic)
+  let device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
+  if (!device_id) {
+    device_id = parsedUserInfo?.table_id || parsedUserInfo?.device_id || parsedUserInfo?.user?.device_id;
+  }
 
   useEffect(() => {
     const fetchOrders = async () => {

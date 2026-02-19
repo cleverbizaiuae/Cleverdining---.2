@@ -360,7 +360,7 @@ class MyOrdersAPIView(generics.ListAPIView):
         if user.is_authenticated:
             return base_qs.filter(
                 device__user=user,
-                status__in=['pending', 'preparing', 'served', 'delivered']
+                status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
             ).exclude(
                 payment_status__in=['paid', 'completed']
             ).order_by('-created_time')
@@ -372,7 +372,7 @@ class MyOrdersAPIView(generics.ListAPIView):
                     session = GuestSession.objects.get(session_token=session_token, is_active=True)
                     return base_qs.filter(
                         guest_session=session,
-                        status__in=['pending', 'preparing', 'served', 'delivered']
+                        status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
                     ).exclude(
                         payment_status__in=['paid', 'completed']
                     ).order_by('-created_time')
@@ -481,7 +481,7 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
             stats = {
                 "total_completed_orders": completed_orders.count(),
                 "today_completed_order_count": completed_today.count(),
-                "ongoing_orders": full_queryset.filter(status__in=['pending', 'preparing', 'served']).count()
+                "ongoing_orders": full_queryset.filter(status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']).count()
             }
 
             return self.get_paginated_response({
@@ -674,7 +674,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
         serializer = self.get_serializer(page, many=True)
 
         full_queryset = self.get_queryset()
-        ongoing_statuses = ['pending', 'preparing', 'served']
+        ongoing_statuses = ['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
         total_ongoing = full_queryset.filter(status__in=ongoing_statuses).count()
         total_completed = full_queryset.filter(status='completed').count()
 

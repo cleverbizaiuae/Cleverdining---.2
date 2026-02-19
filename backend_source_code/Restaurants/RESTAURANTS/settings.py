@@ -148,6 +148,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',  # Compress responses — 60-80% smaller JSON payloads
     'corsheaders.middleware.CorsMiddleware',  # CORS must be early, before CommonMiddleware
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -431,6 +432,7 @@ else:
             'PASSWORD': '41ETCSVh25R43IG4vJrL0FHaFOcUoClV',
             'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com',
             'PORT': '5432',
+            'CONN_MAX_AGE': 600,  # Keep DB connections alive for 10 minutes
             'OPTIONS': {
                 'sslmode': 'prefer',
                 'connect_timeout': 10,
