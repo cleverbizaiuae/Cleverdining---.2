@@ -91,7 +91,6 @@ const GoogleReviewSettingsCard = () => {
           <div className="text-sm text-slate-400 py-4 text-center">Loading settings...</div>
         ) : (
           <>
-            {/*
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Google Review URL
@@ -125,8 +124,8 @@ const GoogleReviewSettingsCard = () => {
                 onClick={handleSave}
                 disabled={!hasChanges || saving}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${hasChanges
-                    ? "bg-[#0055FE] text-white hover:bg-[#0047D1] shadow-lg shadow-[#0055FE]/20"
-                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  ? "bg-[#0055FE] text-white hover:bg-[#0047D1] shadow-lg shadow-[#0055FE]/20"
+                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
                   }`}
               >
                 {saving ? (
@@ -142,7 +141,6 @@ const GoogleReviewSettingsCard = () => {
                 )}
               </button>
             </div>
-             */}
           </>
         )}
       </div>
