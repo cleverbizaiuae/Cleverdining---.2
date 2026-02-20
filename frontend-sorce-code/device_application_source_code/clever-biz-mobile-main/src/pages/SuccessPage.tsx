@@ -105,7 +105,7 @@ const SuccessPage = () => {
 
           {/* Supporting Text - Centered */}
           <p className="text-slate-500 text-base mb-6 text-center leading-relaxed max-w-[90%]">
-            Thanks for dining with us, we hope you enjoyed your meal!
+            Thank you for joining us, we hope you had an exceptional experience.
           </p>
 
           {/* Google Review Section - Only show if URL is configured */}
@@ -113,7 +113,7 @@ const SuccessPage = () => {
             <>
               {/* Call-to-Action Message - Centered */}
               <p className="text-slate-600 text-sm mb-8 text-center leading-relaxed max-w-[85%]">
-                Leave a quick Google review and let us know how we did.
+                Please leave a quick Google review and share your experience with others.
               </p>
 
               {/* Google Review Button */}
