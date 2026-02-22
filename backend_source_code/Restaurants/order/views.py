@@ -557,9 +557,10 @@ class OwnerUpdateOrderStatusAPIView(APIView):
 
 
         order.status = new_status
-        # if order.status == "completed":
-        #     payment_status = "paid"  <-- Removed to allow payment after delivery
         order.save(update_fields=['status', 'updated_time'])
+
+        import sys
+        print(f"[ORDER-EMIT] Status changed | order={order.id} → {order.status} | device_id={order.device_id} | session_id={order.guest_session_id}", file=sys.stderr)
 
         if order.status == "completed":
             ChatMessage.objects.filter(
@@ -567,8 +568,9 @@ class OwnerUpdateOrderStatusAPIView(APIView):
                 new_message=True
             ).update(new_message=False)
 
+        print(f"[ORDER-EMIT] Sending to group: device_{order.device_id} | type=order_status_update", file=sys.stderr)
         async_to_sync(channel_layer.group_send)(
-            f'device_{order.device_id}',  # <-- send to device_id group
+            f'device_{order.device_id}',
             {
                 'type': 'order_status_update',
                 'status': order.status,
@@ -578,6 +580,7 @@ class OwnerUpdateOrderStatusAPIView(APIView):
 
         # Also broadcast to session group for redundancy
         if order.guest_session_id:
+            print(f"[ORDER-EMIT] Sending to group: session_{order.guest_session_id} | type=order_status_update", file=sys.stderr)
             async_to_sync(channel_layer.group_send)(
                 f'session_{order.guest_session_id}',
                 {
@@ -588,6 +591,7 @@ class OwnerUpdateOrderStatusAPIView(APIView):
             )
 
         data = OrderDetailSerializer(order).data
+        print(f"[ORDER-EMIT] Sending to group: restaurant_{order.restaurant.id} | type=order_updated", file=sys.stderr)
         async_to_sync(channel_layer.group_send)(
             f"restaurant_{order.restaurant.id}",
             {
@@ -739,8 +743,12 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
                 new_message=True
             ).update(new_message=False)
 
+        import sys
+        print(f"[ORDER-EMIT-CHEF] Status changed | order={order.id} → {order.status} | device_id={order.device_id} | session_id={order.guest_session_id}", file=sys.stderr)
+
+        print(f"[ORDER-EMIT-CHEF] Sending to group: device_{order.device_id} | type=order_status_update", file=sys.stderr)
         async_to_sync(channel_layer.group_send)(
-            f'device_{order.device_id}',  # <-- send to device_id group
+            f'device_{order.device_id}',
             {
                 'type': 'order_status_update',
                 'status': order.status,
@@ -750,6 +758,7 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
 
         # Also broadcast to session group for redundancy
         if order.guest_session_id:
+            print(f"[ORDER-EMIT-CHEF] Sending to group: session_{order.guest_session_id} | type=order_status_update", file=sys.stderr)
             async_to_sync(channel_layer.group_send)(
                 f'session_{order.guest_session_id}',
                 {
@@ -760,6 +769,7 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
             )
 
         data = OrderDetailSerializer(order).data
+        print(f"[ORDER-EMIT-CHEF] Sending to group: restaurant_{order.restaurant.id} | type=order_updated", file=sys.stderr)
         async_to_sync(channel_layer.group_send)(
             f"restaurant_{order.restaurant.id}",
             {

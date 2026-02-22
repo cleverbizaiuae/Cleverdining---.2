@@ -1,14 +1,22 @@
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Order } from "./order-types";
 import { OrderCard } from "./order-card";
 import { Footer } from "../../components/Footer";
 import { GameHub } from "./game-hub";
-import { Gamepad2 } from "lucide-react";
+import { Gamepad2, Receipt } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { StickyTotalPayBar } from "../../components/StickyTotalPayBar";
+
+// ========================================================================
+// DEBUG FLAG — set to true for full pipeline logging
+// ========================================================================
+const DEBUG = true;
+function log(...args: any[]) {
+  if (DEBUG) console.log("[ORDER-SCREEN]", ...args);
+}
 
 const ScreenOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -17,67 +25,87 @@ const ScreenOrders = () => {
   const [isGameHubOpen, setIsGameHubOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Debounce ref for WebSocket updates
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs for WebSocket lifecycle
+  const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   const accessToken = localStorage.getItem("accessToken");
   const userInfo = localStorage.getItem("userInfo");
   const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
 
-  // Robust device_id extraction (matches WebSocketContext logic)
+  // ========================================================================
+  // STEP A: Robust device_id extraction
+  // ========================================================================
   let device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
   if (!device_id) {
     device_id = parsedUserInfo?.table_id || parsedUserInfo?.device_id || parsedUserInfo?.user?.device_id;
   }
+  log("Device ID resolved:", device_id);
+  log("User info structure:", JSON.stringify(parsedUserInfo, null, 2).substring(0, 500));
 
-  useEffect(() => {
-    // Initial fetch only shows loading indicator
-    const fetchOrders = async (isInitial = false) => {
-      try {
-        if (isInitial) {
-          setLoading(true);
-          setErr(null);
-        }
-
-        // Use session token for proper session-based filtering
-        const guestSessionToken = localStorage.getItem("guest_session_token");
-
-        const res = await axiosInstance.get(`/api/customer/uncomplete/orders/`, {
-          headers: guestSessionToken ? { 'X-Guest-Session-Token': guestSessionToken } : {},
-          params: device_id ? { device_id } : {} // Fallback for legacy support
-        });
-        const d = res?.data;
-
-        const list: Order[] = Array.isArray(d)
-          ? d
-          : d?.results ?? d?.orders ?? [];
-
-        setOrders(Array.isArray(list) ? list : []);
-      } catch (e: unknown) {
-        console.error("Failed to fetch orders:", e);
-
-        if (isInitial) {
-          if (e instanceof Error) {
-            setErr(e.message);
-          } else {
-            setErr("Failed to fetch orders.");
-          }
-        }
-      } finally {
-        if (isInitial) {
-          setLoading(false);
-        }
+  // ========================================================================
+  // STEP B: Fetch orders (background-safe — no loading flash on WS updates)
+  // ========================================================================
+  const fetchOrders = useCallback(async (isInitial = false) => {
+    try {
+      if (isInitial) {
+        setLoading(true);
+        setErr(null);
       }
-    };
+
+      const guestSessionToken = localStorage.getItem("guest_session_token");
+      log(`fetchOrders(isInitial=${isInitial}) | session_token=${guestSessionToken?.substring(0, 15)}...`);
+
+      const res = await axiosInstance.get(`/api/customer/uncomplete/orders/`, {
+        headers: guestSessionToken ? { 'X-Guest-Session-Token': guestSessionToken } : {},
+        params: device_id ? { device_id } : {}
+      });
+      const d = res?.data;
+
+      const list: Order[] = Array.isArray(d)
+        ? d
+        : d?.results ?? d?.orders ?? [];
+
+      log(`fetchOrders → got ${list.length} orders:`, list.map(o => `#${o.id}:${o.status}`).join(', '));
+
+      if (isMountedRef.current) {
+        setOrders(Array.isArray(list) ? list : []);
+      }
+    } catch (e: unknown) {
+      console.error("Failed to fetch orders:", e);
+      if (isInitial && isMountedRef.current) {
+        setErr(e instanceof Error ? e.message : "Failed to fetch orders.");
+      }
+    } finally {
+      if (isInitial && isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [device_id]);
+
+  // ========================================================================
+  // STEP C: WebSocket connection with full debug + reconnect + visibility
+  // ========================================================================
+  useEffect(() => {
+    isMountedRef.current = true;
     fetchOrders(true);
 
-    // Robust WebSocket Management
-    let socket: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout;
+    if (!device_id) {
+      log("⚠️ NO device_id — WebSocket will NOT connect. Orders page has no live updates.");
+      return;
+    }
 
     const connectWebSocket = () => {
+      // Close existing socket if any
+      if (socketRef.current) {
+        try { socketRef.current.close(); } catch (e) { }
+        socketRef.current = null;
+      }
+
       const guestSessionToken = localStorage.getItem("guest_session_token");
-      const token = accessToken || guestSessionToken || "guest_token";
+      const token = guestSessionToken || accessToken || "guest_token";
 
       // Robust WS URL resolution
       let wsBaseUrl = import.meta.env.VITE_WS_URL;
@@ -87,35 +115,55 @@ const ScreenOrders = () => {
       }
 
       const wsUrl = `${wsBaseUrl}/ws/order/${device_id}/?token=${token}`;
-      console.log("Connecting to Orders WebSocket:", wsUrl);
+      log(`🔌 Connecting WS | url=${wsUrl}`);
+      log(`   token=${token?.substring(0, 20)}... | device_id=${device_id}`);
 
-      socket = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
 
+      // ====== SOCKET OPEN ======
       socket.onopen = () => {
-        console.log("Orders WebSocket connection established");
-        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        log(`✅ WS CONNECTED | readyState=${socket.readyState} | room=device_${device_id}`);
+        reconnectAttemptRef.current = 0; // Reset backoff on success
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
       };
 
+      // ====== SOCKET MESSAGE ======
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("Received order update:", data);
+          log(`📨 WS MESSAGE received:`, JSON.stringify(data));
 
-          // INSTANT INLINE UPDATE: Update specific order status in state immediately
-          if (data.type === 'order_status_update' && data.order_id && data.status) {
-            console.log(`Inline update: Order #${data.order_id} → ${data.status}`);
-            setOrders((prevOrders) =>
-              prevOrders.map((order) =>
+          // ──── INLINE STATUS UPDATE (instant, no API call) ────
+          if (data.type === 'order_status_update' && data.order_id != null && data.status) {
+            log(`🔄 INLINE UPDATE: Order #${data.order_id} → "${data.status}"`);
+
+            setOrders((prevOrders) => {
+              const found = prevOrders.find(o => o.id === data.order_id);
+              if (!found) {
+                log(`⚠️ Order #${data.order_id} NOT in current state (${prevOrders.length} orders: [${prevOrders.map(o => o.id).join(',')}])`);
+                // Order not in state — do a background fetch to pick it up
+                fetchOrders(false);
+                return prevOrders;
+              }
+
+              log(`   BEFORE: Order #${found.id} status="${found.status}"`);
+              const updated = prevOrders.map((order) =>
                 order.id === data.order_id
                   ? { ...order, status: data.status }
                   : order
-              )
-            );
+              );
+              log(`   AFTER:  Order #${data.order_id} status="${data.status}" | React will re-render`);
+              return updated;
+            });
           }
 
-          // INSTANT INLINE UPDATE: Payment status changes
-          if (data.type === 'payment_status_update' && data.order_id) {
-            console.log(`Inline update: Order #${data.order_id} payment → ${data.payment_status}`);
+          // ──── INLINE PAYMENT UPDATE ────
+          if (data.type === 'payment_status_update' && data.order_id != null) {
+            log(`💰 INLINE PAYMENT UPDATE: Order #${data.order_id} → "${data.payment_status}"`);
             setOrders((prevOrders) =>
               prevOrders.map((order) =>
                 order.id === data.order_id
@@ -125,51 +173,96 @@ const ScreenOrders = () => {
             );
           }
 
-          // For new orders or full updates, do a background re-fetch (no loading flash)
+          // ──── BACKGROUND RE-FETCH for new orders / full updates ────
           if (data.type === 'order_created' || data.type === 'order_updated') {
-            console.log("Background re-fetch triggered...");
-            if (debounceRef.current) {
-              clearTimeout(debounceRef.current);
-            }
-            debounceRef.current = setTimeout(() => {
-              fetchOrders(false); // Background, no loading indicator
-            }, 500);
+            log(`📋 Background re-fetch triggered (type=${data.type})`);
+            fetchOrders(false);
           }
+
         } catch (e) {
-          console.error("Error parsing order websocket message:", e);
+          console.error("[ORDER-SCREEN] Error parsing WS message:", e);
         }
       };
 
-      socket.onclose = () => {
-        console.log("Orders WebSocket connection closed. Reconnecting in 3s...");
-        reconnectTimeout = setTimeout(connectWebSocket, 3000);
-      };
-
+      // ====== SOCKET ERROR ======
       socket.onerror = (e) => {
-        console.error("Orders WebSocket Error:", e);
+        log(`❌ WS ERROR:`, e);
+      };
+
+      // ====== SOCKET CLOSE + RECONNECT ======
+      socket.onclose = (e) => {
+        log(`🔌 WS CLOSED | code=${e.code} reason="${e.reason}" wasClean=${e.wasClean}`);
+        socketRef.current = null;
+
+        if (!isMountedRef.current) return; // Component unmounted, don't reconnect
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+        const attempt = reconnectAttemptRef.current;
+        const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
+        log(`🔄 Scheduling reconnect in ${delay}ms (attempt ${attempt + 1})`);
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectAttemptRef.current = attempt + 1;
+          connectWebSocket();
+        }, delay);
       };
     };
 
-    if (device_id) {
-      connectWebSocket();
-    } else {
-      console.warn("No device_id found, WebSocket not connecting for orders");
-    }
+    // ========================================================================
+    // STEP D: PWA Visibility Change Handler (suspend/resume)
+    // ========================================================================
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        log("👁️ App resumed (visibility=visible)");
 
-    return () => {
-      if (socket) socket.close();
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        // Check if socket is dead
+        const socket = socketRef.current;
+        if (!socket || socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
+          log("🔄 Socket dead after resume — reconnecting...");
+          reconnectAttemptRef.current = 0; // Reset backoff
+          connectWebSocket();
+        } else {
+          log(`   Socket alive (readyState=${socket.readyState})`);
+        }
+
+        // Also re-fetch orders in case updates were missed while backgrounded
+        log("📋 Re-fetching orders after resume...");
+        fetchOrders(false);
+      } else {
+        log("😴 App backgrounded (visibility=hidden)");
+      }
     };
-  }, [device_id, accessToken]);
 
+    // Start connection
+    connectWebSocket();
+
+    // Listen for visibility changes (PWA suspend/resume)
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup
+    return () => {
+      isMountedRef.current = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (socketRef.current) {
+        try { socketRef.current.close(); } catch (e) { }
+        socketRef.current = null;
+      }
+    };
+  }, [device_id, accessToken, fetchOrders]);
+
+  // ========================================================================
   // Handle Payment Cancellation Redirect
+  // ========================================================================
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentStatus = params.get("payment");
     const reason = params.get("reason");
 
     if (paymentStatus === "cancelled" || paymentStatus === "failed") {
-      // Clear the param to prevent toast on reload
       window.history.replaceState({}, '', window.location.pathname);
 
       let msg = "Payment was not completed. Please try again.";
@@ -194,7 +287,6 @@ const ScreenOrders = () => {
   }, []);
 
   const handleCheckout = (order: Order) => {
-    // Navigate to checkout with robust ID passing
     navigate(`/dashboard/checkout?orderId=${order.id}`, { state: { orderId: order.id } });
   };
 
@@ -232,7 +324,7 @@ const ScreenOrders = () => {
         {!loading && !err && (
           <div className="flex flex-col gap-6">
             {orders.length === 0 ? (
-              /* 5. Empty State */
+              /* Empty State */
               <div className="flex flex-col items-center justify-center h-[60vh] text-center">
                 <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-6">
                   <Receipt size={32} className="text-gray-400" />
@@ -250,39 +342,40 @@ const ScreenOrders = () => {
                 </button>
               </div>
             ) : (
-              /* 2. Order Card List */
-              orders.map((order) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <OrderCard
-                    order={order}
-                    onCheckout={handleCheckout}
-                  />
-                </motion.div>
-              ))
+              /* Order Card List with AnimatePresence for smooth transitions */
+              <AnimatePresence mode="popLayout">
+                {orders.map((order) => (
+                  <motion.div
+                    key={order.id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <OrderCard
+                      order={order}
+                      onCheckout={handleCheckout}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             )}
             <Footer />
           </div>
         )}
       </div>
 
-      {/* 4. Wait & Play Overlay */}
+      {/* Wait & Play Overlay */}
       <GameHub
         isOpen={isGameHubOpen}
         close={() => setIsGameHubOpen(false)}
       />
 
-      {/* 5. Sticky Total Pay Bar - Hidden when playing games */}
+      {/* Sticky Total Pay Bar - Hidden when playing games */}
       {!isGameHubOpen && <StickyTotalPayBar orders={orders} />}
     </div>
   );
 };
-
-// Helper import for Empty State icon
-import { Receipt } from "lucide-react";
 
 export default ScreenOrders;

@@ -532,9 +532,12 @@ class CallSignalConsumer(AsyncWebsocketConsumer):
 
 class OrderConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        import sys
         # Retrieve device id from the URL
         self.device_id = self.scope['url_route']['kwargs']['device_id']
         self.room_group_name = f'device_{self.device_id}'
+        
+        print(f"[ORDER-WS] CONNECT attempt | device_id={self.device_id} | group={self.room_group_name}", file=sys.stderr)
         
         # Check for guest session
         self.guest_session = self.scope.get('guest_session')
@@ -544,12 +547,13 @@ class OrderConsumer(AsyncWebsocketConsumer):
         if self.guest_session:
             # Verify session belongs to this device/table
             if str(self.guest_session.device.id) != str(self.device_id):
-                print(f"DEBUG: Session device mismatch. Session: {self.guest_session.device.id}, Requested: {self.device_id}")
+                print(f"[ORDER-WS] REJECTED - device mismatch | session_device={self.guest_session.device.id} requested_device={self.device_id}", file=sys.stderr)
                 await self.close(code=4003) # Forbidden
                 return
 
             self.session_group_name = f'session_{self.guest_session.id}'
-            print(f"DEBUG: Joining session group {self.session_group_name}")
+            print(f"[ORDER-WS] Guest session OK | session_id={self.guest_session.id} | joining groups: [{self.room_group_name}, {self.session_group_name}]", file=sys.stderr)
+            
             await self.channel_layer.group_add(
                 self.session_group_name,
                 self.channel_name
@@ -561,21 +565,24 @@ class OrderConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
             await self.accept()
+            print(f"[ORDER-WS] ACCEPTED guest | device={self.device_id} | channel={self.channel_name[:20]}...", file=sys.stderr)
             
         elif self.scope.get("user") and self.scope["user"].is_authenticated:
              # Allow staff/admin to join table group
-             # TODO: Add strict staff-restaurant validation here if needed
              await self.channel_layer.group_add(
                 self.room_group_name,
                 self.channel_name
-            )
+             )
              await self.accept()
+             print(f"[ORDER-WS] ACCEPTED staff/admin | device={self.device_id} | user={self.scope['user']}", file=sys.stderr)
         else:
             # Reject unauthenticated connections
-            print("DEBUG: Rejecting unauthenticated socket connection")
+            print(f"[ORDER-WS] REJECTED - no auth | device={self.device_id} | user={self.scope.get('user')}", file=sys.stderr)
             await self.close(code=4001) # Unauthorized
 
     async def disconnect(self, close_code):
+        import sys
+        print(f"[ORDER-WS] DISCONNECT | device={self.device_id} | code={close_code}", file=sys.stderr)
         # Leave the WebSocket group
         await self.channel_layer.group_discard(
             self.room_group_name,
@@ -590,13 +597,15 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Receive message from the group
     async def order_status_update(self, event):
-        order_id = event['order_id']
-        status = event['status']
+        import sys
+        order_id = event.get('order_id')
+        status = event.get('status')
+        print(f"[ORDER-WS] >>> FORWARDING order_status_update | order={order_id} status={status} → client device={self.device_id}", file=sys.stderr)
 
         # Send the status update to WebSocket
         response = {
-            'order_id': event.get('order_id'),
-            'status': event.get('status'),
+            'order_id': order_id,
+            'status': status,
             'type': 'order_status_update',  # Explicit type for frontend routing
         }
         if 'session_ended' in event:
@@ -605,9 +614,12 @@ class OrderConsumer(AsyncWebsocketConsumer):
             response['bulk'] = event['bulk']
             
         await self.send(text_data=json.dumps(response))
+        print(f"[ORDER-WS] >>> SENT to client | payload={response}", file=sys.stderr)
 
     # Forward order_updated events (sent when dashboard updates status)
     async def order_updated(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING order_updated → client device={self.device_id}", file=sys.stderr)
         await self.send(text_data=json.dumps({
             'type': 'order_updated',
             'order': event.get('order', {}),
@@ -615,6 +627,8 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Forward order_created events (sent when new order is placed)
     async def order_created(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING order_created → client device={self.device_id}", file=sys.stderr)
         await self.send(text_data=json.dumps({
             'type': 'order_created',
             'order': event.get('order', {}),
@@ -622,6 +636,8 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Forward payment status updates
     async def payment_status_update(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING payment_status_update | order={event.get('order_id')} → client device={self.device_id}", file=sys.stderr)
         await self.send(text_data=json.dumps({
             'type': 'payment_status_update',
             'order_id': event.get('order_id'),
@@ -630,6 +646,8 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Forward order_paid events
     async def order_paid(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING order_paid → client device={self.device_id}", file=sys.stderr)
         await self.send(text_data=json.dumps({
             'type': 'payment_status_update',
             'order': event.get('order', {}),
@@ -637,6 +655,8 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Forward cash payment alerts
     async def cash_payment_alert(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING cash_payment_alert → client device={self.device_id}", file=sys.stderr)
         await self.send(text_data=json.dumps({
             'type': 'order_updated',
             'order': event.get('order', {}),
@@ -644,6 +664,8 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Forward cash payment confirmed
     async def cash_payment_confirmed(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING cash_payment_confirmed | order={event.get('order_id')} → client device={self.device_id}", file=sys.stderr)
         await self.send(text_data=json.dumps({
             'type': 'payment_status_update',
             'order_id': event.get('order_id'),
@@ -651,6 +673,8 @@ class OrderConsumer(AsyncWebsocketConsumer):
 
     # Receive cart update from the session group
     async def cart_updated(self, event):
+        import sys
+        print(f"[ORDER-WS] >>> FORWARDING cart_updated → client device={self.device_id}", file=sys.stderr)
         # Forward the update notification to the client
         await self.send(text_data=json.dumps({
             'type': 'cart_updated',
