@@ -4,29 +4,113 @@ import path from "path";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Build version for cache busting
+const BUILD_VERSION = Date.now().toString(36);
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __BUILD_VERSION__: JSON.stringify(BUILD_VERSION),
+  },
   assetsInclude: ["**/icon-32.png", "**/icon-512.png"],
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      manifest: {
-        name: "Cleverbiz PWA",
-        short_name: "Cleverbiz",
-        description: "Cleverbiz food order app",
-        theme_color: "#ffffff",
-        icons: [
+      // Use Workbox's generateSW for proper cache strategies
+      workbox: {
+        // Skip waiting and claim clients immediately
+        skipWaiting: true,
+        clientsClaim: true,
+
+        // NEVER cache index.html aggressively
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//],
+
+        // Runtime caching strategies
+        runtimeCaching: [
+          // NetworkFirst for HTML pages (never serve stale HTML)
           {
-            src: "src/assets/icon-32.png",
-            sizes: "32x32",
-            type: "image/png",
+            urlPattern: /^https:\/\/.*\.(html?)$/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "html-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60, // 1 hour
+              },
+              networkTimeoutSeconds: 5,
+            },
+          },
+          // NetworkOnly for API calls (NEVER cache API responses)
+          {
+            urlPattern: /^https:\/\/cleverdining-2\.onrender\.com\/.*/i,
+            handler: "NetworkOnly",
           },
           {
-            src: "src/assets/icon-512.png",
+            urlPattern: /\/api\/.*/i,
+            handler: "NetworkOnly",
+          },
+          // StaleWhileRevalidate for static assets (JS, CSS, images)
+          {
+            urlPattern: /\.(?:js|css|woff2?|ttf|eot)$/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "static-assets",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
+          },
+          // CacheFirst for images (they rarely change)
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "image-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
+          },
+          // NetworkFirst for Google Fonts
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "google-fonts-stylesheets",
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-webfonts",
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+            },
+          },
+        ],
+      },
+      manifest: {
+        name: "CleverDining",
+        short_name: "CleverDining",
+        description: "CleverDining - Smart Restaurant Ordering",
+        theme_color: "#3B82F6",
+        background_color: "#ffffff",
+        display: "standalone",
+        start_url: "/",
+        icons: [
+          {
+            src: "/icon-512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any maskable",
           },
         ],
       },

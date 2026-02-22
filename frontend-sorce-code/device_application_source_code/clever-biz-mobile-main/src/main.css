@@ -30,14 +30,27 @@ select {
 
 @layer base {
 
+  html {
+    background-color: #ffffff !important;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
   html,
   body,
   #root {
     @apply h-full;
+    background-color: #ffffff !important;
+    margin: 0;
+  }
+
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   #root {
     @apply bg-background text-foreground overflow-y-hidden;
+    min-height: 100vh;
   }
 
   .pb-safe-bottom {
