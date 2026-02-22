@@ -209,6 +209,7 @@ if REDIS_URL:
             },
         },
     }
+     print(f"[STARTUP] ✅ CHANNEL_LAYERS = RedisChannelLayer (REDIS_URL={REDIS_URL[:30]}...)")
 elif REDIS_HOST and REDIS_HOST != 'localhost':
     # Use Redis if available
     CHANNEL_LAYERS = {
@@ -219,13 +220,18 @@ elif REDIS_HOST and REDIS_HOST != 'localhost':
             },
         },
     }
+    print(f"[STARTUP] ✅ CHANNEL_LAYERS = RedisChannelLayer (REDIS_HOST={REDIS_HOST})")
 else:
-    # Use in-memory channel layer (simpler, works without Redis)
+    # ⚠️ WARNING: InMemoryChannelLayer CANNOT send between processes!
+    # Real-time order updates WILL NOT WORK in production with this layer.
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels.layers.InMemoryChannelLayer"
         },
     }
+    import sys
+    print("[STARTUP] ⚠️⚠️⚠️ CHANNEL_LAYERS = InMemoryChannelLayer — REAL-TIME UPDATES WILL NOT WORK ACROSS PROCESSES!", file=sys.stderr)
+    print("[STARTUP] ⚠️ Set REDIS_URL environment variable to fix this!", file=sys.stderr)
 
 
 # Database

@@ -560,7 +560,8 @@ class OwnerUpdateOrderStatusAPIView(APIView):
         order.save(update_fields=['status', 'updated_time'])
 
         import sys
-        print(f"[ORDER-EMIT] Status changed | order={order.id} → {order.status} | device_id={order.device_id} | session_id={order.guest_session_id}", file=sys.stderr)
+        cl_backend = type(channel_layer).__name__
+        print(f"[ORDER-EMIT] Status changed | order={order.id} → {order.status} | device_id={order.device_id} | session_id={order.guest_session_id} | channel_layer={cl_backend}", file=sys.stderr)
 
         if order.status == "completed":
             ChatMessage.objects.filter(
