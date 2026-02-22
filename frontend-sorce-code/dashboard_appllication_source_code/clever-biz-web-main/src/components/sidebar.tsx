@@ -161,7 +161,7 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
                   end={true}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-4 px-6 py-3 rounded-lg text-gray-300 hover:bg-chat-sender/30 hover:text-white transition-colors",
+                      "flex items-center gap-4 px-6 py-3 rounded-lg text-gray-300 hover:bg-chat-sender/30 hover:text-white transition-colors relative",
                       {
                         "bg-dashboard": isActive,
                       }
