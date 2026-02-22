@@ -576,6 +576,17 @@ class OwnerUpdateOrderStatusAPIView(APIView):
             }
         )
 
+        # Also broadcast to session group for redundancy
+        if order.guest_session_id:
+            async_to_sync(channel_layer.group_send)(
+                f'session_{order.guest_session_id}',
+                {
+                    'type': 'order_status_update',
+                    'status': order.status,
+                    'order_id': order.id,
+                }
+            )
+
         data = OrderDetailSerializer(order).data
         async_to_sync(channel_layer.group_send)(
             f"restaurant_{order.restaurant.id}",
@@ -736,6 +747,17 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
                 'order_id': order.id,
             }
         )
+
+        # Also broadcast to session group for redundancy
+        if order.guest_session_id:
+            async_to_sync(channel_layer.group_send)(
+                f'session_{order.guest_session_id}',
+                {
+                    'type': 'order_status_update',
+                    'status': order.status,
+                    'order_id': order.id,
+                }
+            )
 
         data = OrderDetailSerializer(order).data
         async_to_sync(channel_layer.group_send)(

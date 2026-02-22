@@ -31,11 +31,13 @@ const ScreenOrders = () => {
   }
 
   useEffect(() => {
-    const fetchOrders = async () => {
+    // Initial fetch only shows loading indicator
+    const fetchOrders = async (isInitial = false) => {
       try {
-        setLoading(true);
-        setErr(null);
-        setOrders([]); // Clear stale state before fetch to ensure fresh data
+        if (isInitial) {
+          setLoading(true);
+          setErr(null);
+        }
 
         // Use session token for proper session-based filtering
         const guestSessionToken = localStorage.getItem("guest_session_token");
@@ -54,16 +56,20 @@ const ScreenOrders = () => {
       } catch (e: unknown) {
         console.error("Failed to fetch orders:", e);
 
-        if (e instanceof Error) {
-          setErr(e.message);
-        } else {
-          setErr("Failed to fetch orders.");
+        if (isInitial) {
+          if (e instanceof Error) {
+            setErr(e.message);
+          } else {
+            setErr("Failed to fetch orders.");
+          }
         }
       } finally {
-        setLoading(false);
+        if (isInitial) {
+          setLoading(false);
+        }
       }
     };
-    fetchOrders();
+    fetchOrders(true);
 
     // Robust WebSocket Management
     let socket: WebSocket | null = null;
@@ -95,19 +101,39 @@ const ScreenOrders = () => {
           const data = JSON.parse(event.data);
           console.log("Received order update:", data);
 
-          if (
-            data.type === 'order_created' ||
-            data.type === 'order_updated' ||
-            data.type === 'order_status_update' ||
-            data.type === 'payment_status_update'
-          ) {
-            console.log("Triggering order refresh...");
+          // INSTANT INLINE UPDATE: Update specific order status in state immediately
+          if (data.type === 'order_status_update' && data.order_id && data.status) {
+            console.log(`Inline update: Order #${data.order_id} → ${data.status}`);
+            setOrders((prevOrders) =>
+              prevOrders.map((order) =>
+                order.id === data.order_id
+                  ? { ...order, status: data.status }
+                  : order
+              )
+            );
+          }
+
+          // INSTANT INLINE UPDATE: Payment status changes
+          if (data.type === 'payment_status_update' && data.order_id) {
+            console.log(`Inline update: Order #${data.order_id} payment → ${data.payment_status}`);
+            setOrders((prevOrders) =>
+              prevOrders.map((order) =>
+                order.id === data.order_id
+                  ? { ...order, payment_status: data.payment_status || order.payment_status }
+                  : order
+              )
+            );
+          }
+
+          // For new orders or full updates, do a background re-fetch (no loading flash)
+          if (data.type === 'order_created' || data.type === 'order_updated') {
+            console.log("Background re-fetch triggered...");
             if (debounceRef.current) {
               clearTimeout(debounceRef.current);
             }
             debounceRef.current = setTimeout(() => {
-              fetchOrders();
-            }, 1000);
+              fetchOrders(false); // Background, no loading indicator
+            }, 500);
           }
         } catch (e) {
           console.error("Error parsing order websocket message:", e);
@@ -126,6 +152,8 @@ const ScreenOrders = () => {
 
     if (device_id) {
       connectWebSocket();
+    } else {
+      console.warn("No device_id found, WebSocket not connecting for orders");
     }
 
     return () => {
