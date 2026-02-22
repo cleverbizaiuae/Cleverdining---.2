@@ -606,6 +606,49 @@ class OrderConsumer(AsyncWebsocketConsumer):
             
         await self.send(text_data=json.dumps(response))
 
+    # Forward order_updated events (sent when dashboard updates status)
+    async def order_updated(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_updated',
+            'order': event.get('order', {}),
+        }))
+
+    # Forward order_created events (sent when new order is placed)
+    async def order_created(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_created',
+            'order': event.get('order', {}),
+        }))
+
+    # Forward payment status updates
+    async def payment_status_update(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'payment_status_update',
+            'order_id': event.get('order_id'),
+            'payment_status': event.get('payment_status', ''),
+        }))
+
+    # Forward order_paid events
+    async def order_paid(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'payment_status_update',
+            'order': event.get('order', {}),
+        }))
+
+    # Forward cash payment alerts
+    async def cash_payment_alert(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_updated',
+            'order': event.get('order', {}),
+        }))
+
+    # Forward cash payment confirmed
+    async def cash_payment_confirmed(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'payment_status_update',
+            'order_id': event.get('order_id'),
+        }))
+
     # Receive cart update from the session group
     async def cart_updated(self, event):
         # Forward the update notification to the client

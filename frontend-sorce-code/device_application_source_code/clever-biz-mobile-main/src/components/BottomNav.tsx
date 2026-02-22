@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { useCart } from "../context/CartContext";
+import { useWebSocket } from "./WebSocketContext";
 
 export const BottomNav = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { cart } = useCart();
+    const { hasNewMessage, setNewMessageFlag } = useWebSocket();
 
     const tabs = [
         { id: "home", icon: Home, label: "Home", path: "/dashboard" },
@@ -24,6 +26,10 @@ export const BottomNav = () => {
             // Dispatch custom event for call handler in layout
             window.dispatchEvent(new CustomEvent("trigger-call-staff"));
             return;
+        }
+        if (tab.id === "message") {
+            // Clear the notification badge when navigating to messages
+            setNewMessageFlag(false);
         }
         navigate(tab.path);
     };
@@ -67,6 +73,14 @@ export const BottomNav = () => {
                                     >
                                         {cart.length}
                                     </motion.span>
+                                )}
+
+                                {tab.id === "message" && hasNewMessage && !isActive && (
+                                    <motion.span
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="absolute -top-1 -right-1 bg-red-500 w-2.5 h-2.5 rounded-full shadow-sm"
+                                    />
                                 )}
                             </div>
 
