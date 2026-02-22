@@ -137,19 +137,21 @@ class CreateBulkCheckoutSessionView(APIView):
 
         from device.models import GuestSession
         try:
-            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+            # Try active session first, then fall back to most recent inactive
+            # (allows returning customers to pay for orders from expired sessions)
+            session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+            if not session:
+                raise GuestSession.DoesNotExist
         except GuestSession.DoesNotExist:
             return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
 
         # 2. Get Unpaid Orders
-        # Filter for orders that are 'unpaid' AND status is not cancelled
+        # Include: pending, preparing, served, completed, awaiting_cash
+        # Exclude: only orders that are already PAID
         unpaid_orders = Order.objects.filter(
             guest_session=session, 
-            status__in=['pending', 'preparing', 'served', 'completed'],
-        ).exclude(payment_status__in=['paid', 'pending_cash']) # waiting cash is considered "pending" process, so exclude or allow retry if failed? If pending_cash, user can confirm. Let's exclude.
-        
-        # If user wants to retry failed payment, status might be 'failed'. Including 'failed' in filter implicitly by not excluding it.
-        # But payment_status default is 'unpaid'.
+            status__in=['pending', 'preparing', 'served', 'completed', 'awaiting_cash'],
+        ).exclude(payment_status='paid')
         
         if not unpaid_orders.exists():
              return Response({'error': 'No unpaid orders found'}, status=status.HTTP_400_BAD_REQUEST)
