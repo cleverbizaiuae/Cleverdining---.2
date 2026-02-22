@@ -68,8 +68,12 @@ class OrderCreateAPIView(generics.CreateAPIView):
             raise ValidationError(f"DEBUG CHECK v4: Token Missing. H:{dbg_headers} B:{dbg_data} Q:{dbg_query}")
 
         try:
-            session = GuestSession.objects.get(session_token=session_token, is_active=True)
-        except GuestSession.DoesNotExist:
+            # Resilient lookup: try active first, fall back to most recent
+            session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+            if not session:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError("Invalid or expired session. Please scan the QR code again.")
+        except Exception:
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Invalid or expired session. Please scan the QR code again.")
 
@@ -368,16 +372,16 @@ class MyOrdersAPIView(generics.ListAPIView):
             # Try to resolve guest session
             session_token = self.request.headers.get('X-Guest-Session-Token')
             if session_token:
-                try:
-                    session = GuestSession.objects.get(session_token=session_token, is_active=True)
+                # Resilient lookup: try active first, fall back to most recent
+                session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+                if session:
                     return base_qs.filter(
                         guest_session=session,
                         status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
                     ).exclude(
-                        payment_status__in=['paid', 'completed']
+                        payment_status='paid'
                     ).order_by('-created_time')
-                except GuestSession.DoesNotExist:
-                    return Order.objects.none()
+                return Order.objects.none()
 
             # Fallback to device_id REMOVED for security/isolation. 
             # Orders must be accessed via Session Token or User Auth.
@@ -401,13 +405,13 @@ class MySingleOrderAPIView(generics.RetrieveAPIView):
         # Guest Session Logic
         session_token = self.request.headers.get('X-Guest-Session-Token')
         if session_token:
-            try:
-                session = GuestSession.objects.get(session_token=session_token, is_active=True)
+            # Resilient lookup: try active first, fall back to most recent
+            session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+            if session:
                 return Order.objects.filter(
                     guest_session=session
                 )
-            except GuestSession.DoesNotExist:
-                return Order.objects.none()
+            return Order.objects.none()
         
         return Order.objects.none()
 
@@ -999,11 +1003,11 @@ class CartViewSet(viewsets.ModelViewSet):
         if not session_token:
             return Cart.objects.none()
         
-        try:
-            session = GuestSession.objects.get(session_token=session_token, is_active=True)
+        # Resilient lookup: try active first, fall back to most recent
+        session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+        if session:
             return Cart.objects.filter(guest_session=session)
-        except GuestSession.DoesNotExist:
-            return Cart.objects.none()
+        return Cart.objects.none()
 
     @action(detail=False, methods=['post'])
     def add_item(self, request):
@@ -1011,9 +1015,9 @@ class CartViewSet(viewsets.ModelViewSet):
         if not session_token:
             return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
         
-        try:
-            session = GuestSession.objects.get(session_token=session_token, is_active=True)
-        except GuestSession.DoesNotExist:
+        # Resilient lookup: try active first, fall back to most recent
+        session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+        if not session:
             return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
             
         # Strict Table Isolation Check
@@ -1057,9 +1061,9 @@ class CartViewSet(viewsets.ModelViewSet):
         if not session_token:
             return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
             
-        try:
-            session = GuestSession.objects.get(session_token=session_token, is_active=True)
-            Cart.objects.filter(guest_session=session).delete()
-            return Response({'status': 'cleared'})
-        except GuestSession.DoesNotExist:
+        # Resilient lookup: try active first, fall back to most recent
+        session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+        if not session:
             return Response({'error': 'Invalid session'}, status=status.HTTP_403_FORBIDDEN)
+        Cart.objects.filter(guest_session=session).delete()
+        return Response({'status': 'cleared'})

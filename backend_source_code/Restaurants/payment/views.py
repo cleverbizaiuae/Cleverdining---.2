@@ -346,9 +346,9 @@ class CreateCheckoutSessionView(APIView):
              return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
 
         from device.models import GuestSession
-        try:
-            session = GuestSession.objects.get(session_token=session_token, is_active=True)
-        except GuestSession.DoesNotExist:
+        # Resilient lookup: try active first, fall back to most recent
+        session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+        if not session:
             return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
