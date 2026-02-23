@@ -174,61 +174,79 @@ class CreateBulkCheckoutSessionView(APIView):
 
         # 4. Processing
         if provider == 'cash':
-            # 1. Cache the list of orders BEFORE update
-            # (Because update() clears cache, and the exclusion filter would then hide them)
-            all_orders = list(unpaid_orders)
-            
-            # 2. Mark all as awaiting_cash
-            unpaid_orders.update(status='awaiting_cash', payment_status='pending_cash')
-            
-            # Send ONE Alert
-            if not all_orders:
-                 return Response({'error': 'No orders to process'}, status=400)
+            import sys, traceback
+            try:
+                # 1. Cache the list of orders BEFORE update
+                all_orders = list(unpaid_orders)
+                
+                # 2. Mark all as awaiting_cash
+                unpaid_orders.update(status='awaiting_cash', payment_status='pending_cash')
+                
+                if not all_orders:
+                     return Response({'error': 'No orders to process'}, status=400)
 
-            first_order = all_orders[0]
-            
-            # Create a comprehensive order representation for the alert
-            items_summary = []
-            for o in all_orders:
-                for item in o.order_items.all():
-                    items_summary.append({
-                        "item_name": f"(Order #{o.id}) {item.item.item_name}", 
-                        "quantity": item.quantity, 
-                        "price": str(item.price)
-                    })
+                first_order = all_orders[0]
+                
+                # Safeguard device attribute access
+                table_name = 'Unknown'
+                try:
+                    table_name = session.device.table_number or session.device.table_name or f'Device {session.device_id}'
+                except Exception:
+                    table_name = f'Device {session.device_id}'
 
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{first_order.restaurant.id}",
-                {
-                    "type": "cash_payment_alert",
-                    "order": {
-                         "id": f"BULK-{session.id}", 
-                         "device_name": session.device.table_number or session.device.table_name,
-                         "items": items_summary,
-                         "tip_amount": sum(o.tip_amount for o in all_orders)
-                    }, 
-                    "table_number": session.device.table_number or session.device.table_name,
-                    "total_amount": str(total_amount),
-                    "timestamp": str(now()),
-                    "is_bulk": True,
-                    "session_id": session.id
-                }
-            )
-            
-            # Notify User Session
-            async_to_sync(channel_layer.group_send)(
-                f"session_{session.id}",
-                {
-                    "type": "order_status_update", 
-                    "status": 'awaiting_cash', 
-                    "bulk": True
-                }
-            )
-            
-            return Response({
-                'url': f"{success_url}?session_id=bulk_cash_{session.id}&amount={total_amount}",
-                'provider': 'cash'
-            })
+                # Create items summary
+                items_summary = []
+                for o in all_orders:
+                    for item in o.order_items.all():
+                        items_summary.append({
+                            "item_name": f"(Order #{o.id}) {item.item.item_name}", 
+                            "quantity": item.quantity, 
+                            "price": str(item.price)
+                        })
+
+                tip_total = sum(float(o.tip_amount or 0) for o in all_orders)
+
+                print(f"[CASH-PAYMENT] Processing cash | session={session.id} | orders={[o.id for o in all_orders]} | total={total_amount} | tip={tip_total} | table={table_name}", file=sys.stderr)
+
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{first_order.restaurant.id}",
+                    {
+                        "type": "cash_payment_alert",
+                        "order": {
+                             "id": f"BULK-{session.id}", 
+                             "device_name": table_name,
+                             "items": items_summary,
+                             "tip_amount": tip_total
+                        }, 
+                        "table_number": table_name,
+                        "total_amount": str(total_amount),
+                        "timestamp": str(now()),
+                        "is_bulk": True,
+                        "session_id": session.id
+                    }
+                )
+                
+                # Notify User Session
+                async_to_sync(channel_layer.group_send)(
+                    f"session_{session.id}",
+                    {
+                        "type": "order_status_update", 
+                        "status": 'awaiting_cash', 
+                        "bulk": True
+                    }
+                )
+
+                print(f"[CASH-PAYMENT] ✅ Success | alerts sent to restaurant_{first_order.restaurant.id} + session_{session.id}", file=sys.stderr)
+                
+                return Response({
+                    'url': f"{success_url}?session_id=bulk_cash_{session.id}&amount={total_amount}",
+                    'provider': 'cash'
+                })
+
+            except Exception as e:
+                print(f"[CASH-PAYMENT] ❌ CRASH: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                return Response({'error': f'Cash payment failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         else:
              # Stripe Bulk Session

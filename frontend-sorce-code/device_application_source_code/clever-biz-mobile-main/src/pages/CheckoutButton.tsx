@@ -112,8 +112,10 @@ export default function CheckoutButton({
       }
 
     } catch (e: any) {
-      console.error(e);
-      const msg = e?.response?.data?.error || e?.message || "Something went wrong";
+      console.error("[CHECKOUT] Error:", e);
+      console.error("[CHECKOUT] Response data:", e?.response?.data);
+      console.error("[CHECKOUT] Status:", e?.response?.status);
+      const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || "Something went wrong";
       toast.error(msg);
     } finally {
       setLoading(false);
