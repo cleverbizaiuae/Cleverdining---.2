@@ -1,6 +1,6 @@
 import { Order } from "./order-types";
 import { cn } from "clsx-for-tailwind";
-import { Check, ChefHat, Clock, Utensils, Receipt } from "lucide-react";
+import { Check, ChefHat, Clock, Utensils, Receipt, Banknote } from "lucide-react";
 
 interface OrderCardProps {
     order: Order;
@@ -23,9 +23,11 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
         const s = status.toLowerCase();
         if (s === "pending" || s === "new") return 0;
         if (s === "preparing" || s === "cooking") return 1;
-        if (s === "served" || s === "completed" || s === "delivered") return 2;
+        if (s === "served" || s === "completed" || s === "delivered" || s === "awaiting_cash") return 2;
         return 0;
     };
+
+    const isAwaitingCash = order.status?.toLowerCase() === 'awaiting_cash' || order.payment_status === 'pending_cash';
 
     const currentStepIndex = getCurrentStepIndex(order.status);
 
@@ -49,12 +51,13 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                         <div className="flex flex-col items-end gap-1">
                             <span className={cn(
                                 "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide",
-                                // Real Logic
                                 (order.payment_status === 'paid')
                                     ? "bg-green-100 text-green-600"
-                                    : "bg-red-100 text-red-600"
+                                    : isAwaitingCash
+                                        ? "bg-yellow-100 text-yellow-700 animate-pulse"
+                                        : "bg-red-100 text-red-600"
                             )}>
-                                {order.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
+                                {order.payment_status === 'paid' ? 'Paid' : isAwaitingCash ? '💵 Awaiting Cash' : 'Unpaid'}
                             </span>
                             <span className="text-sm font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg">
                                 AED {order.total_price}
@@ -127,7 +130,18 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                     </div>
                 </div>
 
-                {/* D. Action Buttons removed to enforce 'Pay All' flow */}
+                {/* D. Awaiting Cash Banner */}
+                {isAwaitingCash && (
+                    <div className="mx-5 mb-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-center gap-3">
+                        <Banknote size={20} className="text-yellow-600 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm font-semibold text-yellow-800">Cash collection requested</p>
+                            <p className="text-xs text-yellow-600">Staff will come to your table to collect payment</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* E. Action Buttons removed to enforce 'Pay All' flow */}
             </div>
         </>
     );

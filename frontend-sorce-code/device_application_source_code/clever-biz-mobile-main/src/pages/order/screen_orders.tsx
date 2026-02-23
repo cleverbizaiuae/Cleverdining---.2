@@ -139,13 +139,32 @@ const ScreenOrders = () => {
 
           // ──── INLINE STATUS UPDATE (instant, no API call) ────
           if (data.type === 'order_status_update' && data.order_id != null && data.status) {
-            log(`🔄 INLINE UPDATE: Order #${data.order_id} → "${data.status}"`);
+            log(`🔄 INLINE UPDATE: Order #${data.order_id} → "${data.status}" | session_ended=${data.session_ended} | bulk=${data.bulk}`);
+
+            // Session ended — staff confirmed cash, navigate to success
+            if (data.session_ended === true) {
+              log(`🎉 SESSION ENDED — navigating to success page`);
+              navigate('/dashboard/success');
+              return;
+            }
+
+            // Bulk cash update — update ALL orders in state
+            if (data.bulk === true && data.status === 'awaiting_cash') {
+              log(`💵 BULK awaiting_cash — updating all orders`);
+              setOrders((prevOrders) =>
+                prevOrders.map((order) => ({
+                  ...order,
+                  status: 'awaiting_cash',
+                  payment_status: 'pending_cash',
+                }))
+              );
+              return;
+            }
 
             setOrders((prevOrders) => {
               const found = prevOrders.find(o => o.id === data.order_id);
               if (!found) {
                 log(`⚠️ Order #${data.order_id} NOT in current state (${prevOrders.length} orders: [${prevOrders.map(o => o.id).join(',')}])`);
-                // Order not in state — do a background fetch to pick it up
                 fetchOrders(false);
                 return prevOrders;
               }
@@ -153,7 +172,13 @@ const ScreenOrders = () => {
               log(`   BEFORE: Order #${found.id} status="${found.status}"`);
               const updated = prevOrders.map((order) =>
                 order.id === data.order_id
-                  ? { ...order, status: data.status }
+                  ? {
+                    ...order,
+                    status: data.status,
+                    // Also update payment_status for cash flow
+                    ...(data.status === 'awaiting_cash' ? { payment_status: 'pending_cash' } : {}),
+                    ...(data.status === 'paid' || data.status === 'completed' ? { payment_status: 'paid' } : {}),
+                  }
                   : order
               );
               log(`   AFTER:  Order #${data.order_id} status="${data.status}" | React will re-render`);
