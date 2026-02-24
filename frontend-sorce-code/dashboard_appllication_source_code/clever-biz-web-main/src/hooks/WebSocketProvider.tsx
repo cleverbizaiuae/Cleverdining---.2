@@ -117,12 +117,17 @@ const WebSocketProvider = ({ children }) => {
       return;
     }
 
-    // Close existing if any
-    if (ws) {
-      ws.close();
-    }
+    // We will handle closing via setWs internally to avoid stale closures
 
     const connectWebSocket = () => {
+      setWs((prevWs) => {
+        if (prevWs) {
+          prevWs.onclose = null; // Prevent reconnect loop on cleanup
+          prevWs.close();
+        }
+        return null;
+      });
+
       console.log(`Connecting to Global WS: ${wsUrl}`);
       const socket = new WebSocket(wsUrl);
       setWs(socket);
@@ -246,18 +251,39 @@ const WebSocketProvider = ({ children }) => {
         }, delay);
       };
 
-      return socket;
+      // Do not return socket, setWs controls it
     };
 
-    const socket = connectWebSocket();
+    connectWebSocket();
+
+    // Reconnect on visibility change (when PWA comes to foreground)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("Dashboard visible, checking WebSocket connection...");
+        setWs((prevWs) => {
+          if (!prevWs || prevWs.readyState === WebSocket.CLOSED || prevWs.readyState === WebSocket.CLOSING) {
+            connectWebSocket();
+          }
+          return prevWs;
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.close();
-      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+      setWs((prevWs) => {
+        if (prevWs) {
+          prevWs.onclose = null;
+          prevWs.close();
+        }
+        return null;
+      });
     };
   }, [wsUrl, id, accessToken]);
 
