@@ -30,10 +30,16 @@ select {
 
 @layer base {
 
+  /* ─── iOS/iPad PWA Overscroll Prevention ─── */
   html {
     background-color: #ffffff !important;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
+    /* Prevent iOS rubber-band bounce that reveals black areas */
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 
   html,
@@ -42,15 +48,43 @@ select {
     @apply h-full;
     background-color: #ffffff !important;
     margin: 0;
+    padding: 0;
+    overscroll-behavior: none;
+    -webkit-overscroll-behavior: none;
   }
 
   body {
+    /* Safe area insets for notched devices (iPad Pro, iPhone) */
+    padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    /* Fixed layout to prevent iOS bounce */
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 
   #root {
-    @apply bg-background text-foreground overflow-y-hidden;
-    min-height: 100vh;
+    @apply bg-background text-foreground;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
+    /* iPad safe area */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Prevent double-tap zoom on all touch targets (iPad/iPhone) */
+  * {
+    touch-action: manipulation;
   }
 
   .pb-safe-bottom {

@@ -1,6 +1,6 @@
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useContext, useEffect, useState, useRef, useCallback } from "react";
 import { Order } from "./order-types";
 import { OrderCard } from "./order-card";
 import { Footer } from "../../components/Footer";
@@ -9,6 +9,7 @@ import { Gamepad2, Receipt } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { StickyTotalPayBar } from "../../components/StickyTotalPayBar";
+import { SocketContext } from "@/components/SocketContext";
 
 // ========================================================================
 // DEBUG FLAG — set to true for full pipeline logging
@@ -258,6 +259,12 @@ const ScreenOrders = () => {
       }
     };
 
+    // GUARANTEED POLLING FALLBACK — fetches every 10s regardless of WS status
+    const pollInterval = setInterval(() => {
+      log("⏰ Poll tick — fetching orders...");
+      fetchOrders(false);
+    }, 10000);
+
     // Start connection
     connectWebSocket();
 
@@ -268,6 +275,7 @@ const ScreenOrders = () => {
     return () => {
       isMountedRef.current = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(pollInterval);
 
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -278,6 +286,30 @@ const ScreenOrders = () => {
       }
     };
   }, [device_id, accessToken, fetchOrders]);
+
+  // ========================================================================
+  // STEP E: SocketContext backup listener (restaurant-level WS)
+  // ========================================================================
+  const socketCtx = useContext(SocketContext);
+  useEffect(() => {
+    if (!socketCtx?.response || !socketCtx.response.type) return;
+
+    const data = socketCtx.response;
+    log(`📡 SocketContext event: ${data.type}`);
+
+    if (
+      data.type === 'order_status_update' ||
+      data.type === 'order_created' ||
+      data.type === 'order_updated' ||
+      data.type === 'new_order' ||
+      data.type === 'order_paid' ||
+      data.type === 'cash_payment_alert' ||
+      data.type === 'cash_payment_confirmed'
+    ) {
+      log(`📡 Re-fetching orders due to SocketContext event: ${data.type}`);
+      fetchOrders(false);
+    }
+  }, [socketCtx?.response, fetchOrders]);
 
   // ========================================================================
   // Handle Payment Cancellation Redirect
