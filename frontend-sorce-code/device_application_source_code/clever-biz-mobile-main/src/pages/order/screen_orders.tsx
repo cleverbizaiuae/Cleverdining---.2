@@ -259,11 +259,11 @@ const ScreenOrders = () => {
       }
     };
 
-    // GUARANTEED POLLING FALLBACK — fetches every 10s regardless of WS status
+    // GUARANTEED POLLING FALLBACK — fetches every 30s regardless of WS status
     const pollInterval = setInterval(() => {
       log("⏰ Poll tick — fetching orders...");
       fetchOrders(false);
-    }, 10000);
+    }, 30000);
 
     // Start connection
     connectWebSocket();

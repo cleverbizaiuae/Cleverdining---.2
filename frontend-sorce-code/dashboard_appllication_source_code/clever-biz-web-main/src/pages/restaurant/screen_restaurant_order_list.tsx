@@ -76,12 +76,12 @@ const ScreenRestaurantOrderList = () => {
     }
   }, [response, fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 
-  // GUARANTEED POLLING FALLBACK — 15s refresh regardless of WS status
+  // GUARANTEED POLLING FALLBACK — 30s refresh regardless of WS status
   useEffect(() => {
     const poll = setInterval(() => {
       console.log("[ORDERS-POLL] Auto-refreshing orders...");
       fetchOrders(ordersCurrentPage, ordersSearchQuery);
-    }, 15000);
+    }, 30000);
     return () => clearInterval(poll);
   }, [fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 

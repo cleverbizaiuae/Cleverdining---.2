@@ -75,12 +75,12 @@ const ScreenChefOrderList = () => {
     }
   }, [response, fetchOrders, ordersCurrentPage, debouncedSearchQuery]);
 
-  // GUARANTEED POLLING FALLBACK — 15s refresh
+  // GUARANTEED POLLING FALLBACK — 30s refresh
   useEffect(() => {
     const poll = setInterval(() => {
       console.log("[CHEF-ORDERS-POLL] Auto-refreshing orders...");
       fetchOrders(ordersCurrentPage, debouncedSearchQuery);
-    }, 15000);
+    }, 30000);
     return () => clearInterval(poll);
   }, [fetchOrders, ordersCurrentPage, debouncedSearchQuery]);
 

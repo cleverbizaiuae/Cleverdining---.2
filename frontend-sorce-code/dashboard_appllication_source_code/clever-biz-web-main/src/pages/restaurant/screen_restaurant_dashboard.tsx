@@ -166,14 +166,14 @@ const ScreenRestaurantDashboard = () => {
     }
   }, [response, fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled]);
 
-  // GUARANTEED POLLING FALLBACK — 30s refresh for analytics (heavier queries)
+  // GUARANTEED POLLING FALLBACK — 60s refresh for analytics (heavier queries)
   useEffect(() => {
     if (userRole !== 'owner' && userRole !== 'manager') return;
     const poll = setInterval(() => {
       console.log("[ANALYTICS-POLL] Auto-refreshing analytics...");
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
-    }, 30000);
+    }, 60000);
     return () => clearInterval(poll);
   }, [fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled, userRole]);
 

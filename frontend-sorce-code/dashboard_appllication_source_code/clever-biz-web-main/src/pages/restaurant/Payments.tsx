@@ -237,12 +237,12 @@ export const Payments = () => {
         }
     }, [response, fetchPayments]);
 
-    // GUARANTEED POLLING FALLBACK — 15s refresh
+    // GUARANTEED POLLING FALLBACK — 30s refresh
     useEffect(() => {
         const poll = setInterval(() => {
             console.log("[PAYMENTS-POLL] Auto-refreshing payments...");
             fetchPayments();
-        }, 15000);
+        }, 30000);
         return () => clearInterval(poll);
     }, [fetchPayments]);
 

@@ -800,6 +800,23 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
             "order": event["order"]
         }))
 
+    # --- Order Status Events (CRITICAL — were missing, caused silent drops) ---
+    async def order_status_update(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def new_order(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    # --- Cash Payment Events (CRITICAL — were missing) ---
+    async def cash_payment_alert(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def cash_payment_confirmed(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def payment_status_update(self, event):
+        await self.send(text_data=json.dumps(event))
+
     # --- Session Events ---
     async def session_started(self, event):
         await self.send(text_data=json.dumps(event))

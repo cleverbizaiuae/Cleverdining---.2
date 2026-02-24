@@ -67,7 +67,7 @@ SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False) # Set to Tr
 SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
 CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False  # Use explicit allowlist below
 CORS_ALLOWED_ORIGINS = [
     "https://abc.winaclaim.com",
     "https://clever-biz.netlify.app",
@@ -95,7 +95,6 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'POST',
     'PUT',
-    'POST',
 ]
 
 # Allow common headers
@@ -157,7 +156,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON (DISABLED FOR DEBUGGING)
+    'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON
 ]
 
 ROOT_URLCONF = 'RESTAURANTS.urls'
@@ -420,8 +419,8 @@ STRIPE_WEBHOOK_SECRET=env('STRIPE_WEBHOOK_SECRET', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
 # Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
 USE_SQLITE = env.bool('USE_SQLITE', default=False)
-# --- CRITICAL DEBUG MODE ---
-DEBUG = True
+# --- DEBUG MODE ---
+DEBUG = env.bool('DEBUG', default=False)
 
 if USE_SQLITE:
     DATABASES = {
@@ -440,7 +439,7 @@ else:
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': 'cleverdining_db',
             'USER': 'cleverdining_db_user',
-            'PASSWORD': '41ETCSVh25R43IG4vJrL0FHaFOcUoClV',
+            'PASSWORD': env('DATABASE_PASSWORD', default='41ETCSVh25R43IG4vJrL0FHaFOcUoClV'),
             'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com',
             'PORT': '5432',
             'CONN_MAX_AGE': 600,  # Keep DB connections alive for 10 minutes
