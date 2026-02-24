@@ -229,12 +229,22 @@ export const Payments = () => {
             response.type === 'cash_payment_alert' ||
             response.type === 'payment_status_change' ||
             response.type === 'payment:created' ||
-            response.type === 'payment:updated'
+            response.type === 'payment:updated' ||
+            response.type === 'cash_payment_confirmed'
         )) {
             console.log('Payment event received, refreshing payments:', response.type);
             fetchPayments();
         }
     }, [response, fetchPayments]);
+
+    // GUARANTEED POLLING FALLBACK — 15s refresh
+    useEffect(() => {
+        const poll = setInterval(() => {
+            console.log("[PAYMENTS-POLL] Auto-refreshing payments...");
+            fetchPayments();
+        }, 15000);
+        return () => clearInterval(poll);
+    }, [fetchPayments]);
 
     const handleExportCSV = async () => {
         if (selectedPayments.size === 0 && !window.confirm("Export all visible payments?")) return;

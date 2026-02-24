@@ -1,5 +1,6 @@
 import { useStaff } from "@/context/staffContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useContext } from "react";
+import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import {
   Search,
   CheckCircle2,
@@ -37,6 +38,9 @@ const ScreenChefOrderList = () => {
     setOrdersSearchQuery,
   } = useStaff();
 
+  const { response } = useContext(WebSocketContext) || {};
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -53,6 +57,32 @@ const ScreenChefOrderList = () => {
   useEffect(() => {
     fetchOrders(ordersCurrentPage, debouncedSearchQuery);
   }, [ordersCurrentPage, debouncedSearchQuery, fetchOrders]);
+
+  // Real-time: Refresh orders on WS events
+  useEffect(() => {
+    if (response && (
+      response.type === 'new_order' ||
+      response.type === 'order_created' ||
+      response.type === 'order_status_update' ||
+      response.type === 'order_updated' ||
+      response.type === 'order_paid'
+    )) {
+      console.log("[CHEF-ORDERS] WS event:", response.type);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+      }, 2000);
+    }
+  }, [response, fetchOrders, ordersCurrentPage, debouncedSearchQuery]);
+
+  // GUARANTEED POLLING FALLBACK — 15s refresh
+  useEffect(() => {
+    const poll = setInterval(() => {
+      console.log("[CHEF-ORDERS-POLL] Auto-refreshing orders...");
+      fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+    }, 15000);
+    return () => clearInterval(poll);
+  }, [fetchOrders, ordersCurrentPage, debouncedSearchQuery]);
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
     try {

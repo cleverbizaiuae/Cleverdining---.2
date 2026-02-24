@@ -149,18 +149,33 @@ const ScreenRestaurantDashboard = () => {
     }
   }, [timeRange, compareEnabled, fetchAnalytics, userRole]);
 
-  // Real-time Updates (Context already lists for updates, but if we need to re-trigger analytics specifically)
+  // Real-time Updates
   useEffect(() => {
     if (
       response?.type === "order_paid" ||
       response?.type === "cash_payment_confirmed" ||
-      response?.type === "order_completed"
+      response?.type === "order_completed" ||
+      response?.type === "new_order" ||
+      response?.type === "order_created" ||
+      response?.type === "order_status_update" ||
+      response?.type === "payment:created"
     ) {
-      // Re-fetch analytics on order updates
+      // Re-fetch analytics on order/payment updates
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
     }
   }, [response, fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled]);
+
+  // GUARANTEED POLLING FALLBACK — 30s refresh for analytics (heavier queries)
+  useEffect(() => {
+    if (userRole !== 'owner' && userRole !== 'manager') return;
+    const poll = setInterval(() => {
+      console.log("[ANALYTICS-POLL] Auto-refreshing analytics...");
+      fetchAnalytics(timeRange, compareEnabled);
+      fetchMostSellingItems();
+    }, 30000);
+    return () => clearInterval(poll);
+  }, [fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled, userRole]);
 
   // NOTE: Initial Fetch is now handled by OwnerContext (Background Fetch)
   // We DO NOT fetch here on mount to avoid waterfall.
