@@ -58,10 +58,12 @@ axiosInstance.interceptors.response.use(
           // Retry the original request with new token
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return axiosInstance(originalRequest);
+        } else {
+          // No refresh token available (e.g., Guest Session)
+          throw new Error("No refresh token available");
         }
       } catch {
-        // Refresh token failed
-        // Refresh token failed or ignored
+        // Refresh token failed or ignored (or none existed)
         // UNCONDITIONALLY clear storage to prevent infinite loops.
         // If the token is invalid (401), the session is dead.
         // Clearing storage forces LayoutDashboard to re-bootstrap a new valid session.
@@ -72,6 +74,13 @@ axiosInstance.interceptors.response.use(
 
         window.location.href = "/";
       }
+    } else if (error.response?.status === 401) {
+      // Direct 401 fallback
+      localStorage.removeItem(TOKENS.ACCESS_TOKEN);
+      localStorage.removeItem(TOKENS.REFRESH_TOKEN);
+      localStorage.removeItem(TOKENS.USER_INFO);
+      localStorage.removeItem("guest_session_token");
+      window.location.href = "/";
     }
 
     return Promise.reject(error);
