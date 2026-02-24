@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useWebSocket } from '../../hooks/WebSocketProvider';
 import {
     Search,
@@ -183,6 +183,7 @@ export const Payments = () => {
     // API-provided totals
     const [totalRevenue, setTotalRevenue] = useState<string>('0.00');
     const [receivedAmount, setReceivedAmount] = useState<string>('0.00');
+    const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchPayments = useCallback(async () => {
         setLoading(true);
@@ -193,7 +194,6 @@ export const Payments = () => {
             if (endDate) params.append('created_at__lte', endDate.toISOString().split('T')[0]);
             if (params.toString()) url += `?${params.toString()}`;
             const res = await axios.get(url);
-            // API returns { count, results, total_revenue, received_amount, pending_amount }
             const data = res.data;
             if (data && Array.isArray(data.results)) {
                 setPayments(data.results);
@@ -232,8 +232,13 @@ export const Payments = () => {
             response.type === 'payment:updated' ||
             response.type === 'cash_payment_confirmed'
         )) {
-            console.log('Payment event received, refreshing payments:', response.type);
-            fetchPayments();
+            console.log('Payment event received, scheduling refresh:', response.type);
+
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+
+            debounceRef.current = setTimeout(() => {
+                fetchPayments();
+            }, 2000);
         }
     }, [response, fetchPayments]);
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useContext } from "react";
+import { useEffect, useState, useCallback, useContext, useRef } from "react";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
@@ -142,6 +142,8 @@ const ScreenRestaurantDashboard = () => {
   const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
   const [isViewAll, setIsViewAll] = useState(false);
 
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // Trigger Analytics Fetch when filters change (Context handles the fetch)
   useEffect(() => {
     if (userRole === 'owner' || userRole === 'manager') {
@@ -160,9 +162,14 @@ const ScreenRestaurantDashboard = () => {
       response?.type === "order_status_update" ||
       response?.type === "payment:created"
     ) {
-      // Re-fetch analytics on order/payment updates
-      fetchAnalytics(timeRange, compareEnabled);
-      fetchMostSellingItems();
+      console.log("Real-time Analytics refresh triggered by:", response.type);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+
+      debounceRef.current = setTimeout(() => {
+        // Re-fetch analytics on order/payment updates
+        fetchAnalytics(timeRange, compareEnabled);
+        fetchMostSellingItems();
+      }, 2000);
     }
   }, [response, fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled]);
 
