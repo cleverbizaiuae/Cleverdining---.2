@@ -34,6 +34,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     return localStorage.getItem("newMessage") === "true";
   });
   const reconnectTimeout = React.useRef<NodeJS.Timeout | null>(null);
+  const reconnectDelay = React.useRef<number>(3000); // Start at 3s, exponential backoff
 
   // Function to set the newMessage flag
   const setNewMessageFlag = (value: boolean) => {
@@ -129,6 +130,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     socket.onopen = () => {
       console.log("WebSocket connected");
+      // Reset backoff on successful connection
+      reconnectDelay.current = 3000;
       // Clear any pending reconnect attempts
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
@@ -193,16 +196,24 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
 
     socket.onclose = () => {
-      console.log("WebSocket disconnected. Attempting reconnect in 3s...");
+      const delay = reconnectDelay.current;
+      console.log(`WebSocket disconnected. Reconnecting in ${delay / 1000}s...`);
       wsRef.current = null;
       setWs(null);
+      // Exponential backoff: 3s → 6s → 12s → 24s → max 30s
+      reconnectDelay.current = Math.min(delay * 2, 30000);
       // Attempt reconnect
       if (!reconnectTimeout.current) {
         reconnectTimeout.current = setTimeout(() => {
           reconnectTimeout.current = null;
           connect();
-        }, 3000);
+        }, delay);
       }
+    };
+
+    socket.onerror = (err) => {
+      console.error("WebSocket error:", err);
+      // onclose will fire after onerror, so reconnect is handled there
     };
   }, []);
 

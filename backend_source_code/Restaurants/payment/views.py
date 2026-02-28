@@ -208,35 +208,42 @@ class CreateBulkCheckoutSessionView(APIView):
 
                 print(f"[CASH-PAYMENT] Processing cash | session={session.id} | orders={[o.id for o in all_orders]} | total={total_amount} | tip={tip_total} | table={table_name}", file=sys.stderr)
 
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{first_order.restaurant.id}",
-                    {
-                        "type": "cash_payment_alert",
-                        "order": {
-                             "id": f"BULK-{session.id}", 
-                             "device_name": table_name,
-                             "items": items_summary,
-                             "tip_amount": tip_total
-                        }, 
-                        "table_number": table_name,
-                        "total_amount": str(total_amount),
-                        "timestamp": str(now()),
-                        "is_bulk": True,
-                        "session_id": session.id
-                    }
-                )
+                # Best-effort WebSocket notifications — don't crash if Redis is down
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{first_order.restaurant.id}",
+                        {
+                            "type": "cash_payment_alert",
+                            "order": {
+                                 "id": f"BULK-{session.id}", 
+                                 "device_name": table_name,
+                                 "items": items_summary,
+                                 "tip_amount": tip_total
+                            }, 
+                            "table_number": table_name,
+                            "total_amount": str(total_amount),
+                            "timestamp": str(now()),
+                            "is_bulk": True,
+                            "session_id": session.id
+                        }
+                    )
+                except Exception as ws_err:
+                    print(f"[CASH-PAYMENT] ⚠️ Redis/WS notification failed (restaurant alert): {ws_err}", file=sys.stderr)
                 
                 # Notify User Session
-                async_to_sync(channel_layer.group_send)(
-                    f"session_{session.id}",
-                    {
-                        "type": "order_status_update", 
-                        "status": 'awaiting_cash', 
-                        "bulk": True
-                    }
-                )
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"session_{session.id}",
+                        {
+                            "type": "order_status_update", 
+                            "status": 'awaiting_cash', 
+                            "bulk": True
+                        }
+                    )
+                except Exception as ws_err:
+                    print(f"[CASH-PAYMENT] ⚠️ Redis/WS notification failed (session alert): {ws_err}", file=sys.stderr)
 
-                print(f"[CASH-PAYMENT] ✅ Success | alerts sent to restaurant_{first_order.restaurant.id} + session_{session.id}", file=sys.stderr)
+                print(f"[CASH-PAYMENT] ✅ Success | DB updated, WS notifications attempted", file=sys.stderr)
                 
                 return Response({
                     'url': f"{success_url}?session_id=bulk_cash_{session.id}&amount={total_amount}",

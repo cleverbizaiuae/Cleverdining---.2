@@ -147,28 +147,34 @@ class OrderCreateAPIView(generics.CreateAPIView):
             order.status = 'awaiting_cash'
             order.payment_status = 'pending_cash'
             order.save()
-            # Broadcast Cash Alert to Restaurant
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{order.restaurant.id}",
-                {
-                    "type": "cash_payment_alert",
-                    "order": data,
-                    "table_number": device.table_number or device.table_name,
-                    "total_amount": str(order.total_price),
-                    "timestamp": str(order.created_time)
-                }
-            )
-            # Send updated status to guest
-            if order.guest_session:
-                 async_to_sync(channel_layer.group_send)(
-                    f"session_{order.guest_session.id}",
+            # Broadcast Cash Alert to Restaurant (best-effort, don't crash if Redis is down)
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{order.restaurant.id}",
                     {
-                        "type": "order_status_update",
-                        "order_id": order.id,
-                        "status": 'awaiting_cash',
-                        "order": OrderDetailSerializer(order).data
+                        "type": "cash_payment_alert",
+                        "order": data,
+                        "table_number": device.table_number or device.table_name,
+                        "total_amount": str(order.total_price),
+                        "timestamp": str(order.created_time)
                     }
                 )
+            except Exception as e:
+                print(f"[WS-NOTIFY] Failed to send cash_payment_alert: {e}")
+            # Send updated status to guest
+            if order.guest_session:
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"session_{order.guest_session.id}",
+                        {
+                            "type": "order_status_update",
+                            "order_id": order.id,
+                            "status": 'awaiting_cash',
+                            "order": OrderDetailSerializer(order).data
+                        }
+                    )
+                except Exception as e:
+                    print(f"[WS-NOTIFY] Failed to send guest order_status_update: {e}")
 
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -259,23 +265,29 @@ class ConfirmCashPaymentAPIView(APIView):
                 print(f"CRITICAL ERROR creating payment record for order {o.id}: {e}")
                 print(traceback.format_exc())
 
-            # Notify Restaurant (Updates Dashboard for each order logic or refresh)
+            # Notify Restaurant (best-effort, don't crash if Redis is down)
             data = OrderDetailSerializer(o).data
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{o.restaurant.id}",
-                {
-                    "type": "order_paid",
-                    "order": data
-                }
-            )
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{o.restaurant.id}",
+                    {
+                        "type": "order_paid",
+                        "order": data
+                    }
+                )
+            except Exception as e:
+                print(f"[WS-NOTIFY] Failed to send order_paid for order {o.id}: {e}")
             # Remove Alert
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{o.restaurant.id}",
-                {
-                    "type": "cash_payment_confirmed",
-                    "order_id": o.id
-                }
-            )
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{o.restaurant.id}",
+                    {
+                        "type": "cash_payment_confirmed",
+                        "order_id": o.id
+                    }
+                )
+            except Exception as e:
+                print(f"[WS-NOTIFY] Failed to send cash_payment_confirmed for order {o.id}: {e}")
 
         # Check if session should end (Are there any OTHER unpaid orders?)
         if order.guest_session:
@@ -288,28 +300,41 @@ class ConfirmCashPaymentAPIView(APIView):
             if not remaining_unpaid:
                 session.is_active = False
                 session.save()
+
+                # Clear chat messages for this device so next guest gets a clean slate
+                try:
+                    ChatMessage.objects.filter(device=order.device).delete()
+                    print(f"[SESSION-END] Cleared chat messages for device {order.device_id}")
+                except Exception as e:
+                    print(f"[SESSION-END] Failed to clear chat messages: {e}")
                 
-                # Notify Guest (Updates App)
-                async_to_sync(channel_layer.group_send)(
-                    f"session_{order.guest_session.id}",
-                    {
-                        "type": "order_status_update",
-                        "order_id": order.id,
-                        "status": 'paid', 
-                        "session_ended": True
-                    }
-                )
+                # Notify Guest (best-effort)
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"session_{order.guest_session.id}",
+                        {
+                            "type": "order_status_update",
+                            "order_id": order.id,
+                            "status": 'paid', 
+                            "session_ended": True
+                        }
+                    )
+                except Exception as e:
+                    print(f"[WS-NOTIFY] Failed to send session_ended: {e}")
             else:
                  # Just notify status update without ending session
-                 async_to_sync(channel_layer.group_send)(
-                    f"session_{order.guest_session.id}",
-                    {
-                        "type": "order_status_update",
-                        "order_id": order.id,
-                        "status": 'paid', 
-                        "session_ended": False
-                    }
-                )
+                 try:
+                     async_to_sync(channel_layer.group_send)(
+                        f"session_{order.guest_session.id}",
+                        {
+                            "type": "order_status_update",
+                            "order_id": order.id,
+                            "status": 'paid', 
+                            "session_ended": False
+                        }
+                    )
+                 except Exception as e:
+                     print(f"[WS-NOTIFY] Failed to send order_status_update: {e}")
 
         return Response({"message": "Cash payment confirmed."})
 
@@ -333,13 +358,16 @@ class OrderCancelAPIView(APIView):
         order.status = 'cancelled'
         order.save()
         data = OrderDetailSerializer(order).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "order_updated",
-                "order": data
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "order_updated",
+                    "order": data
+                }
+            )
+        except Exception as e:
+            print(f"[WS-NOTIFY] Failed to send order_updated (cancel): {e}")
         return Response({"message": "Order cancelled successfully"})
     
 
@@ -570,36 +598,45 @@ class OwnerUpdateOrderStatusAPIView(APIView):
             ).update(new_message=False)
 
         print(f"[ORDER-EMIT] Sending to group: device_{order.device_id} | type=order_status_update", file=sys.stderr)
-        async_to_sync(channel_layer.group_send)(
-            f'device_{order.device_id}',
-            {
-                'type': 'order_status_update',
-                'status': order.status,
-                'order_id': order.id,
-            }
-        )
-
-        # Also broadcast to session group for redundancy
-        if order.guest_session_id:
-            print(f"[ORDER-EMIT] Sending to group: session_{order.guest_session_id} | type=order_status_update", file=sys.stderr)
+        try:
             async_to_sync(channel_layer.group_send)(
-                f'session_{order.guest_session_id}',
+                f'device_{order.device_id}',
                 {
                     'type': 'order_status_update',
                     'status': order.status,
                     'order_id': order.id,
                 }
             )
+        except Exception as e:
+            print(f"[WS-NOTIFY] Failed to send order_status_update to device: {e}", file=sys.stderr)
+
+        # Also broadcast to session group for redundancy
+        if order.guest_session_id:
+            print(f"[ORDER-EMIT] Sending to group: session_{order.guest_session_id} | type=order_status_update", file=sys.stderr)
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f'session_{order.guest_session_id}',
+                    {
+                        'type': 'order_status_update',
+                        'status': order.status,
+                        'order_id': order.id,
+                    }
+                )
+            except Exception as e:
+                print(f"[WS-NOTIFY] Failed to send order_status_update to session: {e}", file=sys.stderr)
 
         data = OrderDetailSerializer(order).data
         print(f"[ORDER-EMIT] Sending to group: restaurant_{order.restaurant.id} | type=order_updated", file=sys.stderr)
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "order_updated",
-                "order": data
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "order_updated",
+                    "order": data
+                }
+            )
+        except Exception as e:
+            print(f"[WS-NOTIFY] Failed to send order_updated to restaurant: {e}", file=sys.stderr)
         
         return Response({"message": "Order status updated", "status": order.status})
     
@@ -748,36 +785,45 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         print(f"[ORDER-EMIT-CHEF] Status changed | order={order.id} → {order.status} | device_id={order.device_id} | session_id={order.guest_session_id}", file=sys.stderr)
 
         print(f"[ORDER-EMIT-CHEF] Sending to group: device_{order.device_id} | type=order_status_update", file=sys.stderr)
-        async_to_sync(channel_layer.group_send)(
-            f'device_{order.device_id}',
-            {
-                'type': 'order_status_update',
-                'status': order.status,
-                'order_id': order.id,
-            }
-        )
-
-        # Also broadcast to session group for redundancy
-        if order.guest_session_id:
-            print(f"[ORDER-EMIT-CHEF] Sending to group: session_{order.guest_session_id} | type=order_status_update", file=sys.stderr)
+        try:
             async_to_sync(channel_layer.group_send)(
-                f'session_{order.guest_session_id}',
+                f'device_{order.device_id}',
                 {
                     'type': 'order_status_update',
                     'status': order.status,
                     'order_id': order.id,
                 }
             )
+        except Exception as e:
+            print(f"[WS-NOTIFY] Failed to send chef order_status_update to device: {e}", file=sys.stderr)
+
+        # Also broadcast to session group for redundancy
+        if order.guest_session_id:
+            print(f"[ORDER-EMIT-CHEF] Sending to group: session_{order.guest_session_id} | type=order_status_update", file=sys.stderr)
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f'session_{order.guest_session_id}',
+                    {
+                        'type': 'order_status_update',
+                        'status': order.status,
+                        'order_id': order.id,
+                    }
+                )
+            except Exception as e:
+                print(f"[WS-NOTIFY] Failed to send chef order_status_update to session: {e}", file=sys.stderr)
 
         data = OrderDetailSerializer(order).data
         print(f"[ORDER-EMIT-CHEF] Sending to group: restaurant_{order.restaurant.id} | type=order_updated", file=sys.stderr)
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{order.restaurant.id}",
-            {
-                "type": "order_updated",
-                "order": data
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "order_updated",
+                    "order": data
+                }
+            )
+        except Exception as e:
+            print(f"[WS-NOTIFY] Failed to send chef order_updated to restaurant: {e}", file=sys.stderr)
 
         return Response({"detail": f"Order status updated to {new_status}"}, status=status.HTTP_200_OK)
     
