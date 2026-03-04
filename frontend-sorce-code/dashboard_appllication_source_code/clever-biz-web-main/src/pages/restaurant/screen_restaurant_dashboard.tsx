@@ -232,16 +232,21 @@ const ScreenRestaurantDashboard = () => {
       if (!prompt) return toast.error("Please enter a prompt");
       setGenerating(true);
       try {
-        const res = await axiosInstance.post('/owners/generate-image/', { prompt });
-        const base64 = res.data.image;
-        setGeneratedPreview(base64);
-        const resBlob = await fetch(base64).then(r => r.blob());
-        const file = new File([resBlob], "ai-generated-image.png", { type: "image/png" });
+        const fetchUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        const resBlob = await response.blob();
+        if (!resBlob.type.startsWith('image/')) throw new Error('Invalid response format, please try again.');
+
+        const objectUrl = URL.createObjectURL(resBlob);
+        setGeneratedPreview(objectUrl);
+
+        const file = new File([resBlob], "ai-generated-image.jpg", { type: "image/jpeg" });
         onImageSelected(file);
         toast.success("Image generated!");
       } catch (e: any) {
         console.error(e);
-        toast.error("Generation failed: " + (e.response?.data?.error || e.message));
+        toast.error("Generation failed: " + (e.message || "Unknown error"));
       } finally { setGenerating(false); }
     };
     const previewUrl = currentImage

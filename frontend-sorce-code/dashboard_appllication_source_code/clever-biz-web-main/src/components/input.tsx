@@ -434,7 +434,7 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "U
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const prompt = `${searchQuery} food high quality delicious professional photography`;
-        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+        const url = `https://pollinations.ai/p/${encodeURIComponent(prompt)}`;
 
         const response = await fetch(url);
 
