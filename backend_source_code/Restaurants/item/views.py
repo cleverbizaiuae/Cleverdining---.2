@@ -133,13 +133,15 @@ class ItemViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(f"Failed to update item: {str(e)}")
 
     def perform_destroy(self, instance):
+        if not self.is_user_authorized(instance):
+            raise PermissionDenied("You don't have permission to delete this item.")
+        
+        restaurant_id = instance.restaurant.id
+        item_id = instance.id
+        instance.delete()
+        
+        # Broadcast WebSocket event — must never block the delete response
         try:
-            if not self.is_user_authorized(instance):
-                raise PermissionDenied("You don't have permission to delete this item.")
-            
-            restaurant_id = instance.restaurant.id
-            item_id = instance.id
-            instance.delete()
             async_to_sync(channel_layer.group_send)(
                 f"restaurant_{restaurant_id}",
                 {
@@ -147,11 +149,8 @@ class ItemViewSet(viewsets.ModelViewSet):
                     "item_id": item_id
                 }
             )
-        except PermissionDenied:
-            raise
-        except Exception as e:
-            print(f"ItemViewSet.perform_destroy error: {e}")
-            raise PermissionDenied(f"Failed to delete item: {str(e)}")
+        except Exception as ws_err:
+            print(f"ItemViewSet.perform_destroy WS broadcast error (non-fatal): {ws_err}")
     
     def send_ws_event(self, event_type, item):
         """Helper method to broadcast item events"""

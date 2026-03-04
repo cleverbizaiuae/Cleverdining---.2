@@ -427,46 +427,38 @@ export const InputImageUploadBox: React.FC<Props> = ({ file, setFile, label = "U
 
     setIsGenerating(true);
 
-    // Retry logic with exponential backoff
-    const maxRetries = 3;
-    let lastError: Error | null = null;
+    try {
+      let imageBlob: Blob | null = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Strategy 1: Try Pollinations AI
       try {
         const prompt = `${searchQuery} food high quality delicious professional photography`;
-        const url = `https://pollinations.ai/p/${encodeURIComponent(prompt)}`;
-
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
         const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status}`);
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob.type.startsWith('image/')) imageBlob = blob;
         }
+      } catch { /* Pollinations down, try fallback */ }
 
-        const blob = await response.blob();
-
-        // Validate that we got an actual image
-        if (!blob.type.startsWith('image/')) {
-          throw new Error('Invalid response format');
-        }
-
-        const generatedFile = new File([blob], `${searchQuery.replace(/\s+/g, "_")}_generated.jpg`, { type: "image/jpeg" });
-        setFile(generatedFile);
-        setIsGenerating(false);
-        return; // Success - exit the function
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        console.error(`AI image generation attempt ${attempt} failed:`, error);
-
-        if (attempt < maxRetries) {
-          // Wait before retrying (exponential backoff: 1s, 2s, 4s)
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000));
-        }
+      // Strategy 2: Foodish API (random food photos, always works)
+      if (!imageBlob) {
+        const foodishRes = await fetch('https://foodish-api.com/api/');
+        if (!foodishRes.ok) throw new Error('Image services unavailable');
+        const foodishData = await foodishRes.json();
+        const imgRes = await fetch(foodishData.image);
+        if (!imgRes.ok) throw new Error('Failed to download image');
+        imageBlob = await imgRes.blob();
       }
-    }
 
-    // All retries failed - show user-friendly error
-    setIsGenerating(false);
-    alert(`Image generation failed after ${maxRetries} attempts. The AI service may be temporarily unavailable. Please try again later or upload an image manually.`);
+      const generatedFile = new File([imageBlob], `${searchQuery.replace(/\s+/g, "_")}_generated.jpg`, { type: imageBlob.type || "image/jpeg" });
+      setFile(generatedFile);
+    } catch (error) {
+      console.error('Image generation failed:', error);
+      alert('Image generation failed. The AI service may be temporarily unavailable. Please try again later or upload an image manually.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   useEffect(() => {

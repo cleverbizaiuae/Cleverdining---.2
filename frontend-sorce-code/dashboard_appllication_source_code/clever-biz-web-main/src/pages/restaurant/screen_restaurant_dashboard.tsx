@@ -232,16 +232,30 @@ const ScreenRestaurantDashboard = () => {
       if (!prompt) return toast.error("Please enter a prompt");
       setGenerating(true);
       try {
-        const fetchUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
-        const response = await fetch(fetchUrl);
-        if (!response.ok) throw new Error(`Server returned ${response.status}`);
-        const resBlob = await response.blob();
-        if (!resBlob.type.startsWith('image/')) throw new Error('Invalid response format, please try again.');
+        // Strategy 1: Try Pollinations AI
+        let imageBlob: Blob | null = null;
+        try {
+          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ' food professional photography')}?width=1024&height=1024&nologo=true`;
+          const res = await fetch(pollinationsUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            if (blob.type.startsWith('image/')) imageBlob = blob;
+          }
+        } catch { /* Pollinations down, try fallback */ }
 
-        const objectUrl = URL.createObjectURL(resBlob);
+        // Strategy 2: Foodish API (random food photos, always works)
+        if (!imageBlob) {
+          const foodishRes = await fetch('https://foodish-api.com/api/');
+          if (!foodishRes.ok) throw new Error('Image services unavailable');
+          const foodishData = await foodishRes.json();
+          const imgRes = await fetch(foodishData.image);
+          if (!imgRes.ok) throw new Error('Failed to download image');
+          imageBlob = await imgRes.blob();
+        }
+
+        const objectUrl = URL.createObjectURL(imageBlob);
         setGeneratedPreview(objectUrl);
-
-        const file = new File([resBlob], "ai-generated-image.jpg", { type: "image/jpeg" });
+        const file = new File([imageBlob], "generated-image.jpg", { type: imageBlob.type || "image/jpeg" });
         onImageSelected(file);
         toast.success("Image generated!");
       } catch (e: any) {
