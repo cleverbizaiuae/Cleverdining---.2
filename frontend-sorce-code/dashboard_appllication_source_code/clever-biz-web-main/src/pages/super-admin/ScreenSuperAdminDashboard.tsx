@@ -61,7 +61,7 @@ const ScreenSuperAdminDashboard = () => {
         queryKey: ['registered-restaurants'],
         queryFn: async () => {
             try {
-                const response = await axiosInstance.get('/api/registered-restaurants');
+                const response = await axiosInstance.get('/owners/registered-restaurants/');
                 return response.data;
             } catch {
                 return SEEDED_RESTAURANTS;

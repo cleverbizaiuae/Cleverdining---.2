@@ -117,7 +117,7 @@ const ScreenSuperAdminManagement = () => {
         queryKey: ['registered-restaurants'],
         queryFn: async () => {
             try {
-                const response = await axiosInstance.get('/api/registered-restaurants');
+                const response = await axiosInstance.get('/owners/registered-restaurants/');
                 return response.data;
             } catch {
                 // Return seeded data if API not available
@@ -132,7 +132,7 @@ const ScreenSuperAdminManagement = () => {
         mutationFn: async ({ id, status }: { id: string; status: string }) => {
             // Try API call first
             try {
-                const response = await axiosInstance.patch(`/api/registered-restaurants/${id}`, { status });
+                const response = await axiosInstance.patch(`/owners/registered-restaurants/${id}/`, { status });
                 return response.data;
             } catch {
                 // If API fails, return the update data for optimistic update
@@ -168,7 +168,7 @@ const ScreenSuperAdminManagement = () => {
     const updateRestaurantMutation = useMutation({
         mutationFn: async (data: { id: string; qrCodes: number; tableCount: number; paymentProcessor: string; package: string }) => {
             try {
-                const response = await axiosInstance.patch(`/api/registered-restaurants/${data.id}`, data);
+                const response = await axiosInstance.patch(`/owners/registered-restaurants/${data.id}/`, data);
                 return response.data;
             } catch {
                 return data;
@@ -214,11 +214,11 @@ const ScreenSuperAdminManagement = () => {
                 table_count: data.tableCount,
                 payment_processor: data.paymentProcessor,
                 whatsapp_enabled: data.whatsappEnabled,
-                owner_password: data.ownerPassword
+                password: data.ownerPassword
             };
 
             try {
-                const response = await axiosInstance.post('/api/registered-restaurants', payload);
+                const response = await axiosInstance.post('/owners/registered-restaurants/', payload);
                 return response.data;
             } catch (error: any) {
                 // If backend fails, throw to trigger onError
@@ -266,7 +266,7 @@ const ScreenSuperAdminManagement = () => {
     const deleteRestaurantMutation = useMutation({
         mutationFn: async (id: string) => {
             try {
-                const response = await axiosInstance.delete(`/api/registered-restaurants/${id}`);
+                const response = await axiosInstance.delete(`/owners/registered-restaurants/${id}/`);
                 return response.data;
             } catch {
                 return { id };
