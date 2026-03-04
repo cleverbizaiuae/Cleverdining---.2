@@ -758,7 +758,7 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         except Order.DoesNotExist:
             return Response({"detail": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        is_chef = ChefStaff.objects.filter(user=user, restaurant=order.restaurant, action='active').exists()
+        is_chef = ChefStaff.objects.filter(user=user, restaurant=order.restaurant, action='accepted').exists()
         if not is_chef:
             return Response({"detail": "You are not authorized to update this order."}, status=status.HTTP_403_FORBIDDEN)
 

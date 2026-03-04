@@ -49,57 +49,66 @@ class CategoryViewSet(viewsets.ModelViewSet):
             traceback.print_exc()
             return Category.objects.none()
 
+    def is_user_authorized(self, category):
+        """Check if the current user is authorized for this category's restaurant."""
+        user = self.request.user
+        if category.restaurant.owner == user:
+            return True
+        role = getattr(user, 'role', None)
+        if role in ['chef', 'staff', 'manager']:
+            return ChefStaff.objects.filter(
+                user=user, restaurant=category.restaurant, action='accepted'
+            ).exists()
+        return False
+
     def perform_create(self, serializer):
-        # Use filter().first() to avoid MultipleObjectsReturned error
-        restaurant = Restaurant.objects.filter(owner=self.request.user).first()
+        user = self.request.user
+        role = getattr(user, 'role', None)
+        if role == 'owner':
+            restaurant = Restaurant.objects.filter(owner=user).first()
+        elif role in ['chef', 'staff', 'manager']:
+            cs = ChefStaff.objects.filter(user=user, action='accepted').first()
+            restaurant = cs.restaurant if cs else None
+        else:
+            restaurant = None
         if not restaurant:
             raise ValidationError("You don't have a restaurant yet.")
 
         category = serializer.save(restaurant=restaurant)
-
-        # 🔥 send WebSocket event
         self.send_ws_event("category_created", category)
 
     def perform_update(self, serializer):
         category = self.get_object()
-        # Handle multi-restaurant ownership check strictly if needed, but for now check if owner owns the restaurant
-        if category.restaurant.owner != self.request.user:
+        if not self.is_user_authorized(category):
             raise PermissionDenied("You don't have permission to edit this category.")
-
         category = serializer.save()
-
-        # 🔥 send WebSocket event
         self.send_ws_event("category_updated", category)
 
     def perform_destroy(self, instance):
-        if instance.restaurant.owner != self.request.user:
+        if not self.is_user_authorized(instance):
             raise PermissionDenied("You don't have permission to delete this category.")
-
         restaurant_id = instance.restaurant.id
         category_id = instance.id
         instance.delete()
-
-        # 🔥 send WebSocket event
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant_id}",
-            {
-                "type": "category_deleted",
-                "category_id": category_id
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant_id}",
+                {"type": "category_deleted", "category_id": category_id}
+            )
+        except Exception as e:
+            print(f"CategoryViewSet WS broadcast error (non-fatal): {e}")
 
     def send_ws_event(self, event_type, category):
         """Helper method to broadcast category events"""
-        restaurant_id = category.restaurant.id
-        data = CategorySerializer(category).data
-
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant_id}",
-            {
-                "type": event_type,
-                "category": data
-            }
-        )
+        try:
+            restaurant_id = category.restaurant.id
+            data = CategorySerializer(category).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant_id}",
+                {"type": event_type, "category": data}
+            )
+        except Exception as e:
+            print(f"CategoryViewSet.send_ws_event error (non-fatal): {e}")
 
 class SubCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = SubCategorySerializer
@@ -129,21 +138,26 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
             return Category.objects.none()
 
     def perform_create(self, serializer):
-        # Use filter().first() to avoid MultipleObjectsReturned error
-        restaurant = Restaurant.objects.filter(owner=self.request.user).first()
+        user = self.request.user
+        role = getattr(user, 'role', None)
+        if role == 'owner':
+            restaurant = Restaurant.objects.filter(owner=user).first()
+        elif role in ['chef', 'staff', 'manager']:
+            cs = ChefStaff.objects.filter(user=user, action='accepted').first()
+            restaurant = cs.restaurant if cs else None
+        else:
+            restaurant = None
         if not restaurant:
             raise ValidationError("You don't have a restaurant yet.")
 
         category = serializer.save(restaurant=restaurant)
-
-        # 🔥 send WebSocket event
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant.id}",
-            {
-                "type": "subcategory_created",
-                "category": CategorySerializer(category).data
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant.id}",
+                {"type": "subcategory_created", "category": CategorySerializer(category).data}
+            )
+        except Exception as e:
+            print(f"SubCategoryViewSet WS broadcast error (non-fatal): {e}")
 
 
 

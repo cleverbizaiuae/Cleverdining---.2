@@ -130,7 +130,7 @@ class ItemViewSet(viewsets.ModelViewSet):
             raise
         except Exception as e:
             print(f"ItemViewSet.perform_update error: {e}")
-            raise PermissionDenied(f"Failed to update item: {str(e)}")
+            raise ValidationError(f"Failed to update item: {str(e)}")
 
     def perform_destroy(self, instance):
         if not self.is_user_authorized(instance):
@@ -195,13 +195,16 @@ class StaffItemViewSet(viewsets.ModelViewSet):
         restaurant_id = item.restaurant.id if item else None
         data = ItemSerializer(item).data if item else None
 
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant_id}",
-            {
-                "type": event_type, 
-                "item": data,
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant_id}",
+                {
+                    "type": event_type, 
+                    "item": data,
+                }
+            )
+        except Exception as e:
+            print(f"send_ws_event error (non-fatal): {e}")
 
     def perform_update(self, serializer):
         if not IsStafforChefOfRestaurant().has_object_permission(self.request, self, serializer.instance):
@@ -215,7 +218,10 @@ class StaffItemViewSet(viewsets.ModelViewSet):
         restaurant_id = instance.restaurant.id
         item_id = instance.id
         instance.delete()
-        self.send_ws_event("item_deleted", item_id=item_id)
+        try:
+            self.send_ws_event("item_deleted", item_id=item_id)
+        except Exception as e:
+            print(f"StaffItemViewSet.perform_destroy WS error (non-fatal): {e}")
 
     
 
@@ -285,7 +291,10 @@ class ChefItemViewSet(viewsets.ModelViewSet):
         restaurant_id = instance.restaurant.id
         item_id = instance.id
         instance.delete()
-        self.send_ws_event("item_deleted", item_id=item_id)
+        try:
+            self.send_ws_event("item_deleted", item_id=item_id)
+        except Exception as e:
+            print(f"ChefItemViewSet.perform_destroy WS error (non-fatal): {e}")
 
     
     @action(detail=False,methods=['get'],url_path='status-summary')

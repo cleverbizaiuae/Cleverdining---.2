@@ -393,21 +393,21 @@ class DeviceViewSet(viewsets.ModelViewSet):
         device = serializer.save()
         restaurant = device.restaurant
 
-        # 🔥 WebSocket Broadcast - device updated
-        data = DeviceSerializer(device).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant.id}",
-            {
-                "type": "device_updated",
-                "device": data
-            }
-        )
+        # WebSocket Broadcast - device updated (non-fatal)
+        try:
+            data = DeviceSerializer(device).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant.id}",
+                {"type": "device_updated", "device": data}
+            )
+        except Exception as e:
+            print(f"DeviceViewSet.perform_update WS error (non-fatal): {e}")
 
     
     def perform_destroy(self, instance):
         restaurant = instance.restaurant
         device_id = instance.id
-        device_user = instance.user # Capture user before delete
+        device_user = instance.user  # Capture user before delete
         
         instance.delete()
         
@@ -415,14 +415,14 @@ class DeviceViewSet(viewsets.ModelViewSet):
         if device_user:
             device_user.delete()
 
-        # 🔥 WebSocket Broadcast - device deleted
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant.id}",
-            {
-                "type": "device_deleted",
-                "device_id": device_id
-            }
-        )
+        # WebSocket Broadcast - device deleted (non-fatal)
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant.id}",
+                {"type": "device_deleted", "device_id": device_id}
+            )
+        except Exception as e:
+            print(f"DeviceViewSet.perform_destroy WS error (non-fatal): {e}")
 
     @action(detail=False, methods=['get'], url_path='stats')
     def get_device_stats(self, request):
@@ -491,15 +491,15 @@ class CreateReservationAPIView(APIView):
 
         serializer = ReservationSerializer(data=data)
         if serializer.is_valid():
-            reservation =serializer.save()
-            data = ReservationSerializer(reservation).data
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{device.restaurant.id}",
-                {
-                    "type": "reservation_created",
-                    "reservation": data
-                }
-            )
+            reservation = serializer.save()
+            try:
+                rdata = ReservationSerializer(reservation).data
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{device.restaurant.id}",
+                    {"type": "reservation_created", "reservation": rdata}
+                )
+            except Exception as e:
+                print(f"CreateReservationAPIView WS error (non-fatal): {e}")
             return Response({"message": "Reservation created successfully"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -550,9 +550,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         if getattr(user, 'role', None) == 'owner' and reservation.restaurant.owner == user:
             pass
-        elif getattr(user, 'role', None) == 'staff':
-            is_chef = ChefStaff.objects.filter(user=user, restaurant=reservation.restaurant).exists()
-            if not is_chef:
+        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
+            is_authorized = ChefStaff.objects.filter(user=user, restaurant=reservation.restaurant, action='accepted').exists()
+            if not is_authorized:
                 raise PermissionDenied("You're not assigned to this restaurant.")
         else:
             raise PermissionDenied("You are not authorized to update this reservation.")
@@ -561,14 +561,14 @@ class ReservationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         reservation = serializer.save()
 
-        data = ReservationSerializer(reservation).data
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{reservation.restaurant.id}",
-            {
-                "type": "reservation_updated",
-                "reservation": data
-            }
-        )
+        try:
+            data = ReservationSerializer(reservation).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{reservation.restaurant.id}",
+                {"type": "reservation_updated", "reservation": data}
+            )
+        except Exception as e:
+            print(f"ReservationViewSet.partial_update WS error (non-fatal): {e}")
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], url_path='report-reservation-status')
