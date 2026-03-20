@@ -23,6 +23,7 @@ from datetime import timedelta
 from django.utils.timezone import now
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import transaction
 import uuid
 from .models import Device, Reservation, GuestSession
 
@@ -223,6 +224,22 @@ def generate_password(length=10):
     return ''.join(random.choice(characters) for _ in range(length))
 
 
+def _table_capacity_info(restaurant):
+    table_limit = int(getattr(restaurant, "table_count", 0) or 0)
+    current_tables = Device.objects.filter(restaurant=restaurant).count()
+    return table_limit, current_tables
+
+
+def _enforce_table_limit(restaurant):
+    table_limit, current_tables = _table_capacity_info(restaurant)
+    if table_limit > 0 and current_tables >= table_limit:
+        raise serializers.ValidationError({
+            "detail": "Table limit reached",
+            "table_limit": table_limit,
+            "current_tables": current_tables,
+        })
+
+
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
@@ -327,36 +344,39 @@ class DeviceViewSet(viewsets.ModelViewSet):
             if not restaurant:
                 raise serializers.ValidationError("You are not associated with any accepted restaurant.")
 
-        # Generate unique username
-        username = None
-        password = generate_password()
-        email = None
-        
-        max_retries = 5
-        for _ in range(max_retries):
-            temp_username = generate_username(restaurant.resturent_name)
-            if not User.objects.filter(username=temp_username).exists():
-                username = temp_username
-                email = f"{username}@example.com"
-                break
-        
-        if not username:
-             raise serializers.ValidationError("Failed to generate unique device credentials. Please try again.")
+        with transaction.atomic():
+            # Lock restaurant row to avoid race conditions across concurrent creates.
+            restaurant = Restaurant.objects.select_for_update().get(pk=restaurant.pk)
+            _enforce_table_limit(restaurant)
 
-        device_user = User.objects.create_user(
-            email=email,
-            username=username,
-            password=password,
-            role='customer'
-        )
+            # Generate unique username
+            username = None
+            password = generate_password()
+            email = None
+            
+            max_retries = 5
+            for _ in range(max_retries):
+                temp_username = generate_username(restaurant.resturent_name)
+                if not User.objects.filter(username=temp_username).exists():
+                    username = temp_username
+                    email = f"{username}@example.com"
+                    break
+            
+            if not username:
+                 raise serializers.ValidationError("Failed to generate unique device credentials. Please try again.")
 
-        try:
-            device = serializer.save(user=device_user, restaurant=restaurant)
-        except Exception as e:
-            print(f"CRITICAL: Device creation failed (likely QR code/Storage): {e}")
-            # Delete the user we just created to avoid orphans
-            device_user.delete()
-            raise serializers.ValidationError(f"Failed to create table/QR code. Error: {str(e)}")
+            device_user = User.objects.create_user(
+                email=email,
+                username=username,
+                password=password,
+                role='customer'
+            )
+
+            try:
+                device = serializer.save(user=device_user, restaurant=restaurant)
+            except Exception as e:
+                print(f"CRITICAL: Device creation failed (likely QR code/Storage): {e}")
+                raise serializers.ValidationError(f"Failed to create table/QR code. Error: {str(e)}")
 
         # Notify owner if possible, or log it
         if getattr(user, 'role', None) == 'owner':
@@ -451,14 +471,19 @@ class DeviceViewSet(viewsets.ModelViewSet):
                     "total_devices": 0,
                     "active_devices": 0,
                     "hold_devices": 0,
+                    "table_limit": 0,
+                    "can_create_table": False,
                 })
 
             all_devices = Device.objects.filter(restaurant=restaurant)
+            table_limit, current_tables = _table_capacity_info(restaurant)
             return Response({
                 "restaurant": restaurant.resturent_name,
-                "total_devices": all_devices.count(),
+                "total_devices": current_tables,
                 "active_devices": all_devices.filter(action='active').count(),
                 "hold_devices": all_devices.filter(action='hold').count(),
+                "table_limit": table_limit,
+                "can_create_table": not (table_limit > 0 and current_tables >= table_limit),
             })
         except Exception as e:
             print(f"DeviceStats Error: {e}")
@@ -467,6 +492,8 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 "total_devices": 0,
                 "active_devices": 0,
                 "hold_devices": 0,
+                "table_limit": 0,
+                "can_create_table": False,
                 "error": str(e)
             }, status=200) # Return 200 with empty stats to prevent UI crash
 
@@ -851,39 +878,48 @@ class SimpleDeviceListView(APIView):
             
             if not table_name:
                 return Response({"error": "table_name is required"}, status=400)
-            
-            # Generate unique device user
-            username = None
-            password = generate_password()
-            
-            max_retries = 5
-            for _ in range(max_retries):
-                temp_username = generate_username(restaurant.resturent_name)
-                if not User.objects.filter(username=temp_username).exists():
-                    username = temp_username
-                    break
-            
-            if not username:
-                return Response({"error": "Failed to generate device credentials"}, status=500)
-            
-            # Create device user
-            email = f"{username}@example.com"
-            device_user = User.objects.create_user(
-                email=email,
-                username=username,
-                password=password,
-                role='customer'
-            )
-            
-            # Create device
-            device = Device.objects.create(
-                table_name=table_name,
-                table_number=table_number,
-                region=region,
-                user=device_user,
-                restaurant=restaurant,
-                action='active'
-            )
+
+            with transaction.atomic():
+                # Lock restaurant row to avoid race conditions across concurrent creates.
+                restaurant = Restaurant.objects.select_for_update().get(pk=restaurant.pk)
+                try:
+                    _enforce_table_limit(restaurant)
+                except serializers.ValidationError as exc:
+                    detail = exc.detail if hasattr(exc, "detail") else {"detail": "Table limit reached"}
+                    return Response(detail, status=400)
+                
+                # Generate unique device user
+                username = None
+                password = generate_password()
+                
+                max_retries = 5
+                for _ in range(max_retries):
+                    temp_username = generate_username(restaurant.resturent_name)
+                    if not User.objects.filter(username=temp_username).exists():
+                        username = temp_username
+                        break
+                
+                if not username:
+                    return Response({"error": "Failed to generate device credentials"}, status=500)
+                
+                # Create device user
+                email = f"{username}@example.com"
+                device_user = User.objects.create_user(
+                    email=email,
+                    username=username,
+                    password=password,
+                    role='customer'
+                )
+                
+                # Create device
+                device = Device.objects.create(
+                    table_name=table_name,
+                    table_number=table_number,
+                    region=region,
+                    user=device_user,
+                    restaurant=restaurant,
+                    action='active'
+                )
             
             # Try to send email notification (non-blocking)
             try:

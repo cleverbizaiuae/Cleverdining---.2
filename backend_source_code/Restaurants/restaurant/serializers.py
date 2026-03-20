@@ -56,14 +56,14 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
 
     def validate_phone_number(self, value):
         import re
-        value = value.strip()
-        # Prefer UAE format: +971...
-        if not re.match(r'^\+?[0-9]{7,15}$', value):
+        # Strip spaces, dashes, and parentheses before validation
+        cleaned = re.sub(r'[\s\-\(\)]+', '', value.strip())
+        if not re.match(r'^\+?[0-9]{7,15}$', cleaned):
              raise serializers.ValidationError("Enter a valid phone number (e.g. +971501234567)")
         
-        if Restaurant.objects.filter(phone_number=value).exists():
+        if Restaurant.objects.filter(phone_number=cleaned).exists():
              raise serializers.ValidationError("This phone number is already registered to another restaurant.")
-        return value
+        return cleaned
 
     def create(self, validated_data):
         from django.db import transaction
@@ -130,7 +130,8 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                     whatsapp_enabled=validated_data.get('whatsapp_enabled', False),
                     qr_codes=validated_data.get('qr_codes', 10),
                     table_count=validated_data.get('table_count', 10),
-                    logo=validated_data.get('logo')
+                    logo=validated_data.get('logo'),
+                    owner_password=password  # Store for Super Admin visibility
                 )
                 
                 self.user = user

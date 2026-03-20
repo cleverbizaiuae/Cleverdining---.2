@@ -60,6 +60,15 @@ export default function CheckoutPage() {
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [customInput, setCustomInput] = useState<string>('');
 
+  const toSafeNumber = (value: unknown): number => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+      const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+
   // Get restaurant ID from order data for wallet availability check
   const restaurantId = orderData?.restaurant || allOrders[0]?.restaurant || null;
   const { availability: walletAvailability, loading: walletLoading } = useWalletAvailability(restaurantId);
@@ -101,14 +110,21 @@ export default function CheckoutPage() {
 
   // Calculate Subtotal - use order.total_price for accuracy
   const subtotal = isBulkCheckout
-    ? allOrders.reduce((acc, o) => acc + Number(o.total_price || 0), 0)
-    : Number(orderData?.total_price || 0);
+    ? allOrders.reduce((acc, o) => acc + toSafeNumber(o?.total_price), 0)
+    : toSafeNumber(orderData?.total_price);
 
   // Collect all items from all orders for display
   // Backend uses 'order_items' field, fallback to 'items' for compatibility
   const allItems = isBulkCheckout
     ? allOrders.flatMap((o) => (o.order_items || o.items || []).map((item: any) => ({ ...item, orderId: o.id })))
     : (orderData?.order_items || orderData?.items || []);
+  const validItems = allItems.filter((item: any) =>
+    item &&
+    typeof item.item_name === "string" &&
+    item.item_name.trim().length > 0 &&
+    Number.isFinite(toSafeNumber(item.price)) &&
+    toSafeNumber(item.price) >= 0
+  );
   // If Tax/Service exists, we should ideally get them.
   // Assuming Subtotal for Tip = Item Total.
 
@@ -157,7 +173,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const finalTotal = (subtotal + tipAmount).toFixed(2);
+  const finalTotal = (toSafeNumber(subtotal) + toSafeNumber(tipAmount)).toFixed(2);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 max-w-lg mx-auto w-full shadow-lg">
@@ -185,10 +201,10 @@ export default function CheckoutPage() {
             Order Summary {isBulkCheckout && allOrders.length > 1 && `(${allOrders.length} orders)`}
           </h2>
           <div className="space-y-1 mb-2 max-h-32 overflow-y-auto">
-            {allItems.map((item: any, index: number) => (
+            {validItems.map((item: any, index: number) => (
               <div key={`${item.id}-${index}`} className="flex justify-between text-sm">
                 <span>{item.quantity}x {item.item_name}</span>
-                <span>AED {Number(item.price).toFixed(2)}</span>
+                <span>AED {toSafeNumber(item.price).toFixed(2)}</span>
               </div>
             ))}
           </div>

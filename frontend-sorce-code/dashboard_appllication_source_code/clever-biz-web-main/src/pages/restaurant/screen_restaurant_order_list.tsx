@@ -38,6 +38,7 @@ const ScreenRestaurantOrderList = () => {
   const {
     orders = [],
     ordersStats,
+    ordersCount,
     ordersCurrentPage,
     ordersSearchQuery,
     fetchOrders,
@@ -147,10 +148,6 @@ const ScreenRestaurantOrderList = () => {
 
   // 1. Filter Orders (Close Day Logic)
   const activeOrders = orders.filter((order: any) => {
-    // Exclude cancelled ? Spec says "Exclude cancelled orders".
-    // Let's keep them if user wants to see them, or follow spec strictly.
-    if (order.status === 'cancelled') return false;
-
     // Filter by Close Day
     if (closedDayDate) {
       const orderDate = new Date(order.timeOfOrder || order.created_time || order.created_at); // API uses created_at
@@ -296,6 +293,8 @@ const ScreenRestaurantOrderList = () => {
         return 'text-green-600';
       case 'delivered':
         return 'text-green-700';
+      case 'cancelled':
+        return 'text-red-600';
       case 'preparing':
         return 'text-orange-600';
       case 'awaiting_cash':
@@ -402,7 +401,7 @@ const ScreenRestaurantOrderList = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           title="Ongoing Orders"
-          value={activeOrders.filter((o: any) => ['pending', 'preparing', 'awaiting_cash', 'served', 'delivered'].includes(o.status.toLowerCase())).length}
+          value={ordersStats?.ongoing_orders ?? ordersStats?.total_ongoing_orders ?? 0}
           icon={Clock}
           colorClass="text-[#0055FE]"
           bgClass="bg-white"
@@ -541,6 +540,7 @@ const ScreenRestaurantOrderList = () => {
                         <option value="preparing" className="text-orange-600">Preparing</option>
                         <option value="served" className="text-green-600">Ready (Served)</option>
                         <option value="delivered" className="text-green-700">Delivered</option>
+                        <option value="cancelled" className="text-red-600">Cancelled</option>
                       </select>
                     </td>
                     <td className="px-5 py-3 text-right">
@@ -597,7 +597,7 @@ const ScreenRestaurantOrderList = () => {
             <span className="px-3 py-1 text-xs text-slate-600 self-center">Page {ordersCurrentPage}</span>
             <button
               onClick={() => setOrdersCurrentPage(ordersCurrentPage + 1)}
-              disabled={orders.length < 10}
+              disabled={ordersCount <= (ordersCurrentPage * 10)}
               className="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600"
             >
               Next

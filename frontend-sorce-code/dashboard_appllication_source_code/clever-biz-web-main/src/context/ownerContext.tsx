@@ -76,6 +76,8 @@ interface DeviceStats {
   active_devices: number;
   hold_devices: number;
   restaurant: string;
+  table_limit?: number;
+  can_create_table?: boolean;
 }
 
 interface OrdersStats {
@@ -238,19 +240,23 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       const fetchInitialData = async () => {
         try {
           let endpointCategory;
+          let endpointSubCategory;
           let endpointItems;
           let endpointOrders;
 
           if (userRole === "owner" || userRole === "manager") {
             endpointCategory = "/owners/categories/";
+            endpointSubCategory = "/owners/sub-categories/";
             endpointItems = "/owners/items/";
             endpointOrders = "/owners/orders/";
           } else if (userRole === "staff") {
             endpointCategory = "/owners/categories/";
+            endpointSubCategory = "/owners/sub-categories/";
             endpointItems = "/owners/items/";
             endpointOrders = "/api/staff/orders/";
           } else if (userRole === "chef") {
             endpointCategory = "/chef/categories/";
+            endpointSubCategory = "/chef/sub-categories/";
             endpointItems = "/chef/items/";
             endpointOrders = "/api/chef/orders/";
           } else {
@@ -258,13 +264,15 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           }
 
           // 1. CRITICAL DATA - Wait for this (Layout depends on it)
-          const [catRes, itemRes, orderRes] = await Promise.all([
+          const [catRes, subCatRes, itemRes, orderRes] = await Promise.all([
             axiosInstance.get(endpointCategory),
+            axiosInstance.get(endpointSubCategory),
             axiosInstance.get(endpointItems),
             axiosInstance.get(endpointOrders)
           ]);
 
           setCategories(catRes.data);
+          setSubCategories(subCatRes.data);
 
           // Set Food Items
           const { results: itemResults, count: itemCount } = itemRes.data;
@@ -383,41 +391,56 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const createSubCategory = useCallback(async (formData: FormData) => {
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? "/owners/sub-categories/" : "/staff/sub-categories/";
-      await axiosInstance.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const response = await axiosInstance.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Sub-Category created successfully");
-      fetchSubCategories();
+      const createdSubCategory = response?.data;
+      if (createdSubCategory?.id) {
+        setSubCategories((prev) => [createdSubCategory, ...prev.filter((c: any) => c.id !== createdSubCategory.id)]);
+        setCategories((prev) => [createdSubCategory, ...prev.filter((c: any) => c.id !== createdSubCategory.id)]);
+      } else {
+        fetchSubCategories();
+        fetchCategories();
+      }
     } catch (err) {
       console.error("Failed to create sub-category", err);
       toast.error("Failed to create sub-category");
       throw err;
     }
-  }, [userRole, fetchSubCategories]);
+  }, [userRole, fetchSubCategories, fetchCategories]);
 
   const updateSubCategory = useCallback(async (id: number, formData: FormData) => {
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/sub-categories/${id}/` : `/staff/sub-categories/${id}/`;
-      await axiosInstance.patch(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const response = await axiosInstance.patch(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Sub-Category updated successfully");
-      fetchSubCategories();
+      const updatedSubCategory = response?.data;
+      if (updatedSubCategory?.id) {
+        setSubCategories((prev) => prev.map((c: any) => c.id === id ? updatedSubCategory : c));
+        setCategories((prev) => prev.map((c: any) => c.id === id ? updatedSubCategory : c));
+      } else {
+        fetchSubCategories();
+        fetchCategories();
+      }
     } catch (err) {
       console.error("Failed to update sub-category", err);
       toast.error("Failed to update sub-category");
       throw err;
     }
-  }, [userRole, fetchSubCategories]);
+  }, [userRole, fetchSubCategories, fetchCategories]);
 
   const deleteSubCategory = useCallback(async (id: number) => {
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/sub-categories/${id}/` : `/staff/sub-categories/${id}/`;
       await axiosInstance.delete(endpoint);
       toast.success("Sub-Category deleted successfully");
-      fetchSubCategories();
+      setSubCategories((prev) => prev.filter((c: any) => c.id !== id));
+      setCategories((prev) => prev.filter((c: any) => c.id !== id));
     } catch (err) {
       console.error("Failed to delete sub-category", err);
       toast.error("Failed to delete sub-category");
       throw err;
     }
-  }, [userRole, fetchSubCategories]);
+  }, [userRole]);
 
   const fetchFoodItems = useCallback(
     async (page: number = currentPage, search?: string) => {
@@ -445,10 +468,12 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
           image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
           item_name: item.item_name,
+          name: item.item_name,
           price: parseFloat(item.price),
           category: item.category_name, // Display Name
           category_id: item.category,   // ID for editing
           category_name: item.category_name, // Explicit Name
+          available: !!item.availability,
           availability: item.availability,
           description: item.description
         }));
@@ -952,14 +977,8 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       try {
         let endpoint;
-        if (userRole === "owner") {
+        if (userRole === "owner" || userRole === "manager" || userRole === "staff" || userRole === "chef") {
           endpoint = `/owners/orders/status/${id}/`;
-        } else if (userRole === "staff") {
-          // Staff updates use Generic/Owner endpoint if explicit Staff one missing, likely Owner endpoint
-          endpoint = `/owners/orders/status/${id}/`;
-          endpoint = `/staff/orders/status/${id}/`;
-        } else if (userRole === "chef") {
-          endpoint = `/chef/orders/status/${id}/`;
         } else {
           throw new Error("Invalid user role");
         }

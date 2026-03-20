@@ -24,7 +24,7 @@ const ScreenMessage = () => {
 function MessagingUI() {
   const navigate = useNavigate();
   // Consume global state from Context
-  const { ws, sendMessage, hasNewMessage: contextHasNewMessage, setNewMessageFlag, messages, setMessages } = useWebSocket();
+  const { ws, sendMessage, hasNewMessage: contextHasNewMessage, setNewMessageFlag, messages, setMessages, connectionStatus, retryConnection } = useWebSocket();
 
   const [inputValue, setInputValue] = useState("");
   // Removed local messages state
@@ -157,13 +157,13 @@ function MessagingUI() {
               <div className="flex items-center gap-2">
                 <span className={cn(
                   "text-xs font-medium transition-colors duration-300",
-                  ws?.readyState === WebSocket.OPEN ? "text-green-600" : "text-red-500"
+                  connectionStatus === "connected" ? "text-green-600" : "text-red-500"
                 )}>
-                  {ws?.readyState === WebSocket.OPEN ? 'Online' : 'Reconnecting...'}
+                  {connectionStatus === "connected" ? "Online" : connectionStatus === "reconnecting" ? "Reconnecting..." : "Disconnected"}
                 </span>
-                {ws?.readyState !== WebSocket.OPEN && (
+                {connectionStatus !== "connected" && (
                   <button
-                    onClick={() => window.location.reload()}
+                    onClick={retryConnection}
                     className="text-[10px] bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded text-gray-600 border border-gray-300"
                   >
                     Retry

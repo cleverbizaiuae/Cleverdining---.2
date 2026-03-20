@@ -259,13 +259,13 @@ const ScreenRestaurantManagement = () => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => openEditModal(member)} className="p-1.5 text-[#0055FE] hover:bg-[#0055FE]/10 rounded transition-colors" title="Edit">
+                        <button data-testid="edit-member" onClick={() => openEditModal(member)} className="p-1.5 text-[#0055FE] hover:bg-[#0055FE]/10 rounded transition-colors" title="Edit">
                           <Pencil size={16} />
                         </button>
                         <button onClick={() => openPasswordModal(member)} className="p-1.5 text-[#0055FE] hover:bg-[#0055FE]/10 rounded transition-colors" title="Change Password">
                           <Key size={16} />
                         </button>
-                        <button onClick={() => openDeleteModal(member)} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete">
+                        <button data-testid="delete-btn" onClick={() => openDeleteModal(member)} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -304,13 +304,13 @@ const ScreenRestaurantManagement = () => {
                 </div>
 
                 <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-50">
-                  <button onClick={() => openEditModal(member)} className="p-2 text-[#0055FE] bg-[#0055FE]/5 rounded-lg hover:bg-[#0055FE]/10 transition-colors flex-1 flex justify-center">
+                  <button data-testid="edit-member" onClick={() => openEditModal(member)} className="p-2 text-[#0055FE] bg-[#0055FE]/5 rounded-lg hover:bg-[#0055FE]/10 transition-colors flex-1 flex justify-center">
                     <Pencil size={16} />
                   </button>
                   <button onClick={() => openPasswordModal(member)} className="p-2 text-[#0055FE] bg-[#0055FE]/5 rounded-lg hover:bg-[#0055FE]/10 transition-colors flex-1 flex justify-center">
                     <Key size={16} />
                   </button>
-                  <button onClick={() => openDeleteModal(member)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors flex-1 flex justify-center">
+                  <button data-testid="delete-btn" onClick={() => openDeleteModal(member)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors flex-1 flex justify-center">
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -371,6 +371,7 @@ const ScreenRestaurantManagement = () => {
             </select>
           </div>
           <button
+            data-testid="submit-btn"
             onClick={handleCreateSubmit}
             disabled={loading}
             className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
@@ -406,6 +407,7 @@ const ScreenRestaurantManagement = () => {
             </select>
           </div>
           <button
+            data-testid="submit-btn"
             onClick={handleEditSubmit}
             disabled={loading}
             className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"

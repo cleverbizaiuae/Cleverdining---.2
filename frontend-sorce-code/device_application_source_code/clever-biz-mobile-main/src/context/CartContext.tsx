@@ -28,6 +28,54 @@ type CartContextType = {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const parsePrice = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  if (typeof value === "string") {
+    const normalized = value.replace(/[^0-9.-]/g, "");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+  return NaN;
+};
+
+const sanitizeCartItems = (raw: unknown): CartItem[] => {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter((entry: any) => entry && typeof entry === "object")
+    .map((entry: any) => {
+      const price = parsePrice(entry.price);
+      const quantity = Number(entry.quantity);
+      if (
+        !Number.isInteger(entry.id) ||
+        entry.id <= 0 ||
+        typeof entry.item_name !== "string" ||
+        !entry.item_name.trim() ||
+        !Number.isFinite(price) ||
+        price < 0
+      ) {
+        return null;
+      }
+
+      return {
+        id: entry.id,
+        item_name: entry.item_name.trim(),
+        price: String(price),
+        description: String(entry.description || ""),
+        slug: String(entry.slug || ""),
+        category: Number(entry.category || 0),
+        restaurant: Number(entry.restaurant || 0),
+        category_name: String(entry.category_name || ""),
+        image1: String(entry.image1 || ""),
+        availability: Boolean(entry.availability),
+        video: String(entry.video || ""),
+        restaurant_name: String(entry.restaurant_name || ""),
+        quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
+      } as CartItem;
+    })
+    .filter((entry): entry is CartItem => !!entry);
+};
+
 export const useCart = () => {
   const ctx = useContext(CartContext);
   if (!ctx) throw new Error("useCart must be used within CartProvider");
@@ -56,16 +104,25 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
             // Ensure all required fields are present, fallback if needed
             restaurant_name: cartItem.item_name ? "Restaurant" : "",
           }));
-          setCart(backendItems);
+          setCart(sanitizeCartItems(backendItems));
         } catch (error) {
           console.error("Failed to fetch cart from server", error);
           // Fallback to namespaced local storage
           const stored = localStorage.getItem(`cb:cart:${sessionToken}`);
-          if (stored) setCart(JSON.parse(stored));
+          if (stored) {
+            try {
+              setCart(sanitizeCartItems(JSON.parse(stored)));
+            } catch {
+              setCart([]);
+            }
+          } else {
+            setCart([]);
+          }
         }
       } else {
         // No session, clear cart or handle appropriately
         setCart([]);
+        localStorage.removeItem("cart");
       }
       setIsInitialized(true);
     };
@@ -84,15 +141,36 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [cart, isInitialized]);
 
   const addToCart = React.useCallback(async (item: Omit<CartItem, "quantity">, quantity: number = 1) => {
+    const parsedPrice = parsePrice(item?.price);
+    if (
+      !item ||
+      !Number.isInteger(item.id) ||
+      item.id <= 0 ||
+      typeof item.item_name !== "string" ||
+      !item.item_name.trim() ||
+      !Number.isFinite(parsedPrice) ||
+      parsedPrice < 0
+    ) {
+      console.warn("Invalid cart item rejected:", item);
+      return;
+    }
+
+    const safeQuantity = Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+    const normalizedItem = {
+      ...item,
+      item_name: item.item_name.trim(),
+      price: String(parsedPrice),
+    };
+
     // Optimistic update
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
+      const existing = prev.find((i) => i.id === normalizedItem.id);
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i
+          i.id === normalizedItem.id ? { ...i, quantity: i.quantity + safeQuantity } : i
         );
       } else {
-        return [...prev, { ...item, quantity: quantity }];
+        return [...prev, { ...normalizedItem, quantity: safeQuantity }];
       }
     });
 
@@ -101,8 +179,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     if (sessionToken) {
       try {
         await axiosInstance.post("/api/customer/cart/add_item/", {
-          item_id: item.id,
-          quantity: quantity
+          item_id: normalizedItem.id,
+          quantity: safeQuantity
         });
       } catch (error) {
         console.error("Failed to add item to server cart", error);
@@ -149,6 +227,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const clearCart = React.useCallback(async () => {
     setCart([]);
     const sessionToken = localStorage.getItem("guest_session_token");
+    localStorage.removeItem("cart");
+    if (sessionToken) {
+      localStorage.removeItem(`cb:cart:${sessionToken}`);
+    }
     if (sessionToken) {
       try {
         await axiosInstance.post("/api/customer/cart/clear/");

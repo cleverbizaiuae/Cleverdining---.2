@@ -496,23 +496,28 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
                 raise ValidationError("You do not have a valid restaurant association to add members.")
 
             instance = serializer.save(restaurant=restaurant)
+            logger.info(f"ChefStaff member created successfully: user={instance.user.username}, restaurant={instance.restaurant.id}")
             
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{instance.restaurant.id}",
-                {
-                    "type": "chefstaff_created",
-                    "chefstaff": {
-                        "id": instance.id,
-                        "username": instance.user.username,
-                        "restaurant_id": instance.restaurant.id
+            # WebSocket broadcast is best-effort — must not affect the HTTP response
+            try:
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{instance.restaurant.id}",
+                    {
+                        "type": "chefstaff_created",
+                        "chefstaff": {
+                            "id": instance.id,
+                            "username": instance.user.username,
+                            "restaurant_id": instance.restaurant.id
+                        }
                     }
-                }
-            )
+                )
+            except Exception as ws_err:
+                logger.warning(f"WebSocket broadcast failed (chefstaff_created): {ws_err}")
         except ValidationError:
             raise
         except Exception as e:
-            print(f"ChefStaffViewSet.perform_create error: {e}")
+            logger.error(f"ChefStaffViewSet.perform_create error: {e}")
             raise ValidationError(f"Failed to create member: {str(e)}")
 
     def perform_update(self, serializer):
@@ -534,23 +539,28 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You do not have permission to update this record.")
                 
             serializer.save()
+            logger.info(f"ChefStaff member updated successfully: id={instance.id}")
 
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{instance.restaurant.id}",
-                {
-                    "type": "chefstaff_updated",
-                    "chefstaff": {
-                        "id": instance.id,
-                        "username": instance.user.username,
-                        "restaurant_id": instance.restaurant.id
+            # WebSocket broadcast is best-effort — must not affect the HTTP response
+            try:
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{instance.restaurant.id}",
+                    {
+                        "type": "chefstaff_updated",
+                        "chefstaff": {
+                            "id": instance.id,
+                            "username": instance.user.username,
+                            "restaurant_id": instance.restaurant.id
+                        }
                     }
-                }
-            )
+                )
+            except Exception as ws_err:
+                logger.warning(f"WebSocket broadcast failed (chefstaff_updated): {ws_err}")
         except PermissionDenied:
             raise
         except Exception as e:
-            print(f"ChefStaffViewSet.perform_update error: {e}")
+            logger.error(f"ChefStaffViewSet.perform_update error: {e}")
             raise PermissionDenied(f"Failed to update member: {str(e)}")
 
     def perform_destroy(self, instance):
@@ -565,15 +575,20 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
         restaurant_id = instance.restaurant.id
         instance_id = instance.id
         instance.delete()
+        logger.info(f"ChefStaff member deleted successfully: id={instance_id}")
 
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"restaurant_{restaurant_id}",
-            {
-                "type": "chefstaff_deleted",
-                "chefstaff_id": instance_id
-            }
-        )
+        # WebSocket broadcast is best-effort — must not affect the HTTP response
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{restaurant_id}",
+                {
+                    "type": "chefstaff_deleted",
+                    "chefstaff_id": instance_id
+                }
+            )
+        except Exception as ws_err:
+            logger.warning(f"WebSocket broadcast failed (chefstaff_deleted): {ws_err}")
 
     @action(detail=True, methods=['post'], url_path='change-password')
     def change_password(self, request, pk=None):

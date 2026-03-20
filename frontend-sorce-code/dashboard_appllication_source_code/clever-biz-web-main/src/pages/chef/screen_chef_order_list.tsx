@@ -106,6 +106,7 @@ const ScreenChefOrderList = () => {
       case 'served':
       case 'ready':
         return 'text-green-600';
+      case 'delivered':
       case 'completed':
         return 'text-green-700';
       case 'preparing': // Chef specific focus
@@ -222,7 +223,7 @@ const ScreenChefOrderList = () => {
                         <option value="pending" className="text-yellow-600">Pending</option>
                         <option value="preparing" className="text-orange-600">Preparing</option>
                         <option value="served" className="text-green-600">Ready</option>
-                        <option value="completed" className="text-green-700">Delivered</option>
+                        <option value="delivered" className="text-green-700">Delivered</option>
                         <option value="cancelled" className="text-red-600">Cancelled</option>
                       </select>
                     </td>
@@ -239,7 +240,7 @@ const ScreenChefOrderList = () => {
                             <MoreHorizontal size={16} />
                           </button>
                           <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded shadow-lg border border-slate-100 hidden group-hover:block z-10">
-                            <button onClick={() => handleStatusChange(order.id, 'completed')} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Complete</button>
+                            <button onClick={() => handleStatusChange(order.id, 'delivered')} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Deliver</button>
                             <button onClick={() => handleStatusChange(order.id, 'cancelled')} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel</button>
                           </div>
                         </div>

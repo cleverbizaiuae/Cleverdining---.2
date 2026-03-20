@@ -74,6 +74,10 @@ export const ScreenRestaurantDevices = () => {
     area: "Primary"
   });
 
+  const tableLimit = Number(deviceStats?.table_limit || 0);
+  const currentTableCount = Number(deviceStats?.total_devices || 0);
+  const tableLimitReached = tableLimit > 0 && currentTableCount >= tableLimit;
+
   // Effects
   useEffect(() => {
     const loadData = async () => {
@@ -116,6 +120,10 @@ export const ScreenRestaurantDevices = () => {
   // API Actions
   // API Actions
   const handleCreateSubmit = async () => {
+    if (tableLimitReached) {
+      toast.error("Table limit reached");
+      return;
+    }
     setLoading(true);
     try {
       const endpoint = "/owners/devices/"; // Device creation is centralized for owners/staff usually
@@ -139,7 +147,7 @@ export const ScreenRestaurantDevices = () => {
         }, 1000);
         return;
       }
-      const errorMessage = error.response?.data?.detail || error.response?.data?.table_name?.[0] || "Failed to create table";
+      const errorMessage = error.response?.data?.detail || error.response?.data?.error || error.response?.data?.table_name?.[0] || "Failed to create table";
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -242,10 +250,15 @@ export const ScreenRestaurantDevices = () => {
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <button
               onClick={() => {
+                if (tableLimitReached) {
+                  toast.error("Table limit reached");
+                  return;
+                }
                 setFormData({ name: "", area: "Primary" });
                 setIsAddModalOpen(true);
               }}
-              className="bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
+              disabled={tableLimitReached}
+              className="bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Plus size={16} />
               Add Table
@@ -325,6 +338,11 @@ export const ScreenRestaurantDevices = () => {
             </tbody>
           </table>
         </div>
+        {tableLimitReached && (
+          <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-amber-800 text-sm font-medium">
+            Table limit reached
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -382,7 +400,7 @@ export const ScreenRestaurantDevices = () => {
           )}
           <button
             onClick={isEditModalOpen ? handleEditSubmit : handleCreateSubmit}
-            disabled={loading}
+            disabled={loading || (!isEditModalOpen && tableLimitReached)}
             className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
           >
             {loading ? "Saving..." : (isEditModalOpen ? "Save Changes" : "Create Table")}

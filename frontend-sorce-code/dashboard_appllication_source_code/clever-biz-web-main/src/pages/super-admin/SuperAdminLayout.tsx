@@ -61,7 +61,6 @@ const SuperAdminLayout = () => {
 
     return (
         <QueryClientProvider client={queryClient}>
-            <Toaster position="top-right" />
             <div className="flex min-h-screen bg-slate-50">
                 {/* --- Mobile Sidebar Overlay --- */}
                 {sidebarOpen && (

@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
+import { API_BASE_URL } from "../lib/axios";
 
 interface ModalProps {
   isOpen: boolean;
@@ -18,11 +19,12 @@ interface ModalFoodDetailProps extends ModalProps {
 }
 
 const getImageUrl = (url: string | undefined) => {
-  if (!url) return "https://placehold.co/600x400?text=No+Image";
-  if (url.startsWith("http://")) {
-    return url.replace("http://", "https://");
-  }
-  return url;
+  const fallback = "https://placehold.co/600x400?text=No+Image";
+  if (!url) return fallback;
+  if (url.startsWith("http://")) return url.replace("http://", "https://");
+  if (url.startsWith("https://")) return url;
+  if (url.startsWith("/")) return `${API_BASE_URL}${url.replace(/^\/+/, "")}`;
+  return fallback;
 };
 
 export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
@@ -133,8 +135,12 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                         onLoad={() => setIsImageLoading(false)}
                         onError={(e) => {
                           setIsImageLoading(false);
+                          const fallback = "https://placehold.co/600x400?text=No+Image";
+                          if (e.currentTarget.src !== fallback) {
+                            e.currentTarget.src = fallback;
+                            return;
+                          }
                           e.currentTarget.style.display = 'none';
-                          // Show a fallback div if image fails
                           e.currentTarget.parentElement?.parentElement?.querySelector('.fallback-placeholder')?.classList.remove('hidden');
                         }}
                       />
@@ -168,7 +174,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Content Body */}
-          <div className="flex-1 flex flex-col px-6 pt-6 pb-24 overflow-y-auto">
+          <div className="flex-1 flex flex-col px-6 pt-6 pb-6 overflow-y-auto">
             <div className="flex flex-col items-center text-center space-y-4">
               <h3 className="text-3xl font-bold text-foreground tracking-tight leading-tight">
                 {truncatedName}
@@ -193,7 +199,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Sticky Action Bar */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-50 p-4 pt-4 z-30 pb-8 sm:pb-[env(safe-area-inset-bottom)]">
+          <div className="bg-white border-t border-gray-100 p-4 sm:p-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center gap-2">
               {/* Quantity Selector - Compact for Mobile */}
               <div className="flex items-center bg-gray-50 p-1 rounded-full border border-gray-100 shrink-0">
@@ -214,9 +220,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
               <button
                 onClick={handleAddToCart}
-                className="flex-1 h-12 sm:h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-xl shadow-primary/20 min-w-0"
+                className="flex-1 h-12 sm:h-14 px-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-xl shadow-primary/20 min-w-0"
               >
-                <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate">Add to Cart</span>
+                <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate px-1">Add to Cart</span>
                 <span className="text-sm sm:text-base font-bold whitespace-nowrap">
                   AED {(Number(item?.price || 0) * quantity).toFixed(2)}
                 </span>

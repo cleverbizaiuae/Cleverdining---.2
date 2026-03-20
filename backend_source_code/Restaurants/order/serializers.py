@@ -95,13 +95,14 @@ class PaymentSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(serializers.ModelSerializer):
     order_items = OrderItemSerializer(many=True, read_only=True)
     device_name = serializers.CharField(source='device.table_name')
+    device_table_name = serializers.CharField(source='device.table_name', read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
     restaurant_name = serializers.CharField(source='restaurant.resturent_name', read_only=True)
     google_review_url = serializers.CharField(source='restaurant.google_review_url', read_only=True, allow_null=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'tip_amount', 'tip_type', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'payments', 'restaurant_name', 'google_review_url']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'tip_amount', 'tip_type', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'google_review_url']
 
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)

@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
+import { API_BASE_URL } from "../lib/axios";
 import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion"; // Corrected from "motion/react"
 import { useEffect } from "react";
@@ -9,9 +10,45 @@ import { useEffect } from "react";
 const ScreenCart = () => {
   const navigate = useNavigate();
   const { cart, removeFromCart, clearCart, incrementQuantity, decrementQuantity } = useCart();
-  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const totalCost = cart.reduce(
-    (sum, item) => sum + Number(item.price) * item.quantity,
+  const toSafeNumber = (value: unknown): number => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+      const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+
+  const validCartItems = cart.filter(
+    (item) =>
+      item &&
+      Number.isInteger(item.id) &&
+      item.id > 0 &&
+      typeof item.item_name === "string" &&
+      item.item_name.trim().length > 0 &&
+      Number.isFinite(toSafeNumber(item.price))
+  );
+
+  const resolveImageUrl = (url?: string) => {
+    const fallback = "https://placehold.co/200x200?text=No+Image";
+    if (!url) return fallback;
+    if (url.startsWith("http://")) return url.replace("http://", "https://");
+    if (url.startsWith("https://")) return url;
+    if (url.startsWith("/")) return `${API_BASE_URL}${url.replace(/^\/+/, "")}`;
+    return fallback;
+  };
+
+  const resolveVideoUrl = (url?: string) => {
+    if (!url) return "";
+    if (url.startsWith("http://")) return url.replace("http://", "https://");
+    if (url.startsWith("https://")) return url;
+    if (url.startsWith("/")) return `${API_BASE_URL}${url.replace(/^\/+/, "")}`;
+    return "";
+  };
+
+  const totalQuantity = validCartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalCost = validCartItems.reduce(
+    (sum, item) => sum + toSafeNumber(item.price) * item.quantity,
     0
   );
 
@@ -42,7 +79,7 @@ const ScreenCart = () => {
       const restaurant = userData.user.restaurants[0].id;
       const device = userData.user.restaurants[0].device_id;
 
-      const orderItems = cart.map((item) => ({
+      const orderItems = validCartItems.map((item) => ({
         item: item.id,
         quantity: item.quantity,
       }));
@@ -131,7 +168,7 @@ const ScreenCart = () => {
         <h1 className="text-3xl font-medium">Cart List</h1>
       </div>
       <div className="flex-1 flex flex-col gap-y-2 w-full max-w-2xl overflow-y-auto px-4 pb-48">
-        {cart.length === 0 ? (
+        {validCartItems.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -150,7 +187,7 @@ const ScreenCart = () => {
           </motion.div>
         ) : (
           <AnimatePresence mode="popLayout">
-            {cart.map((item) => (
+            {validCartItems.map((item) => (
               <motion.div
                 layout
                 key={item.id}
@@ -165,7 +202,7 @@ const ScreenCart = () => {
                 <div className="w-20 h-20 shrink-0 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden relative">
                   {(item.video && !item.image1) ? (
                     <video
-                      src={item.video.startsWith("http") ? item.video : `https://cleverdining-2.onrender.com${item.video}`}
+                      src={resolveVideoUrl(item.video)}
                       className="w-full h-full object-cover"
                       muted
                       playsInline
@@ -175,20 +212,21 @@ const ScreenCart = () => {
                     />
                   ) : (
                     <img
-                      src={item.image1}
+                      src={resolveImageUrl(item.image1)}
                       alt={item.item_name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        // Could show a generic fallback icon here if needed
+                        e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
                       }}
                     />
                   )}
                 </div>
                 {/* Text & Price */}
-                <div className="ml-4 flex-1">
-                  <h2 className="text-primary">{item.item_name}</h2>
-                  <p className="text-primary/40">AED {item.price}</p>
+                <div className="ml-4 flex-1 min-w-0 flex flex-col justify-between">
+                  <div>
+                    <h2 className="text-primary font-medium leading-tight truncate">{item.item_name}</h2>
+                    <p className="text-primary/40 text-sm">AED {item.price}</p>
+                  </div>
                   {/* Quantity Controller with +/- buttons */}
                   <div className="flex items-center space-x-2 mt-2">
                     <button
@@ -210,7 +248,7 @@ const ScreenCart = () => {
                 </div>
                 {/* Remove Button */}
                 <button
-                  className="ml-4 text-gray-500 hover:text-gray-800"
+                  className="ml-4 self-start text-gray-500 hover:text-gray-800"
                   onClick={() => removeFromCart(item.id)}
                 >
                   <svg
@@ -233,7 +271,7 @@ const ScreenCart = () => {
           </AnimatePresence>
         )}
       </div>
-      {cart.length > 0 && (
+      {validCartItems.length > 0 && (
         <div className="w-full mt-auto">
           <div className="fixed bottom-24 left-4 right-4 bg-white p-4 shadow-xl rounded-2xl z-50 max-w-2xl mx-auto border border-gray-100">
             <div className="flex justify-between items-center mb-4">

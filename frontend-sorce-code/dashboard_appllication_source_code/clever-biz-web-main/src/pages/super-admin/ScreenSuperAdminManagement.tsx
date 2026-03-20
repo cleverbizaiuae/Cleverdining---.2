@@ -113,18 +113,12 @@ const ScreenSuperAdminManagement = () => {
     });
 
     // --- Queries ---
-    const { data: restaurants = SEEDED_RESTAURANTS, isLoading } = useQuery<RegisteredRestaurant[]>({
+    const { data: restaurants = [], isLoading } = useQuery<RegisteredRestaurant[]>({
         queryKey: ['registered-restaurants'],
         queryFn: async () => {
-            try {
-                const response = await axiosInstance.get('/owners/registered-restaurants/');
-                return response.data;
-            } catch {
-                // Return seeded data if API not available
-                return SEEDED_RESTAURANTS;
-            }
+            const response = await axiosInstance.get('/owners/registered-restaurants/');
+            return response.data;
         },
-        initialData: SEEDED_RESTAURANTS
     });
 
     // --- Mutations with Optimistic Updates (works without backend) ---
@@ -328,6 +322,7 @@ const ScreenSuperAdminManagement = () => {
             paymentProcessor: restaurant.paymentProcessor || "stripe",
             package: restaurant.package
         });
+        setShowPassword(false);
         setIsEditing(false);
     };
 
@@ -447,7 +442,7 @@ const ScreenSuperAdminManagement = () => {
                     >
                         {/* Restaurant Column - Name, Email, Rating */}
                         <div className="col-span-4">
-                            <p className="text-sm font-medium text-slate-900">{restaurant.name}</p>
+                            <p data-testid="restaurant-name" className="text-sm font-medium text-slate-900">{restaurant.name}</p>
                             <p className="text-xs text-slate-500">{restaurant.email || '-'}</p>
                             {restaurant.rating && (
                                 <div className="flex items-center gap-1 mt-1">
@@ -459,7 +454,8 @@ const ScreenSuperAdminManagement = () => {
 
                         {/* Location Column */}
                         <div className="col-span-2">
-                            <p className="text-sm text-slate-600">{restaurant.city}, {restaurant.country}</p>
+                            <p className="text-sm text-slate-600">{restaurant.location || 'N/A'}</p>
+                            <p className="text-xs text-slate-400">{[restaurant.city, restaurant.country].filter(Boolean).join(', ')}</p>
                         </div>
 
                         {/* Package Column */}
@@ -486,12 +482,35 @@ const ScreenSuperAdminManagement = () => {
 
                         {/* Actions Column */}
                         <div className="col-span-2 flex justify-center">
-                            <button
-                                onClick={() => handleViewRestaurant(restaurant)}
-                                className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors"
-                            >
-                                <Eye className="h-4 w-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    data-testid="view-user"
+                                    onClick={() => handleViewRestaurant(restaurant)}
+                                    className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="View"
+                                >
+                                    <Eye className="h-4 w-4" />
+                                </button>
+                                <button
+                                    data-testid="edit-restaurant"
+                                    onClick={() => {
+                                        handleViewRestaurant(restaurant);
+                                        setIsEditing(true);
+                                    }}
+                                    className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit"
+                                >
+                                    <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                    data-testid="delete-restaurant"
+                                    onClick={() => handleOpenDelete(restaurant)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )) : (
@@ -604,7 +623,7 @@ const ScreenSuperAdminManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-700 mb-1">Contact Phone</label>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Contact Phone <span className="text-red-500">*</span></label>
                                         <input
                                             type="text"
                                             value={newRestaurant.phone}
@@ -614,7 +633,7 @@ const ScreenSuperAdminManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-700 mb-1">Contact Email</label>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Contact Email <span className="text-red-500">*</span></label>
                                         <input
                                             type="email"
                                             value={newRestaurant.email}
@@ -749,8 +768,9 @@ const ScreenSuperAdminManagement = () => {
                                 Cancel
                             </button>
                             <button
+                                data-testid="submit-btn"
                                 onClick={() => createRestaurantMutation.mutate(newRestaurant)}
-                                disabled={createRestaurantMutation.isPending || !newRestaurant.name || !newRestaurant.city}
+                                disabled={createRestaurantMutation.isPending || !newRestaurant.name || !newRestaurant.city || !newRestaurant.phone || !newRestaurant.email}
                                 className="px-5 py-2.5 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
                             >
                                 {createRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -765,7 +785,7 @@ const ScreenSuperAdminManagement = () => {
 
             {/* --- Delete Confirmation Modal --- */}
             {isDeleteOpen && restaurantToDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6">
                         {/* Header */}
                         <div className="flex items-center gap-3 mb-4">
@@ -781,7 +801,7 @@ const ScreenSuperAdminManagement = () => {
                         {/* Restaurant Info */}
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                             <p className="text-sm text-red-800 font-medium">{restaurantToDelete.name}</p>
-                            <p className="text-xs text-red-600 mt-1">{restaurantToDelete.location}, {restaurantToDelete.city}</p>
+                            <p className="text-xs text-red-600 mt-1">{[restaurantToDelete.location, restaurantToDelete.city].filter(Boolean).join(', ') || 'N/A'}</p>
                         </div>
 
                         {/* Confirmation Input */}
@@ -807,6 +827,7 @@ const ScreenSuperAdminManagement = () => {
                                 Cancel
                             </button>
                             <button
+                                data-testid="delete-btn"
                                 onClick={handleConfirmDelete}
                                 disabled={deleteConfirmText.toLowerCase() !== "delete" || deleteRestaurantMutation.isPending}
                                 className="flex-1 h-10 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
@@ -827,7 +848,7 @@ const ScreenSuperAdminManagement = () => {
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <div>
                                 <h3 className="text-lg font-semibold text-slate-900">{selectedRestaurant.name}</h3>
-                                <p className="text-xs text-slate-500">{selectedRestaurant.city}, {selectedRestaurant.country}</p>
+                                <p className="text-xs text-slate-500">{[selectedRestaurant.city, selectedRestaurant.country].filter(Boolean).join(', ') || 'N/A'}</p>
                             </div>
                             <button onClick={() => setSelectedRestaurant(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
                                 <X className="h-4 w-4" />
@@ -914,16 +935,113 @@ const ScreenSuperAdminManagement = () => {
                         {/* Footer */}
                         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between">
                             <button
+                                data-testid="delete-btn"
                                 onClick={() => handleOpenDelete(selectedRestaurant)}
                                 className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
                             >
                                 <Trash2 className="h-3.5 w-3.5" /> Delete
                             </button>
+                            <div className="flex gap-2">
+                                <button
+                                    data-testid="edit-restaurant"
+                                    onClick={() => setIsEditing(true)}
+                                    className="px-5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                                >
+                                    <Edit2 className="h-3.5 w-3.5" /> Edit
+                                </button>
+                                <button
+                                    onClick={() => { setSelectedRestaurant(null); setShowPassword(false); }}
+                                    className="px-5 py-2 bg-[#0055FE] hover:bg-[#0047D1] text-white rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- Edit Restaurant Modal --- */}
+            {selectedRestaurant && isEditing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900">Edit {selectedRestaurant.name}</h3>
+                                <p className="text-xs text-slate-500">Update restaurant details</p>
+                            </div>
+                            <button onClick={() => { setIsEditing(false); setSelectedRestaurant(null); }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Form */}
+                        <div className="p-6 overflow-y-auto space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
+                                    <input type="text" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+                                    <input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">City</label>
+                                    <input type="text" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Country</label>
+                                    <input type="text" value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">QR Codes</label>
+                                    <input type="number" min="1" value={editForm.qrCodes} onChange={(e) => setEditForm({ ...editForm, qrCodes: parseInt(e.target.value) || 0 })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Tables</label>
+                                    <input type="number" min="1" value={editForm.tableCount} onChange={(e) => setEditForm({ ...editForm, tableCount: parseInt(e.target.value) || 0 })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Processor</label>
+                                    <div className="relative">
+                                        <select value={editForm.paymentProcessor} onChange={(e) => setEditForm({ ...editForm, paymentProcessor: e.target.value })} className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none">
+                                            <option value="stripe">Stripe</option>
+                                            <option value="checkout">Checkout.com</option>
+                                            <option value="paytabs">PayTabs</option>
+                                        </select>
+                                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-700 mb-1">Package</label>
+                                <div className="relative">
+                                    <select value={editForm.package} onChange={(e) => setEditForm({ ...editForm, package: e.target.value })} className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none">
+                                        <option value="Starter">Starter</option>
+                                        <option value="Enterprise">Enterprise</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                            <button onClick={() => setIsEditing(false)} className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition-colors">
+                                Cancel
+                            </button>
                             <button
-                                onClick={() => { setSelectedRestaurant(null); setShowPassword(false); }}
-                                className="px-5 py-2 bg-[#0055FE] hover:bg-[#0047D1] text-white rounded-lg text-sm font-medium transition-colors"
+                                data-testid="submit-btn"
+                                onClick={handleSaveChanges}
+                                disabled={updateRestaurantMutation.isPending}
+                                className="px-5 py-2.5 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                             >
-                                Close
+                                {updateRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
+                                Save Changes
                             </button>
                         </div>
                     </div>

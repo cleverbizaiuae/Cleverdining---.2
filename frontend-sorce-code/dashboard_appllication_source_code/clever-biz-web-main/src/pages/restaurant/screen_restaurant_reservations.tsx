@@ -16,6 +16,7 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import toast from "react-hot-toast";
+import { NewAssistantModal } from "@/components/modals";
 
 // --- COMPONENTS ---
 
@@ -33,61 +34,6 @@ const MetricCard = ({ title, value, icon: Icon, colorClass = "text-[#0055FE]", i
     )}
   </div>
 );
-
-const AddAssistantModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl scale-100 animate-scaleIn">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-semibold text-slate-900">Add Assistant</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Phone Number</label>
-            <div className="flex gap-2">
-              <div className="w-20 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-center text-lg">
-                🇺🇸
-              </div>
-              <input
-                type="tel"
-                placeholder="+1 (555) 000-0000"
-                className="flex-1 h-10 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 px-4 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Twilio SID</label>
-            <input
-              type="text"
-              placeholder="AC..."
-              className="w-full h-10 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 px-4 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 font-mono text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">Twilio Token</label>
-            <input
-              type="password"
-              placeholder="••••••••••••••••"
-              className="w-full h-10 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 px-4 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 font-mono text-sm"
-            />
-          </div>
-
-          <button className="w-full h-10 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg mt-2 transition-colors shadow-lg shadow-blue-500/20">
-            Update Assistant
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 const ScreenRestaurantReservations = () => {
   const {
@@ -171,6 +117,7 @@ const ScreenRestaurantReservations = () => {
               }}
               dateFormat="dd/MM/yyyy"
               placeholderText="dd/mm/yyyy"
+              popperClassName="z-[100]"
               className="h-10 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 w-full sm:w-40 cursor-pointer"
             />
           </div>
@@ -320,7 +267,7 @@ const ScreenRestaurantReservations = () => {
         </div>
       </div>
 
-      <AddAssistantModal isOpen={assistantModalOpen} onClose={() => setAssistantModalOpen(false)} />
+      <NewAssistantModal isOpen={assistantModalOpen} close={() => setAssistantModalOpen(false)} />
     </div>
   );
 };

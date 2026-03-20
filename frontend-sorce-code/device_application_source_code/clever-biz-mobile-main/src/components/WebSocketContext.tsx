@@ -13,6 +13,8 @@ type WebSocketContextType = {
   setNewMessageFlag: (value: boolean) => void;
   messages: any[];
   setMessages: React.Dispatch<React.SetStateAction<any[]>>;
+  connectionStatus: "connecting" | "connected" | "reconnecting" | "disconnected";
+  retryConnection: () => void;
 };
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(
@@ -35,6 +37,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   });
   const reconnectTimeout = React.useRef<NodeJS.Timeout | null>(null);
   const reconnectDelay = React.useRef<number>(3000); // Start at 3s, exponential backoff
+  const reconnectAttempts = React.useRef<number>(0);
+  const pendingMessagesRef = React.useRef<Array<{ message: string; type: string }>>([]);
+  const MAX_RECONNECT_ATTEMPTS = 8;
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "reconnecting" | "disconnected">("connecting");
 
   // Function to set the newMessage flag
   const setNewMessageFlag = (value: boolean) => {
@@ -83,8 +89,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
 
     // Robust ID Extraction (Supports Owner User structure AND Guest/Table Session structure)
-    let device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id;
-    let restaurant_id = parsedUserInfo?.user?.restaurants?.[0]?.id;
+    let device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id || parsedUserInfo?.device_id || parsedUserInfo?.table_id;
+    let restaurant_id = parsedUserInfo?.user?.restaurants?.[0]?.id || parsedUserInfo?.restaurant_id || localStorage.getItem("restaurant_id");
 
     // Fallback for Guest/Table Session (where structure is flat or different)
     if (!device_id) {
@@ -94,20 +100,29 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       restaurant_id = parsedUserInfo?.restaurant_id || parsedUserInfo?.user?.restaurant_id;
     }
 
-    if (!device_id) return;
+    if (!device_id || !restaurant_id) {
+      setConnectionStatus("disconnected");
+      return;
+    }
 
     // Check against the Ref, which is always current
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return; // Already connecting or connected
     }
 
-    // Use WSS for production fallback
-    const defaultWsUrl = "wss://cleverdining-2.onrender.com";
-    const wsBaseUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
+    const toWsBase = (input: string): string => {
+      if (!input) return "wss://cleverdining-2.onrender.com";
+      if (input.startsWith("ws://") || input.startsWith("wss://")) return input;
+      if (input.startsWith("http://")) return input.replace("http://", "ws://");
+      if (input.startsWith("https://")) return input.replace("https://", "wss://");
+      return `wss://${input.replace(/^\/+/, "")}`;
+    };
+    const wsBaseUrl = toWsBase(import.meta.env.VITE_WS_URL || "wss://cleverdining-2.onrender.com");
 
     // Safety Check: If we are a guest (no accessToken) and have no guestSessionToken, do NOT connect.
     if ((!accessToken || accessToken === "guest_token") && !tokenToUse) {
       console.warn("WebSocket Context: Missing Guest Token, aborting connection to prevent history loss.");
+      setConnectionStatus("disconnected");
       return;
     }
 
@@ -118,9 +133,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurant_id}/?token=${tokenToUse}`;
     } else {
       console.warn("Missing restaurant_id, cannot connect to Unified Chat Room.");
+      setConnectionStatus("disconnected");
       return;
     }
 
+    setConnectionStatus(reconnectAttempts.current > 0 ? "reconnecting" : "connecting");
     console.log(`Connecting to WebSocket: ${wsUrl}`);
     const socket = new WebSocket(wsUrl);
 
@@ -132,10 +149,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       console.log("WebSocket connected");
       // Reset backoff on successful connection
       reconnectDelay.current = 3000;
+      reconnectAttempts.current = 0;
+      setConnectionStatus("connected");
       // Clear any pending reconnect attempts
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
         reconnectTimeout.current = null;
+      }
+
+      // Flush queued messages that were created while disconnected.
+      if (pendingMessagesRef.current.length > 0) {
+        const queued = [...pendingMessagesRef.current];
+        pendingMessagesRef.current = [];
+        queued.forEach((entry) => {
+          socket.send(JSON.stringify(entry));
+        });
       }
     };
 
@@ -200,6 +228,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       console.log(`WebSocket disconnected. Reconnecting in ${delay / 1000}s...`);
       wsRef.current = null;
       setWs(null);
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        setConnectionStatus("disconnected");
+        return;
+      }
+      setConnectionStatus("reconnecting");
+      reconnectAttempts.current += 1;
       // Exponential backoff: 3s → 6s → 12s → 24s → max 30s
       reconnectDelay.current = Math.min(delay * 2, 30000);
       // Attempt reconnect
@@ -218,16 +252,36 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   }, []);
 
   const sendMessage = (message: string, type: string = "message") => {
+    const payload = { message, type };
+
     // Use Ref for immediate check
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log(`DEBUG: Mobile Sending WS Payload: ${JSON.stringify({ message, type })}`);
-      wsRef.current.send(JSON.stringify({ message, type }));
+      console.log(`DEBUG: Mobile Sending WS Payload: ${JSON.stringify(payload)}`);
+      wsRef.current.send(JSON.stringify(payload));
     } else {
-      console.warn("DEBUG: Mobile WS not ready. Triggering reconnect.");
-      // Try to reconnect if trying to send and disconnected
+      // Queue message so actions like "Call Assistance" are not dropped.
+      const queue = pendingMessagesRef.current;
+      if (queue.length >= 20) {
+        queue.shift();
+      }
+      queue.push(payload);
+
+      console.warn("DEBUG: Mobile WS not ready. Queued message and triggering reconnect.");
+      reconnectAttempts.current = 0;
+      setConnectionStatus("reconnecting");
       connect();
     }
   };
+
+  const retryConnection = React.useCallback(() => {
+    reconnectAttempts.current = 0;
+    reconnectDelay.current = 3000;
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+    connect();
+  }, [connect]);
 
   useEffect(() => {
     connect();
@@ -237,6 +291,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         const socket = wsRef.current;
         if (!socket || socket.readyState === WebSocket.CLOSED) {
           console.log("App visible, reconnecting socket...");
+          reconnectAttempts.current = 0;
           connect();
         }
       }
@@ -259,7 +314,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
   return (
     <WebSocketContext.Provider
-      value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage, messages, setMessages }}
+      value={{ ws, hasNewMessage, setNewMessageFlag, sendMessage, messages, setMessages, connectionStatus, retryConnection }}
     >
       {children}
     </WebSocketContext.Provider>

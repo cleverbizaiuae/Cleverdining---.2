@@ -16,6 +16,20 @@
   box-shadow: 0 0 0 2px #0057e4 !important;
 }
 
+.phone-input-container .PhoneInput {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.phone-input-container .PhoneInputCountry {
+  min-width: 3.5rem !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  margin-right: 0.5rem !important;
+}
+
 .phone-input-container .PhoneInputCountrySelect {
   background-color: #383a41 !important;
   color: white !important;
@@ -27,8 +41,7 @@
 
 /* Fixed country flag - remove the problematic filter */
 .phone-input-container .PhoneInputCountryIcon {
-  /* Remove this line: filter: brightness(1.8) invert(6); */
-  /* This filter makes flags look weird - let them show naturally */
+  filter: none !important;
 }
 
 /* If you want to style the dropdown arrow */

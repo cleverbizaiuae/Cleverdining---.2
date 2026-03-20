@@ -4,7 +4,6 @@ import {
   TableFoodList,
 } from "../../components/utilities";
 import { useEffect, useState } from "react";
-import { useOwner } from "@/context/ownerContext";
 import { useStaff } from "@/context/staffContext";
 
 const ScreenChefDashboard = () => {
@@ -15,9 +14,9 @@ const ScreenChefDashboard = () => {
     searchQuery,
     fetchFoodItems,
     setCurrentPage,
-  } = useOwner();
-
-  const { statusSummary, fetchStatusSummary } = useStaff();
+    statusSummary,
+    fetchStatusSummary,
+  } = useStaff();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,14 +108,18 @@ const ScreenChefDashboard = () => {
         {/* Dashboard Content */}
         {/* Header and dropdown */}
         <div className="flex flex-row justify-between items-center my-3">
-          <h2 className="text-2xl text-primary-text">List of items</h2>
+          <h2 className="text-2xl text-slate-900">List of items</h2>
           {/* <DashboardDropDown
             options={["All", "Fruits", "Vegetables", "Dairy", "Meat", "Snacks"]}
           /> */}
         </div>
         {/* List of content */}
         <div className="bg-white border border-slate-200 p-4 rounded-lg">
-          <TableFoodList data={foodItems} />
+          {foodItems.length > 0 ? (
+            <TableFoodList data={foodItems} />
+          ) : (
+            <div className="py-10 text-center text-slate-500 text-sm">No items found.</div>
+          )}
           <div className="mt-4 flex justify-center">
             <Pagination
               page={currentPage}

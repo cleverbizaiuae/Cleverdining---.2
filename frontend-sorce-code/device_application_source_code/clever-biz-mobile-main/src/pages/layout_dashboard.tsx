@@ -432,7 +432,7 @@ const LayoutDashboard = () => {
               </header>
 
               {/* Main Content (Menu Feed) */}
-              <main className="px-4 py-4 flex flex-col gap-4 flex-1">
+              <main className="px-4 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain">
                 {filteredItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                     <p>No items found.</p>

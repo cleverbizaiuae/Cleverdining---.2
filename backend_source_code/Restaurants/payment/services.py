@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
+from django.db.models import Q
 
 channel_layer = get_channel_layer()
 
@@ -20,79 +21,24 @@ class PaymentService:
         if provider == 'cash':
             return CashAdapter(None) 
 
-        # Handle generic 'card' alias
+        # Treat "card" as "use active configured online gateway".
         if provider == 'card':
-            # 1. Respect currently active gateway if exists
-            active = PaymentGateway.objects.filter(restaurant=restaurant, is_active=True).first()
-            if active:
-                provider = active.provider
-                gateway = active
-            else:
-                # 2. Default to PayTabs if nothing is active (User Preference)
-                provider = 'paytabs'
+            provider = None
 
-        # 1. Try exact match (Active)
+        gateway = None
         if provider:
-            gateway = PaymentGateway.objects.filter(restaurant=restaurant, provider=provider, is_active=True).first()
+            gateway = PaymentGateway.objects.filter(
+                restaurant=restaurant,
+                provider=provider,
+                is_active=True
+            ).first()
         else:
-            gateway = PaymentGateway.objects.filter(restaurant=restaurant, is_active=True).first()
-        
-        # 2. Self-Healing: If not found, try to find ANY match and activate/fix it
-        if not gateway and provider:
-            # Check for inactive
-            gateway = PaymentGateway.objects.filter(restaurant=restaurant, provider=provider).first()
-            if gateway:
-                gateway.is_active = True
-                gateway.save()
-            else:
-                # Does not exist. Create Default/Placeholder.
-                defaults = {}
-                if provider == 'stripe':
-                    defaults = {
-                        'key_id': "pk_test_TYooMQauvdEDq54NiTphI7jx",
-                        'key_secret': "sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc"
-                    }
-                elif provider == 'paytabs':
-                    defaults = {
-                        'key_id': "PROFILE_ID_MISSING",
-                        'key_secret': "SERVER_KEY_MISSING"
-                    }
-                elif provider == 'checkout':
-                    defaults = {
-                         'key_id': "pk_test_missing",
-                         'key_secret': "sk_test_missing"
-                    }
-                
-                if defaults:
-                     # Auto-Create
-                     if not provider in ['stripe', 'paytabs', 'checkout']:
-                          # Don't auto-create unknown providers without defaults
-                          pass
-                     else:
-                        gateway = PaymentGateway.objects.create(
-                            restaurant=restaurant,
-                            provider=provider,
-                            is_active=True,
-                            **defaults
-                        )
+            gateway = PaymentGateway.objects.filter(
+                restaurant=restaurant,
+                is_active=True
+            ).first()
 
-        # 3. Last Resort: Default Fallback if provider was None and we still have nothing
-        if not gateway and not provider:
-             # Try defaulting to Stripe
-             gateway = PaymentGateway.objects.filter(restaurant=restaurant, provider='stripe').first()
-             if not gateway:
-                  gateway = PaymentGateway.objects.create(
-                        restaurant=restaurant,
-                        provider='stripe',
-                        is_active=True,
-                        key_id="pk_test_TYooMQauvdEDq54NiTphI7jx",
-                        key_secret="sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc"
-                  )
-             else:
-                 gateway.is_active = True
-                 gateway.save()
-
-        # 4. Legacy Fallback (StripeDetails) - kept just in case
+        # Legacy fallback for StripeDetails-backed setups.
         if not gateway and (not provider or provider == 'stripe'):
              try:
                 stripe_details = StripeDetails.objects.get(restaurant=restaurant)
@@ -104,7 +50,6 @@ class PaymentService:
                 pass
 
         if not gateway:
-            # If we reached here, we really failed.
             raise ValidationError(f"No active payment gateway found for provider: {provider or 'any'}")
             
         adapter_class = PaymentService.ADAPTERS.get(gateway.provider)
@@ -188,8 +133,9 @@ class PaymentService:
                 # (Logic matches CreateBulkCheckoutSessionView filtering)
                 from order.models import Order
                 bulk_orders = Order.objects.filter(
-                    guest_session=main_order.guest_session,
-                    status__in=['pending', 'preparing', 'served', 'completed', 'awaiting_cash'],
+                    Q(guest_session=main_order.guest_session) | Q(device=main_order.device),
+                    restaurant=main_order.restaurant,
+                    status__in=['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
                 ).exclude(id=main_order.id).exclude(payment_status='paid')
                 
                 orders_to_update.extend(list(bulk_orders))
@@ -314,8 +260,9 @@ class PaymentService:
                 if payment.created_by == 'guest_bulk' and main_order.guest_session:
                     from order.models import Order
                     bulk_orders = Order.objects.filter(
-                        guest_session=main_order.guest_session,
-                        status__in=['pending', 'preparing', 'served', 'awaiting_cash'],
+                        Q(guest_session=main_order.guest_session) | Q(device=main_order.device),
+                        restaurant=main_order.restaurant,
+                        status__in=['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
                     ).exclude(id=main_order.id).exclude(payment_status='paid')
                     orders_to_update.extend(list(bulk_orders))
                 

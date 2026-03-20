@@ -2,6 +2,7 @@ import stripe
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from order.models import Order
+from django.db.models import Q
 from .models import Payment, PaymentGateway
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
@@ -146,12 +147,16 @@ class CreateBulkCheckoutSessionView(APIView):
             return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
 
         # 2. Get Unpaid Orders
-        # Include: pending, preparing, served, completed, awaiting_cash
+        # Include all checkout-eligible unpaid states.
         # Exclude: only orders that are already PAID
+        eligible_statuses = ['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash']
+        # Include all unpaid orders for the same current table/device to avoid missing orders
+        # when session records rotate or split.
         unpaid_orders = Order.objects.filter(
-            guest_session=session, 
-            status__in=['pending', 'preparing', 'served', 'completed', 'awaiting_cash'],
-        ).exclude(payment_status='paid')
+            Q(guest_session=session) | Q(device=session.device),
+            restaurant=session.device.restaurant,
+            status__in=eligible_statuses,
+        ).exclude(payment_status='paid').distinct()
         
         if not unpaid_orders.exists():
              return Response({'error': 'No unpaid orders found'}, status=status.HTTP_400_BAD_REQUEST)
@@ -256,79 +261,11 @@ class CreateBulkCheckoutSessionView(APIView):
                 return Response({'error': f'Cash payment failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         else:
-             # Stripe Bulk Session
-             # We use the Primary Order to initialize the Payment record creation in the Adapter
-             # But we need to override the amount.
-             
-             primary_order = unpaid_orders.first() # Attach to latest or first? Latest might be better.
+             # Use latest unpaid order as anchor for session-wide checkout metadata.
              primary_order = unpaid_orders.last()
-             
-             # Call Adapter Directly to bypass PaymentService rigidness check if needed, 
-             # OR utilize PaymentService if we modify it.
-             primary_order = unpaid_orders.last()
-             
-             # --- AUTO-FIX LOGIC ---
-             # The user specifically requested PayTabs. If no provider specified, check active, or default to PayTabs?
-             # If provider is passed from frontend, we respect it.
-             # If not, we check what's active.
-             
-             from .models import PaymentGateway
-             
-             # Determine target provider
-             target_provider = provider if provider else 'paytabs' # Default to PayTabs per user request if ambiguous
-             
-             # Attempt to find EXISTING gateway for this provider
-             gateway = PaymentGateway.objects.filter(restaurant=primary_order.restaurant, provider=target_provider).first()
+             target_provider = provider or None
 
-             if not gateway:
-                 # Auto-Create 
-                 if target_provider == 'stripe':
-                      gateway = PaymentGateway.objects.create(
-                         restaurant=primary_order.restaurant,
-                         provider='stripe',
-                         is_active=True,
-                         key_id="pk_test_TYooMQauvdEDq54NiTphI7jx",
-                         key_secret="sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc"
-                     )
-                 elif target_provider == 'paytabs':
-                     # We don't have public test keys for PayTabs.
-                     # But user said "Use the PAYTABS account added", yet it's not in DB.
-                     # We MUST create a record so PaymentService doesn't crash.
-                     
-                     # First, check for *any* active gateway to fallback to?
-                     # No, user wants PayTabs. Let's create a Shell Gateway.
-                     # If credentials are wrong, Adapter will show useful error.
-                     active_gateway = PaymentGateway.objects.filter(restaurant=primary_order.restaurant, is_active=True).first()
-                     
-                     if active_gateway and active_gateway.provider != 'paytabs':
-                         # If there is another active one (e.g. Stripe), switch to it to be helpful?
-                         # Or just auto-create PayTabs?
-                         # Let's try to assume they want what they asked for.
-                         gateway = PaymentGateway.objects.create(
-                             restaurant=primary_order.restaurant,
-                             provider='paytabs',
-                             is_active=True,
-                             key_id="PROFILE_ID_MISSING",
-                             key_secret="SERVER_KEY_MISSING"
-                         )
-                     else:
-                        # No active gateway at all, or we need to make PayTabs.
-                        gateway = PaymentGateway.objects.create(
-                             restaurant=primary_order.restaurant,
-                             provider='paytabs',
-                             is_active=True,
-                             key_id="PROFILE_ID_MISSING",
-                             key_secret="SERVER_KEY_MISSING"
-                        )
-                        
-             elif not gateway.is_active:
-                 # Reactivate
-                 gateway.is_active = True
-                 gateway.save()
-            
-             # --- PROCESS PAYMENT ---
              try:
-                 # Use Unified Service which now supports PayTabs
                  result = PaymentService.create_payment(
                      order=primary_order,
                      success_url=success_url,

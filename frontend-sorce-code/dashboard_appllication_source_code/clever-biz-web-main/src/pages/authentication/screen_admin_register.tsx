@@ -99,6 +99,7 @@ const ScreenAdminRegister = () => {
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-900">Owner Name</label>
                     <input
+                        data-testid="owner-name"
                         type="text"
                         name="customerName"
                         required
@@ -113,6 +114,7 @@ const ScreenAdminRegister = () => {
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-900">Restaurant Name</label>
                     <input
+                        data-testid="restaurant-name"
                         type="text"
                         name="restaurantName"
                         required
@@ -141,6 +143,7 @@ const ScreenAdminRegister = () => {
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-900">Phone Number</label>
                     <input
+                        data-testid="mobile-input"
                         type="tel"
                         name="phoneNumber"
                         required
@@ -212,6 +215,7 @@ const ScreenAdminRegister = () => {
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-900">Email</label>
                     <input
+                        data-testid="email-input"
                         type="email"
                         name="email"
                         required
@@ -247,6 +251,7 @@ const ScreenAdminRegister = () => {
 
                 {/* Submit Button */}
                 <button
+                    data-testid="submit-btn"
                     type="submit"
                     disabled={isLoading}
                     className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold rounded-lg shadow-[0_10px_15px_rgba(0,85,254,0.2)] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all text-lg"

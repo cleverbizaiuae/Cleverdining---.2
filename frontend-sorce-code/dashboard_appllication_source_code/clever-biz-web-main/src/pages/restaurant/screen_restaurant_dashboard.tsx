@@ -409,10 +409,10 @@ const ScreenRestaurantDashboard = () => {
               </div>
               {(userRole === 'owner' || userRole === 'manager') && (
                 <>
-                  <button className="h-8 px-3 ml-2 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddCategory(true)}>
+                  <button data-testid="add-category-btn" className="h-8 px-3 ml-2 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddCategory(true)}>
                     <FolderPlus size={14} /> Add Category
                   </button>
-                  <button className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddSubCategory(true)}>
+                  <button data-testid="add-sub-category-btn" className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddSubCategory(true)}>
                     <Layers size={14} /> Add Sub-Category
                   </button>
                   <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddItem(true)}>
@@ -442,7 +442,14 @@ const ScreenRestaurantDashboard = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden shrink-0">
                             {item.image ? (
-                              <img src={item.image} alt="" className="w-full h-full object-cover" />
+                              <img
+                                src={item.image}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Img</div>
                             )}
@@ -699,13 +706,12 @@ const ScreenRestaurantDashboard = () => {
           <ImageUploaderWithAI
             label="Category Image"
             currentImage={catFormData.image}
-            onImageSelected={(file: File) => {
-              if (showEditCategory) { /* edit logic */ }
-              else setCatFormData({ ...catFormData, image: file })
-            }}
+            existingImageUrl={showEditCategory ? editingCategory?.image : undefined}
+            onImageSelected={(file: File) => setCatFormData({ ...catFormData, image: file })}
           />
 
           <button
+            data-testid="submit-btn"
             disabled={isCategorySubmitting}
             onClick={async () => {
               if (isCategorySubmitting) return;
@@ -714,8 +720,10 @@ const ScreenRestaurantDashboard = () => {
                 const formData = new FormData();
                 if (showEditCategory) {
                   formData.append('Category_name', editingCategory.Category_name);
+                  if (catFormData.image) formData.append('image', catFormData.image);
                   await updateCategory(editingCategory.id, formData);
                   setShowEditCategory(false);
+                  setCatFormData({ name: "", image: null });
                 } else {
                   formData.append('Category_name', catFormData.name);
                   if (catFormData.image) formData.append('image', catFormData.image);
@@ -778,8 +786,17 @@ const ScreenRestaurantDashboard = () => {
             </select>
           </div>
 
+          {/* IMAGE UPLOADER WITH AI FOR SUBCATEGORY */}
+          <ImageUploaderWithAI
+            label="Sub-Category Image"
+            currentImage={subCatFormData.image}
+            existingImageUrl={showEditSubCategory ? editingSubCategory?.image : undefined}
+            onImageSelected={(file: File) => setSubCatFormData({ ...subCatFormData, image: file })}
+          />
+
 
           <button
+            data-testid="submit-btn"
             disabled={isCategorySubmitting}
             onClick={async () => {
               if (isCategorySubmitting) return;
@@ -789,11 +806,14 @@ const ScreenRestaurantDashboard = () => {
                 if (showEditSubCategory) {
                   formData.append('Category_name', editingSubCategory.Category_name);
                   formData.append('parent_category', editingSubCategory.parent_category);
+                  if (subCatFormData.image) formData.append('image', subCatFormData.image);
                   await updateSubCategory(editingSubCategory.id, formData);
                   setShowEditSubCategory(false);
+                  setSubCatFormData({ Category_name: "", parent_category: "", image: null });
                 } else {
                   formData.append('Category_name', subCatFormData.Category_name);
                   formData.append('parent_category', subCatFormData.parent_category);
+                  if (subCatFormData.image) formData.append('image', subCatFormData.image);
                   await createSubCategory(formData);
                   setShowAddSubCategory(false);
                   setSubCatFormData({ Category_name: "", parent_category: "", image: null });

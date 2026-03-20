@@ -378,7 +378,7 @@ class MyOrdersAPIView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     pagination_class = TenPerPagePagination
     filter_backends = [filters.SearchFilter]
-    search_fields = ['id']
+    search_fields = ['id', 'device__table_name']
 
     def get_queryset(self):
         user = self.request.user
@@ -451,7 +451,7 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
     pagination_class = TenPerPagePagination
     filter_backends = [filters.SearchFilter]
-    search_fields = ['id']
+    search_fields = ['id', 'device__table_name']
 
     def get_queryset(self):
         try:
@@ -505,13 +505,15 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
             # Stats should be calculated on the FULL (unfiltered) queryset
             full_queryset = self.get_queryset()
             today = date.today()
-            completed_orders = full_queryset.filter(status='completed')
+            completed_statuses = ['completed', 'delivered']
+            completed_orders = full_queryset.filter(status__in=completed_statuses)
             completed_today = completed_orders.filter(updated_time__date=today)
+            ongoing_statuses = ['pending', 'preparing', 'served', 'awaiting_cash']
 
             stats = {
                 "total_completed_orders": completed_orders.count(),
                 "today_completed_order_count": completed_today.count(),
-                "ongoing_orders": full_queryset.filter(status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']).count()
+                "ongoing_orders": full_queryset.filter(status__in=ongoing_statuses).count()
             }
 
             return self.get_paginated_response({
@@ -579,10 +581,6 @@ class OwnerUpdateOrderStatusAPIView(APIView):
              
         elif order.status == "completed":
             return Response({"error": "Order is already completed/delivered."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if order.status == "paid" and new_status != "completed" and new_status != "cancelled":
-            return Response({"error": "Once order is paid, it can only be marked as completed."}, status=status.HTTP_400_BAD_REQUEST)
-
 
         order.status = new_status
         order.save(update_fields=['status', 'updated_time'])
@@ -671,10 +669,10 @@ class OwnerOrderDetailAPIView(generics.RetrieveAPIView):
 
 class ChefStaffOrdersAPIView(generics.ListAPIView):
     serializer_class = OrderDetailSerializer
-    permission_classes = [IsAuthenticated,IsChefOrStaff]
+    permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
     pagination_class = TenPerPagePagination
     filter_backends = [filters.SearchFilter]
-    search_fields = ['id']
+    search_fields = ['id', 'device__table_name']
 
     def get_queryset(self):
         user = self.request.user
@@ -729,13 +727,18 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
         serializer = self.get_serializer(page, many=True)
 
         full_queryset = self.get_queryset()
-        ongoing_statuses = ['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
+        ongoing_statuses = ['pending', 'preparing', 'served', 'awaiting_cash']
+        completed_statuses = ['completed', 'delivered']
+        today = date.today()
         total_ongoing = full_queryset.filter(status__in=ongoing_statuses).count()
-        total_completed = full_queryset.filter(status='completed').count()
+        total_completed = full_queryset.filter(status__in=completed_statuses).count()
+        today_completed = full_queryset.filter(status__in=completed_statuses, updated_time__date=today).count()
 
         stats = {
             "total_ongoing_orders": total_ongoing,
             "total_completed_orders": total_completed,
+            "today_completed_order_count": today_completed,
+            "ongoing_orders": total_ongoing,
         }
 
         return self.get_paginated_response({
@@ -747,7 +750,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
     
 
 class ChefStaffUpdateOrderStatusAPIView(APIView):
-    permission_classes = [IsAuthenticated,IsChefOrStaff]
+    permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
 
     def patch(self, request, pk):
         user = request.user
@@ -766,11 +769,6 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         
         if order.status == "completed":
             return Response({"detail": "Order already completed"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if order.status == "paid" and new_status != "completed":
-            return Response({
-                "detail": "Once order is paid, it can only be marked as completed."
-            }, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = new_status
         order.save(update_fields=['status', 'updated_time'])

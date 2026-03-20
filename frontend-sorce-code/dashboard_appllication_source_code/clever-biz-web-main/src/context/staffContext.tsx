@@ -285,7 +285,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         console.log("Order status updated:", response.data);
       } catch (error: any) {
         console.error("Failed to update order status", error);
-        toast.error("Failed to update order status.");
+        if (showToast) {
+          toast.error("Failed to update order status.");
+        }
         throw error;
       }
     },
