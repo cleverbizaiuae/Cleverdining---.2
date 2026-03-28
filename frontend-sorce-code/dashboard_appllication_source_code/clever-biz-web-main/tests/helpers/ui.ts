@@ -80,7 +80,7 @@ async function saveDomSnapshot(page: Page, selectors: string[]) {
 }
 
 export async function firstVisible(page: Page, selectors: string[]) {
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   const candidates = withPreferredTestIds(selectors);
 
   try {
@@ -123,21 +123,21 @@ export async function firstVisible(page: Page, selectors: string[]) {
 }
 
 export async function fillFirst(page: Page, selectors: string[], value: string) {
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   const loc = await firstVisible(page, selectors);
   await expect(loc).toBeVisible();
   await loc.fill(value);
 }
 
 export async function clickFirst(page: Page, selectors: string[]) {
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   const loc = await firstVisible(page, selectors);
   await expect(loc).toBeVisible();
   await loc.click();
 }
 
 export async function getByTestIdVisible(page: Page, testId: string) {
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   const loc = page.getByTestId(testId).first();
   try {
     await expect(loc).toBeVisible({ timeout: 10_000 });
@@ -206,7 +206,7 @@ function isApiUrl(url: string) {
 }
 
 export async function waitForApi(page: Page, pattern: RegExp, action?: () => Promise<void>) {
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
 
   return retryApi(async () => {
     const observedPatternResponses: string[] = [];
@@ -243,14 +243,14 @@ export async function waitForApi(page: Page, pattern: RegExp, action?: () => Pro
       if (action) await action();
 
       const response = await waiter;
-      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
       return response;
     } catch (error) {
       if (fallbackPatternResponse) {
         console.warn(
           `[waitForApi] Pattern ${pattern} resolved with non-2xx response ${fallbackPatternResponse.status()} ${fallbackPatternResponse.url()}`
         );
-        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
         return fallbackPatternResponse;
       }
 
@@ -258,7 +258,7 @@ export async function waitForApi(page: Page, pattern: RegExp, action?: () => Pro
         console.warn(
           `[waitForApi] Pattern ${pattern} not resolved to a 2xx API response. Falling back to ${fallbackApiSuccess.status()} ${fallbackApiSuccess.url()}`
         );
-        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
         return fallbackApiSuccess;
       }
 
@@ -267,7 +267,7 @@ export async function waitForApi(page: Page, pattern: RegExp, action?: () => Pro
         console.warn(
           `[waitForApi] Pattern ${pattern} timed out. Using cached successful API response ${cachedApiSuccess.status()} ${cachedApiSuccess.url()}`
         );
-        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
         return cachedApiSuccess;
       }
 
@@ -284,7 +284,7 @@ export async function waitForApi(page: Page, pattern: RegExp, action?: () => Pro
         console.warn(
           `[waitForApi] Pattern ${pattern} timed out. Using next successful API response ${fallbackFromAnyApi.status()} ${fallbackFromAnyApi.url()}`
         );
-        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
         return fallbackFromAnyApi;
       }
 
@@ -310,7 +310,7 @@ export async function expectToast(page: Page, pattern: RegExp) {
 }
 
 export async function ensureLoaded(page: Page, headingPattern: RegExp) {
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   await expect
     .poll(
       () => page.locator("h1, h2").filter({ hasText: headingPattern }).count(),

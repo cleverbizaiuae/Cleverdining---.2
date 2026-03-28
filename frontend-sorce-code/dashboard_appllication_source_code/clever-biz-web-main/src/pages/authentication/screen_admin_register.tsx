@@ -31,8 +31,12 @@ const ScreenAdminRegister = () => {
         if (userInfo) {
             try {
                 const user = JSON.parse(userInfo);
-                // Check for Super Admin role
-                if (user.is_superuser || user.role === "super_admin") {
+                // Allow legacy and current super-admin representations.
+                if (
+                    user.is_superuser ||
+                    user.role === "super_admin" ||
+                    user.role === "admin"
+                ) {
                     setIsUnlocked(true);
                 } else {
                     toast.error("Unauthorized access.");
@@ -57,18 +61,49 @@ const ScreenAdminRegister = () => {
         setIsLoading(true);
 
         try {
-            await axiosInstance.post('/restaurant/create/', {
-                name: formData.restaurantName,
-                owner_name: formData.customerName,
-                email: formData.email,
-                password: formData.password,
+            const [cityPart, countryPart] = formData.location
+                .split(",")
+                .map((part) => part.trim())
+                .filter(Boolean);
+
+            const primaryPayload = {
+                resturent_name: formData.restaurantName,
+                location: formData.location,
+                city: cityPart || formData.location,
+                country: countryPart || "UAE",
                 phone_number: formData.phoneNumber,
-                address: formData.location,
-                table_count: formData.numberOfTables,
-                payment_processor: formData.paymentProcessor
-                // Note: File upload for logo typically requires FormData, 
-                // but respecting current JSON structure unless backend explicitly needs multipart/form-data.
-            });
+                email: formData.email,
+                owner_name: formData.customerName,
+                package: "Starter",
+                plan: "standard",
+                subscription_months: 12,
+                qr_codes: Number(formData.numberOfTables) || 10,
+                table_count: Number(formData.numberOfTables) || 10,
+                payment_processor: formData.paymentProcessor,
+                whatsapp_enabled: false,
+                password: formData.password
+            };
+
+            try {
+                await axiosInstance.post('/owners/registered-restaurants/', primaryPayload);
+            } catch (primaryErr: any) {
+                const statusCode = primaryErr?.response?.status;
+                if (statusCode !== 404 && statusCode !== 405) {
+                    throw primaryErr;
+                }
+
+                // Legacy fallback for older backend deployments.
+                await axiosInstance.post('/restaurant/create/', {
+                    name: formData.restaurantName,
+                    owner_name: formData.customerName,
+                    email: formData.email,
+                    password: formData.password,
+                    phone_number: formData.phoneNumber,
+                    address: formData.location,
+                    table_count: Number(formData.numberOfTables) || 10,
+                    payment_processor: formData.paymentProcessor
+                });
+            }
 
             toast.success("Restaurant registered successfully!");
             navigate("/superadmin/management");

@@ -716,6 +716,7 @@ from django.utils import timezone
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings as django_settings
+from django.db.utils import OperationalError
 
 
 class ForgotPasswordView(APIView):
@@ -749,9 +750,13 @@ class ForgotPasswordView(APIView):
 
         # Rate limiting: max N requests per hour for this email
         one_hour_ago = timezone.now() - timedelta(hours=1)
-        recent_count = PasswordResetToken.objects.filter(
-            user=user, created_at__gte=one_hour_ago
-        ).count()
+        try:
+            recent_count = PasswordResetToken.objects.filter(
+                user=user, created_at__gte=one_hour_ago
+            ).count()
+        except OperationalError as exc:
+            logger.warning("Password reset token table unavailable during rate-limit check: %s", exc)
+            return generic_response
         if recent_count >= self.MAX_REQUESTS_PER_HOUR:
             return generic_response  # Silently rate-limit
 
@@ -761,11 +766,15 @@ class ForgotPasswordView(APIView):
         expires_at = timezone.now() + timedelta(minutes=self.TOKEN_EXPIRY_MINUTES)
 
         # Store hashed token
-        PasswordResetToken.objects.create(
-            user=user,
-            token_hash=token_hash,
-            expires_at=expires_at
-        )
+        try:
+            PasswordResetToken.objects.create(
+                user=user,
+                token_hash=token_hash,
+                expires_at=expires_at
+            )
+        except OperationalError as exc:
+            logger.warning("Password reset token table unavailable during token create: %s", exc)
+            return generic_response
 
         # Build reset link
         reset_link = f"{self.FRONTEND_RESET_URL}?token={raw_token}"
@@ -864,4 +873,3 @@ class TokenResetPasswordView(APIView):
         PasswordResetToken.objects.filter(user=user).update(is_used=True)
 
         return Response({'detail': 'Password reset successfully. Redirecting to login...'}, status=status.HTTP_200_OK)
-

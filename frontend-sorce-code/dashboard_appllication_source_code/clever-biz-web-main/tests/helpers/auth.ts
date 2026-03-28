@@ -80,7 +80,7 @@ async function loginViaUi(page: Page, creds: Creds, role: AuthRole) {
 
   for (const route of routes) {
     await page.goto(route);
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
 
     if (role === "superadmin") {
       const pinInput = await firstVisibleOrNull(page, [
@@ -98,7 +98,7 @@ async function loginViaUi(page: Page, creds: Creds, role: AuthRole) {
       } else {
         await page.keyboard.press("Enter");
       }
-      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
       if (page.url().includes("/superadmin")) {
         return;
       }
@@ -145,7 +145,7 @@ async function loginViaUi(page: Page, creds: Creds, role: AuthRole) {
       await page.keyboard.press("Enter");
     }
 
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
 
     const token = await page
       .evaluate(() => localStorage.getItem("accessToken"))
@@ -189,7 +189,7 @@ async function loginViaApi(
     }
 
     await page.goto("/");
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
     await page.evaluate(
       ({ payload, isSuperAdmin }) => {
         localStorage.setItem("accessToken", payload.access || "");
@@ -215,25 +215,25 @@ async function loginViaApi(
 export async function loginAsAdmin(request: APIRequestContext, page: Page) {
   await loginViaApi(request, page, credentials.admin, "admin");
   await page.goto(roleHome.admin);
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 
 export async function loginAsOwner(request: APIRequestContext, page: Page) {
   await loginViaApi(request, page, credentials.owner, "owner");
   await page.goto(roleHome.owner);
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 
 export async function loginAsStaff(request: APIRequestContext, page: Page) {
   await loginViaApi(request, page, credentials.staff, "staff");
   await page.goto(roleHome.staff);
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 
 export async function loginAsChef(request: APIRequestContext, page: Page) {
   await loginViaApi(request, page, credentials.chef, "chef");
   await page.goto(roleHome.chef);
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 
 export async function loginAsSuperAdmin(
@@ -242,5 +242,5 @@ export async function loginAsSuperAdmin(
 ) {
   await loginViaApi(request, page, credentials.superadmin, "superadmin");
   await page.goto(roleHome.superadmin);
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
 }

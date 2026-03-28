@@ -522,7 +522,7 @@ const ScreenSuperAdminManagement = () => {
 
             {/* --- Add Restaurant Modal (Multi-Step) --- */}
             {isAddOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
                         {/* Modal Header */}
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -785,7 +785,7 @@ const ScreenSuperAdminManagement = () => {
 
             {/* --- Delete Confirmation Modal --- */}
             {isDeleteOpen && restaurantToDelete && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6">
                         {/* Header */}
                         <div className="flex items-center gap-3 mb-4">
@@ -842,7 +842,7 @@ const ScreenSuperAdminManagement = () => {
 
             {/* --- VIEW / PREVIEW Modal (Eye Button) --- */}
             {selectedRestaurant && !isEditing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -963,7 +963,7 @@ const ScreenSuperAdminManagement = () => {
 
             {/* --- Edit Restaurant Modal --- */}
             {selectedRestaurant && isEditing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -1050,7 +1050,7 @@ const ScreenSuperAdminManagement = () => {
 
             {/* --- Credentials Modal --- */}
             {credentialModalOpen && createdCredentials && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 relative">
                         <button
                             onClick={() => setCredentialModalOpen(false)}

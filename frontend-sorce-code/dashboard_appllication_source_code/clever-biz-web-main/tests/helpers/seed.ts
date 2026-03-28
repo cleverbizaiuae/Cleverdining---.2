@@ -98,6 +98,15 @@ function parseListPayload(payload: unknown): unknown[] {
   return [];
 }
 
+function readId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 async function login(
   api: APIRequestContext,
   email: string,
@@ -363,6 +372,75 @@ export async function createTable(api: APIRequestContext, ownerAccess: string) {
   }
 }
 
+async function ensureCategory(api: APIRequestContext, ownerAccess: string): Promise<number> {
+  const listRes = await api.get(`${API_BASE_URL}/owners/categories/`, {
+    headers: { Authorization: `Bearer ${ownerAccess}` },
+  });
+  if (listRes.ok()) {
+    const payload = await listRes.json().catch(() => null);
+    const list = parseListPayload(payload);
+    for (const row of list as Array<Record<string, unknown>>) {
+      const id = readId(row.id);
+      if (id) return id;
+    }
+  }
+
+  const createRes = await api.post(`${API_BASE_URL}/owners/categories/`, {
+    headers: { Authorization: `Bearer ${ownerAccess}` },
+    data: {
+      Category_name: "E2E Category",
+    },
+  });
+
+  if (!createRes.ok()) {
+    const body = await responseBody(createRes);
+    throw new Error(
+      `[seed] Could not create category: ${createRes.status()} ${body}`
+    );
+  }
+
+  const created = (await createRes.json().catch(() => null)) as
+    | Record<string, unknown>
+    | null;
+  const createdId = readId(created?.id);
+  if (!createdId) {
+    throw new Error("[seed] Category created but id is missing.");
+  }
+  return createdId;
+}
+
+async function createMenuSeed(
+  api: APIRequestContext,
+  ownerAccess: string,
+  categoryId: number
+) {
+  const listRes = await api.get(`${API_BASE_URL}/owners/items/?page=1`, {
+    headers: { Authorization: `Bearer ${ownerAccess}` },
+  });
+
+  if (listRes.ok()) {
+    const payload = await listRes.json().catch(() => null);
+    const list = parseListPayload(payload);
+    if (list.length > 0) return;
+  }
+
+  const createRes = await api.post(`${API_BASE_URL}/owners/items/`, {
+    headers: { Authorization: `Bearer ${ownerAccess}` },
+    multipart: {
+      item_name: "E2E Seed Item",
+      price: "10.00",
+      description: "E2E seeded menu item",
+      category: String(categoryId),
+      availability: "true",
+    },
+  });
+
+  if (!createRes.ok()) {
+    const body = await responseBody(createRes);
+    throw new Error(`[seed] Could not create item: ${createRes.status()} ${body}`);
+  }
+}
+
 export async function seedTestData(api: APIRequestContext) {
   const owner = await ensureOwner(api);
   if (!owner.access) {
@@ -371,4 +449,6 @@ export async function seedTestData(api: APIRequestContext) {
 
   await createUsers(api, owner.access);
   await createTable(api, owner.access);
+  const categoryId = await ensureCategory(api, owner.access);
+  await createMenuSeed(api, owner.access, categoryId);
 }
