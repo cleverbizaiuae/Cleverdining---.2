@@ -6,10 +6,10 @@ const TOKENS = {
   USER_INFO: "userInfo",
 };
 
-// Use environment variable or fallback to production URL
-// Use environment variable or fallback to production URL
-// Hardcoded for production stability
-export const API_BASE_URL = "https://cleverdining-2.onrender.com/";
+// Use env when provided (local/staging), with production fallback.
+const rawApiBase =
+  import.meta.env.VITE_API_URL?.trim() || "https://cleverdining-2.onrender.com";
+export const API_BASE_URL = `${rawApiBase.replace(/\/+$/, "")}/`;
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
