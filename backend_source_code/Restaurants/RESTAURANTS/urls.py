@@ -22,6 +22,7 @@ from .health_views import health_check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', health_check),
     path('api/health/', health_check),
     path('', include('accounts.urls')),
     path('adminapi/', include('adminapi.urls')),
