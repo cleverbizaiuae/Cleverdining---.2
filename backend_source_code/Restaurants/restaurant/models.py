@@ -6,6 +6,8 @@ from django.utils import timezone
 class Restaurant(models.Model):
     resturent_name = models.CharField(max_length=255)
     location = models.CharField(max_length=255)
+    city = models.CharField(max_length=100, blank=True, default="")
+    country = models.CharField(max_length=100, blank=True, default="")
     phone_number = models.CharField(max_length=20, unique=True)
     package = models.CharField(max_length=100, blank=True, null=True)
     image = models.ImageField(upload_to='media/restaurant_images/', null=True, blank=True)
@@ -34,6 +36,7 @@ class Restaurant(models.Model):
     # Capacity
     qr_codes = models.PositiveIntegerField(default=10)
     table_count = models.PositiveIntegerField(default=10)
+    payment_processor = models.CharField(max_length=30, default='stripe')
     
     # Subscription
     subscription_start = models.DateTimeField(default=timezone.now)

@@ -6,7 +6,11 @@ from restaurant.models import Restaurant
 class RestaurantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Restaurant
-        fields = ['resturent_name', 'location', 'phone_number', 'package', 'image', 'logo', 'owner', 'google_review_url']
+        fields = [
+            'resturent_name', 'location', 'city', 'country', 'phone_number',
+            'package', 'image', 'logo', 'owner', 'google_review_url',
+            'qr_codes', 'table_count', 'payment_processor'
+        ]
 
 class OwnerRegisterSerializer(serializers.ModelSerializer):
     # Restaurant inputs
@@ -121,6 +125,8 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                     owner=user,
                     resturent_name=validated_data['resturent_name'],
                     location=validated_data['location'],
+                    city=validated_data.get('city', ''),
+                    country=validated_data.get('country', ''),
                     phone_number=validated_data['phone_number'],
                     package=validated_data.get('package', 'Starter'),
                     plan=validated_data.get('plan', 'standard'),
@@ -130,6 +136,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                     whatsapp_enabled=validated_data.get('whatsapp_enabled', False),
                     qr_codes=validated_data.get('qr_codes', 10),
                     table_count=validated_data.get('table_count', 10),
+                    payment_processor=validated_data.get('payment_processor', 'stripe'),
                     logo=validated_data.get('logo'),
                     owner_password=password  # Store for Super Admin visibility
                 )

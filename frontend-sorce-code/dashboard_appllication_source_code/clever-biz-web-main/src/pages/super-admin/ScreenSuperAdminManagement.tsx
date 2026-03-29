@@ -47,6 +47,27 @@ interface RegisteredRestaurant {
     ownerPassword?: string;
 }
 
+const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
+    id: String(restaurant?.id ?? restaurant?.restaurant_id ?? ""),
+    name: String(restaurant?.name ?? restaurant?.resturent_name ?? ""),
+    location: String(restaurant?.location ?? ""),
+    city: String(restaurant?.city ?? restaurant?.location_city ?? ""),
+    country: String(restaurant?.country ?? restaurant?.location_country ?? ""),
+    phone: String(restaurant?.phone ?? restaurant?.phone_number ?? ""),
+    email: String(restaurant?.email ?? restaurant?.owner_email ?? ""),
+    logoUrl: restaurant?.logoUrl ?? restaurant?.logo_url ?? restaurant?.logo ?? undefined,
+    rating: typeof restaurant?.rating === "number" ? restaurant.rating : undefined,
+    package: String(restaurant?.package ?? "Starter"),
+    status: restaurant?.status === "on_hold" ? "on_hold" : "active",
+    qrCodes: Number(restaurant?.qrCodes ?? restaurant?.qr_codes ?? 10) || 10,
+    tableCount: Number(restaurant?.tableCount ?? restaurant?.table_count ?? 10) || 10,
+    paymentProcessor: String(restaurant?.paymentProcessor ?? restaurant?.payment_processor ?? "stripe"),
+    subscriptionStart: restaurant?.subscriptionStart ?? restaurant?.subscription_start ?? undefined,
+    subscriptionEnd: restaurant?.subscriptionEnd ?? restaurant?.subscription_end ?? undefined,
+    createdAt: String(restaurant?.createdAt ?? restaurant?.created_at ?? new Date().toISOString()),
+    ownerPassword: String(restaurant?.ownerPassword ?? restaurant?.owner_password ?? ""),
+});
+
 // Seeded Sample Data (12 restaurants)
 const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
     { id: "rest-001", name: "The Golden Fork", location: "Dubai Mall, Level 2", city: "Dubai", country: "UAE", phone: "+971 4 123 4567", email: "contact@goldenfork.ae", rating: 4.8, package: "Enterprise", status: "active", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-10-10", createdAt: "2026-01-10T20:39:25.775Z", ownerPassword: "GoldenFork@2026" },
@@ -117,7 +138,8 @@ const ScreenSuperAdminManagement = () => {
         queryKey: ['registered-restaurants'],
         queryFn: async () => {
             const response = await axiosInstance.get('/owners/registered-restaurants/');
-            return response.data;
+            const payload = Array.isArray(response.data) ? response.data : [];
+            return payload.map(normalizeRestaurant);
         },
     });
 
@@ -160,9 +182,29 @@ const ScreenSuperAdminManagement = () => {
     });
 
     const updateRestaurantMutation = useMutation({
-        mutationFn: async (data: { id: string; qrCodes: number; tableCount: number; paymentProcessor: string; package: string }) => {
+        mutationFn: async (data: {
+            id: string;
+            phone: string;
+            email: string;
+            city: string;
+            country: string;
+            qrCodes: number;
+            tableCount: number;
+            paymentProcessor: string;
+            package: string;
+        }) => {
             try {
-                const response = await axiosInstance.patch(`/owners/registered-restaurants/${data.id}/`, data);
+                const payload = {
+                    phone: data.phone,
+                    email: data.email,
+                    city: data.city,
+                    country: data.country,
+                    qrCodes: data.qrCodes,
+                    tableCount: data.tableCount,
+                    paymentProcessor: data.paymentProcessor,
+                    package: data.package,
+                };
+                const response = await axiosInstance.patch(`/owners/registered-restaurants/${data.id}/`, payload);
                 return response.data;
             } catch {
                 return data;
@@ -317,10 +359,10 @@ const ScreenSuperAdminManagement = () => {
             email: restaurant.email || "",
             city: restaurant.city || "",
             country: restaurant.country || "",
-            qrCodes: restaurant.qrCodes,
-            tableCount: restaurant.tableCount,
+            qrCodes: restaurant.qrCodes || 10,
+            tableCount: restaurant.tableCount || 10,
             paymentProcessor: restaurant.paymentProcessor || "stripe",
-            package: restaurant.package
+            package: restaurant.package || "Starter"
         });
         setShowPassword(false);
         setIsEditing(false);

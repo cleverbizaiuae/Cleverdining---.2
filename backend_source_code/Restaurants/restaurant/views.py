@@ -9,6 +9,8 @@ from device.models import Device
 from category.models import Category
 from item.models import Item
 from django.db.models import Prefetch
+from django.db import IntegrityError
+from accounts.models import User
 # Create your views here.
 
 # jwt
@@ -16,6 +18,12 @@ from rest_framework.permissions import AllowAny
 
 class OwnerRegisterView(APIView):
     permission_classes = [AllowAny]
+
+    def _pick(self, data, *keys, default=None):
+        for key in keys:
+            if key in data and data.get(key) is not None:
+                return data.get(key)
+        return default
 
     def get(self, request, pk=None):
         """List all restaurants for Super Admin dashboard"""
@@ -29,8 +37,8 @@ class OwnerRegisterView(APIView):
                     'id': str(r.id),
                     'name': r.resturent_name,
                     'location': r.location or '',
-                    'city': '',  # Not stored separately yet
-                    'country': '',
+                    'city': r.city or '',
+                    'country': r.country or '',
                     'phone': r.phone_number or '',
                     'email': r.owner.email if r.owner else '',
                     'logoUrl': r.logo.url if r.logo else None,
@@ -39,7 +47,7 @@ class OwnerRegisterView(APIView):
                     'status': r.status or 'active',
                     'qrCodes': r.qr_codes,
                     'tableCount': r.table_count,
-                    'paymentProcessor': 'stripe',
+                    'paymentProcessor': r.payment_processor or 'stripe',
                     'subscriptionStart': r.subscription_start.isoformat() if r.subscription_start else None,
                     'subscriptionEnd': r.subscription_end.isoformat() if r.subscription_end else None,
                     'createdAt': r.created_at.isoformat() if r.created_at else None,
@@ -51,24 +59,63 @@ class OwnerRegisterView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def patch(self, request, pk=None):
-        """Update a restaurant (status, etc.) for Super Admin"""
+        """Update a restaurant for Super Admin (supports camelCase and snake_case payloads)."""
         import logging
         logger = logging.getLogger(__name__)
         try:
             restaurant = Restaurant.objects.get(pk=pk)
             data = request.data
 
-            if 'status' in data:
-                restaurant.status = data['status']
-            if 'package' in data:
-                restaurant.package = data['package']
-            if 'owner_password' in data:
-                restaurant.owner_password = data['owner_password']
+            status_value = self._pick(data, 'status')
+            package_value = self._pick(data, 'package')
+            owner_password = self._pick(data, 'owner_password', 'ownerPassword')
+            phone_value = self._pick(data, 'phone', 'phone_number')
+            email_value = self._pick(data, 'email')
+            city_value = self._pick(data, 'city')
+            country_value = self._pick(data, 'country')
+            qr_codes_value = self._pick(data, 'qrCodes', 'qr_codes')
+            table_count_value = self._pick(data, 'tableCount', 'table_count')
+            processor_value = self._pick(data, 'paymentProcessor', 'payment_processor')
+
+            if status_value is not None:
+                restaurant.status = status_value
+            if package_value is not None:
+                restaurant.package = package_value
+            if owner_password is not None:
+                restaurant.owner_password = owner_password
+            if city_value is not None:
+                restaurant.city = str(city_value).strip()
+            if country_value is not None:
+                restaurant.country = str(country_value).strip()
+            if phone_value is not None:
+                restaurant.phone_number = str(phone_value).strip()
+            if qr_codes_value is not None:
+                restaurant.qr_codes = max(int(qr_codes_value), 1)
+            if table_count_value is not None:
+                restaurant.table_count = max(int(table_count_value), 1)
+            if processor_value is not None:
+                restaurant.payment_processor = str(processor_value).strip() or 'stripe'
+
+            owner = restaurant.owner
+            if owner and email_value is not None:
+                normalized_email = str(email_value).strip().lower()
+                if normalized_email:
+                    email_exists = User.objects.filter(email__iexact=normalized_email).exclude(pk=owner.pk).exists()
+                    if email_exists:
+                        return Response({'email': ['A user with this email already exists.']}, status=status.HTTP_400_BAD_REQUEST)
+                    owner.email = normalized_email
+                    owner.save(update_fields=['email'])
 
             restaurant.save()
             return Response({'message': 'Restaurant updated successfully'}, status=status.HTTP_200_OK)
         except Restaurant.DoesNotExist:
             return Response({'error': 'Restaurant not found'}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid numeric values for qr/table counts'}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as e:
+            if 'phone_number' in str(e):
+                return Response({'phone': ['This phone number is already registered.']}, status=status.HTTP_400_BAD_REQUEST)
+            raise
         except Exception as e:
             logger.error(f"Error updating restaurant: {str(e)}", exc_info=True)
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
