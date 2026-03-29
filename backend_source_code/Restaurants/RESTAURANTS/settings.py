@@ -203,12 +203,46 @@ ASGI_APPLICATION = 'RESTAURANTS.asgi.application'
 WSGI_APPLICATION = 'RESTAURANTS.wsgi.application'
 
 
-# Channel layers - use in-memory for now, add Redis later if needed
+# Channel layers
 REDIS_HOST = env('REDIS_HOST', default=None)
-REDIS_URL = env('REDIS_URL', default=None) # Standard Render/Heroku Var
+REDIS_URL = env('REDIS_URL', default=None)  # Standard Render/Heroku Var
 
-if REDIS_URL:
-     CHANNEL_LAYERS = {
+
+def _redis_available(redis_url=None, redis_host=None):
+    """
+    Verify Redis connectivity at startup.
+    If Redis is misconfigured/unreachable, fallback to in-memory channels
+    so websocket handshakes do not fail with HTTP 500.
+    """
+    try:
+        import redis
+
+        if redis_url:
+            client = redis.Redis.from_url(
+                redis_url,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+                retry_on_timeout=False,
+            )
+        else:
+            client = redis.Redis(
+                host=redis_host,
+                port=6379,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+                retry_on_timeout=False,
+            )
+        client.ping()
+        return True
+    except Exception as exc:
+        import sys
+        target = redis_url or f"{redis_host}:6379"
+        print(f"[STARTUP] ⚠️ Redis unavailable at {target}: {exc}", file=sys.stderr)
+        return False
+
+
+if REDIS_URL and _redis_available(redis_url=REDIS_URL):
+    CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
@@ -216,9 +250,8 @@ if REDIS_URL:
             },
         },
     }
-     print(f"[STARTUP] ✅ CHANNEL_LAYERS = RedisChannelLayer (REDIS_URL={REDIS_URL[:30]}...)")
-elif REDIS_HOST and REDIS_HOST != 'localhost':
-    # Use Redis if available
+    print(f"[STARTUP] ✅ CHANNEL_LAYERS = RedisChannelLayer (REDIS_URL={REDIS_URL[:30]}...)")
+elif REDIS_HOST and REDIS_HOST != 'localhost' and _redis_available(redis_host=REDIS_HOST):
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -229,16 +262,15 @@ elif REDIS_HOST and REDIS_HOST != 'localhost':
     }
     print(f"[STARTUP] ✅ CHANNEL_LAYERS = RedisChannelLayer (REDIS_HOST={REDIS_HOST})")
 else:
-    # ⚠️ WARNING: InMemoryChannelLayer CANNOT send between processes!
-    # Real-time order updates WILL NOT WORK in production with this layer.
+    # ⚠️ InMemory is single-process only, but prevents websocket hard failures
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels.layers.InMemoryChannelLayer"
         },
     }
     import sys
-    print("[STARTUP] ⚠️⚠️⚠️ CHANNEL_LAYERS = InMemoryChannelLayer — REAL-TIME UPDATES WILL NOT WORK ACROSS PROCESSES!", file=sys.stderr)
-    print("[STARTUP] ⚠️ Set REDIS_URL environment variable to fix this!", file=sys.stderr)
+    print("[STARTUP] ⚠️⚠️⚠️ CHANNEL_LAYERS = InMemoryChannelLayer — REAL-TIME UPDATES MAY NOT WORK ACROSS PROCESSES!", file=sys.stderr)
+    print("[STARTUP] ⚠️ Fix REDIS_URL/REDIS_HOST to restore multi-process real-time messaging.", file=sys.stderr)
 
 
 # Database

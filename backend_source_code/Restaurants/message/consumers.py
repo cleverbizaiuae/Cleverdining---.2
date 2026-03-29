@@ -688,11 +688,23 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
         self.restaurant_id = self.scope['url_route']['kwargs']['restaurant_id']
         self.room_group_name = f'restaurant_{self.restaurant_id}'
 
-        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        await self.accept()
+        try:
+            await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+            await self.accept()
+        except Exception as exc:
+            logger.exception(
+                "RestaurantConsumer connect failed for restaurant_%s: %s",
+                self.restaurant_id,
+                exc,
+            )
+            # Graceful close instead of server 500 during WS handshake.
+            await self.close(code=1011)
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        try:
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        except Exception:
+            pass
 
 
     # Category created
