@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useOwner } from "@/context/ownerContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   Search,
   Plus,
@@ -97,6 +97,11 @@ export const ScreenRestaurantDevices = () => {
   const handleSearch = (e: any) => {
     setDevicesSearchQuery(e.target.value);
     fetchAllDevices(1, e.target.value);
+  };
+
+  const handleSearchSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    fetchAllDevices(1, devicesSearchQuery);
   };
 
   const copyToClipboard = (url: string, id: number) => {
@@ -263,8 +268,14 @@ export const ScreenRestaurantDevices = () => {
               <Plus size={16} />
               Add Table
             </button>
-            <div className="relative flex-1 sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 sm:w-64">
+              <button
+                type="submit"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                aria-label="Search tables"
+              >
+                <Search size={16} />
+              </button>
               <input
                 type="text"
                 placeholder="Search by table name"
@@ -272,7 +283,7 @@ export const ScreenRestaurantDevices = () => {
                 value={devicesSearchQuery}
                 onChange={handleSearch}
               />
-            </div>
+            </form>
           </div>
         </div>
 

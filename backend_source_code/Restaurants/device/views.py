@@ -726,6 +726,7 @@ class SimpleDeviceListView(APIView):
     def get(self, request):
         try:
             user = request.user
+            search_query = (request.query_params.get('search') or '').strip()
             
             # Determine restaurant
             restaurant = None
@@ -760,7 +761,18 @@ class SimpleDeviceListView(APIView):
                 })
             
             # Get devices - simple query, no annotations
-            devices = Device.objects.filter(restaurant=restaurant).select_related('restaurant', 'user').order_by('-id')
+            devices = Device.objects.filter(restaurant=restaurant).select_related('restaurant', 'user')
+
+            # Apply owner table search (table name primarily, plus number/region fallback)
+            if search_query:
+                from django.db.models import Q
+                devices = devices.filter(
+                    Q(table_name__icontains=search_query) |
+                    Q(table_number__icontains=search_query) |
+                    Q(region__icontains=search_query)
+                )
+
+            devices = devices.order_by('-id')
             
             # Manual pagination
             page = int(request.query_params.get('page', 1))
@@ -823,11 +835,12 @@ class SimpleDeviceListView(APIView):
             # Build pagination response
             has_next = end < total_count
             has_prev = page > 1
+            query_suffix = f"&search={search_query}" if search_query else ""
             
             return Response({
                 "count": total_count,
-                "next": f"?page={page + 1}" if has_next else None,
-                "previous": f"?page={page - 1}" if has_prev else None,
+                "next": f"?page={page + 1}{query_suffix}" if has_next else None,
+                "previous": f"?page={page - 1}{query_suffix}" if has_prev else None,
                 "results": results
             })
             

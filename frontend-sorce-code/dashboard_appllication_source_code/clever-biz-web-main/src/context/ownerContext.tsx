@@ -686,16 +686,16 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       try {
-        const searchParam = search || devicesSearchQuery;
+        const searchParam = search ?? devicesSearchQuery;
         let endpoint;
         if (userRole === "owner" || (userRole as string) === "manager") {
-          endpoint = `/owners/devices/?page=${page}&search=${searchParam}`;
+          endpoint = `/owners/devices/?page=${page}&search=${encodeURIComponent(searchParam || "")}`;
         } else if (userRole === "staff" || userRole === "chef") {
           // Unify Manager/Staff/Chef to use the robust Chef/Staff API
-          endpoint = `/api/chef/devices/?page=${page}&search=${searchParam}`;
+          endpoint = `/api/chef/devices/?page=${page}&search=${encodeURIComponent(searchParam || "")}`;
         } else {
           // Fallback
-          endpoint = `/owners/devices/?page=${page}&search=${searchParam}`;
+          endpoint = `/owners/devices/?page=${page}&search=${encodeURIComponent(searchParam || "")}`;
         }
 
         const response = await axiosInstance.get(endpoint);
