@@ -2,8 +2,8 @@
 # Exit on error
 set -o errexit
 
-# Run migrations (Runtime access to DB is guaranteed)
-python manage.py migrate
+# Run migrations at runtime
+python manage.py migrate --noinput
 
-# Start Gunicorn (Reverted to Stable WSGI for Debugging)
-exec gunicorn RESTAURANTS.wsgi:application --bind 0.0.0.0:$PORT
+# Start ASGI server (WebSocket-compatible)
+exec daphne -b 0.0.0.0 -p "$PORT" RESTAURANTS.asgi:application
