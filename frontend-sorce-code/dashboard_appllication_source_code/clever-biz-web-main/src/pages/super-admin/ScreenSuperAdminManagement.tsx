@@ -890,7 +890,11 @@ const ScreenSuperAdminManagement = () => {
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <div>
                                 <h3 className="text-lg font-semibold text-slate-900">{selectedRestaurant.name}</h3>
-                                <p className="text-xs text-slate-500">{[selectedRestaurant.city, selectedRestaurant.country].filter(Boolean).join(', ') || 'N/A'}</p>
+                                {([selectedRestaurant.city, selectedRestaurant.country].filter(Boolean).join(', ').trim()) && (
+                                    <p className="text-xs text-slate-500">
+                                        {[selectedRestaurant.city, selectedRestaurant.country].filter(Boolean).join(', ')}
+                                    </p>
+                                )}
                             </div>
                             <button onClick={() => setSelectedRestaurant(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
                                 <X className="h-4 w-4" />
