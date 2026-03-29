@@ -884,14 +884,15 @@ const ScreenRestaurantDashboard = () => {
         title={editingItem ? "Edit Item" : "Add New Item"}
       >
         <div className="space-y-4">
+          <p className="text-[11px] text-slate-500">Fields marked <span className="text-red-500">*</span> are required.</p>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Item Name</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Item Name <span className="text-red-500">*</span></label>
             <input type="text" placeholder="Burger, Pizza..." className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE]"
               value={itemFormData.item_name} onChange={e => setItemFormData({ ...itemFormData, item_name: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Price</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Price <span className="text-red-500">*</span></label>
               <input type="number" placeholder="0.00" className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE]"
                 value={itemFormData.price} onChange={e => setItemFormData({ ...itemFormData, price: e.target.value })} />
             </div>
@@ -904,7 +905,7 @@ const ScreenRestaurantDashboard = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Category <span className="text-red-500">*</span></label>
             <select className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:border-[#0055FE]"
               value={itemFormData.category} onChange={e => setItemFormData({ ...itemFormData, category: e.target.value, sub_category: "" })}>
               <option value="">Select Category</option>
@@ -925,7 +926,7 @@ const ScreenRestaurantDashboard = () => {
           )}
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Description <span className="text-red-500">*</span></label>
             <textarea className="w-full p-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] h-20"
               placeholder="Item description..."
               value={itemFormData.description} onChange={e => setItemFormData({ ...itemFormData, description: e.target.value })} />
@@ -983,14 +984,20 @@ const ScreenRestaurantDashboard = () => {
             disabled={isSubmitting}
             onClick={async () => {
               if (isSubmitting) return; // Prevent double-click
+              const itemName = (itemFormData.item_name || "").trim();
+              const description = (itemFormData.description || "").trim();
+              const price = (itemFormData.price || "").toString().trim();
+
+              if (!itemName) return toast.error("Please enter item name");
+              if (!price) return toast.error("Please enter a price");
               if (!itemFormData.category) return toast.error("Please select a category");
-              if (!itemFormData.price) return toast.error("Please enter a price");
+              if (!description) return toast.error("Please enter item description");
 
               setIsSubmitting(true);
               const formData = new FormData();
-              formData.append('item_name', itemFormData.item_name);
-              formData.append('price', itemFormData.price);
-              formData.append('description', itemFormData.description);
+              formData.append('item_name', itemName);
+              formData.append('price', price);
+              formData.append('description', description);
               formData.append('category', itemFormData.category);
               if (itemFormData.sub_category) formData.append('sub_category', itemFormData.sub_category);
               if ((itemFormData as any).discount_percentage) formData.append('discount_percentage', (itemFormData as any).discount_percentage);
@@ -1023,8 +1030,14 @@ const ScreenRestaurantDashboard = () => {
                 const data = e.response?.data;
 
                 if (data) {
-                  if (data.description) {
-                    errorMsg = "Add Description before adding an item";
+                  if (data.item_name) {
+                    errorMsg = "Please enter item name";
+                  } else if (data.price) {
+                    errorMsg = "Please enter a valid price";
+                  } else if (data.category) {
+                    errorMsg = "Please select a category";
+                  } else if (data.description) {
+                    errorMsg = "Please enter item description";
                   } else if (typeof data === 'object') {
                     // Extract first error message from any field
                     const firstError = Object.values(data).flat()[0];
