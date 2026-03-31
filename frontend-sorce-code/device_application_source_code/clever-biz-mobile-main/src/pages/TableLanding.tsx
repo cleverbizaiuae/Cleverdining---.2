@@ -17,15 +17,15 @@ export default function TableLanding() {
 
             // Payload construction
             const payload: any = {};
-            if (restaurantId && tableToken) {
-                payload.restaurant_id = restaurantId;
-                payload.table_token = tableToken;
-            } else {
-                if (qrDeviceId) payload.device_id = qrDeviceId;
-                // Add fallback data for self-healing / legacy links
-                if (qrTableName) payload.table_name = qrTableName;
-                if (qrRestaurantId) payload.restaurant_id = qrRestaurantId;
-            }
+            // Always include route params when present
+            if (restaurantId) payload.restaurant_id = restaurantId;
+            if (tableToken) payload.table_token = tableToken;
+
+            // Always include query params too as fallback/self-healing metadata.
+            // This lets stale token links still resolve by device_id/table_name.
+            if (qrDeviceId) payload.device_id = qrDeviceId;
+            if (qrTableName) payload.table_name = qrTableName;
+            if (qrRestaurantId) payload.restaurant_id = qrRestaurantId;
 
             if (Object.keys(payload).length === 0) {
                 // No parameters provided -> Show QR Code Scan prompt instead of error
