@@ -81,6 +81,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // Cache app shell only — NOT API data
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
 
