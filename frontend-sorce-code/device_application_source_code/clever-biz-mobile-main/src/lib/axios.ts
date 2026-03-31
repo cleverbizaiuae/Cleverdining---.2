@@ -6,9 +6,13 @@ const TOKENS = {
   USER_INFO: "userInfo",
 };
 
-// Use env when provided (local/staging), with production fallback.
+// Use env when provided, but ignore "/api" shorthand in production
+// because Netlify has no API proxy configured for this app.
+const envApiUrl = import.meta.env.VITE_API_URL?.trim();
 const rawApiBase =
-  import.meta.env.VITE_API_URL?.trim() || "https://cleverdining-2.onrender.com";
+  envApiUrl && envApiUrl !== "/api"
+    ? envApiUrl
+    : "https://cleverdining-2.onrender.com";
 export const API_BASE_URL = `${rawApiBase.replace(/\/+$/, "")}/`;
 
 const axiosInstance = axios.create({
