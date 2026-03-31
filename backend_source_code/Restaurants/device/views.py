@@ -33,35 +33,67 @@ class ResolveTableView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Accept all known client formats (legacy + current)
         restaurant_id = request.data.get('restaurant_id')
         table_token = request.data.get('table_token')
-        device_id = request.data.get('device_id') # Support lookup by ID
+        device_id = request.data.get('device_id') or request.data.get('table_id')
+        table_name = request.data.get('table_name') or request.data.get('table')
+        table_number = request.data.get('table_number')
 
-        if not device_id and (not restaurant_id or not table_token):
+        # Normalize incoming values to avoid whitespace/type mismatch issues
+        restaurant_id = str(restaurant_id).strip() if restaurant_id not in (None, "") else None
+        table_token = str(table_token).strip() if table_token not in (None, "") else None
+        device_id = str(device_id).strip() if device_id not in (None, "") else None
+        table_name = str(table_name).strip() if table_name not in (None, "") else None
+        table_number = str(table_number).strip() if table_number not in (None, "") else None
+
+        if not any([device_id, table_token, table_name, table_number]):
             return Response({'error': 'Missing required parameters'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            device = None
+
+            # 1) Primary lookup by device/table id.
             if device_id:
                 try:
-                    device = Device.objects.get(id=device_id)
-                    restaurant_id = device.restaurant.id
+                    device = Device.objects.get(id=int(device_id))
+                except (ValueError, TypeError, Device.DoesNotExist):
+                    # If a UUID-like value is passed in id/table_id, try uuid lookup too.
+                    try:
+                        device = Device.objects.get(uuid=device_id)
+                    except Device.DoesNotExist:
+                        device = None
+
+            # 2) Token-based lookup (supports /t/:restaurantId/:tableToken style)
+            if not device and restaurant_id and table_token:
+                try:
+                    device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
                 except Device.DoesNotExist:
-                    # Fallback: Validation if restaurant_id and table_name are present (Self-Healing URL)
                     device = None
-                    table_name = request.data.get('table_name')
-                    fallback_rid = request.data.get('restaurant_id')
-                    
-                    if fallback_rid and table_name:
-                         # Use iexact for robust case-insensitive matching
-                         device = Device.objects.filter(restaurant_id=fallback_rid, table_name__iexact=table_name).first()
-                    
-                    if not device:
-                        raise Device.DoesNotExist 
-            else:
-                device = Device.objects.get(restaurant_id=restaurant_id, table_token=table_token)
+
+            # 3) Human-readable fallback (self-healing links)
+            if not device and restaurant_id:
+                if table_name:
+                    device = Device.objects.filter(
+                        restaurant_id=restaurant_id,
+                        table_name__iexact=table_name
+                    ).first()
+                if not device and table_number:
+                    device = Device.objects.filter(
+                        restaurant_id=restaurant_id,
+                        table_number__iexact=table_number
+                    ).first()
+
+            if not device:
+                raise Device.DoesNotExist
+
+            restaurant_id = device.restaurant.id
         except Device.DoesNotExist:
             # Construct debug info
-            debug_info = f"ID: {device_id}, RID: {request.data.get('restaurant_id')}, Table: {request.data.get('table_name')}"
+            debug_info = (
+                f"ID: {device_id}, RID: {restaurant_id}, "
+                f"Table: {table_name}, TableNo: {table_number}, Token: {table_token}"
+            )
             return Response({'error': f'Invalid table link. (Debug: {debug_info})'}, status=status.HTTP_404_NOT_FOUND)
 
         

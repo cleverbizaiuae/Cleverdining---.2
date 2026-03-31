@@ -23,14 +23,16 @@ class Device(models.Model):
 
     @property
     def table_url(self):
-        # Legacy URL format as requested to restore original functionality
+        # Canonical URL uses token route for stable table access across environments.
+        # Keep query params as compatibility metadata for older clients.
         base_url = "https://officialcleverdiningcustomer.netlify.app"
+        token_path = f"/t/{self.restaurant.id}/{self.table_token}"
         params = {
             "id": self.id,
             "table": self.table_name,
             "restaurant_id": self.restaurant.id
         }
-        return f"{base_url}/login?{urllib.parse.urlencode(params)}"
+        return f"{base_url}{token_path}?{urllib.parse.urlencode(params)}"
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
@@ -99,7 +101,6 @@ class Reservation(models.Model):
     def __str__(self):
         return f"{self.customer_name} - {self.device.table_name} - {self.guest_no} - {self.reservation_time.strftime('%H:%M')} - {self.status} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
     
-
 
 
 

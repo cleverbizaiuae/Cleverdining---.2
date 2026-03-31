@@ -636,15 +636,20 @@ export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
     }
   };
 
-  const handleCopyLink = (tableId: number, tableName: string) => {
-    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-    const restaurantId = userInfo?.restaurants?.[0]?.id;
-    if (!restaurantId) {
-      toast.error("Restaurant ID not found");
-      return;
+  const getDeviceLink = (item: DeviceItem) => {
+    // Prefer canonical URL from backend to keep all clients in sync.
+    if ((item as any).table_url) {
+      return (item as any).table_url as string;
     }
-    // Construct URL with query params
-    const url = `https://officialcleverdiningcustomer.netlify.app/?table_id=${tableId}&table_name=${encodeURIComponent(tableName)}&restaurant_id=${restaurantId}`;
+
+    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    const restaurantId = item.restaurant || userInfo?.restaurants?.[0]?.id;
+    const rid = restaurantId ? `&restaurant_id=${encodeURIComponent(String(restaurantId))}` : "";
+    return `https://officialcleverdiningcustomer.netlify.app/login?id=${encodeURIComponent(String(item.id))}&table=${encodeURIComponent(item.table_name)}${rid}`;
+  };
+
+  const handleCopyLink = (item: DeviceItem) => {
+    const url = getDeviceLink(item);
     navigator.clipboard.writeText(url);
     toast.success("Link copied to clipboard!");
   };
@@ -662,9 +667,7 @@ export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
         </thead>
         <tbody className="bg-sidebar text-sm">
           {data.map((item, index) => {
-            const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-            const restaurantId = userInfo?.restaurants?.[0]?.id;
-            const url = `https://officialcleverdiningcustomer.netlify.app/?table_id=${item.id}&table_name=${encodeURIComponent(item.table_name)}&restaurant_id=${restaurantId}`;
+            const url = getDeviceLink(item);
 
             return (
               <tr key={index} className="border-b border-[#1C1E3C]">
@@ -674,7 +677,7 @@ export const TableDeviceList: React.FC<TableDeviceListProps> = ({ data }) => {
                   <div className="flex items-center justify-center gap-2">
                     <span className="text-xs text-gray-400 truncate max-w-[150px]">{url} (Rest ID: {item.restaurant})</span>
                     <button
-                      onClick={() => handleCopyLink(item.id, item.table_name)}
+                      onClick={() => handleCopyLink(item)}
                       className="p-1 hover:bg-white/10 rounded-full transition-colors text-xs text-blue-300 border border-blue-300 px-2"
                       title="Copy Link"
                     >

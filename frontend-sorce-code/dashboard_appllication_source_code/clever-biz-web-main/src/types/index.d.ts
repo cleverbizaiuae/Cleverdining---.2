@@ -48,6 +48,7 @@ export interface DeviceItem {
   table_name: string;
   region?: string;
   table_number?: string;
+  table_url?: string;
   restaurant: number;
   action: string;
   restaurant_name: string;

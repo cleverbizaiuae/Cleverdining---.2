@@ -36,7 +36,8 @@ function App() {
     if (tableIdParam && restaurantIdParam) {
       // Case 1: URL params present - redirect to real login flow (TableLanding)
       // PRIORITY: This must happen even if logged in, to ensure Guest Token is generated for the new table.
-      window.location.href = `/login?id=${tableIdParam}&table=${tableNameParam || 'Table'}&restaurant_id=${restaurantIdParam}`;
+      const encodedName = encodeURIComponent(tableNameParam || "Table");
+      window.location.href = `/login?id=${encodeURIComponent(tableIdParam)}&table=${encodedName}&restaurant_id=${encodeURIComponent(restaurantIdParam)}`;
       return;
 
     } else if (storedUserInfo) {

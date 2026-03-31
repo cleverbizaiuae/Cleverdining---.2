@@ -12,6 +12,9 @@ interface QRCodeModalProps {
     data: {
         id: number;
         table_name: string;
+        restaurant?: number;
+        restaurant_id?: number;
+        table_url?: string;
     } | null;
 }
 
@@ -22,11 +25,12 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
 }) => {
     if (!data) return null;
 
-    // URL to encode in the QR code
-    // Using the mobile app URL with query parameters for table and device ID
-    const qrValue = `https://clever-biz-mobile.netlify.app/login?table=${encodeURIComponent(
+    const restaurantId = data.restaurant_id || data.restaurant;
+    const fallbackUrl = `https://officialcleverdiningcustomer.netlify.app/login?table=${encodeURIComponent(
         data.table_name
-    )}&id=${data.id}`;
+    )}&id=${encodeURIComponent(String(data.id))}${restaurantId ? `&restaurant_id=${encodeURIComponent(String(restaurantId))}` : ""}`;
+    // Prefer backend-generated canonical URL when available.
+    const qrValue = data.table_url || fallbackUrl;
 
     return (
         <Dialog

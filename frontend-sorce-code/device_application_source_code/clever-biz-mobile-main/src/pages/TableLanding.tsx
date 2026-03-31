@@ -11,18 +11,18 @@ export default function TableLanding() {
 
     useEffect(() => {
         const resolveTable = async () => {
-            const qrDeviceId = searchParams.get('id');
-            const qrTableName = searchParams.get('table');
-            const qrRestaurantId = searchParams.get('restaurant_id'); // Added for fallback
+            const qrDeviceId = searchParams.get('id') || searchParams.get('table_id');
+            const qrTableName = searchParams.get('table') || searchParams.get('table_name');
+            const qrRestaurantId = searchParams.get('restaurant_id');
 
             // Payload construction
             const payload: any = {};
             if (restaurantId && tableToken) {
                 payload.restaurant_id = restaurantId;
                 payload.table_token = tableToken;
-            } else if (qrDeviceId) {
-                payload.device_id = qrDeviceId;
-                // Add fallback data for self-healing
+            } else {
+                if (qrDeviceId) payload.device_id = qrDeviceId;
+                // Add fallback data for self-healing / legacy links
                 if (qrTableName) payload.table_name = qrTableName;
                 if (qrRestaurantId) payload.restaurant_id = qrRestaurantId;
             }
@@ -95,7 +95,7 @@ export default function TableLanding() {
     }
 
     // Check if we have params to attempt connection
-    const hasParams = restaurantId || searchParams.get('id');
+    const hasParams = restaurantId || searchParams.get('id') || searchParams.get('table_id');
 
     if (!hasParams && !error) {
         return (
