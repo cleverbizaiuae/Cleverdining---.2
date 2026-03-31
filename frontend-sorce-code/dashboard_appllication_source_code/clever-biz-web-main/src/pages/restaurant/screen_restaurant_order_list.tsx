@@ -627,6 +627,7 @@ const ScreenRestaurantOrderList = () => {
                 Cancel
               </button>
               <button
+                onClick={handleCloseDay}
                 disabled={isClosingDay}
                 className="flex-1 h-9 bg-[#0055FE] hover:bg-[#0047D1] rounded-lg text-sm text-white font-medium shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
               >

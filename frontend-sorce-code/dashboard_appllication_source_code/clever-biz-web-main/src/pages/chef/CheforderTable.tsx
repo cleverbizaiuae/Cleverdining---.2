@@ -31,7 +31,7 @@ const OrderTable = () => {
 
     if (userRole === "chef") {
       try {
-        const response = await axiosInstance.get("/chef/orders/");
+        const response = await axiosInstance.get("/api/chef/orders/");
         setOrdersData(response.data.results.orders);
       } catch (error) {
         console.error("Error fetching orders data:", error);
@@ -84,7 +84,7 @@ const OrderTable = () => {
 
     try {
       const response = await axiosInstance.patch(
-        `/chef/orders/${orderId}/status/`,
+        `/api/chef/orders/status/${orderId}/`,
         {
           status: newStatus,
         }

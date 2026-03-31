@@ -107,7 +107,15 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
     if (!selectedCategory) return toast.error("Select a main category first");
 
     try {
-      await axiosInstance.post("/owners/categories/", {
+      const role = String(parseUser?.role || userRole || "").toLowerCase();
+      const categoryEndpoint =
+        role === "owner" || role === "manager"
+          ? "/owners/categories/"
+          : role === "staff"
+            ? "/api/staff/categories/"
+            : "/api/chef/categories/";
+
+      await axiosInstance.post(categoryEndpoint, {
         Category_name: newSubCatName,
         parent_category: selectedCategory
       });
@@ -115,8 +123,7 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
       setNewSubCatName("");
       setShowSubCatInput(false);
       // Trigger refresh
-      const endpoint = "/owners/categories/";
-      const res = await axiosInstance.get(endpoint);
+      const res = await axiosInstance.get(categoryEndpoint);
       setAllCate(res.data);
     } catch (e) {
       console.error(e);
@@ -129,7 +136,7 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     const fetchCategories = async () => {
-      if (!isLoading || !userRole) {
+      if (isLoading || !userRole) {
         return;
       }
 
@@ -138,9 +145,9 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
         if (parseUser?.role === "owner") {
           endpoint = "/owners/categories/";
         } else if (parseUser?.role === "staff") {
-          endpoint = "/staff/categories/";
+          endpoint = "/api/staff/categories/";
         } else if (parseUser?.role === "chef") {
-          endpoint = "/chef/categories/";
+          endpoint = "/api/chef/categories/";
         } else {
           throw new Error("Invalid user role");
         }
@@ -163,7 +170,6 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
   }, [userRole, isLoading, fetchCategories]);
 
   // Load single food item data if in edit mode
-  console.log(userRole, "user role in edit modal");
   useEffect(() => {
     if (id) {
       const fetchItem = async () => {
@@ -173,9 +179,9 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
           if (userRole === "owner") {
             endpoint = `/owners/items/${id}/`;
           } else if (userRole === "staff") {
-            endpoint = `/staff/items/${id}/`;
+            endpoint = `/api/staff/items/${id}/`;
           } else if (userRole === "chef") {
-            endpoint = `/chef/items/${id}/`;
+            endpoint = `/api/chef/items/${id}/`;
           } else {
             throw new Error("Invalid user role");
           }
@@ -1976,6 +1982,5 @@ export const NewAssistantModal: React.FC<TAssistantModalProps> = ({
     </Dialog>
   );
 };
-
 
 

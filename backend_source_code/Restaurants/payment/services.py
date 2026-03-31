@@ -17,6 +17,81 @@ class PaymentService:
     }
 
     @staticmethod
+    def _close_session_and_clear_chat_if_settled(order):
+        """
+        End table session and clear table chat only when no unpaid orders remain.
+        """
+        session = getattr(order, "guest_session", None)
+        if not session:
+            return
+
+        from order.models import Order
+        from message.models import ChatMessage
+
+        has_unpaid_orders = Order.objects.filter(
+            guest_session=session
+        ).exclude(payment_status='paid').exclude(status='cancelled').exists()
+
+        if has_unpaid_orders:
+            return
+
+        if session.is_active:
+            session.is_active = False
+            session.save(update_fields=['is_active'])
+
+        ChatMessage.objects.filter(device=order.device).delete()
+
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "chat_cleared",
+                    "device_id": order.device_id,
+                    "session_id": session.id,
+                    "reason": "bill_paid"
+                }
+            )
+        except Exception as e:
+            print(f"[PAYMENT-WS] Failed sending chat_cleared to restaurant group: {e}")
+
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_chat_{order.restaurant.id}",
+                {
+                    "type": "chat_cleared",
+                    "device_id": order.device_id,
+                    "session_id": session.id,
+                    "reason": "bill_paid"
+                }
+            )
+        except Exception as e:
+            print(f"[PAYMENT-WS] Failed sending chat_cleared to chat group: {e}")
+
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{order.restaurant.id}",
+                {
+                    "type": "session_closed",
+                    "session_id": session.id,
+                    "table_id": order.device_id,
+                    "reason": "bill_paid"
+                }
+            )
+        except Exception as e:
+            print(f"[PAYMENT-WS] Failed sending session_closed to restaurant group: {e}")
+
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f"session_{session.id}",
+                {
+                    "type": "session_closed",
+                    "message": "Session closed after payment"
+                }
+            )
+        except Exception as e:
+            print(f"[PAYMENT-WS] Failed sending session_closed to device session group: {e}")
+
+    @staticmethod
     def get_adapter(restaurant, provider=None):
         if provider == 'cash':
             return CashAdapter(None) 
@@ -188,6 +263,8 @@ class PaymentService:
             if main_order.guest_session:
                 from order.models import Cart
                 Cart.objects.filter(guest_session=main_order.guest_session).delete()
+
+            PaymentService._close_session_and_clear_chat_if_settled(main_order)
             
         return verification_result
 
@@ -292,4 +369,5 @@ class PaymentService:
                         "payment": payment_data
                     }
                 )
+                PaymentService._close_session_and_clear_chat_if_settled(main_order)
         return result

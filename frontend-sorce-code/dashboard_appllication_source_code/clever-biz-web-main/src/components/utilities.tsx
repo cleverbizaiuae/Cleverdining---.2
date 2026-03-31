@@ -770,14 +770,37 @@ export const TooltipTop: React.FC<TooltipTopProps> = ({
 /* Foodlist =========================================>>>>>>>>> */
 interface TableFoodListProps {
   data: FoodItem[];
+  allowItemActions?: boolean;
 }
-export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
+export const TableFoodList: React.FC<TableFoodListProps> = ({ data, allowItemActions = true }) => {
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-  const { updateAvailability } = useOwner();
-  const { fetchFoodItems } = useOwner();
-  const { fetchStatusSummary } = useStaff();
+  const { userRole } = useRole();
+  const ownerCtx = useOwner();
+  const staffCtx = useStaff();
+  const storedRole = (() => {
+    try {
+      const raw = localStorage.getItem("userInfo");
+      return raw ? JSON.parse(raw)?.role : null;
+    } catch {
+      return null;
+    }
+  })();
+  const effectiveRole = String(userRole || storedRole || "").toLowerCase();
+
+  const isChefOrStaff = effectiveRole === "chef" || effectiveRole === "staff";
+  const canEditDelete = allowItemActions && (effectiveRole === "owner" || effectiveRole === "manager");
+
+  const updateAvailability = isChefOrStaff
+    ? staffCtx.updateAvailability
+    : ownerCtx.updateAvailability;
+  const fetchFoodItems = isChefOrStaff
+    ? staffCtx.fetchFoodItems
+    : ownerCtx.fetchFoodItems;
+  const fetchStatusSummary = isChefOrStaff
+    ? staffCtx.fetchStatusSummary
+    : async () => { };
 
   // Local state to track availability changes immediately
   const [localAvailability, setLocalAvailability] = useState<
@@ -894,18 +917,24 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
                 <td className="px-5 py-3 text-slate-500 text-center">{item.category}</td>
                 <td className="px-5 py-3 text-slate-900 font-medium text-center">${item.price}</td>
                 <td className="h-20 p-4 flex gap-x-4 items-center">
-                  <button
-                    onClick={() => openEdit(item?.id)}
-                    className="text-blue-100 hover:text-blue-600"
-                  >
-                    <IconEdit className="h-6 w-6" />
-                  </button>
-                  <button
-                    onClick={() => openDelete(item?.id)}
-                    className="text-red-400 hover:text-red-600"
-                  >
-                    <IconDelete className="h-6 w-6" />
-                  </button>
+                  {canEditDelete ? (
+                    <>
+                      <button
+                        onClick={() => openEdit(item?.id)}
+                        className="text-blue-100 hover:text-blue-600"
+                      >
+                        <IconEdit className="h-6 w-6" />
+                      </button>
+                      <button
+                        onClick={() => openDelete(item?.id)}
+                        className="text-red-400 hover:text-red-600"
+                      >
+                        <IconDelete className="h-6 w-6" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-400">Limited</span>
+                  )}
                 </td>
                 <td className="p-4 text-start" >
                   <ButtonStatus
@@ -931,16 +960,20 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data }) => {
         </table>
       </div>
 
-      <EditFoodItemModal
-        isOpen={isEditDialogOpen}
-        close={closeEdit}
-        id={selectedItemId}
-      />
-      <DeleteFoodItemModal
-        isOpen={isDeleteDialogOpen}
-        close={closeDelete}
-        id={selectedItemId}
-      />
+      {canEditDelete && (
+        <>
+          <EditFoodItemModal
+            isOpen={isEditDialogOpen}
+            close={closeEdit}
+            id={selectedItemId}
+          />
+          <DeleteFoodItemModal
+            isOpen={isDeleteDialogOpen}
+            close={closeDelete}
+            id={selectedItemId}
+          />
+        </>
+      )}
     </>
   );
 };

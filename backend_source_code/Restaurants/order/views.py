@@ -307,6 +307,46 @@ class ConfirmCashPaymentAPIView(APIView):
                     print(f"[SESSION-END] Cleared chat messages for device {order.device_id}")
                 except Exception as e:
                     print(f"[SESSION-END] Failed to clear chat messages: {e}")
+
+                # Notify dashboard chat clients to clear this table thread immediately
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{order.restaurant.id}",
+                        {
+                            "type": "chat_cleared",
+                            "device_id": order.device_id,
+                            "session_id": session.id,
+                            "reason": "bill_paid"
+                        }
+                    )
+                except Exception as e:
+                    print(f"[WS-NOTIFY] Failed to send chat_cleared to restaurant group: {e}")
+
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_chat_{order.restaurant.id}",
+                        {
+                            "type": "chat_cleared",
+                            "device_id": order.device_id,
+                            "session_id": session.id,
+                            "reason": "bill_paid"
+                        }
+                    )
+                except Exception as e:
+                    print(f"[WS-NOTIFY] Failed to send chat_cleared to chat group: {e}")
+
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{order.restaurant.id}",
+                        {
+                            "type": "session_closed",
+                            "session_id": session.id,
+                            "table_id": order.device_id,
+                            "reason": "bill_paid"
+                        }
+                    )
+                except Exception as e:
+                    print(f"[WS-NOTIFY] Failed to send session_closed to restaurant group: {e}")
                 
                 # Notify Guest (best-effort)
                 try:

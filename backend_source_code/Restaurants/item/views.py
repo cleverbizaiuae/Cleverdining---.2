@@ -17,6 +17,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Sum, F
+from django.db.models.functions import Lower
 from order.models import OrderItem
 from restaurant.models import Restaurant
 from asgiref.sync import async_to_sync
@@ -231,11 +232,14 @@ class StaffItemViewSet(viewsets.ModelViewSet):
             cheff_staff = ChefStaff.objects.get(user = request.user)
             restaurant = cheff_staff.restaurant
             available_items_count = Item.objects.filter(restaurant=restaurant,availability=True).count()
-            preparing_order_count =  Order.objects.filter(restaurant= restaurant,status ='preparing').count()
-            pending_order_count = Order.objects.filter(restaurant=restaurant, status='pending').count()
+            normalized_orders = Order.objects.filter(restaurant=restaurant).annotate(status_lc=Lower('status'))
+            preparing_order_count = normalized_orders.filter(status_lc='preparing').count()
+            pending_order_count = normalized_orders.filter(status_lc='pending').count()
             return Response(
                 {
                     "available_items_count": available_items_count,
+                    "processing_orders_count": preparing_order_count,
+                    "pending_orders_count": pending_order_count,
                     "preparing_order_count": preparing_order_count,
                     "pending_order_count": pending_order_count
                 }
@@ -303,11 +307,14 @@ class ChefItemViewSet(viewsets.ModelViewSet):
             cheff_staff = ChefStaff.objects.get(user = request.user)
             restaurant = cheff_staff.restaurant
             available_items_count = Item.objects.filter(restaurant=restaurant,availability=True).count()
-            preparing_order_count =  Order.objects.filter(restaurant= restaurant,status ='preparing').count()
-            pending_order_count = Order.objects.filter(restaurant=restaurant, status='pending').count()
+            normalized_orders = Order.objects.filter(restaurant=restaurant).annotate(status_lc=Lower('status'))
+            preparing_order_count = normalized_orders.filter(status_lc='preparing').count()
+            pending_order_count = normalized_orders.filter(status_lc='pending').count()
             return Response(
                 {
                     "available_items_count": available_items_count,
+                    "processing_orders_count": preparing_order_count,
+                    "pending_orders_count": pending_order_count,
                     "preparing_order_count": preparing_order_count,
                     "pending_order_count": pending_order_count
                 }
@@ -395,8 +402,6 @@ class MostSellingItemsAPIView(APIView):
         ]
 
         return Response(data)
-
-
 
 
 

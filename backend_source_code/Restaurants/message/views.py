@@ -421,6 +421,32 @@ class ClearChatView(APIView):
                 device_id=device_id,
                 restaurant_id__in=restaurant_ids
             ).delete()
+
+            # Broadcast clear event so dashboard/mobile can remove this table thread live
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            for rid in restaurant_ids:
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{rid}",
+                        {
+                            "type": "chat_cleared",
+                            "device_id": str(device_id)
+                        }
+                    )
+                except Exception as ws_err:
+                    print(f"WS Emit Error (restaurant group): {ws_err}")
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_chat_{rid}",
+                        {
+                            "type": "chat_cleared",
+                            "device_id": str(device_id)
+                        }
+                    )
+                except Exception as ws_err:
+                    print(f"WS Emit Error (chat group): {ws_err}")
             
             return Response({'status': 'chat cleared', 'count': deleted_count})
         except Exception as e:

@@ -7,6 +7,12 @@ export const WebSocketContext = createContext(null);
 // Cross-tab sync channel
 const BROADCAST_CHANNEL_NAME = 'cleverdining-unread-sync';
 
+type UnreadTable = {
+  deviceId: string;
+  tableName: string;
+  unreadCount: number;
+};
+
 // PWA App Badge helpers
 function updateAppBadge(count: number) {
   try {
@@ -27,6 +33,7 @@ const WebSocketProvider = ({ children }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [response, setResponse] = useState({});
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadTables, setUnreadTables] = useState<UnreadTable[]>([]);
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -36,9 +43,16 @@ const WebSocketProvider = ({ children }) => {
   const accessToken = localStorage.getItem("accessToken");
 
   // 2. Robust ID Extraction
-  let restaurantId = parseUser.restaurant_id || localStorage.getItem("restaurantId");
+  let restaurantId =
+    parseUser.restaurant_id ||
+    parseUser.restaurants_id ||
+    parseUser.restaurant?.id ||
+    parseUser.restaurant ||
+    localStorage.getItem("restaurantId") ||
+    localStorage.getItem("selectedRestaurantId");
+
   if (!restaurantId && parseUser.restaurants && parseUser.restaurants.length > 0) {
-    restaurantId = parseUser.restaurants[0].id;
+    restaurantId = parseUser.restaurants[0]?.id;
   }
 
   const id = restaurantId;
@@ -51,9 +65,22 @@ const WebSocketProvider = ({ children }) => {
       broadcastChannelRef.current = channel;
 
       channel.onmessage = (event) => {
-        if (event.data && typeof event.data.unreadCount === 'number') {
+        if (!event.data) return;
+        if (typeof event.data.unreadCount === 'number') {
           setUnreadCount(event.data.unreadCount);
           updateAppBadge(event.data.unreadCount);
+        }
+        if (Array.isArray(event.data.unreadTables)) {
+          setUnreadTables(
+            event.data.unreadTables
+              .filter((t: any) => t && t.deviceId)
+              .map((t: any) => ({
+                deviceId: String(t.deviceId),
+                tableName: String(t.tableName || `Table ${t.deviceId}`),
+                unreadCount: Number(t.unreadCount || 0),
+              }))
+              .filter((t: UnreadTable) => t.unreadCount > 0)
+          );
         }
       };
 
@@ -66,13 +93,94 @@ const WebSocketProvider = ({ children }) => {
     }
   }, []);
 
-  // Sync unread count changes to other tabs and app badge
-  const syncUnreadCount = useCallback((count: number) => {
-    setUnreadCount(count);
-    updateAppBadge(count);
+  const syncUnreadState = useCallback((count: number, tables?: UnreadTable[]) => {
+    const safeCount = Math.max(0, Number(count) || 0);
+    setUnreadCount(safeCount);
+    if (tables) {
+      setUnreadTables(tables.filter((t) => t.unreadCount > 0));
+    }
+    updateAppBadge(safeCount);
     try {
-      broadcastChannelRef.current?.postMessage({ unreadCount: count });
+      broadcastChannelRef.current?.postMessage({
+        unreadCount: safeCount,
+        unreadTables: tables,
+      });
     } catch (e) { }
+  }, []);
+
+  const setUnreadCountSafe = useCallback((next: number | ((prev: number) => number)) => {
+    setUnreadCount((prev) => {
+      const resolved = typeof next === "function" ? (next as (p: number) => number)(prev) : next;
+      const safeCount = Math.max(0, Number(resolved) || 0);
+      const nextTables = safeCount === 0 ? [] : unreadTables;
+      if (safeCount === 0) {
+        setUnreadTables([]);
+      }
+      updateAppBadge(safeCount);
+      try {
+        broadcastChannelRef.current?.postMessage({
+          unreadCount: safeCount,
+          unreadTables: nextTables
+        });
+      } catch (e) { }
+      return safeCount;
+    });
+  }, [unreadTables]);
+
+  const clearUnreadForTable = useCallback((deviceId: string | number) => {
+    const key = String(deviceId);
+    setUnreadTables((prev) => {
+      const existing = prev.find((t) => String(t.deviceId) === key);
+      const next = prev.filter((t) => String(t.deviceId) !== key);
+      if (existing && existing.unreadCount > 0) {
+        setUnreadCount((prevCount) => {
+          const safeCount = Math.max(0, prevCount - existing.unreadCount);
+          updateAppBadge(safeCount);
+          try {
+            broadcastChannelRef.current?.postMessage({
+              unreadCount: safeCount,
+              unreadTables: next,
+            });
+          } catch (e) { }
+          return safeCount;
+        });
+      } else {
+        try {
+          broadcastChannelRef.current?.postMessage({
+            unreadCount,
+            unreadTables: next,
+          });
+        } catch (e) { }
+      }
+      return next;
+    });
+  }, [unreadCount]);
+
+  const incrementUnreadForTable = useCallback((deviceId: string | number, tableName?: string) => {
+    const key = String(deviceId);
+    setUnreadTables((prev) => {
+      const existing = prev.find((t) => String(t.deviceId) === key);
+      const next = existing
+        ? prev.map((t) =>
+          String(t.deviceId) === key
+            ? { ...t, unreadCount: t.unreadCount + 1, tableName: tableName || t.tableName }
+            : t
+        )
+        : [...prev, { deviceId: key, tableName: tableName || `Table ${key}`, unreadCount: 1 }];
+
+      setUnreadCount((prevCount) => {
+        const safeCount = Math.max(0, prevCount + 1);
+        updateAppBadge(safeCount);
+        try {
+          broadcastChannelRef.current?.postMessage({
+            unreadCount: safeCount,
+            unreadTables: next,
+          });
+        } catch (e) { }
+        return safeCount;
+      });
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -95,24 +203,66 @@ const WebSocketProvider = ({ children }) => {
         );
         if (res.ok) {
           const data = await res.json();
-          syncUnreadCount(data.unread_count || 0);
+          syncUnreadState(data.unread_count || 0);
         } else {
           console.warn("Unread count returned non-OK status:", res.status);
-          syncUnreadCount(0);
+          syncUnreadState(0);
         }
       } catch (error) {
         console.warn("Failed to fetch unread count (non-blocking):", error);
-        syncUnreadCount(0);
+        syncUnreadState(0);
       }
     };
 
     fetchUnreadCount();
-  }, [accessToken]);
+  }, [accessToken, syncUnreadState]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const fetchUnreadTables = async () => {
+      try {
+        const role = parseUser?.role;
+        let endpoint = "/owners/devicesall/";
+        if (role === "staff") endpoint = "/api/staff/devicesall/";
+        if (role === "chef") endpoint = "/api/chef/devicesall/";
+
+        const envApiUrl = import.meta.env.VITE_API_URL;
+        const baseUrl = envApiUrl && envApiUrl !== "/api"
+          ? envApiUrl
+          : "https://cleverdining-2.onrender.com";
+
+        const res = await fetch(`${baseUrl}${endpoint}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+
+        const rows: UnreadTable[] = data
+          .map((row: any) => ({
+            deviceId: String(row?.id ?? row?.device_id ?? ""),
+            tableName: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
+            unreadCount: Number(row?.unread_count || 0),
+          }))
+          .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
+
+        const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
+        syncUnreadState(total, rows);
+      } catch (error) {
+        console.warn("Failed to fetch unread table list (non-blocking):", error);
+      }
+    };
+
+    fetchUnreadTables();
+  }, [accessToken, parseUser?.role, syncUnreadState]);
 
   useEffect(() => {
     if (!id || !accessToken) {
-      console.error(
-        "Missing user ID or access token, WebSocket connection won't be established."
+      console.warn(
+        "Missing restaurant ID or access token, WebSocket connection skipped.",
+        { restaurantId: id, hasAccessToken: !!accessToken }
       );
       return;
     }
@@ -150,14 +300,19 @@ const WebSocketProvider = ({ children }) => {
 
             if (isFromDevice) {
               console.log("Incrementing Global Unread Count (Incoming Device Msg)");
-              setUnreadCount((prev) => {
-                const newCount = prev + 1;
-                updateAppBadge(newCount);
-                try {
-                  broadcastChannelRef.current?.postMessage({ unreadCount: newCount });
-                } catch (e) { }
-                return newCount;
-              });
+              const deviceId = parsedMessage.device_id ?? parsedMessage.table_id;
+              if (deviceId !== undefined && deviceId !== null) {
+                incrementUnreadForTable(deviceId, parsedMessage.table_name);
+              } else {
+                setUnreadCountSafe((prev) => prev + 1);
+              }
+            }
+          }
+
+          if (parsedMessage.type === "chat_cleared" || parsedMessage.type === "session_closed") {
+            const targetDeviceId = parsedMessage.device_id ?? parsedMessage.table_id;
+            if (targetDeviceId !== undefined && targetDeviceId !== null) {
+              clearUnreadForTable(targetDeviceId);
             }
           }
 
@@ -285,10 +440,27 @@ const WebSocketProvider = ({ children }) => {
         return null;
       });
     };
-  }, [wsUrl, id, accessToken]);
+  }, [wsUrl, id, accessToken, clearUnreadForTable, incrementUnreadForTable, setUnreadCountSafe]);
+
+  const unreadTableSummary = unreadTables
+    .slice(0, 2)
+    .map((t) => t.tableName)
+    .join(", ");
 
   return (
-    <WebSocketContext.Provider value={{ ws, messages, response, unreadCount, setUnreadCount: syncUnreadCount }}>
+    <WebSocketContext.Provider
+      value={{
+        ws,
+        messages,
+        response,
+        unreadCount,
+        unreadTables,
+        unreadTableSummary,
+        setUnreadCount: setUnreadCountSafe,
+        clearUnreadForTable,
+        incrementUnreadForTable,
+      }}
+    >
       {children}
     </WebSocketContext.Provider>
   );

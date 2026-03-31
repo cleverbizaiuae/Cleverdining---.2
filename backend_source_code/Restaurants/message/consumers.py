@@ -869,6 +869,14 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
             'timestamp': event['timestamp'],
         }))
 
+    async def chat_cleared(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "chat_cleared",
+            "device_id": event.get("device_id"),
+            "session_id": event.get("session_id"),
+            "reason": event.get("reason"),
+        }))
+
 
 
 

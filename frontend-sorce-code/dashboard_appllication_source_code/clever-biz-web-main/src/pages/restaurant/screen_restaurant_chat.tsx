@@ -45,7 +45,7 @@ const formatTime = (ts: string | number) => {
 
 const ScreenRestaurantChat = () => {
   const { userInfo } = useRole();
-  const { setUnreadCount } = useContext(WebSocketContext) || {};
+  const { clearUnreadForTable, messages: globalMessages } = useContext(WebSocketContext) || {};
   const [chatList, setChatList] = useState<ChatRoomItem[]>([]);
   const [selectedChat, setSelectedChat] = useState<ChatRoomItem | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -174,9 +174,6 @@ const ScreenRestaurantChat = () => {
     };
   }, [selectedChat, userInfo]);
 
-  // 3. Global WebSocket Listener for Real-time List Updates
-  const { messages: globalMessages } = useContext(WebSocketContext) || {};
-
   // Ref to track selected chat without triggering re-renders in useEffect
   const selectedChatRef = useRef<ChatRoomItem | null>(null);
 
@@ -192,7 +189,32 @@ const ScreenRestaurantChat = () => {
 
     const lastMsg = globalMessages[globalMessages.length - 1];
 
-    if (lastMsg && lastMsg.type === 'chat_message') {
+    if (!lastMsg) return;
+
+    if (lastMsg.type === 'session_closed' || lastMsg.type === 'chat_cleared') {
+      const affectedDeviceId = lastMsg.device_id ?? lastMsg.table_id;
+      if (!affectedDeviceId) return;
+      const normalizedId = String(affectedDeviceId);
+
+      setChatList((prev) => prev.filter((chat) => String(chat.id) !== normalizedId));
+      setMessageCache((prev) => {
+        const next = { ...prev };
+        delete next[normalizedId];
+        return next;
+      });
+
+      if (selectedChatRef.current && String(selectedChatRef.current.id) === normalizedId) {
+        setSelectedChat(null);
+        setMessages([]);
+      }
+
+      if (clearUnreadForTable) {
+        clearUnreadForTable(normalizedId);
+      }
+      return;
+    }
+
+    if (lastMsg.type === 'chat_message') {
       // Generate a unique ID for the message if not present
       const msgId = lastMsg.id || `${lastMsg.device_id}-${lastMsg.timestamp}-${lastMsg.message}`;
 
@@ -267,12 +289,9 @@ const ScreenRestaurantChat = () => {
     if (!selectedChat) return;
 
     // IMMEDIATELY clear local badge for this chat (optimistic UI)
-    const currentUnread = chatList.find(c => c.id === selectedChat.id)?.unread_count || 0;
     setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
-
-    // Also decrement global count immediately
-    if (currentUnread > 0 && setUnreadCount) {
-      setUnreadCount((prev: number) => Math.max(0, prev - currentUnread));
+    if (clearUnreadForTable) {
+      clearUnreadForTable(selectedChat.id);
     }
 
     // LOAD FROM CACHE FIRST (Instant Load)
@@ -306,7 +325,7 @@ const ScreenRestaurantChat = () => {
       }
     };
     fetchHistory();
-  }, [selectedChat, userInfo, setUnreadCount]);
+  }, [selectedChat, userInfo, clearUnreadForTable]);
 
   // 4. Auto-scroll to bottom
   useEffect(() => {

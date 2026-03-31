@@ -29,7 +29,7 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { unreadCount } = useContext(WebSocketContext) || {};
+  const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
 
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/staff" },
@@ -72,6 +72,11 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
+                    <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
+                      {unreadTableSummary}
+                    </span>
+                  )}
                   {item.title === "Messages" && unreadCount > 0 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
                       {unreadCount > 99 ? '99+' : unreadCount}
@@ -131,7 +136,7 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { response, unreadCount } = useContext(WebSocketContext) || {};
+  const { response, unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
   console.log(response);
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/chef" },
@@ -170,6 +175,11 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
+                    <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
+                      {unreadTableSummary}
+                    </span>
+                  )}
                   {item.title === "Messages" && unreadCount > 0 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
                       {unreadCount > 99 ? '99+' : unreadCount}
@@ -328,7 +338,7 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { unreadCount } = useContext(WebSocketContext) || {};
+  const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
 
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/restaurant" },
@@ -387,6 +397,11 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
+                  {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
+                    <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
+                      {unreadTableSummary}
+                    </span>
+                  )}
                   {item.title === "Messages" && unreadCount > 0 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
                       {unreadCount > 99 ? '99+' : unreadCount}

@@ -154,6 +154,25 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
   const [ordersStats, setOrdersStats] = useState<OrdersStats | null>(null);
   const { userRole, isLoading } = useRole();
   const { response } = useContext(WebSocketContext);
+
+  const normalizeStatusSummary = (raw: any): StatusSummary => {
+    return {
+      available_items_count: Number(raw?.available_items_count || 0),
+      // backend may send either processing_orders_count or preparing_order_count
+      processing_orders_count: Number(
+        raw?.processing_orders_count ??
+        raw?.preparing_order_count ??
+        0
+      ),
+      // backend may send either pending_orders_count or pending_order_count
+      pending_orders_count: Number(
+        raw?.pending_orders_count ??
+        raw?.pending_order_count ??
+        0
+      ),
+    };
+  };
+
   const fetchStatusSummary = useCallback(async () => {
     if (!userRole) return;
     let endpoint = "";
@@ -165,9 +184,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
     try {
-      const response = await axiosInstance.get(endpoint);
-      setStatusSummary(response.data);
-      console.log(response.data, "summary");
+      const res = await axiosInstance.get(endpoint);
+      setStatusSummary(normalizeStatusSummary(res.data));
+      console.log(res.data, "summary");
     } catch (error: any) {
       console.error("Failed to load status summary", error);
       if (error.response?.status !== 401 && error.response?.status !== 403) {
@@ -188,10 +207,12 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
       try {
-        const response = await axiosInstance.get(endpoint);
-        console.log(response, "response from fetch food items");
-        const { results, count } = response.data;
-        console.log("Fetched food items:", response.data);
+        const res = await axiosInstance.get(endpoint);
+        console.log(res, "response from fetch food items");
+        const payload = res.data;
+        const results = Array.isArray(payload) ? payload : payload?.results || [];
+        const count = Array.isArray(payload) ? payload.length : Number(payload?.count || results.length || 0);
+        console.log("Fetched food items:", payload);
         const formattedItems = results.map((item: any) => ({
           id: item.id,
           image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
@@ -229,13 +250,17 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
-      const response = await axiosInstance.get(endpoint, {
+      const res = await axiosInstance.get(endpoint, {
         params: { page: page, search: search },
       });
-      console.log(response, "response from fetch orders");
-      const { results, count } = response.data;
-      console.log("Fetched orders:", response.data);
-      setOrdersStats(results.stats);
+      console.log(res, "response from fetch orders");
+      const payload = res.data || {};
+      const results = payload.results;
+      const count = Number(payload.count || 0);
+      console.log("Fetched orders:", payload);
+
+      // Stats can arrive as payload.stats or results.stats depending on API variant
+      setOrdersStats((payload.stats || results?.stats || null) as any);
 
       // Handle both array and object with orders property
       const ordersData = Array.isArray(results)
@@ -252,7 +277,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         toast.error("Failed to load orders.");
       }
     }
-  }, []);
+  }, [userRole]);
 
   const updateOrderStatus = useCallback(
     async (id: number, status: string, showToast: boolean = true) => {
@@ -291,22 +316,47 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         throw error;
       }
     },
-    [setOrders]
+    [setOrders, userRole]
   );
   useEffect(() => {
-    if (
-      response.type === "order_created" ||
-      response.type === "order_updated"
-    ) {
+    if (!response?.type) return;
+
+    const orderEvents = new Set([
+      "new_order",
+      "order_created",
+      "order_updated",
+      "order_status_update",
+      "order_paid",
+      "cash_payment_confirmed",
+      "payment_status_update",
+    ]);
+    const itemEvents = new Set([
+      "item_created",
+      "item_updated",
+      "item_deleted",
+    ]);
+
+    if (orderEvents.has(response.type)) {
       fetchOrders(ordersCurrentPage, ordersSearchQuery);
-    } else if (
-      response.type === "device_created" ||
-      response.type === "device_updated" ||
-      response.type === "device_deleted"
-    ) {
-      // fetchAllDevices(devicesCurrentPage, devicesSearchQuery);
+      fetchStatusSummary();
+      return;
     }
-  }, [response, ordersCurrentPage, ordersSearchQuery, fetchOrders]);
+
+    if (itemEvents.has(response.type)) {
+      fetchFoodItems(currentPage, searchQuery);
+      fetchStatusSummary();
+      return;
+    }
+  }, [
+    response,
+    currentPage,
+    searchQuery,
+    ordersCurrentPage,
+    ordersSearchQuery,
+    fetchOrders,
+    fetchFoodItems,
+    fetchStatusSummary,
+  ]);
 
   const updateAvailability = useCallback(
     async (id: number, availability: boolean) => {
