@@ -174,7 +174,7 @@ const ScreenRegister = () => {
           inputType="tel"
           inputProps={{
             id: "phone_number",
-            placeholder={`${getRegionConfig((watch("region") || "UAE")).phoneCode}123456789`,
+            placeholder: `${getRegionConfig((watch("region") || "UAE")).phoneCode}123456789`,
             ...register("phone_number"),
           }}
         />

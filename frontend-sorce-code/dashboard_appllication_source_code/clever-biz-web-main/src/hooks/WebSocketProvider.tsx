@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
-import { captureWebSocketFailure } from "../monitoring/sentry";
 import { getActiveRestaurantCurrency } from "../lib/utils";
 
 // Create a WebSocket context
@@ -14,6 +13,18 @@ type UnreadTable = {
   tableName: string;
   unreadCount: number;
 };
+
+type WsFailureContext = {
+  feature?: string;
+  endpoint?: string;
+  status?: number | string;
+};
+
+function captureWebSocketFailure(message: string, context: WsFailureContext = {}) {
+  if (import.meta.env.DEV) {
+    console.warn("[WebSocket warning]", message, context);
+  }
+}
 
 // PWA App Badge helpers
 function updateAppBadge(count: number) {
