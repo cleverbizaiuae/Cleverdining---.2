@@ -1,16 +1,36 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-import { useCart } from "../context/CartContext";
+import { useCart, type CartItem } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { API_BASE_URL } from "../lib/axios";
 import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion"; // Corrected from "motion/react"
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSessionCurrencyCode } from "../utils/regionSession";
+
+type UpsellSuggestion = {
+  id: number;
+  item_name: string;
+  price: string | number;
+  description?: string;
+  slug?: string;
+  category?: number;
+  restaurant?: number;
+  category_name?: string;
+  image1?: string;
+  availability?: boolean;
+  video?: string;
+  restaurant_name?: string;
+  upsell_rule?: string;
+  upsell_message?: string;
+  upsell_score?: number;
+};
 
 const ScreenCart = () => {
   const navigate = useNavigate();
-  const { cart, removeFromCart, clearCart, incrementQuantity, decrementQuantity } = useCart();
+  const { cart, addToCart, removeFromCart, clearCart, incrementQuantity, decrementQuantity } = useCart();
+  const [upsellSuggestions, setUpsellSuggestions] = useState<UpsellSuggestion[]>([]);
+  const [upsellLoading, setUpsellLoading] = useState(false);
   const toSafeNumber = (value: unknown): number => {
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
     if (typeof value === "string") {
@@ -20,14 +40,18 @@ const ScreenCart = () => {
     return 0;
   };
 
-  const validCartItems = cart.filter(
-    (item) =>
-      item &&
-      Number.isInteger(item.id) &&
-      item.id > 0 &&
-      typeof item.item_name === "string" &&
-      item.item_name.trim().length > 0 &&
-      Number.isFinite(toSafeNumber(item.price))
+  const validCartItems = useMemo(
+    () =>
+      cart.filter(
+        (item) =>
+          item &&
+          Number.isInteger(item.id) &&
+          item.id > 0 &&
+          typeof item.item_name === "string" &&
+          item.item_name.trim().length > 0 &&
+          Number.isFinite(toSafeNumber(item.price))
+      ),
+    [cart]
   );
 
   const resolveImageUrl = (url?: string) => {
@@ -53,6 +77,10 @@ const ScreenCart = () => {
     0
   );
   const currencyCode = getSessionCurrencyCode();
+  const cartFingerprint = useMemo(
+    () => validCartItems.map((item) => `${item.id}:${item.quantity}`).sort().join("|"),
+    [validCartItems]
+  );
 
   useEffect(() => {
     const userInfo = localStorage.getItem("userInfo");
@@ -68,6 +96,68 @@ const ScreenCart = () => {
       window.location.href = "/login?id=14&table=Default Table";
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const guestSessionToken = localStorage.getItem("guest_session_token");
+    if (!guestSessionToken || validCartItems.length === 0) {
+      setUpsellSuggestions([]);
+      return;
+    }
+
+    const fetchUpsellSuggestions = async () => {
+      setUpsellLoading(true);
+      try {
+        const response = await axiosInstance.get("/api/customer/cart/upsell_suggestions/", {
+          params: { limit: 4 },
+        });
+        const rawSuggestions = Array.isArray(response.data?.suggestions)
+          ? response.data.suggestions
+          : [];
+        const cartIds = new Set(validCartItems.map((item) => item.id));
+        const cleanedSuggestions = rawSuggestions
+          .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
+          .slice(0, 4);
+
+        if (!cancelled) {
+          setUpsellSuggestions(cleanedSuggestions);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setUpsellSuggestions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setUpsellLoading(false);
+        }
+      }
+    };
+
+    fetchUpsellSuggestions();
+    return () => {
+      cancelled = true;
+    };
+  }, [cartFingerprint]);
+
+  const suggestionToCartItem = (item: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
+    id: item.id,
+    item_name: item.item_name,
+    price: String(toSafeNumber(item.price)),
+    description: item.description || "",
+    slug: item.slug || "",
+    category: Number(item.category || 0),
+    restaurant: Number(item.restaurant || 0),
+    category_name: item.category_name || "",
+    image1: item.image1 || "",
+    availability: item.availability !== false,
+    video: item.video || "",
+    restaurant_name: item.restaurant_name || "",
+  });
+
+  const addSuggestedItem = (item: UpsellSuggestion) => {
+    addToCart(suggestionToCartItem(item), 1);
+    toast.success(`${item.item_name} added to cart`);
+  };
 
   const handleOrderNow = async () => {
     try {
@@ -271,6 +361,43 @@ const ScreenCart = () => {
               </motion.div>
             ))}
           </AnimatePresence>
+        )}
+
+        {validCartItems.length > 0 && (
+          <div className="mt-4 bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">Recommended Add-ons</h3>
+              {upsellLoading && <span className="text-xs text-gray-400">Loading...</span>}
+            </div>
+            {upsellSuggestions.length === 0 ? (
+              <p className="text-xs text-gray-500">No add-on suggestions right now.</p>
+            ) : (
+              <div className="space-y-3">
+                {upsellSuggestions.map((suggestion) => (
+                  <div
+                    key={suggestion.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{suggestion.item_name}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {suggestion.upsell_message || "You might like this add-on."}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        {currencyCode} {toSafeNumber(suggestion.price).toFixed(2)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => addSuggestedItem(suggestion)}
+                      className="shrink-0 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold hover:bg-blue-100 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
       {validCartItems.length > 0 && (

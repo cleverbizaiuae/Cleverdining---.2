@@ -1184,3 +1184,55 @@ class CartViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Invalid session'}, status=status.HTTP_403_FORBIDDEN)
         Cart.objects.filter(guest_session=session).delete()
         return Response({'status': 'cleared'})
+
+    @action(detail=False, methods=['get'])
+    def upsell_suggestions(self, request):
+        session_token = request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+            return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+        if not session:
+            return Response({'error': 'Invalid session'}, status=status.HTTP_403_FORBIDDEN)
+
+        cart = (
+            Cart.objects
+            .filter(guest_session=session, device=session.device)
+            .order_by('-updated_at')
+            .first()
+        )
+
+        if not cart:
+            return Response({'cart_id': None, 'suggestions': []})
+
+        try:
+            limit = int(request.query_params.get('limit', 4))
+        except (TypeError, ValueError):
+            limit = 4
+
+        from .upsell import build_cart_upsell_suggestions
+        from item.serializers import ItemSerializer
+
+        raw_suggestions = build_cart_upsell_suggestions(cart, limit=limit)
+        if not raw_suggestions:
+            return Response({'cart_id': cart.id, 'suggestions': []})
+
+        item_serializer = ItemSerializer(
+            [entry['item'] for entry in raw_suggestions],
+            many=True,
+            context={'request': request},
+        )
+
+        suggestions = []
+        for item_data, meta in zip(item_serializer.data, raw_suggestions):
+            suggestions.append({
+                **item_data,
+                'upsell_rule': meta['rule'],
+                'upsell_message': meta['message'],
+                'upsell_score': meta['score'],
+            })
+
+        return Response({
+            'cart_id': cart.id,
+            'suggestions': suggestions,
+        })
