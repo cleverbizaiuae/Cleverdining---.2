@@ -1,11 +1,21 @@
 from django.db import models
 from accounts.models import User
 from django.core.exceptions import ValidationError
-from django.utils import timezone
+from django.utils import timezone as dj_timezone
 
 class Restaurant(models.Model):
+    REGION_CHOICES = [
+        ('UAE', 'UAE'),
+        ('UK', 'UK'),
+    ]
+
     resturent_name = models.CharField(max_length=255)
     location = models.CharField(max_length=255)
+    region = models.CharField(max_length=10, choices=REGION_CHOICES, default='UAE', db_index=True)
+    currency = models.CharField(max_length=10, default='AED')
+    timezone = models.CharField(max_length=64, default='Asia/Dubai')
+    country_code = models.CharField(max_length=8, default='+971')
+    default_payment_provider = models.CharField(max_length=30, default='stripe')
     city = models.CharField(max_length=100, blank=True, default="")
     country = models.CharField(max_length=100, blank=True, default="")
     phone_number = models.CharField(max_length=20, unique=True)
@@ -39,7 +49,7 @@ class Restaurant(models.Model):
     payment_processor = models.CharField(max_length=30, default='stripe')
     
     # Subscription
-    subscription_start = models.DateTimeField(default=timezone.now)
+    subscription_start = models.DateTimeField(default=dj_timezone.now)
     subscription_end = models.DateTimeField(null=True, blank=True)
     
     # WhatsApp Configuration (Enterprise)
@@ -63,6 +73,11 @@ class Restaurant(models.Model):
     @property
     def active_business_day(self):
         return self.business_days.filter(is_active=True).last()
+
+    @property
+    def region_settings(self):
+        from restaurant.region_config import get_region_config
+        return get_region_config(self.region)
 
 class BusinessDay(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='business_days')

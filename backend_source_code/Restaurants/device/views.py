@@ -126,6 +126,11 @@ class ResolveTableView(APIView):
                     'table_name': device.table_name,
                     'restaurant_id': device.restaurant.id,
                     'restaurant_name': device.restaurant.resturent_name,
+                    'restaurant_region': device.restaurant.region or 'UAE',
+                    'restaurant_currency': device.restaurant.currency or 'AED',
+                    'restaurant_timezone': device.restaurant.timezone or 'Asia/Dubai',
+                    'restaurant_country_code': device.restaurant.country_code or '+971',
+                    'default_payment_provider': device.restaurant.default_payment_provider or 'stripe',
                     'expires_at': existing_session.expires_at.isoformat() if existing_session.expires_at else None,
                     'is_resumed': True
                 })
@@ -162,6 +167,11 @@ class ResolveTableView(APIView):
             'table_name': device.table_name,
             'restaurant_id': device.restaurant.id,
             'restaurant_name': device.restaurant.resturent_name,
+            'restaurant_region': device.restaurant.region or 'UAE',
+            'restaurant_currency': device.restaurant.currency or 'AED',
+            'restaurant_timezone': device.restaurant.timezone or 'Asia/Dubai',
+            'restaurant_country_code': device.restaurant.country_code or '+971',
+            'default_payment_provider': device.restaurant.default_payment_provider or 'stripe',
             'expires_at': expires_at.isoformat(),
             'is_resumed': False
         })

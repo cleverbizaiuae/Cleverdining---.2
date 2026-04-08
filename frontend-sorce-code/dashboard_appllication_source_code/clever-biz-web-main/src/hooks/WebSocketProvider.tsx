@@ -1,5 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
+import { captureWebSocketFailure } from "../monitoring/sentry";
+import { getActiveRestaurantCurrency } from "../lib/utils";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -264,6 +266,10 @@ const WebSocketProvider = ({ children }) => {
         "Missing restaurant ID or access token, WebSocket connection skipped.",
         { restaurantId: id, hasAccessToken: !!accessToken }
       );
+      captureWebSocketFailure(
+        "Missing restaurant ID or access token, WebSocket connection skipped.",
+        { endpoint: wsUrl, feature: "websocket" }
+      );
       return;
     }
 
@@ -334,7 +340,7 @@ const WebSocketProvider = ({ children }) => {
                 <p>Total: {parsedMessage.total_amount}</p>
                 {Number(parsedMessage.order?.tip_amount) > 0 && (
                   <p className="text-sm text-yellow-800 font-semibold">
-                    Includes Tip: AED {parsedMessage.order.tip_amount}
+                    Includes Tip: {getActiveRestaurantCurrency()} {parsedMessage.order.tip_amount}
                   </p>
                 )}
               </div>
@@ -387,11 +393,19 @@ const WebSocketProvider = ({ children }) => {
 
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
+          captureWebSocketFailure("WebSocket message parsing failed", {
+            endpoint: wsUrl,
+            feature: "websocket",
+          });
         }
       };
 
       socket.onerror = (error) => {
         console.error("WebSocket error:", error);
+        captureWebSocketFailure("WebSocket socket error", {
+          endpoint: wsUrl,
+          feature: "websocket",
+        });
       };
 
       socket.onclose = () => {

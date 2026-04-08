@@ -15,6 +15,8 @@ interface WalletPaymentProps {
     onError: (error: string) => void;
     onCancel: () => void;
     restaurantName?: string;
+    currencyCode?: string;
+    countryCode?: string;
 }
 
 interface WalletPaymentResult {
@@ -135,7 +137,9 @@ export const ApplePayButton = ({
     onSuccess,
     onError,
     onCancel,
-    restaurantName = 'CleverDining'
+    restaurantName = 'CleverDining',
+    currencyCode = 'AED',
+    countryCode = 'AE',
 }: WalletPaymentProps) => {
     const [isSupported, setIsSupported] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -157,13 +161,13 @@ export const ApplePayButton = ({
                         merchantIdentifier: 'merchant.com.cleverdining',
                         merchantCapabilities: ['supports3DS'],
                         supportedNetworks: ['visa', 'masterCard', 'amex'],
-                        countryCode: 'AE'
+                        countryCode: countryCode
                     }
                 }],
                 {
                     total: {
                         label: restaurantName,
-                        amount: { currency: 'AED', value: amount.toFixed(2) }
+                        amount: { currency: currencyCode, value: amount.toFixed(2) }
                     }
                 }
             );
@@ -200,7 +204,7 @@ export const ApplePayButton = ({
         } finally {
             setIsProcessing(false);
         }
-    }, [amount, orderId, restaurantName, onSuccess, onError, onCancel, isProcessing]);
+    }, [amount, orderId, restaurantName, onSuccess, onError, onCancel, isProcessing, currencyCode, countryCode]);
 
     if (!isSupported) return null;
 
@@ -234,7 +238,9 @@ export const GooglePayButton = ({
     onSuccess,
     onError,
     onCancel,
-    restaurantName = 'CleverDining'
+    restaurantName = 'CleverDining',
+    currencyCode = 'AED',
+    countryCode = 'AE',
 }: WalletPaymentProps) => {
     const [isSupported, setIsSupported] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -276,15 +282,15 @@ export const GooglePayButton = ({
                         transactionInfo: {
                             totalPriceStatus: 'FINAL',
                             totalPrice: amount.toFixed(2),
-                            currencyCode: 'AED',
-                            countryCode: 'AE'
+                            currencyCode: currencyCode,
+                            countryCode: countryCode
                         }
                     }
                 }],
                 {
                     total: {
                         label: restaurantName,
-                        amount: { currency: 'AED', value: amount.toFixed(2) }
+                        amount: { currency: currencyCode, value: amount.toFixed(2) }
                     }
                 }
             );
@@ -321,7 +327,7 @@ export const GooglePayButton = ({
         } finally {
             setIsProcessing(false);
         }
-    }, [amount, orderId, restaurantName, onSuccess, onError, onCancel, isProcessing]);
+    }, [amount, orderId, restaurantName, onSuccess, onError, onCancel, isProcessing, currencyCode, countryCode]);
 
     if (!isSupported) return null;
 

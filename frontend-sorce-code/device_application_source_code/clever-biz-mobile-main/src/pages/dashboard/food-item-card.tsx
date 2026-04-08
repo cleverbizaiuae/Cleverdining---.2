@@ -3,6 +3,7 @@ import { useState } from "react";
 import { FoodItemTypes } from "./food-items";
 import { cn } from "clsx-for-tailwind";
 import { API_BASE_URL } from "../../lib/axios";
+import { getSessionCurrencyCode } from "../../utils/regionSession";
 
 interface FoodItemCardProps {
     item: FoodItemTypes;
@@ -14,6 +15,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
     const price = parseFloat(item.price);
     const discount = item.discount_percentage || 0;
     const discountedPrice = discount > 0 ? price - (price * discount / 100) : price;
+    const currencyCode = getSessionCurrencyCode();
 
     return (
         <div
@@ -134,11 +136,11 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                 <div className="flex items-center justify-between mt-2">
                     <div className="flex flex-col">
                         <span className="text-base sm:text-lg font-bold text-primary">
-                            AED {discountedPrice.toFixed(2)}
+                            {currencyCode} {discountedPrice.toFixed(2)}
                         </span>
                         {discount > 0 && (
                             <span className="text-[10px] sm:text-xs text-gray-400 line-through">
-                                AED {price.toFixed(2)}
+                                {currencyCode} {price.toFixed(2)}
                             </span>
                         )}
                     </div>

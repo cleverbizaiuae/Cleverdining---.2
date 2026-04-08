@@ -26,6 +26,7 @@ class Payment(models.Model):
         ('stripe', 'Stripe'),
         ('checkout', 'Checkout.com'),
         ('paytabs', 'PayTabs'),
+        ('payme', 'Payme'),
         ('cash', 'Cash'),
         ('apple_pay', 'Apple Pay'),
         ('google_pay', 'Google Pay'),
@@ -122,6 +123,7 @@ class PaymentGateway(models.Model):
         ('stripe', 'Stripe'),
         ('checkout', 'Checkout.com'),
         ('paytabs', 'PayTabs'),
+        ('payme', 'Payme'),
     ]
     
     GOOGLE_PAY_ENVIRONMENT_CHOICES = [
@@ -181,4 +183,3 @@ class PaymentGateway(models.Model):
     def __str__(self):
         return f"{self.provider} - {self.restaurant.resturent_name}"
     
-

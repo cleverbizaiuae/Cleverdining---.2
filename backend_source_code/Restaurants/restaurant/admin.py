@@ -6,6 +6,9 @@ from .models import Restaurant
 class RestaurantAdmin(admin.ModelAdmin):
     list_display = (
         'resturent_name',
+        'region',
+        'currency',
+        'timezone',
         'location',
         'phone_number',
         'package',

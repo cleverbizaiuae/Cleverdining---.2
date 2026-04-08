@@ -133,11 +133,19 @@ export default function CheckoutButton({
             ? "bg-gray-400 cursor-not-allowed"
             : provider === 'cash'
               ? "bg-yellow-500 hover:bg-yellow-600 text-black border border-yellow-600"
+              : provider === 'payme'
+                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
               : "bg-green-600 hover:bg-green-700 text-white"
           }
   `}
       >
-        {loading ? "Processing..." : provider === 'cash' ? "Confirm Pay by Cash" : "Pay Now"}
+        {loading
+          ? "Processing..."
+          : provider === 'cash'
+            ? "Confirm Pay by Cash"
+            : provider === 'payme'
+              ? "Continue to Bank"
+              : "Pay Now"}
       </button>
     </>
   );

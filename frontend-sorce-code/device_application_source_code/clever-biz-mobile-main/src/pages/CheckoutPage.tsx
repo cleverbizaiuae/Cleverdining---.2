@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import CheckoutButton from "./CheckoutButton";
 import axiosInstance from "../lib/axios";
 import { ApplePayButton, GooglePayButton, useWalletAvailability } from "../components/WalletPayment";
+import { getRegionConfig } from "../config/regionConfig";
 // import CheckoutButton from "../components/CheckoutButton";
 
 export default function CheckoutPage() {
@@ -52,7 +53,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | 'apple_pay' | 'google_pay'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | 'payme' | 'apple_pay' | 'google_pay'>('card');
   const [orderData, setOrderData] = useState<any>(null);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [tipType, setTipType] = useState<'percentage' | 'custom_amount' | 'custom_percentage' | null>(null);
@@ -68,6 +69,21 @@ export default function CheckoutPage() {
     }
     return 0;
   };
+
+  const userInfo = (() => {
+    try {
+      const raw = localStorage.getItem("userInfo");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const restaurantFromSession = userInfo?.user?.restaurants?.[0] || {};
+  const resolvedRegion = (restaurantFromSession.region || orderData?.restaurant_region || "UAE").toUpperCase();
+  const regionSettings = getRegionConfig(resolvedRegion);
+  const currencyCode = restaurantFromSession.currency || regionSettings.currency;
+  const countryAlpha2 = regionSettings.countryAlpha2;
+  const isUkRestaurant = resolvedRegion === "UK";
 
   // Get restaurant ID from order data for wallet availability check
   const restaurantId = orderData?.restaurant || allOrders[0]?.restaurant || null;
@@ -204,18 +220,18 @@ export default function CheckoutPage() {
             {validItems.map((item: any, index: number) => (
               <div key={`${item.id}-${index}`} className="flex justify-between text-sm">
                 <span>{item.quantity}x {item.item_name}</span>
-                <span>AED {toSafeNumber(item.price).toFixed(2)}</span>
+                <span>{currencyCode} {toSafeNumber(item.price).toFixed(2)}</span>
               </div>
             ))}
           </div>
           <div className="border-t border-dashed border-gray-200 pt-1 space-y-0.5">
             <div className="flex justify-between text-sm text-gray-600">
               <span>Subtotal</span>
-              <span>AED {subtotal.toFixed(2)}</span>
+              <span>{currencyCode} {subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-base font-bold text-gray-900 mt-1">
               <span>Total</span>
-              <span>AED {finalTotal}</span>
+              <span>{currencyCode} {finalTotal}</span>
             </div>
           </div>
         </div>
@@ -259,7 +275,7 @@ export default function CheckoutPage() {
                 type="text"
                 value={customInput}
                 onChange={(e) => handleCustomInput(e.target.value)}
-                placeholder="AED 0.00"
+                placeholder={`${currencyCode} 0.00`}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 font-semibold text-gray-800"
               />
               {(customInput && tipAmount === 0 && customInput !== '') && (
@@ -271,7 +287,7 @@ export default function CheckoutPage() {
           {tipAmount > 0 && (
             <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
               <span className="text-sm font-medium text-blue-800">Tip Added</span>
-              <span className="text-lg font-bold text-blue-900">AED {tipAmount.toFixed(2)}</span>
+              <span className="text-lg font-bold text-blue-900">{currencyCode} {tipAmount.toFixed(2)}</span>
             </div>
           )}
         </div>
@@ -300,6 +316,28 @@ export default function CheckoutPage() {
               </div>
               <span className="text-2xl">💳</span>
             </label>
+
+            {isUkRestaurant && (
+              <label
+                className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
+                ${paymentMethod === 'payme' ? 'border-indigo-500 bg-indigo-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+              `}
+              >
+                <input
+                  type="radio"
+                  name="payment"
+                  value="payme"
+                  checked={paymentMethod === 'payme'}
+                  onChange={() => setPaymentMethod('payme')}
+                  className="mr-3 h-5 w-5 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div className="flex-1">
+                  <span className="font-semibold block text-gray-800">Pay by Bank</span>
+                  <span className="text-sm text-gray-500">Secure UK open-banking checkout</span>
+                </div>
+                <span className="text-2xl">🏦</span>
+              </label>
+            )}
 
             {/* WALLET PAYMENT OPTIONS */}
             {!walletLoading && (walletAvailability.apple_pay_available || walletAvailability.google_pay_available) && (
@@ -379,14 +417,20 @@ export default function CheckoutPage() {
       <div className="bg-white border-t border-gray-200 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
         <div className="mb-2 flex justify-between items-center px-1">
           <span className="text-gray-500 text-sm font-medium">Grand Total</span>
-          <span className="text-2xl font-bold text-gray-900">AED {finalTotal}</span>
+          <span className="text-2xl font-bold text-gray-900">{currencyCode} {finalTotal}</span>
         </div>
 
         {/* Card or Cash Payment */}
-        {(paymentMethod === 'card' || paymentMethod === 'cash') && (
+        {(paymentMethod === 'card' || paymentMethod === 'cash' || paymentMethod === 'payme') && (
           <CheckoutButton
             orderId={orderId}
-            provider={paymentMethod === 'card' ? undefined : 'cash'}
+            provider={
+              paymentMethod === 'card'
+                ? undefined
+                : paymentMethod === 'payme'
+                  ? 'payme'
+                  : 'cash'
+            }
             tipAmount={tipAmount}
             tipType={tipType}
             tipValue={tipValue}
@@ -400,6 +444,8 @@ export default function CheckoutPage() {
             amount={parseFloat(finalTotal)}
             orderId={orderId}
             restaurantName={orderData?.restaurant_name || 'CleverDining'}
+            currencyCode={currencyCode}
+            countryCode={countryAlpha2}
             onSuccess={(result) => {
               console.log('Apple Pay Success:', result);
               // Navigate to success page
@@ -427,6 +473,8 @@ export default function CheckoutPage() {
             amount={parseFloat(finalTotal)}
             orderId={orderId}
             restaurantName={orderData?.restaurant_name || 'CleverDining'}
+            currencyCode={currencyCode}
+            countryCode={countryAlpha2}
             onSuccess={(result) => {
               console.log('Google Pay Success:', result);
               // Navigate to success page

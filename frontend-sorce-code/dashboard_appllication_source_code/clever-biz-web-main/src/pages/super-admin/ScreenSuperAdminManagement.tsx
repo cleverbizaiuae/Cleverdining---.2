@@ -24,12 +24,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+import { getRegionConfig } from "../../config/regionConfig";
 
 // --- Types ---
 interface RegisteredRestaurant {
     id: string;
     name: string;
     location: string;
+    region?: "UAE" | "UK";
+    currency?: string;
+    timezone?: string;
+    countryCode?: string;
+    defaultPaymentProvider?: string;
     city: string;
     country: string;
     phone: string;
@@ -51,6 +57,11 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
     id: String(restaurant?.id ?? restaurant?.restaurant_id ?? ""),
     name: String(restaurant?.name ?? restaurant?.resturent_name ?? ""),
     location: String(restaurant?.location ?? ""),
+    region: String(restaurant?.region ?? "UAE").toUpperCase() === "UK" ? "UK" : "UAE",
+    currency: String(restaurant?.currency ?? ""),
+    timezone: String(restaurant?.timezone ?? ""),
+    countryCode: String(restaurant?.countryCode ?? restaurant?.country_code ?? ""),
+    defaultPaymentProvider: String(restaurant?.defaultPaymentProvider ?? restaurant?.default_payment_provider ?? ""),
     city: String(restaurant?.city ?? restaurant?.location_city ?? ""),
     country: String(restaurant?.country ?? restaurant?.location_country ?? ""),
     phone: String(restaurant?.phone ?? restaurant?.phone_number ?? ""),
@@ -87,6 +98,7 @@ const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
 const ScreenSuperAdminManagement = () => {
     const queryClient = useQueryClient();
     const [searchQuery, setSearchQuery] = useState("");
+    const [regionFilter, setRegionFilter] = useState<"all" | "UAE" | "UK">("all");
 
     // Modal States
     const [selectedRestaurant, setSelectedRestaurant] = useState<RegisteredRestaurant | null>(null);
@@ -102,6 +114,7 @@ const ScreenSuperAdminManagement = () => {
 
     // Edit Form
     const [editForm, setEditForm] = useState({
+        region: "UAE" as "UAE" | "UK",
         phone: "",
         email: "",
         city: "",
@@ -118,6 +131,7 @@ const ScreenSuperAdminManagement = () => {
         // Or keep frontend names and map in mutation. mapping is better for UI consistency.
         name: "",
         location: "",
+        region: "UAE" as "UAE" | "UK",
         city: "Dubai",
         country: "UAE",
         phone: "",
@@ -135,9 +149,11 @@ const ScreenSuperAdminManagement = () => {
 
     // --- Queries ---
     const { data: restaurants = [], isLoading } = useQuery<RegisteredRestaurant[]>({
-        queryKey: ['registered-restaurants'],
+        queryKey: ['registered-restaurants', regionFilter],
         queryFn: async () => {
-            const response = await axiosInstance.get('/owners/registered-restaurants/');
+            const response = await axiosInstance.get('/owners/registered-restaurants/', {
+                params: regionFilter === "all" ? undefined : { region: regionFilter },
+            });
             const payload = Array.isArray(response.data) ? response.data : [];
             return payload.map(normalizeRestaurant);
         },
@@ -184,6 +200,7 @@ const ScreenSuperAdminManagement = () => {
     const updateRestaurantMutation = useMutation({
         mutationFn: async (data: {
             id: string;
+            region: "UAE" | "UK";
             phone: string;
             email: string;
             city: string;
@@ -195,6 +212,7 @@ const ScreenSuperAdminManagement = () => {
         }) => {
             try {
                 const payload = {
+                    region: data.region,
                     phone: data.phone,
                     email: data.email,
                     city: data.city,
@@ -238,6 +256,7 @@ const ScreenSuperAdminManagement = () => {
             const payload = {
                 resturent_name: data.name,
                 location: data.location,
+                region: data.region,
                 city: data.city,
                 country: data.country,
                 phone_number: data.phone,
@@ -340,12 +359,15 @@ const ScreenSuperAdminManagement = () => {
 
     const filteredRestaurants = useMemo(() => {
         const lowerQ = searchQuery.toLowerCase();
-        return restaurants.filter(r =>
-            r.name.toLowerCase().includes(lowerQ) ||
-            r.city.toLowerCase().includes(lowerQ) ||
-            r.country.toLowerCase().includes(lowerQ)
-        );
-    }, [restaurants, searchQuery]);
+        return restaurants.filter((r) => {
+            const matchesRegion = regionFilter === "all" || r.region === regionFilter;
+            const matchesText =
+                r.name.toLowerCase().includes(lowerQ) ||
+                r.city.toLowerCase().includes(lowerQ) ||
+                r.country.toLowerCase().includes(lowerQ);
+            return matchesRegion && matchesText;
+        });
+    }, [restaurants, searchQuery, regionFilter]);
 
     // --- Handlers ---
     const handleStatusChange = (id: string, status: string) => {
@@ -355,6 +377,7 @@ const ScreenSuperAdminManagement = () => {
     const handleViewRestaurant = (restaurant: RegisteredRestaurant) => {
         setSelectedRestaurant(restaurant);
         setEditForm({
+            region: restaurant.region || "UAE",
             phone: restaurant.phone || "",
             email: restaurant.email || "",
             city: restaurant.city || "",
@@ -391,7 +414,7 @@ const ScreenSuperAdminManagement = () => {
 
     const resetNewRestaurant = () => {
         setNewRestaurant({
-            name: "", location: "", city: "Dubai", country: "UAE", phone: "", email: "", ownerName: "",
+            name: "", location: "", region: "UAE", city: "Dubai", country: "UAE", phone: "", email: "", ownerName: "",
             qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Starter", plan: "standard", subscriptionMonths: 12, whatsappEnabled: false, ownerPassword: ""
         });
     };
@@ -427,6 +450,15 @@ const ScreenSuperAdminManagement = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h2 className="text-lg font-semibold text-slate-900">Restaurant Management</h2>
                 <div className="flex gap-3 w-full sm:w-auto">
+                    <select
+                        value={regionFilter}
+                        onChange={(e) => setRegionFilter(e.target.value as "all" | "UAE" | "UK")}
+                        className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"
+                    >
+                        <option value="all">All Regions</option>
+                        <option value="UAE">UAE</option>
+                        <option value="UK">UK</option>
+                    </select>
                     {/* Search Input */}
                     <div className="relative flex-1 sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -498,6 +530,7 @@ const ScreenSuperAdminManagement = () => {
                         <div className="col-span-2">
                             <p className="text-sm text-slate-600">{restaurant.location || 'N/A'}</p>
                             <p className="text-xs text-slate-400">{[restaurant.city, restaurant.country].filter(Boolean).join(', ')}</p>
+                            <p className="text-[11px] text-slate-500 mt-1">Region: {restaurant.region}</p>
                         </div>
 
                         {/* Package Column */}
@@ -616,6 +649,28 @@ const ScreenSuperAdminManagement = () => {
                                             placeholder="e.g. Dubai Mall, Level 2"
                                             className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Region</label>
+                                        <select
+                                            value={newRestaurant.region}
+                                            onChange={(e) => {
+                                                const nextRegion = e.target.value as "UAE" | "UK";
+                                                const cfg = getRegionConfig(nextRegion);
+                                                setNewRestaurant({
+                                                    ...newRestaurant,
+                                                    region: nextRegion,
+                                                    country: cfg.countryLabel,
+                                                    paymentProcessor: cfg.payments.includes(newRestaurant.paymentProcessor)
+                                                        ? newRestaurant.paymentProcessor
+                                                        : cfg.defaultPaymentProvider,
+                                                });
+                                            }}
+                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                        >
+                                            <option value="UAE">UAE</option>
+                                            <option value="UK">UK</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">City <span className="text-red-500">*</span></label>
@@ -790,9 +845,19 @@ const ScreenSuperAdminManagement = () => {
                                                 onChange={(e) => setNewRestaurant({ ...newRestaurant, paymentProcessor: e.target.value })}
                                                 className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
                                             >
-                                                <option value="stripe">Stripe</option>
-                                                <option value="checkout">Checkout.com</option>
-                                                <option value="paytabs">PayTabs</option>
+                                                {getRegionConfig(newRestaurant.region).payments
+                                                    .filter((provider) => provider !== "cash")
+                                                    .map((provider) => (
+                                                        <option key={provider} value={provider}>
+                                                            {provider === "checkout"
+                                                                ? "Checkout.com"
+                                                                : provider === "paytabs"
+                                                                    ? "PayTabs"
+                                                                    : provider === "payme"
+                                                                        ? "Payme"
+                                                                        : "Stripe"}
+                                                        </option>
+                                                    ))}
                                             </select>
                                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                                         </div>
@@ -1026,6 +1091,27 @@ const ScreenSuperAdminManagement = () => {
                         <div className="p-6 overflow-y-auto space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Region</label>
+                                    <select
+                                        value={editForm.region}
+                                        onChange={(e) => {
+                                            const nextRegion = e.target.value as "UAE" | "UK";
+                                            const cfg = getRegionConfig(nextRegion);
+                                            setEditForm({
+                                                ...editForm,
+                                                region: nextRegion,
+                                                paymentProcessor: cfg.payments.includes(editForm.paymentProcessor)
+                                                    ? editForm.paymentProcessor
+                                                    : cfg.defaultPaymentProvider,
+                                            });
+                                        }}
+                                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
+                                    >
+                                        <option value="UAE">UAE</option>
+                                        <option value="UK">UK</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
                                     <input type="text" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
                                 </div>
@@ -1055,9 +1141,19 @@ const ScreenSuperAdminManagement = () => {
                                     <label className="block text-xs font-medium text-slate-700 mb-1">Processor</label>
                                     <div className="relative">
                                         <select value={editForm.paymentProcessor} onChange={(e) => setEditForm({ ...editForm, paymentProcessor: e.target.value })} className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none">
-                                            <option value="stripe">Stripe</option>
-                                            <option value="checkout">Checkout.com</option>
-                                            <option value="paytabs">PayTabs</option>
+                                            {getRegionConfig(editForm.region).payments
+                                                .filter((provider) => provider !== "cash")
+                                                .map((provider) => (
+                                                    <option key={provider} value={provider}>
+                                                        {provider === "checkout"
+                                                            ? "Checkout.com"
+                                                            : provider === "paytabs"
+                                                                ? "PayTabs"
+                                                                : provider === "payme"
+                                                                    ? "Payme"
+                                                                    : "Stripe"}
+                                                    </option>
+                                                ))}
                                         </select>
                                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                                     </div>

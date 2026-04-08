@@ -9,6 +9,7 @@ import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMont
 interface RegisteredRestaurant {
     id: string;
     name: string;
+    region?: "UAE" | "UK";
     location: string;
     city: string;
     country: string;
@@ -25,15 +26,25 @@ interface RegisteredRestaurant {
     createdAt: string;
 }
 
-// GCC Countries with cities
-const COUNTRIES_DATA: Record<string, string[]> = {
-    "UAE": ["Dubai", "Abu Dhabi", "Sharjah", "Ajman"],
-    "Saudi Arabia": ["Riyadh", "Jeddah", "Dammam", "Mecca"],
-    "Qatar": ["Doha", "Al Wakrah", "Al Khor"],
-    "Kuwait": ["Kuwait City", "Hawalli", "Salmiya"],
-    "Bahrain": ["Manama", "Riffa", "Muharraq"],
-    "Egypt": ["Cairo", "Alexandria", "Giza"]
-};
+const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
+    id: String(restaurant?.id ?? ""),
+    name: String(restaurant?.name ?? restaurant?.resturent_name ?? ""),
+    region: String(restaurant?.region ?? "UAE").toUpperCase() === "UK" ? "UK" : "UAE",
+    location: String(restaurant?.location ?? ""),
+    city: String(restaurant?.city ?? ""),
+    country: String(restaurant?.country ?? ""),
+    phone: String(restaurant?.phone ?? restaurant?.phone_number ?? ""),
+    email: restaurant?.email ?? undefined,
+    logoUrl: restaurant?.logoUrl ?? restaurant?.logo_url ?? restaurant?.logo ?? undefined,
+    package: String(restaurant?.package ?? "Starter"),
+    status: restaurant?.status === "on_hold" ? "on_hold" : restaurant?.status === "inactive" ? "inactive" : "active",
+    qrCodes: Number(restaurant?.qrCodes ?? restaurant?.qr_codes ?? 10) || 10,
+    tableCount: Number(restaurant?.tableCount ?? restaurant?.table_count ?? 10) || 10,
+    paymentProcessor: String(restaurant?.paymentProcessor ?? restaurant?.payment_processor ?? "stripe"),
+    subscriptionStart: restaurant?.subscriptionStart ?? restaurant?.subscription_start ?? undefined,
+    subscriptionEnd: restaurant?.subscriptionEnd ?? restaurant?.subscription_end ?? undefined,
+    createdAt: String(restaurant?.createdAt ?? restaurant?.created_at ?? new Date().toISOString()),
+});
 
 // Seeded Sample Data (12 restaurants)
 const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
@@ -53,40 +64,33 @@ const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
 
 const ScreenSuperAdminDashboard = () => {
     // State
-    const [countryFilter, setCountryFilter] = useState("all");
-    const [cityFilter, setCityFilter] = useState("all");
+    const [regionFilter, setRegionFilter] = useState<"all" | "UAE" | "UK">("all");
 
     // Data Fetching with React Query
     const { data: restaurants = SEEDED_RESTAURANTS } = useQuery<RegisteredRestaurant[]>({
-        queryKey: ['registered-restaurants'],
+        queryKey: ['registered-restaurants', regionFilter],
         queryFn: async () => {
             try {
-                const response = await axiosInstance.get('/owners/registered-restaurants/');
-                return response.data;
+                const response = await axiosInstance.get('/owners/registered-restaurants/', {
+                    params: regionFilter === "all" ? undefined : { region: regionFilter },
+                });
+                const payload = Array.isArray(response.data) ? response.data : [];
+                return payload.map(normalizeRestaurant);
             } catch {
                 return SEEDED_RESTAURANTS;
             }
         },
-        initialData: SEEDED_RESTAURANTS
+        initialData: SEEDED_RESTAURANTS.map(normalizeRestaurant)
     });
 
     // --- Computed Values ---
-    const countries = ["all", ...Object.keys(COUNTRIES_DATA)];
-
-    const cities = useMemo(() => {
-        if (countryFilter === "all") {
-            return ["all", ...Object.values(COUNTRIES_DATA).flat()];
-        }
-        return ["all", ...(COUNTRIES_DATA[countryFilter] || [])];
-    }, [countryFilter]);
+    const regions = ["all", "UAE", "UK"] as const;
 
     const filteredRestaurants = useMemo(() => {
         return restaurants.filter(r => {
-            const matchCountry = countryFilter === "all" || r.country === countryFilter;
-            const matchCity = cityFilter === "all" || r.city === cityFilter;
-            return matchCountry && matchCity;
+            return regionFilter === "all" || (r.region || "UAE") === regionFilter;
         });
-    }, [restaurants, countryFilter, cityFilter]);
+    }, [restaurants, regionFilter]);
 
     const totalSubscribers = filteredRestaurants.length;
     const activeToday = filteredRestaurants.filter(r => r.status === 'active').length;
@@ -144,21 +148,11 @@ const ScreenSuperAdminDashboard = () => {
                 <div className="flex items-center gap-3">
                     <div className="relative">
                         <select
-                            value={countryFilter}
-                            onChange={(e) => { setCountryFilter(e.target.value); setCityFilter("all"); }}
+                            value={regionFilter}
+                            onChange={(e) => setRegionFilter(e.target.value as "all" | "UAE" | "UK")}
                             className="bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-[#0055FE] focus:border-[#0055FE] p-2.5 pr-8 outline-none appearance-none cursor-pointer hover:bg-slate-50 transition-colors"
                         >
-                            {countries.map(c => <option key={c} value={c}>{c === 'all' ? 'All Countries' : c}</option>)}
-                        </select>
-                        <Filter className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={14} />
-                    </div>
-                    <div className="relative">
-                        <select
-                            value={cityFilter}
-                            onChange={(e) => setCityFilter(e.target.value)}
-                            className="bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-[#0055FE] focus:border-[#0055FE] p-2.5 pr-8 outline-none appearance-none cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                            {cities.map(c => <option key={c} value={c}>{c === 'all' ? 'All Cities' : c}</option>)}
+                            {regions.map(c => <option key={c} value={c}>{c === 'all' ? 'All Regions' : c}</option>)}
                         </select>
                         <Filter className="absolute right-3 top-3 text-slate-400 pointer-events-none" size={14} />
                     </div>

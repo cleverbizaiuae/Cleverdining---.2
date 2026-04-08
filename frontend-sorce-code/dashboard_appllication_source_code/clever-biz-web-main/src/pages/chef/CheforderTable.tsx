@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import axiosInstance from "@/lib/axios";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 
 interface OrderItem {
   item_name: string;
@@ -19,6 +20,7 @@ interface Order {
 }
 
 const OrderTable = () => {
+  const currencyCode = getActiveRestaurantCurrency();
   const { messages } = useContext(WebSocketContext); // WebSocket messages
   const [ordersData, setOrdersData] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(false); // Loading state for fetching orders
@@ -136,7 +138,7 @@ const OrderTable = () => {
                 {item.order_items.length || "N/A"}
               </td>
               <td className="p-4 text-primary-text">
-                AED {item.total_price || "N/A"}
+                {currencyCode} {item.total_price || "N/A"}
               </td>
               <td className="p-4 text-primary-text">
                 <span className="font-medium">

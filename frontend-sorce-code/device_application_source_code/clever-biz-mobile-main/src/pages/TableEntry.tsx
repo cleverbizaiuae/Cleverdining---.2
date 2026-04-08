@@ -27,7 +27,14 @@ const TableEntry = () => {
                     device_id: device.id // Use ID from details
                 });
 
-                const { session_token } = sessionRes.data;
+                const {
+                    session_token,
+                    restaurant_region,
+                    restaurant_currency,
+                    restaurant_timezone,
+                    restaurant_country_code,
+                    default_payment_provider
+                } = sessionRes.data;
 
                 // 3. Create guest user info
                 const mockUserInfo = {
@@ -40,6 +47,11 @@ const TableEntry = () => {
                                 table_name: device.table_name,
                                 device_id: device.id,
                                 resturent_name: device.restaurant_name,
+                                region: restaurant_region || "UAE",
+                                currency: restaurant_currency || "AED",
+                                timezone: restaurant_timezone || "Asia/Dubai",
+                                country_code: restaurant_country_code || "+971",
+                                default_payment_provider: default_payment_provider || "stripe",
                             },
                         ],
                     },

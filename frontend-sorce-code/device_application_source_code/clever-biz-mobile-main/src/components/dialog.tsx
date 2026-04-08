@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { API_BASE_URL } from "../lib/axios";
+import { getSessionCurrencyCode } from "../utils/regionSession";
 
 interface ModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [quantity, setQuantity] = useState(1);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const { addToCart } = useCart();
+  const currencyCode = getSessionCurrencyCode();
 
   const truncatedName = item?.item_name || "Loading...";
 
@@ -224,7 +226,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               >
                 <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate px-1">Add to Cart</span>
                 <span className="text-sm sm:text-base font-bold whitespace-nowrap">
-                  AED {(Number(item?.price || 0) * quantity).toFixed(2)}
+                  {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
                 </span>
               </button>
             </div>

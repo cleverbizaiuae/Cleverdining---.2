@@ -1,6 +1,7 @@
 import { cn } from "clsx-for-tailwind";
 import { useRef } from "react";
 import { useWebSocket } from "@/components/WebSocketContext";
+import { getSessionCurrencyCode } from "../../utils/regionSession";
 
 export type FoodItemTypes = {
   id: number;
@@ -30,6 +31,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
   const price = parseFloat(item.price);
   const discount = item.discount_percentage || 0;
   const discountedPrice = discount > 0 ? price - (price * discount / 100) : price;
+  const currencyCode = getSessionCurrencyCode();
 
   return (
     <>
@@ -100,11 +102,11 @@ export const FoodItems = ({ item, showFood }: Props) => {
 
             <div className="flex items-center gap-2 mt-1">
               <span className="text-blue-600 font-bold text-base">
-                AED {discountedPrice.toFixed(2)}
+                {currencyCode} {discountedPrice.toFixed(2)}
               </span>
               {discount > 0 && (
                 <span className="text-gray-400 text-xs line-through">
-                  AED {price.toFixed(2)}
+                  {currencyCode} {price.toFixed(2)}
                 </span>
               )}
             </div>

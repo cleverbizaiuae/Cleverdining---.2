@@ -9,6 +9,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
 from restaurant.models import Restaurant
+from restaurant.region_config import resolve_region_defaults, get_region_config
 from django.db import transaction
 import logging
 import uuid
@@ -139,6 +140,11 @@ class SimpleLoginView(APIView):
                             'id': restaurant.id,
                             'resturent_name': restaurant.resturent_name or '',
                             'location': restaurant.location or '',
+                            'region': restaurant.region or 'UAE',
+                            'currency': restaurant.currency or 'AED',
+                            'timezone': restaurant.timezone or 'Asia/Dubai',
+                            'country_code': restaurant.country_code or '+971',
+                            'default_payment_provider': restaurant.default_payment_provider or 'stripe',
                             'phone_number': restaurant.phone_number or '',
                             'package': restaurant.package or 'Basic',
                             'source': 'owner',
@@ -208,15 +214,21 @@ class SimpleOwnerRegisterView(APIView):
             username = (request.data.get('username') or '').strip()
             restaurant_name = (request.data.get('resturent_name') or '').strip()
             location = (request.data.get('location') or '').strip()
+            region = (request.data.get('region') or '').strip()
+            country = (request.data.get('country') or '').strip()
+            city = (request.data.get('city') or '').strip()
             phone_number = (request.data.get('phone_number') or '').strip()
             package = (request.data.get('package') or 'Basic').strip()
+            payment_processor = (request.data.get('payment_processor') or '').strip().lower()
             
             # Truncate fields to database limits to prevent constraint violations
             username = username[:150]  # User.username max_length=150
             restaurant_name = restaurant_name[:255]  # Restaurant.resturent_name max_length=255
             location = location[:255]  # Restaurant.location max_length=255
             package = package[:100]  # Restaurant.package max_length=100
-            
+            city = city[:100]  # Restaurant.city max_length=100
+            country = country[:100]  # Restaurant.country max_length=100
+
             # Validate required fields
             errors = {}
             if not email:
@@ -235,6 +247,17 @@ class SimpleOwnerRegisterView(APIView):
             if errors:
                 logger.warning(f"Registration validation failed: {errors}")
                 return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+            region_defaults = resolve_region_defaults(
+                region=region,
+                country=country,
+            )
+            resolved_region = region_defaults['region']
+            resolved_payment_provider = payment_processor or region_defaults['default_payment_provider']
+            allowed_providers = set(get_region_config(resolved_region).get('payments', []))
+            if resolved_payment_provider not in allowed_providers:
+                resolved_payment_provider = region_defaults['default_payment_provider']
+            resolved_country = country or resolved_region
             
             logger.info(f"Registration attempt for: {email}")
             
@@ -289,8 +312,16 @@ class SimpleOwnerRegisterView(APIView):
                         owner=user,
                         resturent_name=restaurant_name,
                         location=location,
+                        region=resolved_region,
+                        currency=region_defaults['currency'],
+                        timezone=region_defaults['timezone'],
+                        country_code=region_defaults['country_code'],
+                        default_payment_provider=resolved_payment_provider,
+                        city=city,
+                        country=resolved_country,
                         phone_number=phone_number,
                         package=package,
+                        payment_processor=resolved_payment_provider,
                         owner_password=password  # Store for Super Admin visibility
                     )
                     logger.info(f"Restaurant created: {restaurant_name}")
@@ -322,6 +353,11 @@ class SimpleOwnerRegisterView(APIView):
                 "resturent_name": restaurant_name,
                 "location": location,
                 "phone_number": phone_number,
+                "region": resolved_region,
+                "currency": region_defaults['currency'],
+                "timezone": region_defaults['timezone'],
+                "country_code": region_defaults['country_code'],
+                "default_payment_provider": resolved_payment_provider,
                 "package": package,
                 "message": "Registration successful"
             }, status=status.HTTP_201_CREATED)
@@ -399,4 +435,3 @@ class SimpleOwnerRegisterView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
-

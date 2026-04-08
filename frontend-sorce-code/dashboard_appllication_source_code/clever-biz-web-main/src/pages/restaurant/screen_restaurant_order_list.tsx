@@ -17,6 +17,8 @@ import {
   ChevronDown
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { getActiveRestaurantCurrency, getActiveRestaurantRegion } from "@/lib/utils";
+import { getRegionConfig } from "@/config/regionConfig";
 
 // --- COMPONENTS ---
 
@@ -34,6 +36,19 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass
 );
 
 const ScreenRestaurantOrderList = () => {
+  const currencyCode = getActiveRestaurantCurrency();
+  const regionCode = getActiveRestaurantRegion();
+  type GatewayProvider = "stripe" | "checkout" | "paytabs" | "payme";
+  const gatewayOptions = getRegionConfig(regionCode).payments.filter(
+    (provider) => provider !== "cash"
+  ) as GatewayProvider[];
+
+  const providerLabel = (provider: GatewayProvider): string => {
+    if (provider === "checkout") return "Checkout.com";
+    if (provider === "paytabs") return "PayTabs";
+    if (provider === "payme") return "Payme (Bank)";
+    return "Stripe";
+  };
   const { userRole } = useRole();
   const {
     orders = [],
@@ -96,7 +111,7 @@ const ScreenRestaurantOrderList = () => {
   // Payment States
   const [openStripe, setOpenStripe] = useState(false);
   const [openGatewayModal, setOpenGatewayModal] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<"stripe" | "checkout" | "paytabs">("stripe");
+  const [selectedProvider, setSelectedProvider] = useState<GatewayProvider>("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -276,7 +291,7 @@ const ScreenRestaurantOrderList = () => {
     }
   };
 
-  const handleAddGateway = (provider: "stripe" | "checkout" | "paytabs") => {
+  const handleAddGateway = (provider: GatewayProvider) => {
     setShowDropdown(false);
     if (provider === "stripe") {
       setOpenStripe(true);
@@ -345,7 +360,7 @@ const ScreenRestaurantOrderList = () => {
                   <p className="text-xs font-bold text-slate-900 truncate">
                     {tableGroup.orders.length} Order{tableGroup.orders.length > 1 ? 's' : ''}
                   </p>
-                  <p className="text-sm text-yellow-700 font-bold">AED {tableGroup.totalAmount.toFixed(2)}</p>
+                  <p className="text-sm text-yellow-700 font-bold">{currencyCode} {tableGroup.totalAmount.toFixed(2)}</p>
                 </div>
                 <button
                   onClick={() => handleConfirmCashForTable(tableGroup.orders.map((o: any) => o.id))}
@@ -383,7 +398,7 @@ const ScreenRestaurantOrderList = () => {
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
-                  <p className="text-[10px] text-slate-500">AED {order.total_price}</p>
+                  <p className="text-[10px] text-slate-500">{currencyCode} {order.total_price}</p>
                 </div>
                 <button
                   onClick={() => handleMarkDelivered(order.id)}
@@ -462,9 +477,15 @@ const ScreenRestaurantOrderList = () => {
                   </button>
                   {showDropdown && (
                     <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-20">
-                      <button onClick={() => handleAddGateway("stripe")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Stripe</button>
-                      <button onClick={() => handleAddGateway("checkout")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add Checkout.com</button>
-                      <button onClick={() => handleAddGateway("paytabs")} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Add PayTabs</button>
+                      {gatewayOptions.map((provider) => (
+                        <button
+                          key={provider}
+                          onClick={() => handleAddGateway(provider)}
+                          className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                          Add {providerLabel(provider)}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -528,7 +549,7 @@ const ScreenRestaurantOrderList = () => {
                     <td className="px-5 py-3 text-xs text-slate-500">
                       {new Date(order.timeOfOrder || order.created_time || order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="px-5 py-3 text-sm font-medium text-slate-900">AED {order.total_price}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">{currencyCode} {order.total_price}</td>
                     <td className="px-5 py-3">
                       {/* STATUS DROPDOWN */}
                       <select
@@ -676,7 +697,7 @@ const ScreenRestaurantOrderList = () => {
                         {/* Handle both cases for price/qty location if structure varies */}
                         <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
                       </div>
-                      <p className="text-sm font-semibold text-[#0055FE]">AED {item.price}</p>
+                      <p className="text-sm font-semibold text-[#0055FE]">{currencyCode} {item.price}</p>
                     </div>
                   ))
                 ) : (
@@ -738,7 +759,7 @@ const ScreenRestaurantOrderList = () => {
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <p className="text-xs text-slate-400">Total Amount</p>
-                <p className="text-xl font-bold">AED {selectedOrder.total_price}</p>
+                <p className="text-xl font-bold">{currencyCode} {selectedOrder.total_price}</p>
               </div>
               <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                 Close

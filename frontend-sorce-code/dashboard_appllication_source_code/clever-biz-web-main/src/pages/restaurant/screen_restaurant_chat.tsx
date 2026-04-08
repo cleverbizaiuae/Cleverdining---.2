@@ -12,7 +12,7 @@ import {
   MoreVertical,
   ArrowLeft
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getActiveRestaurantLocale, getActiveRestaurantTimezone } from "@/lib/utils";
 
 // Types
 interface ChatRoomItem {
@@ -36,10 +36,10 @@ interface Message {
 // Utility for formatting time in Gulf Standard Time (GMT+4)
 const formatTime = (ts: string | number) => {
   const date = new Date(ts);
-  return date.toLocaleTimeString('en-AE', {
+  return date.toLocaleTimeString(getActiveRestaurantLocale(), {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Asia/Dubai'
+    timeZone: getActiveRestaurantTimezone()
   });
 };
 

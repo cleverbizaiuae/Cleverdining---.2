@@ -20,6 +20,7 @@ import axios from '../../lib/axios';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import toast from 'react-hot-toast';
+import { getActiveRestaurantCurrency } from '@/lib/utils';
 
 // --- COMPONENTS ---
 
@@ -64,6 +65,7 @@ interface PaymentWithOrder extends Payment {
 const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onClose: () => void; payment: PaymentWithOrder | null }) => {
     const [loadingOrder, setLoadingOrder] = useState(false);
     const [orderDetails, setOrderDetails] = useState<any>(null);
+    const currencyCode = getActiveRestaurantCurrency();
 
     useEffect(() => {
         if (isOpen && payment?.order_id) {
@@ -125,7 +127,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                     </div>
                     <div>
                         <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Order Amount</p>
-                        <p className="text-sm font-bold text-slate-900">AED {payment.amount}</p>
+                        <p className="text-sm font-bold text-slate-900">{currencyCode} {payment.amount}</p>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6">
@@ -150,7 +152,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                                         <p className="text-sm font-medium text-slate-900">{item.item_name}</p>
                                         <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
                                     </div>
-                                    <p className="text-sm font-bold text-slate-700">AED {item.price}</p>
+                                    <p className="text-sm font-bold text-slate-700">{currencyCode} {item.price}</p>
                                 </div>
                             ))}
                         </div>
@@ -169,6 +171,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
 };
 
 export const Payments = () => {
+    const currencyCode = getActiveRestaurantCurrency();
     const [payments, setPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
@@ -287,7 +290,7 @@ export const Payments = () => {
             <div className="grid grid-cols-1 gap-4 w-full md:w-1/2">
                 <MetricCard
                     title="Total Revenue"
-                    value={`AED ${totalRevenue}`}
+                    value={`${currencyCode} ${totalRevenue}`}
                     icon={DollarSign}
                     colorClass="text-[#0055FE]"
                     bgClass="bg-white"
@@ -349,7 +352,7 @@ export const Payments = () => {
                                             {p.provider.replace('_', ' ')}
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-sm font-bold text-slate-900">AED {p.amount}</td>
+                                    <td className="px-5 py-3 text-sm font-bold text-slate-900">{currencyCode} {p.amount}</td>
                                     <td className="px-5 py-3">
                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getStatusColor(p.status)}`}>{p.status}</span>
                                     </td>

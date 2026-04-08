@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ImSpinner6 } from "react-icons/im";
 import mobileLogo from "../../assets/mobile_logo.png";
 import { useRole, UserRole } from "../../hooks/useRole";
+import { getRegionConfig } from "../../config/regionConfig";
 
 const ScreenRegister = () => {
   const [loading, setLoading] = useState(false);
@@ -14,6 +15,7 @@ const ScreenRegister = () => {
     customer_name: string;
     restaurant_name: string;
     location: string;
+    region: string;
     phone_number: string;
     company_logo: FileList | undefined;
     email: string;
@@ -60,6 +62,7 @@ const ScreenRegister = () => {
       formData.append("username", data.customer_name.trim());
       formData.append("resturent_name", data.restaurant_name.trim());
       formData.append("location", data.location.trim());
+      formData.append("region", (data.region || "UAE").toUpperCase());
       formData.append("phone_number", (data.phone_number || "").trim());
       formData.append("package", "Basic");
 
@@ -151,12 +154,27 @@ const ScreenRegister = () => {
           }}
         />
 
+        <div>
+          <label htmlFor="region" className="block text-sm mb-1">
+            Region / Country
+          </label>
+          <select
+            id="region"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+            {...register("region")}
+            defaultValue="UAE"
+          >
+            <option value="UAE">UAE</option>
+            <option value="UK">UK</option>
+          </select>
+        </div>
+
         <LabelInput
           label="Phone Number"
           inputType="tel"
           inputProps={{
             id: "phone_number",
-            placeholder: "+1234567890",
+            placeholder={`${getRegionConfig((watch("region") || "UAE")).phoneCode}123456789`,
             ...register("phone_number"),
           }}
         />

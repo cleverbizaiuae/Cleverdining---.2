@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 
 
 
@@ -80,6 +81,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = tru
 
 
 const ScreenRestaurantDashboard = () => {
+  const currencyCode = getActiveRestaurantCurrency();
   const {
     foodItems,
     currentPage,
@@ -324,7 +326,7 @@ const ScreenRestaurantDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Total Revenue"
-            value={analyticsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : `AED ${analytics?.status?.total_revenue || 0}`}
+            value={analyticsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : `${currencyCode} ${analytics?.status?.total_revenue || 0}`}
             trend={`${analytics?.status?.weekly_growth || 0}%`}
             isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
             subtext={analyticsLoading ? "" : "vs last week"}
@@ -464,7 +466,7 @@ const ScreenRestaurantDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">AED {item.price}</td>
+                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">{currencyCode} {item.price}</td>
                       <td className="px-5 py-3">
                         <select
                           className={`h-7 pl-2 pr-6 text-[10px] font-medium rounded border appearance-none outline-none cursor-pointer bg-no-repeat bg-[right_0.4rem_center] transition-colors ${item.availability

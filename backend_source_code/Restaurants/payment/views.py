@@ -16,6 +16,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
 from message.models import ChatMessage
+from restaurant.region_config import get_region_config
 
 channel_layer = get_channel_layer()
 
@@ -49,6 +50,14 @@ class PaymentGatewayViewSet(ModelViewSet):
         
         if not restaurant:
             raise ValidationError("You do not have a valid restaurant association.")
+
+        provider = serializer.validated_data.get('provider')
+        if provider:
+            allowed = set(get_region_config(getattr(restaurant, 'region', 'UAE')).get('payments', []))
+            if provider not in allowed:
+                raise ValidationError(
+                    f"Provider '{provider}' is not supported for region {getattr(restaurant, 'region', 'UAE')}"
+                )
         
         # If setting as active, deactivate others
         if serializer.validated_data.get('is_active', False):
@@ -72,6 +81,14 @@ class PaymentGatewayViewSet(ModelViewSet):
 
         if serializer.instance.restaurant != restaurant:
             raise ValidationError("You cannot update settings for a restaurant that you do not own/manage.")
+
+        provider = serializer.validated_data.get('provider')
+        if provider:
+            allowed = set(get_region_config(getattr(restaurant, 'region', 'UAE')).get('payments', []))
+            if provider not in allowed:
+                raise ValidationError(
+                    f"Provider '{provider}' is not supported for region {getattr(restaurant, 'region', 'UAE')}"
+                )
             
         if serializer.validated_data.get('is_active', False):
              PaymentGateway.objects.filter(restaurant=restaurant).exclude(id=serializer.instance.id).update(is_active=False)
@@ -172,11 +189,6 @@ class CreateBulkCheckoutSessionView(APIView):
         if not provider:
             provider = request.query_params.get('provider')
 
-        # URLs
-        origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
-        success_url = f'{origin}/dashboard/success/'
-        cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
-
         # 4. Processing
         if provider == 'cash':
             import sys, traceback
@@ -261,6 +273,16 @@ class CreateBulkCheckoutSessionView(APIView):
                 return Response({'error': f'Cash payment failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         else:
+             origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
+             backend_origin = f"{request.scheme}://{request.get_host()}"
+             if provider == 'payme':
+                 # Payme should return through backend callback so we can verify and then redirect.
+                 success_url = f"{backend_origin}/api/customer/payment/payme/return/"
+                 cancel_url = f"{backend_origin}/api/customer/payment/payme/return/?status=cancelled"
+             else:
+                 success_url = f'{origin}/dashboard/success/'
+                 cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
+
              # Use latest unpaid order as anchor for session-wide checkout metadata.
              primary_order = unpaid_orders.last()
              target_provider = provider or None
@@ -321,17 +343,21 @@ class CreateCheckoutSessionView(APIView):
         except Order.DoesNotExist:
             return Response({'error': 'Order not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Dynamic URL construction based on Origin
-        origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
-        
-        success_url = f'{origin}/dashboard/success/'
-        # User requested redirection to Orders on cancel with status
-        cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
-
         # Get Provider (Optional, defaults to None -> Active Gateway)
         provider = request.data.get('provider') 
         if not provider:
             provider = request.query_params.get('provider')
+
+        # Dynamic URL construction based on Origin
+        origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
+        backend_origin = f"{request.scheme}://{request.get_host()}"
+        if provider == 'payme':
+            success_url = f"{backend_origin}/api/customer/payment/payme/return/"
+            cancel_url = f"{backend_origin}/api/customer/payment/payme/return/?status=cancelled"
+        else:
+            success_url = f'{origin}/dashboard/success/'
+            # User requested redirection to Orders on cancel with status
+            cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
 
         # --- Handle Tip Update ---
         tip_amount = request.data.get('tip_amount')
@@ -508,4 +534,77 @@ class PayTabsReturnView(APIView):
     def get(self, request):
         # Allow GET access just in case PayTabs does a GET redirect (config dependent)
         # Handle query params instead of post data
+        return self.post(request)
+
+
+class PaymeReturnView(APIView):
+    """
+    Handles Payme return callback for UK open-banking flow.
+    """
+    permission_classes = []
+    authentication_classes = []
+
+    def _payload(self, request):
+        data = {}
+        if hasattr(request, "data") and request.data:
+            try:
+                for key in request.data:
+                    value = request.data.get(key)
+                    data[key] = value
+            except Exception:
+                data.update(dict(request.data))
+        if hasattr(request, "query_params"):
+            for key in request.query_params:
+                data[key] = request.query_params.get(key)
+        return data
+
+    def _redirect_failed(self, reason="payme_failed"):
+        return redirect(
+            f"https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason={reason}"
+        )
+
+    def _redirect_success(self, txn):
+        return redirect(
+            f"https://officialcleverdiningcustomer.netlify.app/dashboard/success/?session_id={txn}"
+        )
+
+    def post(self, request):
+        data = self._payload(request)
+        transaction_id = (
+            data.get("transaction_id")
+            or data.get("payment_id")
+            or data.get("id")
+            or data.get("session_id")
+        )
+        if not transaction_id:
+            return self._redirect_failed("missing_transaction")
+
+        payment = Payment.objects.filter(transaction_id=transaction_id).first()
+        if not payment:
+            return self._redirect_failed("checkout_not_found")
+
+        status_value = str(data.get("status") or "").lower()
+        if status_value in {"paid", "success", "succeeded", "completed"}:
+            verification_payload = {
+                "transaction_id": transaction_id,
+                "status": "completed",
+                "amount": data.get("amount"),
+            }
+            PaymentService.verify_payment(payment, verification_payload)
+            return self._redirect_success(transaction_id)
+
+        # Fallback verification when status is missing or unknown in redirect payload.
+        if not status_value:
+            verification_result = PaymentService.verify_payment(
+                payment,
+                {"transaction_id": transaction_id},
+            )
+            if verification_result.get("status") == "completed":
+                return self._redirect_success(transaction_id)
+
+        payment.status = "failed"
+        payment.save(update_fields=["status", "updated_at"])
+        return self._redirect_failed(status_value or "payme_failed")
+
+    def get(self, request):
         return self.post(request)

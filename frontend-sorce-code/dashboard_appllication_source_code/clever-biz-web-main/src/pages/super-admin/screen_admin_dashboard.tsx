@@ -33,6 +33,7 @@ const ScreenAdminDashboard = () => {
 
   const PAGE_SIZE = 5;
   const [page, setPage] = useState(1); // current page (1-based)
+  const [regionFilter, setRegionFilter] = useState<"all" | "UAE" | "UK">("all");
   const [total, setTotal] = useState(0); // total items from API (DRF `count`)
   const [loading, setLoading] = useState(false);
   const [allResutrentUser, setallResutrentUser] = useState<TSubscriber[]>([]);
@@ -68,6 +69,7 @@ const ScreenAdminDashboard = () => {
           page_size: PAGE_SIZE, // ?page_size=5
         };
         if (search.trim()) params.restaurant_name = search.trim();
+        if (regionFilter !== "all") params.region = regionFilter;
 
         const response = await axiosInstance.get("/adminapi/restaurants/", {
           params,
@@ -91,45 +93,62 @@ const ScreenAdminDashboard = () => {
     };
 
     fetchData();
-  }, [search, page]);
+  }, [search, page, regionFilter]);
 
   useEffect(() => {
     const fetchData = async () => {
       const res = await axiosInstance.get(
-        "/adminapi/restaurants/more_summary/"
+        "/adminapi/restaurants/more_summary/",
+        { params: regionFilter === "all" ? undefined : { region: regionFilter } }
       );
       const data = await res.data;
       setState(data);
       // console.log(res.data, "res.data");
     };
     fetchData();
-  }, []);
+  }, [regionFilter]);
   useEffect(() => {
     const fetchData = async () => {
       const res = await axiosInstance.get(
-        "/adminapi/restaurants/yearly_sells_report/"
+        "/adminapi/restaurants/yearly_sells_report/",
+        { params: regionFilter === "all" ? undefined : { region: regionFilter } }
       );
       const data = await res.data;
 
       setSalesData(data);
     };
     fetchData();
-  }, []);
+  }, [regionFilter]);
   useEffect(() => {
     const fetchData = async () => {
       const res = await axiosInstance.get(
-        "/adminapi/restaurants/last_yearly_sells_report/"
+        "/adminapi/restaurants/last_yearly_sells_report/",
+        { params: regionFilter === "all" ? undefined : { region: regionFilter } }
       );
       const data = await res.data;
       setLastSalesData(data);
       console.log(lastSalesData, "lastSalesData");
     };
     fetchData();
-  }, []);
+  }, [regionFilter]);
 
   return (
     <>
       <div className="flex flex-col">
+        <div className="mb-3 flex justify-end">
+          <select
+            value={regionFilter}
+            onChange={(e) => {
+              setRegionFilter(e.target.value as "all" | "UAE" | "UK");
+              setPage(1);
+            }}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="all">All Regions</option>
+            <option value="UAE">UAE</option>
+            <option value="UK">UK</option>
+          </select>
+        </div>
         {/* Dashboard Cards */}
         <div className="flex flex-col lg:flex-row gap-y-3 lg:gap-y-0 lg:gap-x-3">
           {/* Card 1 */}

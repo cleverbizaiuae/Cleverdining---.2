@@ -6,6 +6,7 @@ import { API_BASE_URL } from "../lib/axios";
 import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion"; // Corrected from "motion/react"
 import { useEffect } from "react";
+import { getSessionCurrencyCode } from "../utils/regionSession";
 
 const ScreenCart = () => {
   const navigate = useNavigate();
@@ -51,6 +52,7 @@ const ScreenCart = () => {
     (sum, item) => sum + toSafeNumber(item.price) * item.quantity,
     0
   );
+  const currencyCode = getSessionCurrencyCode();
 
   useEffect(() => {
     const userInfo = localStorage.getItem("userInfo");
@@ -225,7 +227,7 @@ const ScreenCart = () => {
                 <div className="ml-4 flex-1 min-w-0 flex flex-col justify-between">
                   <div>
                     <h2 className="text-primary font-medium leading-tight truncate">{item.item_name}</h2>
-                    <p className="text-primary/40 text-sm">AED {item.price}</p>
+                    <p className="text-primary/40 text-sm">{currencyCode} {item.price}</p>
                   </div>
                   {/* Quantity Controller with +/- buttons */}
                   <div className="flex items-center space-x-2 mt-2">
@@ -276,7 +278,7 @@ const ScreenCart = () => {
           <div className="fixed bottom-24 left-4 right-4 bg-white p-4 shadow-xl rounded-2xl z-50 max-w-2xl mx-auto border border-gray-100">
             <div className="flex justify-between items-center mb-4">
               <span className="text-gray-600">Total Quantity: <span className="font-bold text-blue-600">{totalQuantity}</span></span>
-              <span className="text-gray-600">Total Cost: <span className="font-bold text-blue-600">AED {totalCost.toFixed(2)}</span></span>
+              <span className="text-gray-600">Total Cost: <span className="font-bold text-blue-600">{currencyCode} {totalCost.toFixed(2)}</span></span>
             </div>
             <button
               onClick={handleOrderNow}
@@ -284,7 +286,7 @@ const ScreenCart = () => {
             >
               <span>Place Order</span>
               <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors">
-                AED {totalCost.toFixed(2)} <ArrowRight className="inline ml-1 w-4 h-4" />
+                {currencyCode} {totalCost.toFixed(2)} <ArrowRight className="inline ml-1 w-4 h-4" />
               </span>
             </button>
           </div>

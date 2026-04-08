@@ -5,6 +5,7 @@ import logo from "../../assets/cleverbiz_full_logo.png";
 import registerBg from "../../assets/register-bg.jpg";
 import toast from "react-hot-toast";
 import axiosInstance from "../../lib/axios";
+import { getRegionConfig } from "../../config/regionConfig";
 
 const ScreenAdminRegister = () => {
     const navigate = useNavigate();
@@ -17,6 +18,7 @@ const ScreenAdminRegister = () => {
         customerName: "",
         restaurantName: "",
         location: "",
+        region: "UAE",
         phoneNumber: "",
         numberOfTables: 10,
         paymentProcessor: "",
@@ -61,6 +63,7 @@ const ScreenAdminRegister = () => {
         setIsLoading(true);
 
         try {
+            const regionSettings = getRegionConfig(formData.region);
             const [cityPart, countryPart] = formData.location
                 .split(",")
                 .map((part) => part.trim())
@@ -69,8 +72,9 @@ const ScreenAdminRegister = () => {
             const primaryPayload = {
                 resturent_name: formData.restaurantName,
                 location: formData.location,
+                region: formData.region,
                 city: cityPart || formData.location,
-                country: countryPart || "UAE",
+                country: countryPart || regionSettings.countryLabel,
                 phone_number: formData.phoneNumber,
                 email: formData.email,
                 owner_name: formData.customerName,
@@ -79,7 +83,7 @@ const ScreenAdminRegister = () => {
                 subscription_months: 12,
                 qr_codes: Number(formData.numberOfTables) || 10,
                 table_count: Number(formData.numberOfTables) || 10,
-                payment_processor: formData.paymentProcessor,
+                payment_processor: formData.paymentProcessor || regionSettings.defaultPaymentProvider,
                 whatsapp_enabled: false,
                 password: formData.password
             };
@@ -174,6 +178,29 @@ const ScreenAdminRegister = () => {
                     />
                 </div>
 
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-900">Region / Country</label>
+                    <select
+                        name="region"
+                        value={formData.region}
+                        onChange={(e) => {
+                            const nextRegion = e.target.value;
+                            const regionCfg = getRegionConfig(nextRegion);
+                            setFormData((prev) => ({
+                                ...prev,
+                                region: nextRegion,
+                                paymentProcessor: regionCfg.payments.includes(prev.paymentProcessor)
+                                    ? prev.paymentProcessor
+                                    : regionCfg.defaultPaymentProvider,
+                            }));
+                        }}
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg px-3 text-base text-slate-900 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all"
+                    >
+                        <option value="UAE">UAE</option>
+                        <option value="UK">UK</option>
+                    </select>
+                </div>
+
                 {/* Phone Number */}
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-900">Phone Number</label>
@@ -216,9 +243,19 @@ const ScreenAdminRegister = () => {
                                 className="w-full h-11 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#0055FE] focus:ring-4 focus:ring-[#0055FE]/20 outline-none transition-all appearance-none cursor-pointer hover:bg-slate-100"
                             >
                                 <option value="" disabled>Select...</option>
-                                <option value="stripe">Stripe</option>
-                                <option value="paytabs">PayTabs</option>
-                                <option value="checkout">Checkout.com</option>
+                                {getRegionConfig(formData.region).payments
+                                    .filter((provider) => provider !== "cash")
+                                    .map((provider) => (
+                                        <option key={provider} value={provider}>
+                                            {provider === "checkout"
+                                                ? "Checkout.com"
+                                                : provider === "paytabs"
+                                                    ? "PayTabs"
+                                                    : provider === "payme"
+                                                        ? "Payme"
+                                                        : "Stripe"}
+                                        </option>
+                                    ))}
                             </select>
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { getSessionCurrencyCode } from '../utils/regionSession';
 
 interface Order {
     id: number;
@@ -17,6 +18,7 @@ interface StickyTotalPayBarProps {
 
 export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, onPaymentSuccess }) => {
     const navigate = useNavigate();
+    const currencyCode = getSessionCurrencyCode();
 
     // Filter Unpaid Orders (include awaiting_cash)
     const unpaidOrders = useMemo(() => {
@@ -66,7 +68,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
             >
                 <div className="flex justify-between items-center mb-4">
                     <span className="text-gray-600 text-sm">Total Orders: <span className="font-bold text-blue-600">{unpaidOrders.length}</span></span>
-                    <span className="text-gray-600 text-sm">Total Cost: <span className="font-bold text-blue-600">AED {totalAmount.toFixed(2)}</span></span>
+                    <span className="text-gray-600 text-sm">Total Cost: <span className="font-bold text-blue-600">{currencyCode} {totalAmount.toFixed(2)}</span></span>
                 </div>
 
                 {allAwaitingCash ? (
@@ -84,7 +86,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
                             Pay All
                         </span>
                         <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors text-sm">
-                            AED {totalAmount.toFixed(2)}
+                            {currencyCode} {totalAmount.toFixed(2)}
                         </span>
                     </button>
                 )}

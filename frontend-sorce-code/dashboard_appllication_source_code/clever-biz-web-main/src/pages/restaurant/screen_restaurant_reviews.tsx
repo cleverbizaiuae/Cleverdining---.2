@@ -2,6 +2,7 @@
 import { useContext, useEffect, useState } from "react";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import axiosInstance from "@/lib/axios";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 import { ReviewItem } from "@/types";
 import toast from "react-hot-toast";
 import DatePicker from "react-datepicker";
@@ -247,7 +248,7 @@ const ReviewDetailModal = ({ isOpen, onClose, review }: { isOpen: boolean, onClo
                         <span className="font-bold text-slate-500 text-xs">x{item.quantity}</span>
                         <span className="font-medium text-slate-900">{item.item_name}</span>
                       </div>
-                      <span className="font-bold text-slate-700">AED {item.price}</span>
+                      <span className="font-bold text-slate-700">{getActiveRestaurantCurrency()} {item.price}</span>
                     </div>
                   ))
                 ) : (
@@ -310,4 +311,3 @@ const ScreenRestaurantReviews = () => {
 };
 
 export default ScreenRestaurantReviews;
-

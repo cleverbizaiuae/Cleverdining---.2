@@ -1,4 +1,5 @@
 import { Calendar, CreditCard, Package, X } from "lucide-react";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 
 interface OrderItem {
   item_id: number;
@@ -33,7 +34,7 @@ export default function OrderDetailsModal({
   isOpen,
   onClose,
   order,
-  formatMoney = (v) => `AED ${v}`
+  formatMoney = (v) => `${getActiveRestaurantCurrency()} ${v}`
 }: OrderDetailsModalProps) {
   if (!isOpen || !order) return null;
   console.log(order);

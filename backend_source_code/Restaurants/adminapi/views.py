@@ -29,9 +29,24 @@ class RestaurantViewSet(ModelViewSet):
     filter_backends = [SearchFilter]  
     search_fields = ['resturent_name']
 
+    def _resolved_region(self):
+        return (self.request.query_params.get('region') or '').strip().upper()
+
+    def _filtered_restaurants(self):
+        return self.get_queryset()
+
+    def _filtered_orders(self):
+        restaurants = self._filtered_restaurants().values_list('id', flat=True)
+        return Order.objects.filter(restaurant_id__in=restaurants)
+
     def get_queryset(self):
         queryset = self.queryset.all()
         restaurant_name = self.request.query_params.get('restaurant_name', None)
+        region = (self.request.query_params.get('region') or '').strip().upper()
+
+        if region in ['UAE', 'UK']:
+            queryset = queryset.filter(region=region)
+
         if restaurant_name:
             queryset = queryset.filter(resturent_name__icontains=restaurant_name)
         
@@ -39,7 +54,7 @@ class RestaurantViewSet(ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def summary(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        queryset = self._filtered_restaurants()
         total_restaurants = queryset.count()
         total_hold_restaurants = queryset.filter(subscriptions__status='hold').count()
         total_active_restaurants = queryset.filter(subscriptions__is_active=True).count()
@@ -58,13 +73,14 @@ class RestaurantViewSet(ModelViewSet):
         today = timezone.now().date()
         last_week_start = today - timedelta(days=today.weekday() + 7)
         last_week_end = last_week_start + timedelta(days=6)
+        orders_qs = self._filtered_orders()
 
         # Query for orders in the last week
-        last_week_orders = Order.objects.filter(created_time__range=[last_week_start, last_week_end])
+        last_week_orders = orders_qs.filter(created_time__range=[last_week_start, last_week_end])
 
         # Total all restaurants' order sales
-        total_all_restaurant_orders = Order.objects.aggregate(total_orders=Count('id'))
-        total_all_restaurant_order_sales = Order.objects.aggregate(total_sales=Sum('total_price'))
+        total_all_restaurant_orders = orders_qs.aggregate(total_orders=Count('id'))
+        total_all_restaurant_order_sales = orders_qs.aggregate(total_sales=Sum('total_price'))
 
         # Last week sales
         last_week_order_sales = last_week_orders.aggregate(last_week_sales=Sum('total_price'))
@@ -73,7 +89,7 @@ class RestaurantViewSet(ModelViewSet):
         last_week_order_count = last_week_orders.count()
         prev_week_start = last_week_start - timedelta(days=7)
         prev_week_end = last_week_start - timedelta(days=1)
-        prev_week_orders = Order.objects.filter(created_time__range=[prev_week_start, prev_week_end])
+        prev_week_orders = orders_qs.filter(created_time__range=[prev_week_start, prev_week_end])
         prev_week_order_count = prev_week_orders.count()
 
         # Calculate growth
@@ -82,7 +98,7 @@ class RestaurantViewSet(ModelViewSet):
             growth_percentage = ((last_week_order_count - prev_week_order_count) / prev_week_order_count) * 100
 
         # Get total active restaurants count
-        total_active_restaurants = Restaurant.objects.filter(subscriptions__is_active=True).count()
+        total_active_restaurants = self._filtered_restaurants().filter(subscriptions__is_active=True).count()
 
         response_data = {
             "total_all_restaurant_order_sells": total_all_restaurant_orders['total_orders'],
@@ -98,10 +114,11 @@ class RestaurantViewSet(ModelViewSet):
     def yearly_sells_report(self, request, *args, **kwargs):
         # Get the current year
         current_year = timezone.now().year
+        orders_qs = self._filtered_orders()
 
         # Get total sales and order count for each month in the current year
         monthly_sales = (
-            Order.objects.filter(created_time__year=current_year)
+            orders_qs.filter(created_time__year=current_year)
             .annotate(month=TruncMonth('created_time'))  # Truncate to month
             .values('month')
             .annotate(total_orders=Count('id'), total_sales=Sum('total_price'))
@@ -135,10 +152,11 @@ class RestaurantViewSet(ModelViewSet):
     def last_yearly_sells_report(self, request, *args, **kwargs):
         # Get the previous year
         previous_year = timezone.now().year - 1
+        orders_qs = self._filtered_orders()
 
         # Get total sales and order count for each month in the previous year
         monthly_sales = (
-            Order.objects.filter(created_time__year=previous_year)
+            orders_qs.filter(created_time__year=previous_year)
             .annotate(month=TruncMonth('created_time'))  # Truncate to month
             .values('month')
             .annotate(total_orders=Count('id'), total_sales=Sum('total_price'))
@@ -168,7 +186,5 @@ class RestaurantViewSet(ModelViewSet):
         return Response(response_data, status=status.HTTP_200_OK)
 
     
-
-
 
 

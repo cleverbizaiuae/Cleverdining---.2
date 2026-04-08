@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrderDetailsModal from "@/components/ui/order-datials-modal";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 
 // 1. METRIC CARDS (Copied from Staff Dashboard)
 const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass }: any) => (
@@ -26,6 +27,7 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass
 );
 
 const ScreenChefOrderList = () => {
+  const currencyCode = getActiveRestaurantCurrency();
   const {
     orders,
     ordersStats,
@@ -212,7 +214,7 @@ const ScreenChefOrderList = () => {
                     <td className="px-5 py-3 text-xs text-slate-500">
                       {order.created_at ? new Date(order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "N/A"}
                     </td>
-                    <td className="px-5 py-3 text-sm font-medium text-slate-900">AED {order.total_price}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">{currencyCode} {order.total_price}</td>
                     <td className="px-5 py-3">
                       {/* STATUS DROPDOWN */}
                       <select

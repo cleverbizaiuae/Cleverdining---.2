@@ -1,10 +1,11 @@
 from .models import PaymentGateway, Payment, StripeDetails
-from .adapters import StripeAdapter, CheckoutAdapter, CashAdapter, PayTabsAdapter
+from .adapters import StripeAdapter, CheckoutAdapter, CashAdapter, PayTabsAdapter, PaymeAdapter
 from rest_framework.exceptions import ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
 from django.db.models import Q
+from restaurant.region_config import get_region_config
 
 channel_layer = get_channel_layer()
 
@@ -13,8 +14,30 @@ class PaymentService:
         'stripe': StripeAdapter,
         'checkout': CheckoutAdapter,
         'cash': CashAdapter,
-        'paytabs': PayTabsAdapter
+        'paytabs': PayTabsAdapter,
+        'payme': PaymeAdapter,
     }
+
+    @staticmethod
+    def _allowed_providers_for_restaurant(restaurant):
+        region = getattr(restaurant, "region", "UAE")
+        region_cfg = get_region_config(region)
+        return set(region_cfg.get("payments", []))
+
+    @staticmethod
+    def _resolve_provider(restaurant, provider=None):
+        requested = (provider or "").strip().lower()
+        if requested == "card":
+            requested = ""
+        if requested:
+            return requested
+
+        explicit_default = (getattr(restaurant, "default_payment_provider", "") or "").strip().lower()
+        if explicit_default:
+            return explicit_default
+
+        region_default = get_region_config(getattr(restaurant, "region", "UAE")).get("default_payment_provider", "stripe")
+        return str(region_default).lower()
 
     @staticmethod
     def _close_session_and_clear_chat_if_settled(order):
@@ -93,28 +116,40 @@ class PaymentService:
 
     @staticmethod
     def get_adapter(restaurant, provider=None):
-        if provider == 'cash':
+        provider_input = (provider or "").strip().lower()
+        explicit_requested = provider_input not in {"", "card"}
+        resolved_provider = PaymentService._resolve_provider(restaurant, provider=provider)
+        if resolved_provider == 'cash':
             return CashAdapter(None) 
 
-        # Treat "card" as "use active configured online gateway".
-        if provider == 'card':
-            provider = None
+        allowed = PaymentService._allowed_providers_for_restaurant(restaurant)
+        if resolved_provider and resolved_provider not in allowed:
+            raise ValidationError(
+                f"Provider '{resolved_provider}' is not enabled for region {getattr(restaurant, 'region', 'UAE')}"
+            )
 
         gateway = None
-        if provider:
+        if resolved_provider:
             gateway = PaymentGateway.objects.filter(
                 restaurant=restaurant,
-                provider=provider,
+                provider=resolved_provider,
                 is_active=True
             ).first()
+            if not gateway and not explicit_requested:
+                gateway = PaymentGateway.objects.filter(
+                    restaurant=restaurant,
+                    provider__in=list(allowed),
+                    is_active=True
+                ).first()
         else:
             gateway = PaymentGateway.objects.filter(
                 restaurant=restaurant,
+                provider__in=list(allowed),
                 is_active=True
             ).first()
 
         # Legacy fallback for StripeDetails-backed setups.
-        if not gateway and (not provider or provider == 'stripe'):
+        if not gateway and (not resolved_provider or resolved_provider == 'stripe'):
              try:
                 stripe_details = StripeDetails.objects.get(restaurant=restaurant)
                 class LegacyGateway:
@@ -125,7 +160,9 @@ class PaymentService:
                 pass
 
         if not gateway:
-            raise ValidationError(f"No active payment gateway found for provider: {provider or 'any'}")
+            raise ValidationError(
+                f"No active payment gateway found for provider: {resolved_provider or 'any'}"
+            )
             
         adapter_class = PaymentService.ADAPTERS.get(gateway.provider)
         if not adapter_class:
@@ -172,6 +209,15 @@ class PaymentService:
 
     @staticmethod
     def verify_payment(payment, data):
+        # Idempotency guard: don't re-process already completed transactions.
+        if payment.status == 'completed':
+            return {
+                'status': 'completed',
+                'transaction_id': payment.transaction_id,
+                'amount': float(payment.amount),
+                'idempotent': True,
+            }
+
         # Find gateway based on payment provider
         gateway = PaymentGateway.objects.filter(restaurant=payment.restaurant, provider=payment.provider).first()
         
@@ -187,6 +233,8 @@ class PaymentService:
                  raise ValidationError("Gateway configuration not found")
         elif gateway:
              adapter_class = PaymentService.ADAPTERS.get(gateway.provider)
+             if not adapter_class:
+                 raise ValidationError(f"Unsupported provider: {gateway.provider}")
              adapter = adapter_class(gateway)
         else:
             raise ValidationError("Gateway configuration not found")
@@ -308,9 +356,27 @@ class PaymentService:
                  restaurant_id = payload.get('data', {}).get('metadata', {}).get('restaurant_id')
              except:
                  pass
+        elif provider == 'payme':
+             try:
+                 restaurant_id = (
+                     payload.get('metadata', {}).get('restaurant_id')
+                     or payload.get('restaurant_id')
+                 )
+             except:
+                 pass
                  
         if not restaurant_id:
-            # Fallback: Try to find payment by ID if possible, but we need restaurant to get secret.
+            transaction_id = (
+                payload.get('transaction_id')
+                or payload.get('payment_id')
+                or payload.get('id')
+            )
+            if transaction_id:
+                payment = Payment.objects.filter(transaction_id=transaction_id).select_related('restaurant').first()
+                if payment:
+                    restaurant_id = payment.restaurant_id
+
+        if not restaurant_id:
             raise ValidationError("Could not identify restaurant from webhook payload")
 
         from restaurant.models import Restaurant
@@ -324,50 +390,7 @@ class PaymentService:
         
         if result and result.get('status') == 'completed':
             transaction_id = result.get('transaction_id')
-            # Find payment
             payment = Payment.objects.filter(transaction_id=transaction_id).first()
             if payment:
-                payment.status = 'completed'
-                payment.save()
-                
-                # Logic for Single vs Bulk
-                main_order = payment.order
-                orders_to_update = [main_order]
-                
-                if payment.created_by == 'guest_bulk' and main_order.guest_session:
-                    from order.models import Order
-                    bulk_orders = Order.objects.filter(
-                        Q(guest_session=main_order.guest_session) | Q(device=main_order.device),
-                        restaurant=main_order.restaurant,
-                        status__in=['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
-                    ).exclude(id=main_order.id).exclude(payment_status='paid')
-                    orders_to_update.extend(list(bulk_orders))
-                
-                for order in orders_to_update:
-                    order.status = 'paid'
-                    order.payment_status = 'paid'
-                    order.save()
-                    
-                    # Notify Restaurant
-                    order_data = OrderDetailSerializer(order).data
-                    async_to_sync(channel_layer.group_send)(
-                        f"restaurant_{order.restaurant.id}",
-                        {
-                            "type": "order_paid",
-                            "order": order_data
-                        }
-                    )
-
-                # Notify Restaurant of payment update
-                from .serializers import PaymentSerializer
-                payment_data = PaymentSerializer(payment).data
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{payment.restaurant.id}",
-                    {
-                        "type": "payment_update",
-                        "event": "payment:updated",
-                        "payment": payment_data
-                    }
-                )
-                PaymentService._close_session_and_clear_chat_if_settled(main_order)
+                PaymentService.verify_payment(payment, result)
         return result

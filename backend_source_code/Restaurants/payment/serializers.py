@@ -7,8 +7,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Payment
-        model = Payment
-        fields = ['id', 'order', 'device', 'amount', 'currency', 'provider', 'status', 'transaction_id', 'created_at', 'order_id', 'table_name']
+        fields = ['id', 'order', 'device', 'amount', 'provider', 'status', 'transaction_id', 'created_at', 'order_id', 'table_name']
 
 class StripeDetailsSerializer(serializers.ModelSerializer):
     class Meta:

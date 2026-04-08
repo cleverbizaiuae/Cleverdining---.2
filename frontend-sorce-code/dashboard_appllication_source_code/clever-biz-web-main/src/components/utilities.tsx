@@ -31,6 +31,7 @@ import { useStaff } from "@/context/staffContext";
 import { useRole } from "@/hooks/useRole";
 import CallerModal from "@/pages/model/CallerModal";
 import { FoodItem } from "@/types";
+import { getActiveRestaurantLocale, getActiveRestaurantTimezone } from "@/lib/utils";
 /* Logo Component */
 type LogoProps = {
   className?: string; // Optional className for styling wrapper div
@@ -2266,24 +2267,27 @@ const formatTimestamp = (timestamp: string): string => {
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
+    const locale = getActiveRestaurantLocale();
+    const timezone = getActiveRestaurantTimezone();
+
     // If less than 24 hours, show time
     if (diffInHours < 24) {
-      return date.toLocaleTimeString("en-AE", {
+      return date.toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
-        timeZone: "Asia/Dubai",
+        timeZone: timezone,
       });
     }
 
     // If more than 24 hours, show date
-    return date.toLocaleDateString("en-AE", {
+    return date.toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-      timeZone: "Asia/Dubai",
+      timeZone: timezone,
     });
   } catch (error) {
     console.error("Error formatting timestamp:", error);

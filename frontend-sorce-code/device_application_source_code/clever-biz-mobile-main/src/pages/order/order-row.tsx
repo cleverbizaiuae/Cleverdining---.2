@@ -6,6 +6,7 @@ import { ProgressBar } from "./order-progressbar";
 import { Order, OrderItem } from "./order-types";
 import { SocketContext } from "@/components/SocketContext";
 import { Check, X } from "lucide-react";
+import { getRegionConfig } from "../../config/regionConfig";
 
 export const OrderRow = ({ order }: { order: Order }) => {
   // Support both order_items and items
@@ -21,15 +22,27 @@ export const OrderRow = ({ order }: { order: Order }) => {
   };
 
   const formatMoney = (v: string | number) => {
+    let currency = "AED";
+    try {
+      const userInfo = localStorage.getItem("userInfo");
+      if (userInfo) {
+        const restaurant = JSON.parse(userInfo)?.user?.restaurants?.[0];
+        const regionCurrency = restaurant?.currency || getRegionConfig(restaurant?.region).currency;
+        if (regionCurrency) currency = regionCurrency;
+      }
+    } catch {
+      currency = "AED";
+    }
+
     const n = typeof v === "string" ? parseFloat(v) : v;
     if (Number.isFinite(n)) {
       try {
         return new Intl.NumberFormat(undefined, {
           style: "currency",
-          currency: "AED",
+          currency: currency,
         }).format(n);
       } catch {
-        return `AED ${n}`;
+        return `${currency} ${n}`;
       }
     }
     return v ?? "—";
@@ -74,7 +87,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
                 </h2>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 mt-1">
                   <p className="text-gray-700 font-medium text-sm sm:text-base">
-                    Total: {order.total_price}
+                    Total: {formatMoney(order.total_price)}
                   </p>
                   <p className="text-xs sm:text-[12px] text-gray-500 sm:text-right">
                     {new Date(order.created_time).toLocaleString()}

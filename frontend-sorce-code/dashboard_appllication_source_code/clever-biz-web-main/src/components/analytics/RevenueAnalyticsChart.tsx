@@ -11,6 +11,7 @@ import {
     ScriptableContext
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler, Legend);
@@ -27,6 +28,7 @@ export const RevenueAnalyticsChart = ({ data, labels, orders, comparisonData, sh
     const safeLabels = (labels && labels.length > 0) ? labels : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const safeRevenue = (data && data.length > 0) ? data : Array(safeLabels.length).fill(0);
     const safeOrders = (orders && orders.length > 0) ? orders : Array(safeLabels.length).fill(0);
+    const currencyCode = getActiveRestaurantCurrency();
 
     const chartData = {
         labels: safeLabels,
@@ -122,7 +124,7 @@ export const RevenueAnalyticsChart = ({ data, labels, orders, comparisonData, sh
                         const label = context.dataset.label || '';
                         const value = context.parsed.y;
                         if (context.dataset.yAxisID === 'y') {
-                            return `${label}: AED ${value.toLocaleString()}`;
+                            return `${label}: ${currencyCode} ${value.toLocaleString()}`;
                         }
                         return `${label}: ${value} orders`;
                     },
@@ -150,7 +152,7 @@ export const RevenueAnalyticsChart = ({ data, labels, orders, comparisonData, sh
                     color: '#64748b',
                     font: { size: 11, family: 'Inter', weight: 500 },
                     padding: 8,
-                    callback: (val: any) => `AED ${val >= 1000 ? val / 1000 + 'k' : val}`
+                    callback: (val: any) => `${currencyCode} ${val >= 1000 ? val / 1000 + 'k' : val}`
                 },
                 beginAtZero: true,
             },

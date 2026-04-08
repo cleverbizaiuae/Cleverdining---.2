@@ -11,6 +11,7 @@ from item.models import Item
 from django.db.models import Prefetch
 from django.db import IntegrityError
 from accounts.models import User
+from restaurant.region_config import resolve_region_defaults, get_region_config
 # Create your views here.
 
 # jwt
@@ -31,12 +32,20 @@ class OwnerRegisterView(APIView):
         logger = logging.getLogger(__name__)
         try:
             restaurants = Restaurant.objects.select_related('owner').all().order_by('-created_at')
+            region = (request.query_params.get('region') or '').strip().upper()
+            if region in {'UAE', 'UK'}:
+                restaurants = restaurants.filter(region=region)
             data = []
             for r in restaurants:
                 data.append({
                     'id': str(r.id),
                     'name': r.resturent_name,
                     'location': r.location or '',
+                    'region': r.region or 'UAE',
+                    'currency': r.currency or 'AED',
+                    'timezone': r.timezone or 'Asia/Dubai',
+                    'countryCode': r.country_code or '+971',
+                    'defaultPaymentProvider': r.default_payment_provider or 'stripe',
                     'city': r.city or '',
                     'country': r.country or '',
                     'phone': r.phone_number or '',
@@ -73,9 +82,21 @@ class OwnerRegisterView(APIView):
             email_value = self._pick(data, 'email')
             city_value = self._pick(data, 'city')
             country_value = self._pick(data, 'country')
+            region_value = self._pick(data, 'region')
+            currency_value = self._pick(data, 'currency')
+            timezone_value = self._pick(data, 'timezone')
+            country_code_value = self._pick(data, 'countryCode', 'country_code')
+            default_provider_value = self._pick(data, 'defaultPaymentProvider', 'default_payment_provider')
             qr_codes_value = self._pick(data, 'qrCodes', 'qr_codes')
             table_count_value = self._pick(data, 'tableCount', 'table_count')
             processor_value = self._pick(data, 'paymentProcessor', 'payment_processor')
+
+            region_defaults = resolve_region_defaults(
+                region=region_value if region_value is not None else restaurant.region,
+                country=country_value if country_value is not None else restaurant.country,
+                currency=currency_value if currency_value is not None else restaurant.currency,
+            )
+            allowed_providers = set(get_region_config(region_defaults['region']).get('payments', []))
 
             if status_value is not None:
                 restaurant.status = status_value
@@ -87,6 +108,29 @@ class OwnerRegisterView(APIView):
                 restaurant.city = str(city_value).strip()
             if country_value is not None:
                 restaurant.country = str(country_value).strip()
+            if region_value is not None:
+                restaurant.region = region_defaults['region']
+                if currency_value is None:
+                    restaurant.currency = region_defaults['currency']
+                if timezone_value is None:
+                    restaurant.timezone = region_defaults['timezone']
+                if country_code_value is None:
+                    restaurant.country_code = region_defaults['country_code']
+                if default_provider_value is None:
+                    restaurant.default_payment_provider = region_defaults['default_payment_provider']
+            if currency_value is not None:
+                restaurant.currency = str(currency_value).strip().upper()
+            if timezone_value is not None:
+                restaurant.timezone = str(timezone_value).strip()
+            if country_code_value is not None:
+                restaurant.country_code = str(country_code_value).strip()
+            if default_provider_value is not None:
+                requested_default_provider = str(default_provider_value).strip().lower() or 'stripe'
+                restaurant.default_payment_provider = (
+                    requested_default_provider
+                    if requested_default_provider in allowed_providers
+                    else region_defaults['default_payment_provider']
+                )
             if phone_value is not None:
                 restaurant.phone_number = str(phone_value).strip()
             if qr_codes_value is not None:
@@ -94,7 +138,12 @@ class OwnerRegisterView(APIView):
             if table_count_value is not None:
                 restaurant.table_count = max(int(table_count_value), 1)
             if processor_value is not None:
-                restaurant.payment_processor = str(processor_value).strip() or 'stripe'
+                requested_processor = str(processor_value).strip().lower() or 'stripe'
+                restaurant.payment_processor = (
+                    requested_processor
+                    if requested_processor in allowed_providers
+                    else region_defaults['default_payment_provider']
+                )
 
             owner = restaurant.owner
             if owner and email_value is not None:
@@ -369,7 +418,12 @@ class PublicRestaurantListView(APIView):
                 "id": restaurant.id,
                 "name": restaurant.resturent_name,
                 "phone": restaurant.phone_number,
-                "location": restaurant.location
+                "location": restaurant.location,
+                "region": restaurant.region or "UAE",
+                "currency": restaurant.currency or "AED",
+                "timezone": restaurant.timezone or "Asia/Dubai",
+                "country_code": restaurant.country_code or "+971",
+                "default_payment_provider": restaurant.default_payment_provider or "stripe",
             })
         return Response(data)
 

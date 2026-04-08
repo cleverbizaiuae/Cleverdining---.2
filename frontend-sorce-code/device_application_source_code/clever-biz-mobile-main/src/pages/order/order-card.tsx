@@ -1,6 +1,7 @@
 import { Order } from "./order-types";
 import { cn } from "clsx-for-tailwind";
 import { Check, ChefHat, Clock, Utensils, Receipt, Banknote } from "lucide-react";
+import { getSessionCurrencyCode } from "../../utils/regionSession";
 
 interface OrderCardProps {
     order: Order;
@@ -8,6 +9,7 @@ interface OrderCardProps {
 }
 
 export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
+    const currencyCode = getSessionCurrencyCode();
 
     // Normalize items
     const items = order.order_items || order.items || [];
@@ -60,7 +62,7 @@ export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
                                 {order.payment_status === 'paid' ? 'Paid' : isAwaitingCash ? '💵 Awaiting Cash' : 'Unpaid'}
                             </span>
                             <span className="text-sm font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg">
-                                AED {order.total_price}
+                                {currencyCode} {order.total_price}
                             </span>
                         </div>
                     </div>

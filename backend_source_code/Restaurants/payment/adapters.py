@@ -1,8 +1,13 @@
 import json
 from abc import ABC, abstractmethod
 import stripe
+import requests
+import hmac
+import hashlib
+from urllib.parse import urlparse
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
+from restaurant.region_config import get_region_config
 
 class PaymentAdapter(ABC):
     def __init__(self, gateway):
@@ -22,6 +27,24 @@ class PaymentAdapter(ABC):
         Verifies the webhook signature and returns the event payload.
         """
         pass
+
+
+def _order_region_settings(order):
+    restaurant = getattr(order, "restaurant", None)
+    return get_region_config(getattr(restaurant, "region", "UAE"))
+
+
+def _order_currency(order):
+    restaurant = getattr(order, "restaurant", None)
+    configured_currency = (getattr(restaurant, "currency", "") or "").strip().upper()
+    if configured_currency:
+        return configured_currency
+    return _order_region_settings(order)["currency"]
+
+
+def _order_country_alpha2(order):
+    settings_map = _order_region_settings(order)
+    return "GB" if settings_map["country_code"] == "+44" else "AE"
 
 class StripeAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
@@ -43,7 +66,7 @@ class StripeAdapter(PaymentAdapter):
                 payment_method_types=['card'],
                 line_items=[{
                     'price_data': {
-                        'currency': 'aed',
+                        'currency': _order_currency(order).lower(),
                         'product_data': {
                             'name': f'Order #{order.id} Payment',
                         },
@@ -146,12 +169,12 @@ class CheckoutAdapter(PaymentAdapter):
 
         payload = {
             "amount": final_amount,
-            "currency": "AED",
+            "currency": _order_currency(order),
             "reference": f"order_{order.id}",
             "description": f"Order #{order.id} Payment",
             "billing": {
                 "address": {
-                    "country": "AE"
+                    "country": _order_country_alpha2(order)
                 }
             },
             "success_url": success_url + "?cko-session-id={cko-session-id}",
@@ -251,6 +274,160 @@ class CheckoutAdapter(PaymentAdapter):
             raise ValidationError(f"Webhook verification failed: {str(e)}")
 
 
+class PaymeAdapter(PaymentAdapter):
+    """
+    UK Open Banking adapter.
+    The gateway key_id acts as merchant/account id and key_secret as API key.
+    """
+
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
+        api_base = (getattr(settings, "PAYME_API_BASE_URL", "") or "").rstrip("/")
+        if not api_base:
+            raise ValidationError("Payme is not configured for this environment")
+
+        final_amount = float(amount if amount is not None else order.total_price)
+        currency = _order_currency(order)
+        if currency != "GBP":
+            raise ValidationError("Payme is only supported for GBP restaurants")
+
+        final_metadata = {
+            "order_id": str(order.id),
+            "restaurant_id": str(order.restaurant.id),
+            "region": getattr(order.restaurant, "region", "UAE"),
+        }
+        if metadata:
+            final_metadata.update(metadata)
+
+        parsed_success = urlparse(success_url or "")
+        backend_base = f"{parsed_success.scheme}://{parsed_success.netloc}" if parsed_success.scheme and parsed_success.netloc else ""
+        callback_url = (
+            (getattr(settings, "PAYME_WEBHOOK_URL", "") or "").rstrip("/")
+            or (f"{backend_base}/api/customer/payment/webhook/payme/" if backend_base else "")
+        )
+        payload = {
+            "merchant_id": self.gateway.key_id,
+            "amount": final_amount,
+            "currency": currency,
+            "description": f"Order #{order.id} payment",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "metadata": final_metadata,
+        }
+        if callback_url:
+            payload["callback_url"] = callback_url
+
+        headers = {
+            "Authorization": f"Bearer {self.gateway.get_decrypted_secret()}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = requests.post(
+                f"{api_base}/payments",
+                json=payload,
+                headers=headers,
+                timeout=15,
+            )
+            data = response.json()
+        except requests.RequestException as exc:
+            raise ValidationError(f"Payme connection failed: {str(exc)}")
+        except ValueError:
+            raise ValidationError("Payme returned invalid response")
+
+        if response.status_code not in [200, 201]:
+            message = data.get("message") or data.get("error") or "Payme session creation failed"
+            raise ValidationError(message)
+
+        redirect_url = data.get("redirect_url") or data.get("authorization_url")
+        transaction_id = data.get("id") or data.get("payment_id")
+        if not redirect_url or not transaction_id:
+            raise ValidationError("Payme session response is incomplete")
+
+        return {
+            "url": redirect_url,
+            "transaction_id": str(transaction_id),
+            "provider": "payme",
+            "status": "pending",
+            "raw_response": data,
+        }
+
+    def verify_payment(self, data):
+        payment_status = str(data.get("status") or "").lower()
+        transaction_id = (
+            data.get("transaction_id")
+            or data.get("payment_id")
+            or data.get("id")
+            or data.get("session_id")
+        )
+        if not transaction_id:
+            raise ValidationError("Transaction ID is required")
+
+        if payment_status in {"completed", "paid", "success", "succeeded"}:
+            amount = data.get("amount")
+            try:
+                amount = float(amount) if amount is not None else None
+            except (TypeError, ValueError):
+                amount = None
+            return {
+                "status": "completed",
+                "transaction_id": str(transaction_id),
+                "amount": amount,
+            }
+        if payment_status in {"failed", "cancelled", "canceled"}:
+            return {"status": "failed", "transaction_id": str(transaction_id)}
+
+        api_base = (getattr(settings, "PAYME_API_BASE_URL", "") or "").rstrip("/")
+        if api_base:
+            headers = {
+                "Authorization": f"Bearer {self.gateway.get_decrypted_secret()}",
+                "Content-Type": "application/json",
+            }
+            try:
+                response = requests.get(
+                    f"{api_base}/payments/{transaction_id}",
+                    headers=headers,
+                    timeout=12,
+                )
+                details = response.json()
+                if response.status_code in [200, 201]:
+                    remote_status = str(details.get("status") or "").lower()
+                    if remote_status in {"completed", "paid", "success", "succeeded"}:
+                        amount = details.get("amount")
+                        try:
+                            amount = float(amount) if amount is not None else None
+                        except (TypeError, ValueError):
+                            amount = None
+                        return {
+                            "status": "completed",
+                            "transaction_id": str(transaction_id),
+                            "amount": amount,
+                        }
+                    if remote_status in {"failed", "cancelled", "canceled"}:
+                        return {"status": "failed", "transaction_id": str(transaction_id)}
+            except Exception:
+                # Keep flow non-blocking; caller can retry verify.
+                pass
+
+        return {"status": "pending", "transaction_id": str(transaction_id)}
+
+    def verify_webhook(self, request):
+        data = request.data if hasattr(request, "data") else json.loads(request.body)
+        webhook_secret = getattr(settings, "PAYME_WEBHOOK_SECRET", None)
+        signature = (
+            request.headers.get("X-Payme-Signature")
+            or request.headers.get("Payme-Signature")
+        )
+        if webhook_secret and signature:
+            computed = hmac.new(
+                webhook_secret.encode("utf-8"),
+                request.body,
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(computed, str(signature).strip()):
+                raise ValidationError("Invalid Payme webhook signature")
+        return self.verify_payment(data)
+
+
 class CashAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         # Update Order Status
@@ -312,8 +489,6 @@ class CashAdapter(PaymentAdapter):
     def verify_webhook(self, request):
         return None
 
-import requests
-
 class PayTabsAdapter(PaymentAdapter):
     # Default to main secure endpoint. 
     # Valid endpoints: 
@@ -341,7 +516,7 @@ class PayTabsAdapter(PaymentAdapter):
             "tran_class": "ecom",
             "cart_id": unique_cart_id,
             "cart_description": desc,
-            "cart_currency": "AED",
+            "cart_currency": _order_currency(order),
             "cart_amount": float(amount if amount is not None else order.total_price),
             "callback": "https://cleverdining-2.onrender.com/api/payment/webhook/paytabs/",
             "return": "https://cleverdining-2.onrender.com/api/customer/payment/paytabs/return/", 

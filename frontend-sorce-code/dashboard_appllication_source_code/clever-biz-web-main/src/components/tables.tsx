@@ -10,7 +10,7 @@ import { TooltipTop } from "./utilities";
 import { BiMailSend } from "react-icons/bi";
 import { useState, useEffect, useRef, useContext, useCallback } from "react";
 import { useOwner } from "@/context/ownerContext";
-import { formatDateTime, formatDate, formatTime } from "@/lib/utils";
+import { formatDateTime, formatDate, formatTime, getActiveRestaurantCurrency } from "@/lib/utils";
 import { useStaff } from "@/context/staffContext";
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
@@ -793,6 +793,7 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
   bodyClassName,
   rowClassName,
 }) => {
+  const currencyCode = getActiveRestaurantCurrency();
   const { response } = useContext(WebSocketContext) || {};
   const { fetchOrders } = useStaff();
   const { fetchOrders: fetchOwnerOrders } = useOwner();
@@ -865,7 +866,7 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
                 {item.order_items.length || "N/A"}
               </td>
               <td className="p-2 sm:p-4 text-inherit text-center">
-                AED {item.total_price || "N/A"}
+                {currencyCode} {item.total_price || "N/A"}
               </td>
               <td className="p-2 sm:p-4 text-inherit text-center">
                 <span className="font-medium">

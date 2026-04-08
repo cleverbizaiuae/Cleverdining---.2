@@ -110,3 +110,49 @@ export function formatTime(isoString: string): string {
     return isoString;
   }
 }
+
+export function getActiveRestaurantRegion(): "UAE" | "UK" {
+  try {
+    const raw = localStorage.getItem("userInfo");
+    if (!raw) return "UAE";
+    const parsed = JSON.parse(raw);
+    const region = String(parsed?.restaurants?.[0]?.region || parsed?.user?.restaurants?.[0]?.region || "UAE").toUpperCase();
+    return region === "UK" ? "UK" : "UAE";
+  } catch {
+    return "UAE";
+  }
+}
+
+export function getActiveRestaurantCurrency(): string {
+  try {
+    const raw = localStorage.getItem("userInfo");
+    if (!raw) return "AED";
+    const parsed = JSON.parse(raw);
+    const explicit = String(
+      parsed?.restaurants?.[0]?.currency || parsed?.user?.restaurants?.[0]?.currency || ""
+    )
+      .trim()
+      .toUpperCase();
+    if (explicit) return explicit;
+    return getActiveRestaurantRegion() === "UK" ? "GBP" : "AED";
+  } catch {
+    return "AED";
+  }
+}
+
+export function getActiveRestaurantTimezone(): string {
+  return getActiveRestaurantRegion() === "UK" ? "Europe/London" : "Asia/Dubai";
+}
+
+export function getActiveRestaurantLocale(): string {
+  return getActiveRestaurantRegion() === "UK" ? "en-GB" : "en-AE";
+}
+
+export function formatCurrencyAmount(
+  value: string | number | null | undefined,
+  currency?: string
+): string {
+  const amount = Number(value || 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  return `${currency || getActiveRestaurantCurrency()} ${safeAmount}`;
+}
