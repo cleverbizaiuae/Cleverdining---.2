@@ -136,15 +136,20 @@ class SimpleLoginView(APIView):
                 try:
                     restaurant = user.restaurants.first()
                     if restaurant:
+                        region_defaults = resolve_region_defaults(
+                            region=restaurant.region,
+                            country=restaurant.country,
+                            currency=restaurant.currency,
+                        )
                         user_data['restaurants'] = [{
                             'id': restaurant.id,
                             'resturent_name': restaurant.resturent_name or '',
                             'location': restaurant.location or '',
-                            'region': restaurant.region or 'UAE',
-                            'currency': restaurant.currency or 'AED',
-                            'timezone': restaurant.timezone or 'Asia/Dubai',
-                            'country_code': restaurant.country_code or '+971',
-                            'default_payment_provider': restaurant.default_payment_provider or 'stripe',
+                            'region': restaurant.region or region_defaults['region'],
+                            'currency': restaurant.currency or region_defaults['currency'],
+                            'timezone': restaurant.timezone or region_defaults['timezone'],
+                            'country_code': restaurant.country_code or region_defaults['country_code'],
+                            'default_payment_provider': restaurant.default_payment_provider or region_defaults['default_payment_provider'],
                             'phone_number': restaurant.phone_number or '',
                             'package': restaurant.package or 'Basic',
                             'source': 'owner',

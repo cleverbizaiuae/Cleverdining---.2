@@ -16,6 +16,7 @@ from accounts.permissions import IsOwnerRole,IsOwnerORStaff,IsOwnerChefOrStaff
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from accounts.models import ChefStaff
+from restaurant.region_config import resolve_region_defaults
 from rest_framework.exceptions import PermissionDenied
 from django.utils.dateparse import parse_date
 from django_filters.rest_framework import DjangoFilterBackend
@@ -118,6 +119,11 @@ class ResolveTableView(APIView):
             else:
                 # Session is genuinely active with orders. Resume it.
                 existing_session.save() # Update last_seen
+                region_defaults = resolve_region_defaults(
+                    region=device.restaurant.region,
+                    country=device.restaurant.country,
+                    currency=device.restaurant.currency,
+                )
                 
                 return Response({
                     'guest_session_id': existing_session.id,
@@ -126,11 +132,11 @@ class ResolveTableView(APIView):
                     'table_name': device.table_name,
                     'restaurant_id': device.restaurant.id,
                     'restaurant_name': device.restaurant.resturent_name,
-                    'restaurant_region': device.restaurant.region or 'UAE',
-                    'restaurant_currency': device.restaurant.currency or 'AED',
-                    'restaurant_timezone': device.restaurant.timezone or 'Asia/Dubai',
-                    'restaurant_country_code': device.restaurant.country_code or '+971',
-                    'default_payment_provider': device.restaurant.default_payment_provider or 'stripe',
+                    'restaurant_region': device.restaurant.region or region_defaults['region'],
+                    'restaurant_currency': device.restaurant.currency or region_defaults['currency'],
+                    'restaurant_timezone': device.restaurant.timezone or region_defaults['timezone'],
+                    'restaurant_country_code': device.restaurant.country_code or region_defaults['country_code'],
+                    'default_payment_provider': device.restaurant.default_payment_provider or region_defaults['default_payment_provider'],
                     'expires_at': existing_session.expires_at.isoformat() if existing_session.expires_at else None,
                     'is_resumed': True
                 })
@@ -142,6 +148,11 @@ class ResolveTableView(APIView):
             device=device,
             session_token=session_token,
             expires_at=expires_at
+        )
+        region_defaults = resolve_region_defaults(
+            region=device.restaurant.region,
+            country=device.restaurant.country,
+            currency=device.restaurant.currency,
         )
 
         # Broadcast New Session Started (Optional, for Dashboard)
@@ -167,11 +178,11 @@ class ResolveTableView(APIView):
             'table_name': device.table_name,
             'restaurant_id': device.restaurant.id,
             'restaurant_name': device.restaurant.resturent_name,
-            'restaurant_region': device.restaurant.region or 'UAE',
-            'restaurant_currency': device.restaurant.currency or 'AED',
-            'restaurant_timezone': device.restaurant.timezone or 'Asia/Dubai',
-            'restaurant_country_code': device.restaurant.country_code or '+971',
-            'default_payment_provider': device.restaurant.default_payment_provider or 'stripe',
+            'restaurant_region': device.restaurant.region or region_defaults['region'],
+            'restaurant_currency': device.restaurant.currency or region_defaults['currency'],
+            'restaurant_timezone': device.restaurant.timezone or region_defaults['timezone'],
+            'restaurant_country_code': device.restaurant.country_code or region_defaults['country_code'],
+            'default_payment_provider': device.restaurant.default_payment_provider or region_defaults['default_payment_provider'],
             'expires_at': expires_at.isoformat(),
             'is_resumed': False
         })

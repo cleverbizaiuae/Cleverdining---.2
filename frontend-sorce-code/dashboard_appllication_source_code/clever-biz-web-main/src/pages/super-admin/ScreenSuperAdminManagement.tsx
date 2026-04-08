@@ -79,22 +79,6 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
     ownerPassword: String(restaurant?.ownerPassword ?? restaurant?.owner_password ?? ""),
 });
 
-// Seeded Sample Data (12 restaurants)
-const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
-    { id: "rest-001", name: "The Golden Fork", location: "Dubai Mall, Level 2", city: "Dubai", country: "UAE", phone: "+971 4 123 4567", email: "contact@goldenfork.ae", rating: 4.8, package: "Enterprise", status: "active", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-10-10", createdAt: "2026-01-10T20:39:25.775Z", ownerPassword: "GoldenFork@2026" },
-    { id: "rest-002", name: "Spice Route Kitchen", location: "JBR Walk", city: "Dubai", country: "UAE", phone: "+971 4 234 5678", email: "info@spiceroute.ae", rating: 4.5, package: "Enterprise", status: "active", qrCodes: 20, tableCount: 18, paymentProcessor: "stripe", subscriptionStart: "2025-09-15", createdAt: "2026-01-08T15:20:00.000Z", ownerPassword: "SpiceRoute@2026" },
-    { id: "rest-003", name: "Marina Bites", location: "Dubai Marina", city: "Dubai", country: "UAE", phone: "+971 4 345 6789", email: "hello@marinabites.ae", rating: 3.9, package: "Starter", status: "on_hold", qrCodes: 10, tableCount: 8, paymentProcessor: "paytabs", subscriptionStart: "2025-08-01", createdAt: "2025-12-20T10:00:00.000Z", ownerPassword: "MarinaBites@2026" },
-    { id: "rest-004", name: "Abu Dhabi Grill House", location: "Yas Mall", city: "Abu Dhabi", country: "UAE", phone: "+971 2 456 7890", email: "reservations@adgrill.ae", rating: 4.7, package: "Enterprise", status: "active", qrCodes: 25, tableCount: 20, paymentProcessor: "stripe", subscriptionStart: "2025-07-20", createdAt: "2025-12-15T14:30:00.000Z", ownerPassword: "ADGrill@2026" },
-    { id: "rest-005", name: "The Corniche Cafe", location: "Corniche Road", city: "Abu Dhabi", country: "UAE", phone: "+971 2 567 8901", email: "info@corniche.ae", rating: 4.2, package: "Enterprise", status: "on_hold", qrCodes: 12, tableCount: 10, paymentProcessor: "checkout", subscriptionStart: "2025-06-10", createdAt: "2025-11-25T09:15:00.000Z", ownerPassword: "Corniche@2026" },
-    { id: "rest-006", name: "Riyadh Palace Restaurant", location: "Kingdom Centre", city: "Riyadh", country: "Saudi Arabia", phone: "+966 11 123 4567", email: "palace@riyadhpalace.sa", rating: 4.9, package: "Enterprise", status: "active", qrCodes: 30, tableCount: 25, paymentProcessor: "stripe", subscriptionStart: "2025-05-01", createdAt: "2025-11-10T12:00:00.000Z", ownerPassword: "Palace@2026" },
-    { id: "rest-007", name: "Jeddah Seafood House", location: "Red Sea Mall", city: "Jeddah", country: "Saudi Arabia", phone: "+966 12 234 5678", email: "jeddah@seafood.sa", rating: 4.3, package: "Starter", status: "active", qrCodes: 18, tableCount: 15, paymentProcessor: "paytabs", subscriptionStart: "2025-04-15", createdAt: "2025-10-20T08:45:00.000Z", ownerPassword: "Seafood@2026" },
-    { id: "rest-008", name: "Cairo Mezze", location: "City Stars Mall", city: "Cairo", country: "Egypt", phone: "+20 2 345 6789", email: "info@cairomezze.eg", rating: 4.0, package: "Starter", status: "on_hold", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", subscriptionStart: "2025-03-20", createdAt: "2025-09-15T16:30:00.000Z", ownerPassword: "CairoMezze@2026" },
-    { id: "rest-009", name: "Nile View Dining", location: "Zamalek", city: "Cairo", country: "Egypt", phone: "+20 2 456 7890", email: "dining@nileview.eg", rating: 4.6, package: "Enterprise", status: "active", qrCodes: 20, tableCount: 16, paymentProcessor: "stripe", subscriptionStart: "2025-02-28", createdAt: "2025-09-01T11:00:00.000Z", ownerPassword: "NileView@2026" },
-    { id: "rest-010", name: "Doha Delights", location: "The Pearl Qatar", city: "Doha", country: "Qatar", phone: "+974 4 567 8901", email: "info@dohadelights.qa", rating: 4.4, package: "Enterprise", status: "active", qrCodes: 22, tableCount: 18, paymentProcessor: "checkout", subscriptionStart: "2025-01-15", createdAt: "2025-08-20T13:15:00.000Z", ownerPassword: "Doha@2026" },
-    { id: "rest-011", name: "Kuwait Kitchen", location: "The Avenues Mall", city: "Kuwait City", country: "Kuwait", phone: "+965 2 678 9012", email: "kitchen@kuwait.kw", rating: 4.1, package: "Starter", status: "on_hold", qrCodes: 14, tableCount: 11, paymentProcessor: "paytabs", subscriptionStart: "2024-12-01", createdAt: "2025-08-10T10:30:00.000Z", ownerPassword: "Kuwait@2026" },
-    { id: "rest-012", name: "Bahrain Brasserie", location: "Seef Mall", city: "Manama", country: "Bahrain", phone: "+973 1789 0123", email: "brasserie@bahrain.bh", rating: 4.5, package: "Enterprise", status: "active", qrCodes: 16, tableCount: 13, paymentProcessor: "stripe", subscriptionStart: "2024-11-10", createdAt: "2025-08-01T09:00:00.000Z", ownerPassword: "Bahrain@2026" },
-];
-
 const ScreenSuperAdminManagement = () => {
     const queryClient = useQueryClient();
     const [searchQuery, setSearchQuery] = useState("");
@@ -528,7 +512,7 @@ const ScreenSuperAdminManagement = () => {
 
                         {/* Location Column */}
                         <div className="col-span-2">
-                            <p className="text-sm text-slate-600">{restaurant.location || 'N/A'}</p>
+                            <p className="text-sm text-slate-600">{restaurant.location || '-'}</p>
                             <p className="text-xs text-slate-400">{[restaurant.city, restaurant.country].filter(Boolean).join(', ')}</p>
                             <p className="text-[11px] text-slate-500 mt-1">Region: {restaurant.region}</p>
                         </div>
@@ -908,7 +892,7 @@ const ScreenSuperAdminManagement = () => {
                         {/* Restaurant Info */}
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                             <p className="text-sm text-red-800 font-medium">{restaurantToDelete.name}</p>
-                            <p className="text-xs text-red-600 mt-1">{[restaurantToDelete.location, restaurantToDelete.city].filter(Boolean).join(', ') || 'N/A'}</p>
+                            <p className="text-xs text-red-600 mt-1">{[restaurantToDelete.location, restaurantToDelete.city].filter(Boolean).join(', ') || '-'}</p>
                         </div>
 
                         {/* Confirmation Input */}

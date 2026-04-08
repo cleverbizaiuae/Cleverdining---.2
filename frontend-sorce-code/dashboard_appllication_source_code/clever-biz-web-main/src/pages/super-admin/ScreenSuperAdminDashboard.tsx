@@ -46,20 +46,14 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
     createdAt: String(restaurant?.createdAt ?? restaurant?.created_at ?? new Date().toISOString()),
 });
 
-// Seeded Sample Data (12 restaurants)
+// Seeded fallback data (UAE + UK only)
 const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
-    { id: "rest-001", name: "The Golden Fork", location: "Dubai Mall, Level 2", city: "Dubai", country: "UAE", phone: "+971 4 123 4567", email: "contact@goldenfork.ae", package: "Professional", status: "active", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", createdAt: "2026-01-10T20:39:25.775Z" },
-    { id: "rest-002", name: "Spice Route Kitchen", location: "JBR Walk", city: "Dubai", country: "UAE", phone: "+971 4 234 5678", email: "info@spiceroute.ae", package: "Enterprise", status: "active", qrCodes: 20, tableCount: 18, paymentProcessor: "stripe", createdAt: "2026-01-08T15:20:00.000Z" },
-    { id: "rest-003", name: "Marina Bites", location: "Dubai Marina", city: "Dubai", country: "UAE", phone: "+971 4 345 6789", email: "hello@marinabites.ae", package: "Starter", status: "inactive", qrCodes: 10, tableCount: 8, paymentProcessor: "paytabs", createdAt: "2025-12-20T10:00:00.000Z" },
-    { id: "rest-004", name: "Abu Dhabi Grill House", location: "Yas Mall", city: "Abu Dhabi", country: "UAE", phone: "+971 2 456 7890", email: "reservations@adgrill.ae", package: "Enterprise", status: "active", qrCodes: 25, tableCount: 20, paymentProcessor: "stripe", createdAt: "2025-12-15T14:30:00.000Z" },
-    { id: "rest-005", name: "The Corniche Cafe", location: "Corniche Road", city: "Abu Dhabi", country: "UAE", phone: "+971 2 567 8901", email: "info@corniche.ae", package: "Enterprise", status: "on_hold", qrCodes: 12, tableCount: 10, paymentProcessor: "checkout", createdAt: "2025-11-25T09:15:00.000Z" },
-    { id: "rest-006", name: "Riyadh Palace Restaurant", location: "Kingdom Centre", city: "Riyadh", country: "Saudi Arabia", phone: "+966 11 123 4567", email: "palace@riyadhpalace.sa", package: "Enterprise", status: "active", qrCodes: 30, tableCount: 25, paymentProcessor: "stripe", createdAt: "2025-11-10T12:00:00.000Z" },
-    { id: "rest-007", name: "Jeddah Seafood House", location: "Red Sea Mall", city: "Jeddah", country: "Saudi Arabia", phone: "+966 12 234 5678", email: "jeddah@seafood.sa", package: "Professional", status: "active", qrCodes: 18, tableCount: 15, paymentProcessor: "paytabs", createdAt: "2025-10-20T08:45:00.000Z" },
-    { id: "rest-008", name: "Cairo Mezze", location: "City Stars Mall", city: "Cairo", country: "Egypt", phone: "+20 2 345 6789", email: "info@cairomezze.eg", package: "Professional", status: "inactive", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", createdAt: "2025-09-15T16:30:00.000Z" },
-    { id: "rest-009", name: "Nile View Dining", location: "Zamalek", city: "Cairo", country: "Egypt", phone: "+20 2 456 7890", email: "dining@nileview.eg", package: "Enterprise", status: "active", qrCodes: 20, tableCount: 16, paymentProcessor: "stripe", createdAt: "2025-09-01T11:00:00.000Z" },
-    { id: "rest-010", name: "Doha Delights", location: "The Pearl Qatar", city: "Doha", country: "Qatar", phone: "+974 4 567 8901", email: "info@dohadelights.qa", package: "Enterprise", status: "active", qrCodes: 22, tableCount: 18, paymentProcessor: "checkout", createdAt: "2025-08-20T13:15:00.000Z" },
-    { id: "rest-011", name: "Kuwait Kitchen", location: "The Avenues Mall", city: "Kuwait City", country: "Kuwait", phone: "+965 2 678 9012", email: "kitchen@kuwait.kw", package: "Professional", status: "on_hold", qrCodes: 14, tableCount: 11, paymentProcessor: "paytabs", createdAt: "2025-08-10T10:30:00.000Z" },
-    { id: "rest-012", name: "Bahrain Brasserie", location: "Seef Mall", city: "Manama", country: "Bahrain", phone: "+973 1789 0123", email: "brasserie@bahrain.bh", package: "Professional", status: "active", qrCodes: 16, tableCount: 13, paymentProcessor: "stripe", createdAt: "2025-08-01T09:00:00.000Z" },
+    { id: "rest-001", name: "The Golden Fork", region: "UAE", location: "Dubai Mall, Level 2", city: "Dubai", country: "UAE", phone: "+971 4 123 4567", email: "contact@goldenfork.ae", package: "Professional", status: "active", qrCodes: 15, tableCount: 12, paymentProcessor: "stripe", createdAt: "2026-01-10T20:39:25.775Z" },
+    { id: "rest-002", name: "Spice Route Kitchen", region: "UAE", location: "JBR Walk", city: "Dubai", country: "UAE", phone: "+971 4 234 5678", email: "info@spiceroute.ae", package: "Enterprise", status: "active", qrCodes: 20, tableCount: 18, paymentProcessor: "stripe", createdAt: "2026-01-08T15:20:00.000Z" },
+    { id: "rest-003", name: "The Corniche Cafe", region: "UAE", location: "Corniche Road", city: "Abu Dhabi", country: "UAE", phone: "+971 2 567 8901", email: "info@corniche.ae", package: "Enterprise", status: "on_hold", qrCodes: 12, tableCount: 10, paymentProcessor: "checkout", createdAt: "2025-11-25T09:15:00.000Z" },
+    { id: "rest-004", name: "London Spice House", region: "UK", location: "Oxford Street", city: "London", country: "United Kingdom", phone: "+44 20 7123 4567", email: "hello@londonspice.uk", package: "Enterprise", status: "active", qrCodes: 18, tableCount: 14, paymentProcessor: "stripe", createdAt: "2025-12-15T14:30:00.000Z" },
+    { id: "rest-005", name: "Manchester Grill", region: "UK", location: "Deansgate", city: "Manchester", country: "United Kingdom", phone: "+44 161 555 1020", email: "bookings@manchestergrill.uk", package: "Professional", status: "active", qrCodes: 16, tableCount: 12, paymentProcessor: "payme", createdAt: "2025-11-10T12:00:00.000Z" },
+    { id: "rest-006", name: "Bristol Riverside", region: "UK", location: "Harbourside", city: "Bristol", country: "United Kingdom", phone: "+44 117 555 2200", email: "contact@bristolriverside.uk", package: "Starter", status: "inactive", qrCodes: 10, tableCount: 8, paymentProcessor: "stripe", createdAt: "2025-09-01T11:00:00.000Z" },
 ];
 
 const ScreenSuperAdminDashboard = () => {
@@ -168,7 +162,7 @@ const ScreenSuperAdminDashboard = () => {
                         </div>
                         <div>
                             <h3 className="font-semibold text-amber-900">No restaurants found</h3>
-                            <p className="text-sm text-amber-700">Click to add sample restaurants for testing</p>
+                            <p className="text-sm text-amber-700">Click to load UAE/UK sample restaurants for testing</p>
                         </div>
                     </div>
                     <button onClick={handleAddSampleData} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg text-sm transition-colors">

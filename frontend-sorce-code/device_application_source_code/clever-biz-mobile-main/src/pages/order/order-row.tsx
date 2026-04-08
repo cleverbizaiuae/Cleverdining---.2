@@ -22,7 +22,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
   };
 
   const formatMoney = (v: string | number) => {
-    let currency = "AED";
+    let currency = getRegionConfig().currency;
     try {
       const userInfo = localStorage.getItem("userInfo");
       if (userInfo) {
@@ -31,7 +31,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
         if (regionCurrency) currency = regionCurrency;
       }
     } catch {
-      currency = "AED";
+      currency = getRegionConfig().currency;
     }
 
     const n = typeof v === "string" ? parseFloat(v) : v;

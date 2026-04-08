@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getRegionConfig } from "../config/regionConfig";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -126,7 +127,7 @@ export function getActiveRestaurantRegion(): "UAE" | "UK" {
 export function getActiveRestaurantCurrency(): string {
   try {
     const raw = localStorage.getItem("userInfo");
-    if (!raw) return "AED";
+    if (!raw) return getRegionConfig(getActiveRestaurantRegion()).currency;
     const parsed = JSON.parse(raw);
     const explicit = String(
       parsed?.restaurants?.[0]?.currency || parsed?.user?.restaurants?.[0]?.currency || ""
@@ -134,14 +135,14 @@ export function getActiveRestaurantCurrency(): string {
       .trim()
       .toUpperCase();
     if (explicit) return explicit;
-    return getActiveRestaurantRegion() === "UK" ? "GBP" : "AED";
+    return getRegionConfig(getActiveRestaurantRegion()).currency;
   } catch {
-    return "AED";
+    return getRegionConfig(getActiveRestaurantRegion()).currency;
   }
 }
 
 export function getActiveRestaurantTimezone(): string {
-  return getActiveRestaurantRegion() === "UK" ? "Europe/London" : "Asia/Dubai";
+  return getRegionConfig(getActiveRestaurantRegion()).timezone;
 }
 
 export function getActiveRestaurantLocale(): string {

@@ -37,15 +37,20 @@ class OwnerRegisterView(APIView):
                 restaurants = restaurants.filter(region=region)
             data = []
             for r in restaurants:
+                region_defaults = resolve_region_defaults(
+                    region=r.region,
+                    country=r.country,
+                    currency=r.currency,
+                )
                 data.append({
                     'id': str(r.id),
                     'name': r.resturent_name,
                     'location': r.location or '',
-                    'region': r.region or 'UAE',
-                    'currency': r.currency or 'AED',
-                    'timezone': r.timezone or 'Asia/Dubai',
-                    'countryCode': r.country_code or '+971',
-                    'defaultPaymentProvider': r.default_payment_provider or 'stripe',
+                    'region': r.region or region_defaults['region'],
+                    'currency': r.currency or region_defaults['currency'],
+                    'timezone': r.timezone or region_defaults['timezone'],
+                    'countryCode': r.country_code or region_defaults['country_code'],
+                    'defaultPaymentProvider': r.default_payment_provider or region_defaults['default_payment_provider'],
                     'city': r.city or '',
                     'country': r.country or '',
                     'phone': r.phone_number or '',
@@ -414,16 +419,21 @@ class PublicRestaurantListView(APIView):
         restaurants = Restaurant.objects.all()
         data = []
         for restaurant in restaurants:
+            region_defaults = resolve_region_defaults(
+                region=restaurant.region,
+                country=restaurant.country,
+                currency=restaurant.currency,
+            )
             data.append({
                 "id": restaurant.id,
                 "name": restaurant.resturent_name,
                 "phone": restaurant.phone_number,
                 "location": restaurant.location,
-                "region": restaurant.region or "UAE",
-                "currency": restaurant.currency or "AED",
-                "timezone": restaurant.timezone or "Asia/Dubai",
-                "country_code": restaurant.country_code or "+971",
-                "default_payment_provider": restaurant.default_payment_provider or "stripe",
+                "region": restaurant.region or region_defaults["region"],
+                "currency": restaurant.currency or region_defaults["currency"],
+                "timezone": restaurant.timezone or region_defaults["timezone"],
+                "country_code": restaurant.country_code or region_defaults["country_code"],
+                "default_payment_provider": restaurant.default_payment_provider or region_defaults["default_payment_provider"],
             })
         return Response(data)
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import axiosInstance from "../lib/axios";
 import { ImSpinner6 } from "react-icons/im";
+import { getRegionConfig } from "../config/regionConfig";
 
 const TableEntry = () => {
     const { uuid } = useParams();
-    const navigate = useNavigate();
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -35,6 +35,9 @@ const TableEntry = () => {
                     restaurant_country_code,
                     default_payment_provider
                 } = sessionRes.data;
+                const resolvedRegion =
+                    String(restaurant_region || "UAE").toUpperCase() === "UK" ? "UK" : "UAE";
+                const regionSettings = getRegionConfig(resolvedRegion);
 
                 // 3. Create guest user info
                 const mockUserInfo = {
@@ -47,11 +50,12 @@ const TableEntry = () => {
                                 table_name: device.table_name,
                                 device_id: device.id,
                                 resturent_name: device.restaurant_name,
-                                region: restaurant_region || "UAE",
-                                currency: restaurant_currency || "AED",
-                                timezone: restaurant_timezone || "Asia/Dubai",
-                                country_code: restaurant_country_code || "+971",
-                                default_payment_provider: default_payment_provider || "stripe",
+                                region: restaurant_region || resolvedRegion,
+                                currency: restaurant_currency || regionSettings.currency,
+                                timezone: restaurant_timezone || regionSettings.timezone,
+                                country_code: restaurant_country_code || regionSettings.countryCode,
+                                default_payment_provider:
+                                    default_payment_provider || regionSettings.defaultPaymentProvider,
                             },
                         ],
                     },
@@ -89,7 +93,7 @@ const TableEntry = () => {
         };
 
         fetchDeviceAndLogin();
-    }, [uuid, navigate]);
+    }, [uuid]);
 
     if (error) {
         return (

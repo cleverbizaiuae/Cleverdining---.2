@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
+import { getRegionConfig } from '../config/regionConfig';
 
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -51,6 +51,9 @@ export default function TableLanding() {
                 localStorage.removeItem('cart');
 
                 // Construct and store userInfo
+                const resolvedRegion =
+                    String(res.data.restaurant_region || "UAE").toUpperCase() === "UK" ? "UK" : "UAE";
+                const regionSettings = getRegionConfig(resolvedRegion);
                 const userInfo = {
                     user: {
                         username: table_name || `Table ${table_id}`,
@@ -61,11 +64,12 @@ export default function TableLanding() {
                                 table_name: table_name || `Table ${table_id}`,
                                 device_id: table_id,
                                 resturent_name: res.data.restaurant_name || "Restaurant",
-                                region: res.data.restaurant_region || "UAE",
-                                currency: res.data.restaurant_currency || "AED",
-                                timezone: res.data.restaurant_timezone || "Asia/Dubai",
-                                country_code: res.data.restaurant_country_code || "+971",
-                                default_payment_provider: res.data.default_payment_provider || "stripe",
+                                region: res.data.restaurant_region || resolvedRegion,
+                                currency: res.data.restaurant_currency || regionSettings.currency,
+                                timezone: res.data.restaurant_timezone || regionSettings.timezone,
+                                country_code: res.data.restaurant_country_code || regionSettings.countryCode,
+                                default_payment_provider:
+                                    res.data.default_payment_provider || regionSettings.defaultPaymentProvider,
                             },
                         ],
                     },
@@ -82,7 +86,7 @@ export default function TableLanding() {
         };
 
         resolveTable();
-    }, [restaurantId, tableToken, searchParams, navigate]);
+    }, [restaurantId, tableToken, searchParams]);
 
     if (error) {
         return (
