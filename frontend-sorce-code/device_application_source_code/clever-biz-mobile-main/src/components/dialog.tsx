@@ -1,12 +1,24 @@
 import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
 import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axios";
-import { useCart } from "../context/CartContext";
+import { type CartItem, useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { API_BASE_URL } from "../lib/axios";
 import { getSessionCurrencyCode } from "../utils/regionSession";
+import UpsellBottomSheet from "./UpsellBottomSheet";
+import {
+  fetchUpsellSuggestions,
+  logUpsellEvent,
+  logUpsellShownBatch,
+  summarizeCart,
+  type UpsellSuggestion,
+} from "../lib/upsellApi";
+import {
+  markUpsellItemDismissed,
+  trackUpsellCategoryDecline,
+} from "../lib/upsellSession";
 
 interface ModalProps {
   isOpen: boolean;
@@ -38,7 +50,10 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [showVideo, setShowVideo] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isImageLoading, setIsImageLoading] = useState(true);
-  const { addToCart } = useCart();
+  const [upsellOpen, setUpsellOpen] = useState(false);
+  const [upsellSuggestions, setUpsellSuggestions] = useState<UpsellSuggestion[]>([]);
+  const [upsellCartMetrics, setUpsellCartMetrics] = useState({ cartValueAtTime: 0, cartItemCount: 0 });
+  const { cart, addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
 
   const truncatedName = item?.item_name || "Loading...";
@@ -59,13 +74,84 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     }
   }, [isOpen, itemId]);
 
-  const handleAddToCart = () => {
+  const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
+    id: suggestion.id,
+    item_name: suggestion.item_name,
+    price: String(suggestion.price ?? "0"),
+    description: suggestion.description || "",
+    slug: suggestion.slug || "",
+    category: Number(suggestion.category || 0),
+    restaurant: Number(suggestion.restaurant || 0),
+    category_name: suggestion.category_name || "",
+    image1: suggestion.image1 || "",
+    availability: suggestion.availability !== false,
+    video: suggestion.video || "",
+    restaurant_name: suggestion.restaurant_name || "",
+  });
+
+  const handleAddToCart = async () => {
     if (item) {
       addToCart(item, quantity);
       toast.success(`Added ${quantity} to cart!`);
       close();
       if (onAddToCart) onAddToCart();
+
+      const nextCart = [...cart, { ...item, quantity }];
+      const metrics = summarizeCart(nextCart);
+      setUpsellCartMetrics(metrics);
+
+      try {
+        const suggestions = await fetchUpsellSuggestions({
+          triggerPoint: "add_to_cart",
+          sourceItemId: Number(item.id),
+          limit: 2,
+        });
+        if (!suggestions.length) return;
+        setUpsellSuggestions(suggestions);
+        setUpsellOpen(true);
+        await logUpsellShownBatch({
+          triggerPoint: "add_to_cart",
+          suggestions,
+          cartValueAtTime: metrics.cartValueAtTime,
+          cartItemCount: metrics.cartItemCount,
+          metadata: { source_item_id: item.id, source_category_id: item.category },
+        });
+      } catch {
+        // Non-blocking by design.
+      }
     }
+  };
+
+  const acceptUpsellSuggestion = async (suggestion: UpsellSuggestion) => {
+    addToCart(toCartItemFromUpsell(suggestion), 1);
+    setUpsellOpen(false);
+    setUpsellSuggestions([]);
+    toast.success(`${suggestion.item_name} added to cart`);
+    await logUpsellEvent({
+      triggerPoint: "add_to_cart",
+      action: "accepted",
+      suggestion,
+      cartValueAtTime: upsellCartMetrics.cartValueAtTime,
+      cartItemCount: upsellCartMetrics.cartItemCount,
+    });
+  };
+
+  const dismissUpsellSuggestion = async (suggestion: UpsellSuggestion) => {
+    if (suggestion.id) {
+      markUpsellItemDismissed(suggestion.id);
+    }
+    if (suggestion.category) {
+      trackUpsellCategoryDecline(suggestion.category);
+    }
+    setUpsellOpen(false);
+    setUpsellSuggestions([]);
+    await logUpsellEvent({
+      triggerPoint: "add_to_cart",
+      action: "dismissed",
+      suggestion,
+      cartValueAtTime: upsellCartMetrics.cartValueAtTime,
+      cartItemCount: upsellCartMetrics.cartItemCount,
+    });
   };
 
   return (
@@ -234,6 +320,17 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
         </DialogPanel>
       </div>
+      <UpsellBottomSheet
+        open={upsellOpen}
+        suggestions={upsellSuggestions}
+        currencyCode={currencyCode}
+        onAccept={acceptUpsellSuggestion}
+        onDismiss={dismissUpsellSuggestion}
+        onClose={() => {
+          setUpsellOpen(false);
+          setUpsellSuggestions([]);
+        }}
+      />
     </Dialog>
   );
 };

@@ -12,14 +12,85 @@ import toast from "react-hot-toast";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
-import axiosInstance from "../lib/axios";
+import axiosInstance, { API_BASE_URL } from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
-import { Search, MapPin } from "lucide-react";
+import { Search } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
 import { Footer } from "../components/Footer";
+import { trackUpsellCategoryView } from "../lib/upsellSession";
+
+type BrandingSnapshot = {
+  brandingEnabled?: boolean;
+  restaurantName?: string;
+  logoDataUrl?: string;
+  coverImageDataUrl?: string;
+};
+
+type BrandApiConfig = {
+  brandingEnabled?: boolean;
+  restaurantName?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+};
+
+type BrandingView = {
+  name: string;
+  logo: string;
+  cover: string;
+  brandingEnabled: boolean;
+  hasConfiguredContent: boolean;
+};
+
+function readBrandingSnapshot(): BrandingSnapshot {
+  try {
+    const raw = localStorage.getItem("customer_branding");
+    if (!raw) return {};
+    return JSON.parse(raw) as BrandingSnapshot;
+  } catch {
+    return {};
+  }
+}
+
+async function fetchBrandConfig(restaurantId: number | null): Promise<BrandApiConfig | null> {
+  if (!restaurantId) return null;
+  try {
+    const response = await fetch(`${API_BASE_URL}api/brand-config/?restaurant_id=${restaurantId}`);
+    if (!response.ok) return null;
+    return (await response.json()) as BrandApiConfig;
+  } catch {
+    return null;
+  }
+}
+
+function getBrandingView(userInfo: any, remoteBranding?: BrandApiConfig | null): BrandingView {
+  const branding = readBrandingSnapshot();
+  const restaurant = userInfo?.user?.restaurants?.[0] || {};
+  const configuredName = String(remoteBranding?.restaurantName || branding.restaurantName || "").trim();
+  const restaurantLogo = String(restaurant.logo || restaurant.logo_url || restaurant.image || "").trim();
+  const restaurantCover = String(restaurant.cover_image || restaurant.coverImage || "").trim();
+  const logo = String(remoteBranding?.logoUrl || branding.logoDataUrl || restaurantLogo || "").trim();
+  const cover = String(remoteBranding?.coverImageUrl || branding.coverImageDataUrl || restaurantCover || "").trim();
+  const fallbackRestaurantName = String(
+    restaurant.resturent_name || restaurant.restaurant_name || ""
+  ).trim();
+  const brandingEnabled = Boolean(
+    remoteBranding?.brandingEnabled ?? branding.brandingEnabled ?? false
+  );
+  const hasConfiguredContent = Boolean(
+    logo || cover || (configuredName && configuredName !== "My Restaurant")
+  );
+
+  return {
+    name: configuredName || fallbackRestaurantName || "Restaurant",
+    logo,
+    cover,
+    brandingEnabled,
+    hasConfiguredContent,
+  };
+}
 
 const LayoutDashboard = () => {
   const location = useLocation();
@@ -120,6 +191,16 @@ const LayoutDashboard = () => {
 
   const [userInfo, setUserInfo] = useState<any>(null);
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
+  const [brandingView, setBrandingView] = useState<BrandingView>({
+    name: "",
+    logo: "",
+    cover: "",
+    brandingEnabled: false,
+    hasConfiguredContent: false,
+  });
+  const [showBrandSplash, setShowBrandSplash] = useState(false);
+
+  const hasBranding = brandingView.brandingEnabled || brandingView.hasConfiguredContent;
 
   useEffect(() => {
     const fetchUserInfo = () => {
@@ -171,6 +252,53 @@ const LayoutDashboard = () => {
       bootstrapSession();
     }
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncBranding = async () => {
+      let parsedUserInfo: any = userInfo;
+      try {
+        const rawUserInfo = localStorage.getItem("userInfo");
+        if (rawUserInfo) parsedUserInfo = JSON.parse(rawUserInfo);
+      } catch {
+        // keep previous value
+      }
+
+      const resolvedRestaurantId = parsedUserInfo?.user?.restaurants?.[0]?.id
+        ? Number(parsedUserInfo.user.restaurants[0].id)
+        : null;
+      const remoteBranding = await fetchBrandConfig(resolvedRestaurantId);
+      const nextBranding = getBrandingView(parsedUserInfo, remoteBranding);
+
+      if (isMounted) {
+        setBrandingView(nextBranding);
+      }
+    };
+
+    syncBranding();
+    const interval = window.setInterval(syncBranding, 4000);
+
+    window.addEventListener("storage", syncBranding as EventListener);
+    window.addEventListener("branding-updated", syncBranding as EventListener);
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+      window.removeEventListener("storage", syncBranding as EventListener);
+      window.removeEventListener("branding-updated", syncBranding as EventListener);
+    };
+  }, [userInfo]);
+
+  useEffect(() => {
+    if (!hasBranding) {
+      setShowBrandSplash(false);
+      return;
+    }
+
+    setShowBrandSplash(true);
+    const timer = window.setTimeout(() => setShowBrandSplash(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [hasBranding]);
 
 
   useEffect(() => {
@@ -255,6 +383,18 @@ const LayoutDashboard = () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
   }, [search, selectedCategory, categories, lastUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (selectedCategory !== null && categories[selectedCategory]?.id) {
+      trackUpsellCategoryView(categories[selectedCategory].id);
+    }
+  }, [selectedCategory, categories]);
+
+  useEffect(() => {
+    if (selectedSubCategory !== null) {
+      trackUpsellCategoryView(selectedSubCategory);
+    }
+  }, [selectedSubCategory]);
 
   // Memoized filtered items to avoid re-computing on every render
   const filteredItems = useMemo(() => {
@@ -353,6 +493,25 @@ const LayoutDashboard = () => {
 
   return (
     <CartProvider>
+      {showBrandSplash && hasBranding && (
+        <div className="fixed inset-0 z-[120] bg-slate-950">
+          {brandingView.cover ? (
+            <img src={brandingView.cover} alt="Brand splash" className="absolute inset-0 w-full h-full object-cover opacity-45" />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/40 to-slate-950/90" />
+          <div className="relative h-full flex flex-col items-center justify-center px-6 text-center">
+            {brandingView.logo ? (
+              <img src={brandingView.logo} alt="Brand logo" className="w-20 h-20 rounded-2xl object-cover border border-white/20 mb-4" />
+            ) : (
+              <Logo className="scale-110 mb-4" />
+            )}
+            <p className="text-white text-2xl font-semibold tracking-tight">
+              {brandingView.name || "Welcome"}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
 
         {/* Main Content Area */}
@@ -365,7 +524,15 @@ const LayoutDashboard = () => {
                 <div className="px-4 py-3 flex items-center justify-between">
                   {/* Logo */}
                   <div className="block shrink-0">
-                    <Logo />
+                    {hasBranding ? (
+                      brandingView.logo ? (
+                        <img src={brandingView.logo} alt="Brand logo" className="h-9 w-auto max-w-[140px] object-contain" />
+                      ) : (
+                        <p className="font-semibold text-base text-foreground max-w-[150px] truncate">{brandingView.name || "Restaurant"}</p>
+                      )
+                    ) : (
+                      <Logo />
+                    )}
                   </div>
 
                   {/* Table Info */}
@@ -376,6 +543,20 @@ const LayoutDashboard = () => {
                     </div>
                   )}
                 </div>
+
+                {hasBranding && (brandingView.cover || brandingView.name) && (
+                  <div className="px-4 pb-2">
+                    <div className="h-20 rounded-2xl overflow-hidden relative border border-gray-200/70 bg-slate-100">
+                      {brandingView.cover ? (
+                        <img src={brandingView.cover} alt="Brand cover" className="w-full h-full object-cover" />
+                      ) : null}
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/45 to-black/10" />
+                      <div className="absolute inset-0 px-3 py-2 flex items-end">
+                        <p className="text-white text-sm font-semibold truncate">{brandingView.name || "Restaurant"}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Search Bar */}
                 <div className="px-4 mt-1 mb-3">

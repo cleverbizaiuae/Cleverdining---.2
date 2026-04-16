@@ -1,5 +1,6 @@
 // src/lib/axios.ts
 import axios from "axios";
+import { captureApiFailure } from "../monitoring/sentry";
 const TOKENS = {
   ACCESS_TOKEN: "accessToken",
   REFRESH_TOKEN: "refreshToken",
@@ -17,6 +18,7 @@ export const API_BASE_URL = `${rawApiBase.replace(/\/+$/, "")}/`;
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -42,6 +44,13 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    captureApiFailure(error, {
+      feature: "api",
+      endpoint: originalRequest?.url,
+      method: originalRequest?.method,
+      status: error?.response?.status,
+    });
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

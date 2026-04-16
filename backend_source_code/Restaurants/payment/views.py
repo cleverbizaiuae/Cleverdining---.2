@@ -17,6 +17,7 @@ from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
 from message.models import ChatMessage
 from restaurant.region_config import get_region_config
+from .split_bill import build_bill_summary, mark_payment_failed
 
 channel_layer = get_channel_layer()
 
@@ -188,6 +189,8 @@ class CreateBulkCheckoutSessionView(APIView):
         provider = request.data.get('provider') 
         if not provider:
             provider = request.query_params.get('provider')
+        origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
+        default_success_url = f'{origin}/dashboard/success/'
 
         # 4. Processing
         if provider == 'cash':
@@ -263,7 +266,7 @@ class CreateBulkCheckoutSessionView(APIView):
                 print(f"[CASH-PAYMENT] ✅ Success | DB updated, WS notifications attempted", file=sys.stderr)
                 
                 return Response({
-                    'url': f"{success_url}?session_id=bulk_cash_{session.id}&amount={total_amount}",
+                    'url': f"{default_success_url}?session_id=bulk_cash_{session.id}&amount={total_amount}",
                     'provider': 'cash'
                 })
 
@@ -273,7 +276,6 @@ class CreateBulkCheckoutSessionView(APIView):
                 return Response({'error': f'Cash payment failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         else:
-             origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
              backend_origin = f"{request.scheme}://{request.get_host()}"
              if provider == 'payme':
                  # Payme should return through backend callback so we can verify and then redirect.
@@ -402,9 +404,56 @@ class CreateCheckoutSessionView(APIView):
             except ValueError:
                 return Response({'error': 'Invalid tip amount'}, status=status.HTTP_400_BAD_REQUEST)
 
+        split_type = str(request.data.get("split_type") or "full_bill").strip().lower()
+        split_data = None
+        if split_type in {"full_bill", "evenly", "my_items"}:
+            split_data = {
+                "split_type": split_type,
+                "split_count": request.data.get("split_count"),
+                "selected_items": request.data.get("selected_items") or [],
+                "participant": request.data.get("participant"),
+                "payer_id_or_name": request.data.get("payer_id_or_name"),
+            }
+
         try:
-            result = PaymentService.create_payment(order, success_url, cancel_url, provider=provider)
+            result = PaymentService.create_payment(
+                order,
+                success_url,
+                cancel_url,
+                provider=provider,
+                split_data=split_data,
+            )
             return Response(result)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SplitBillSummaryView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request, order_id):
+        session_token = request.headers.get('X-Guest-Session-Token')
+        if not session_token:
+            session_token = request.query_params.get('guest_token')
+        if not session_token:
+            return Response({'error': 'Missing session token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from device.models import GuestSession
+        session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
+        if not session:
+            return Response({'error': 'Invalid or expired session'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = Order.objects.get(id=order_id, device=session.device)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            payload = build_bill_summary(order)
+            return Response(payload)
         except ValidationError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -522,7 +571,8 @@ class PayTabsReturnView(APIView):
             else:
                  # Failed/Cancelled
                  payment.status = 'failed' if resp_status == 'E' else 'cancelled'
-                 payment.save()
+                 payment.save(update_fields=["status", "updated_at"])
+                 mark_payment_failed(payment)
                  from django.shortcuts import redirect
                  return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason={resp_message}')
         
@@ -604,6 +654,7 @@ class PaymeReturnView(APIView):
 
         payment.status = "failed"
         payment.save(update_fields=["status", "updated_at"])
+        mark_payment_failed(payment)
         return self._redirect_failed(status_value or "payme_failed")
 
     def get(self, request):

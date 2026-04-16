@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../lib/axios";
+import { resetUpsellSession, trackUpsellCategoryRemoved } from "../lib/upsellSession";
 
 export type CartItem = {
   id: number;
@@ -189,7 +190,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const removeFromCart = React.useCallback(async (id: number) => {
-    setCart((prev) => prev.filter((i) => i.id !== id));
+    setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target?.category) {
+        trackUpsellCategoryRemoved(target.category);
+      }
+      return prev.filter((i) => i.id !== id);
+    });
     // Note: Backend doesn't have remove item endpoint yet.
   }, []);
 
@@ -226,6 +233,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearCart = React.useCallback(async () => {
     setCart([]);
+    resetUpsellSession();
     const sessionToken = localStorage.getItem("guest_session_token");
     localStorage.removeItem("cart");
     if (sessionToken) {

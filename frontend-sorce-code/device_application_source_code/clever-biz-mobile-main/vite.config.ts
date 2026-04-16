@@ -6,6 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // Build version for cache busting
 const BUILD_VERSION = Date.now().toString(36);
+const isProd = process.env.NODE_ENV === "production";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -139,8 +140,14 @@ export default defineConfig({
           "vendor-core": ["react", "react-dom", "react-router-dom"],
           "vendor-ui": ["react-hot-toast", "lucide-react", "motion"],
           "vendor-utils": ["axios"],
+          "vendor-monitoring": ["@sentry/react"],
         }
       },
     },
   },
+  esbuild: isProd
+    ? {
+        drop: ["console", "debugger"],
+      }
+    : undefined,
 });

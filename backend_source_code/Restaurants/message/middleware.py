@@ -4,11 +4,23 @@ from asgiref.sync import sync_to_async
 from rest_framework_simplejwt.tokens import AccessToken
 import jwt
 from urllib.parse import parse_qs
+import logging
+
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover - sentry is optional
+    sentry_sdk = None
+
+logger = logging.getLogger("message.websocket")
 
 class JWTAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
         import sys
         print(f"DEBUG: JWTAuthMiddleware called. Query: {scope.get('query_string')}", file=sys.stderr)
+        logger.info(
+            "WebSocket auth middleware invoked",
+            extra={"event_type": "websocket_auth", "status": "success"},
+        )
         headers = dict(scope["headers"])
         # print(f"DEBUG: Headers: {headers}", file=sys.stderr) # Be careful with sensitive info
         token = None
@@ -101,10 +113,28 @@ class JWTAuthMiddleware(BaseMiddleware):
                         scope["user_info"] = await get_user_info(user)
                     except Exception as e:
                         print(f"DEBUG: Authentication failed in middleware: {e}", file=sys.stderr)
+                        logger.warning(
+                            "WebSocket token authentication failed",
+                            extra={
+                                "event_type": "websocket_auth",
+                                "status": "failure",
+                                "error_message": str(e),
+                            },
+                        )
+                        if sentry_sdk:
+                            sentry_sdk.capture_exception(e)
                         # Don't crash, just set user to None
                         scope["user"] = None
         else:
             print("DEBUG: No token found in request")
+            logger.warning(
+                "WebSocket connection without token",
+                extra={
+                    "event_type": "websocket_auth",
+                    "status": "failure",
+                    "error_message": "Missing token",
+                },
+            )
             scope["user"] = None
 
         # Inject selected protocol into scope for returning in handshake
@@ -124,4 +154,3 @@ class ProtocolAcceptMiddleware:
             await send(message)
 
         return await self.app(scope, receive, wrapped_send)
-

@@ -19,6 +19,15 @@ class PaymentSerializer(serializers.ModelSerializer):
     table_name = serializers.SerializerMethodField()
     table_id = serializers.SerializerMethodField()
     customer_name = serializers.CharField(default="Guest", read_only=True)
+    bill_id = serializers.IntegerField(source='bill.id', read_only=True)
+    bill_total_amount = serializers.DecimalField(source='bill.total_amount', max_digits=12, decimal_places=2, read_only=True)
+    bill_paid_amount = serializers.DecimalField(source='bill.paid_amount', max_digits=12, decimal_places=2, read_only=True)
+    bill_remaining_amount = serializers.DecimalField(source='bill.remaining_amount', max_digits=12, decimal_places=2, read_only=True)
+    bill_payment_status = serializers.CharField(source='bill.payment_status', read_only=True)
+    split_method = serializers.CharField(source='bill.split_method', read_only=True)
+    split_count = serializers.IntegerField(source='bill.split_count', read_only=True)
+    per_person_amount = serializers.DecimalField(source='bill.per_person_amount', max_digits=12, decimal_places=2, read_only=True)
+    allocation_details = serializers.SerializerMethodField()
     
     def get_table_name(self, obj):
         try:
@@ -35,12 +44,32 @@ class PaymentSerializer(serializers.ModelSerializer):
         except:
             pass
         return None
+
+    def get_allocation_details(self, obj):
+        details = []
+        for alloc in obj.allocations.select_related("bill_item").all().order_by("id"):
+            details.append(
+                {
+                    "allocation_id": alloc.id,
+                    "allocation_type": alloc.allocation_type,
+                    "participant_id": alloc.participant_id,
+                    "participant_status": alloc.participant_status,
+                    "allocated_amount": str(alloc.allocated_amount),
+                    "allocated_quantity": str(alloc.allocated_quantity),
+                    "item_id": alloc.bill_item_id,
+                    "item_name": alloc.bill_item.item_name if alloc.bill_item else None,
+                }
+            )
+        return details
     
     class Meta:
         model = Payment
         fields = [
             'id', 'order_id', 'table_name', 'table_id', 'customer_name',
             'amount', 'provider', 'status', 'transaction_id',
+            'split_type', 'payer_id_or_name', 'bill_id', 'bill_total_amount',
+            'bill_paid_amount', 'bill_remaining_amount', 'bill_payment_status',
+            'split_method', 'split_count', 'per_person_amount', 'allocation_details',
             'created_at', 'updated_at', 'created_by',
             'confirmed_at', 'cancelled_at', 'cancel_reason'
         ]
@@ -155,6 +184,11 @@ class PaymentAdminViewSet(ModelViewSet):
         This is NOT saved to the database - it's a read-only derived object.
         """
         try:
+            try:
+                bill = order.bill
+            except Exception:
+                bill = None
+
             table_name = "Online"
             table_id = None
             if order.device:
@@ -171,6 +205,17 @@ class PaymentAdminViewSet(ModelViewSet):
                 'provider': 'cash',
                 'status': 'completed',
                 'transaction_id': f"derived_order_{order.id}",
+                'split_type': 'full_bill',
+                'payer_id_or_name': '',
+                'bill_id': getattr(bill, "id", None),
+                'bill_total_amount': str(getattr(bill, "total_amount", order.total_price)),
+                'bill_paid_amount': str(getattr(bill, "paid_amount", order.total_price)),
+                'bill_remaining_amount': str(getattr(bill, "remaining_amount", 0)),
+                'bill_payment_status': getattr(bill, "payment_status", "fully_paid"),
+                'split_method': getattr(bill, "split_method", "full_bill"),
+                'split_count': getattr(bill, "split_count", None),
+                'per_person_amount': str(getattr(bill, "per_person_amount", 0)),
+                'allocation_details': [],
                 'created_at': order.created_time.isoformat() if order.created_time else None,
                 'updated_at': order.updated_time.isoformat() if order.updated_time else None,
                 'created_by': 'derived',
@@ -307,16 +352,19 @@ class PaymentAdminViewSet(ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="payments_{timezone.now().strftime("%Y%m%d")}.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['ID', 'Order ID', 'Table', 'Customer', 'Amount', 'Provider', 'Status', 'Transaction ID', 'Date', 'Confirmed At'])
+        writer.writerow(['ID', 'Order ID', 'Table', 'Customer', 'Amount', 'Provider', 'Split Type', 'Payer', 'Bill Status', 'Payment Status', 'Transaction ID', 'Date', 'Confirmed At'])
         
         for payment in queryset:
             writer.writerow([
                 payment.id,
                 payment.order.id,
-                payment.order.table.table_number if payment.order.table else "Online",
-                payment.order.customer.name if payment.order.customer else "Guest",
+                payment.order.device.table_name if getattr(payment.order, "device", None) else "Online",
+                "Guest",
                 payment.amount,
                 payment.provider,
+                payment.split_type,
+                payment.payer_id_or_name,
+                payment.bill.payment_status if payment.bill else "",
                 payment.status,
                 payment.transaction_id,
                 payment.created_at.strftime("%Y-%m-%d %H:%M"),
@@ -451,4 +499,3 @@ class PaymentAdminViewSet(ModelViewSet):
             "remaining": remaining,
             "run_again": remaining > 0
         })
-

@@ -1213,7 +1213,64 @@ class CartViewSet(viewsets.ModelViewSet):
         from .upsell import build_cart_upsell_suggestions
         from item.serializers import ItemSerializer
 
-        raw_suggestions = build_cart_upsell_suggestions(cart, limit=limit)
+        trigger_point = request.query_params.get('trigger_point', 'cart')
+        try:
+            source_item_id = int(request.query_params.get('source_item_id')) if request.query_params.get('source_item_id') else None
+        except (TypeError, ValueError):
+            source_item_id = None
+
+        # Compact signal transport over query params:
+        # category_views=1:2,5:1
+        # category_declines=3:2
+        # removed_categories=4,7
+        def _parse_id_counts(raw_value):
+            parsed = {}
+            if not raw_value:
+                return parsed
+            for chunk in str(raw_value).split(','):
+                value = chunk.strip()
+                if not value:
+                    continue
+                if ':' in value:
+                    category_id_raw, count_raw = value.split(':', 1)
+                    try:
+                        parsed[int(category_id_raw)] = int(count_raw)
+                    except (TypeError, ValueError):
+                        continue
+                else:
+                    try:
+                        parsed[int(value)] = 1
+                    except (TypeError, ValueError):
+                        continue
+            return parsed
+
+        def _parse_id_list(raw_value):
+            values = []
+            if not raw_value:
+                return values
+            for chunk in str(raw_value).split(','):
+                value = chunk.strip()
+                if not value:
+                    continue
+                try:
+                    values.append(int(value))
+                except (TypeError, ValueError):
+                    continue
+            return values
+
+        session_signals = {
+            'category_views': _parse_id_counts(request.query_params.get('category_views')),
+            'category_declines': _parse_id_counts(request.query_params.get('category_declines')),
+            'recently_removed_category_ids': _parse_id_list(request.query_params.get('removed_categories')),
+        }
+
+        raw_suggestions = build_cart_upsell_suggestions(
+            cart,
+            limit=limit,
+            trigger_point=trigger_point,
+            source_item_id=source_item_id,
+            session_signals=session_signals,
+        )
         if not raw_suggestions:
             return Response({'cart_id': cart.id, 'suggestions': []})
 
@@ -1230,6 +1287,7 @@ class CartViewSet(viewsets.ModelViewSet):
                 'upsell_rule': meta['rule'],
                 'upsell_message': meta['message'],
                 'upsell_score': meta['score'],
+                'upsell_stage': meta.get('stage'),
             })
 
         return Response({

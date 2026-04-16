@@ -12,6 +12,7 @@ STATUS =(
 
 PAYMENT_STATUS = [
     ('unpaid', 'Unpaid'),
+    ('partially_paid', 'Partially Paid'),
     ('pending_cash', 'Pending Cash'), # New status
     ('paid', 'Paid'),
 ]

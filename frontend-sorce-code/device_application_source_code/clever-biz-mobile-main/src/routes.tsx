@@ -1,20 +1,23 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 
-import CancelPage from "./pages/CancelPage";
-import CheckoutPage from "./pages/CheckoutPage";
-import LayoutDashboard from "./pages/layout_dashboard";
-import ScreenOrders from "./pages/order/screen_orders";
-import ScreenCart from "./pages/screen_cart";
-import ScreenHome from "./pages/screen_home";
-
-import ScreenMessage from "./pages/screen_message";
-import SuccessPage from "./pages/SuccessPage";
 import { PrivateRouteGuard } from "./components/route-guard";
-import { NotFoundPage } from "./pages/not-found";
-import TableEntry from "./pages/TableEntry";
-import TableLanding from "./pages/TableLanding";
-import ScreenScanTable from "./pages/screen_scan_table";
+const CancelPage = lazy(() => import("./pages/CancelPage"));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const LayoutDashboard = lazy(() => import("./pages/layout_dashboard"));
+const ScreenOrders = lazy(() => import("./pages/order/screen_orders"));
+const ScreenCart = lazy(() => import("./pages/screen_cart"));
+const ScreenHome = lazy(() => import("./pages/screen_home"));
+const ScreenMessage = lazy(() => import("./pages/screen_message"));
+const SuccessPage = lazy(() => import("./pages/SuccessPage"));
+const NotFoundPage = lazy(() => import("./pages/not-found").then((m) => ({ default: m.NotFoundPage })));
+const TableEntry = lazy(() => import("./pages/TableEntry"));
+const TableLanding = lazy(() => import("./pages/TableLanding"));
+const ScreenScanTable = lazy(() => import("./pages/screen_scan_table"));
+
+const RouteLoader = () => (
+  <div className="flex items-center justify-center h-screen text-slate-500">Loading...</div>
+);
 
 function App() {
   const [searchParams] = useSearchParams();
@@ -52,7 +55,8 @@ function App() {
   }, [searchParams, navigate, location.pathname]);
 
   return (
-    <Routes>
+    <Suspense fallback={<RouteLoader />}>
+      <Routes>
       <Route path="/" element={<div className="flex items-center justify-center h-screen">Loading...</div>} />
       <Route path="/scan-table" element={<ScreenScanTable />} />
       <Route path="/login" element={<TableLanding />} /> {/* Added for QR Code compatibility */}
@@ -73,8 +77,10 @@ function App() {
       </Route>
 
       <Route path="/table/:uuid" element={<TableEntry />} />
+      <Route path="/thankyou" element={<SuccessPage />} />
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 

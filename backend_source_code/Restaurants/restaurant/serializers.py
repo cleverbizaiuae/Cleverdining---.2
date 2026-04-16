@@ -1,7 +1,7 @@
 # serializers.py
 from rest_framework import serializers
 from accounts.models import User
-from restaurant.models import Restaurant
+from restaurant.models import Restaurant, BrandConfig
 from restaurant.region_config import resolve_region_defaults, normalize_region, get_region_config
 
 class RestaurantSerializer(serializers.ModelSerializer):
@@ -13,6 +13,52 @@ class RestaurantSerializer(serializers.ModelSerializer):
             'package', 'image', 'logo', 'owner', 'google_review_url',
             'qr_codes', 'table_count', 'payment_processor'
         ]
+
+
+class BrandConfigSerializer(serializers.ModelSerializer):
+    restaurantName = serializers.CharField(source='restaurant_name', required=False)
+    logoUrl = serializers.CharField(source='logo_url', allow_null=True, allow_blank=True, required=False)
+    coverImageUrl = serializers.CharField(source='cover_image_url', allow_null=True, allow_blank=True, required=False)
+    primaryColor = serializers.CharField(source='primary_color', required=False)
+    secondaryColor = serializers.CharField(source='secondary_color', allow_null=True, allow_blank=True, required=False)
+    accentColor = serializers.CharField(source='accent_color', allow_null=True, allow_blank=True, required=False)
+    themePreset = serializers.CharField(source='theme_preset', required=False)
+    fontPreset = serializers.CharField(source='font_preset', required=False)
+    brandingEnabled = serializers.BooleanField(source='branding_enabled', required=False)
+    instagramUrl = serializers.CharField(source='instagram_url', allow_null=True, allow_blank=True, required=False)
+    facebookUrl = serializers.CharField(source='facebook_url', allow_null=True, allow_blank=True, required=False)
+    tiktokUrl = serializers.CharField(source='tiktok_url', allow_null=True, allow_blank=True, required=False)
+    twitterUrl = serializers.CharField(source='twitter_url', allow_null=True, allow_blank=True, required=False)
+    websiteUrl = serializers.CharField(source='website_url', allow_null=True, allow_blank=True, required=False)
+    wifiName = serializers.CharField(source='wifi_name', allow_null=True, allow_blank=True, required=False)
+    wifiPassword = serializers.CharField(source='wifi_password', allow_null=True, allow_blank=True, required=False)
+    googleReviewUrl = serializers.CharField(required=False, allow_null=True, allow_blank=True, write_only=True)
+
+    class Meta:
+        model = BrandConfig
+        fields = [
+            'id',
+            'restaurantName',
+            'logoUrl',
+            'coverImageUrl',
+            'primaryColor',
+            'secondaryColor',
+            'accentColor',
+            'themePreset',
+            'fontPreset',
+            'tagline',
+            'brandingEnabled',
+            'instagramUrl',
+            'facebookUrl',
+            'tiktokUrl',
+            'twitterUrl',
+            'websiteUrl',
+            'wifiName',
+            'wifiPassword',
+            'googleReviewUrl',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'updated_at']
 
 class OwnerRegisterSerializer(serializers.ModelSerializer):
     # Restaurant inputs

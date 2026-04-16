@@ -125,7 +125,6 @@ const WebSocketProvider = ({ children }) => {
     setUnreadCount((prev) => {
       const resolved = typeof next === "function" ? (next as (p: number) => number)(prev) : next;
       const safeCount = Math.max(0, Number(resolved) || 0);
-      const nextTables = safeCount === 0 ? [] : unreadTables;
       if (safeCount === 0) {
         setUnreadTables([]);
       }
@@ -133,41 +132,29 @@ const WebSocketProvider = ({ children }) => {
       try {
         broadcastChannelRef.current?.postMessage({
           unreadCount: safeCount,
-          unreadTables: nextTables
+          unreadTables: safeCount === 0 ? [] : undefined,
         });
       } catch (e) { }
       return safeCount;
     });
-  }, [unreadTables]);
+  }, []);
 
   const clearUnreadForTable = useCallback((deviceId: string | number) => {
     const key = String(deviceId);
     setUnreadTables((prev) => {
-      const existing = prev.find((t) => String(t.deviceId) === key);
       const next = prev.filter((t) => String(t.deviceId) !== key);
-      if (existing && existing.unreadCount > 0) {
-        setUnreadCount((prevCount) => {
-          const safeCount = Math.max(0, prevCount - existing.unreadCount);
-          updateAppBadge(safeCount);
-          try {
-            broadcastChannelRef.current?.postMessage({
-              unreadCount: safeCount,
-              unreadTables: next,
-            });
-          } catch (e) { }
-          return safeCount;
+      const safeCount = next.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0);
+      setUnreadCount(safeCount);
+      updateAppBadge(safeCount);
+      try {
+        broadcastChannelRef.current?.postMessage({
+          unreadCount: safeCount,
+          unreadTables: next,
         });
-      } else {
-        try {
-          broadcastChannelRef.current?.postMessage({
-            unreadCount,
-            unreadTables: next,
-          });
-        } catch (e) { }
-      }
+      } catch (e) { }
       return next;
     });
-  }, [unreadCount]);
+  }, []);
 
   const incrementUnreadForTable = useCallback((deviceId: string | number, tableName?: string) => {
     const key = String(deviceId);
@@ -181,17 +168,15 @@ const WebSocketProvider = ({ children }) => {
         )
         : [...prev, { deviceId: key, tableName: tableName || `Table ${key}`, unreadCount: 1 }];
 
-      setUnreadCount((prevCount) => {
-        const safeCount = Math.max(0, prevCount + 1);
-        updateAppBadge(safeCount);
-        try {
-          broadcastChannelRef.current?.postMessage({
-            unreadCount: safeCount,
-            unreadTables: next,
-          });
-        } catch (e) { }
-        return safeCount;
-      });
+      const safeCount = next.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0);
+      setUnreadCount(safeCount);
+      updateAppBadge(safeCount);
+      try {
+        broadcastChannelRef.current?.postMessage({
+          unreadCount: safeCount,
+          unreadTables: next,
+        });
+      } catch (e) { }
       return next;
     });
   }, []);

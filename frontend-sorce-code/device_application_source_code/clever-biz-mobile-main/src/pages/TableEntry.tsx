@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import axiosInstance from "../lib/axios";
 import { ImSpinner6 } from "react-icons/im";
 import { getRegionConfig } from "../config/regionConfig";
+import { resetUpsellSession } from "../lib/upsellSession";
 
 const TableEntry = () => {
     const { uuid } = useParams();
@@ -70,6 +71,7 @@ const TableEntry = () => {
                 localStorage.removeItem("userInfo");
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem('cart');
+                resetUpsellSession();
                 // Clear chat/messages state for session isolation
                 localStorage.removeItem("chat_messages_cache");
                 localStorage.removeItem("newMessage");

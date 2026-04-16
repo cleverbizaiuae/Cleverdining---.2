@@ -5,6 +5,7 @@ import "./main.css";
 import { Toaster } from "react-hot-toast";
 import { WebSocketProvider } from "./components/WebSocketContext.tsx";
 import SocketProvider from "./components/SocketContext.tsx";
+import { initSentry } from "./monitoring/sentry.ts";
 
 // --- PWA Service Worker Lifecycle ---
 declare const __BUILD_VERSION__: string;
@@ -28,10 +29,12 @@ localStorage.setItem(STORED_VERSION_KEY, BUILD_VERSION);
 // Service Worker update handler
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.ready.then((registration) => {
-    // Check for updates periodically (every 60s)
+    // Check for updates periodically without spamming network.
     setInterval(() => {
-      registration.update();
-    }, 60 * 1000);
+      if (navigator.onLine) {
+        registration.update();
+      }
+    }, 15 * 60 * 1000);
 
     // Listen for new service worker
     registration.addEventListener('updatefound', () => {
@@ -76,6 +79,7 @@ function updateAppBadge(count: number) {
 
 // --- Render App ---
 const root = createRoot(document.getElementById("root")!);
+initSentry();
 
 root.render(
   <BrowserRouter>

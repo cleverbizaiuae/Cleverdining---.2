@@ -14,6 +14,7 @@ from payment.views import (
     PaymentWebhookView,
     PayTabsReturnView,
     PaymeReturnView,
+    SplitBillSummaryView,
 )
 from payment.wallet_views import WalletAvailabilityView, WalletPaymentConfirmView
 from restaurant.views import PublicRestaurantListView
@@ -43,6 +44,7 @@ urlpatterns = [
     path('payment/webhook/<str:provider>/', PaymentWebhookView.as_view(), name='payment_webhook'),
     path('payment/verify-checkout/', VerifyCheckoutPaymentView.as_view(), name='verify_checkout'), # Checkout.com verification
     path('create-checkout-session/<int:order_id>/', CreateCheckoutSessionView.as_view(), name='create_checkout_session'),
+    path('payment/bill-summary/<int:order_id>/', SplitBillSummaryView.as_view(), name='split_bill_summary'),
     path('create-bulk-checkout-session/', CreateBulkCheckoutSessionView.as_view(), name='create_bulk_checkout_session'),
     path('payment/paytabs/return/', PayTabsReturnView.as_view(), name='paytabs_return'),
     path('payment/payme/return/', PaymeReturnView.as_view(), name='payme_return'),

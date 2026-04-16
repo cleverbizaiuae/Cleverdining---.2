@@ -34,10 +34,12 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
 
 class OrderCreateSerializerFixed(serializers.ModelSerializer):
     order_items = OrderItemCreateSerializer(many=True)
+    notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    special_request = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
 
     class Meta:
         model = Order
-        fields = ['device', 'restaurant', 'order_items']
+        fields = ['device', 'restaurant', 'order_items', 'notes', 'special_request']
         extra_kwargs = {
             'device': {'read_only': True},
             'restaurant': {'read_only': True}
@@ -45,6 +47,10 @@ class OrderCreateSerializerFixed(serializers.ModelSerializer):
 
     def create(self, validated_data):
         order_items_data = validated_data.pop('order_items')
+        special_request = validated_data.pop('special_request', None)
+        notes = validated_data.get('notes')
+        if (notes is None or notes == '') and special_request:
+            validated_data['notes'] = special_request
         order = Order.objects.create(**validated_data)
         total = 0
         from rest_framework.exceptions import ValidationError
@@ -78,6 +84,9 @@ class OrderCreateSerializerFixed(serializers.ModelSerializer):
         # which happens even if we pop the field when calling super().update()
         if 'order_items' in validated_data:
             validated_data.pop('order_items')
+        special_request = validated_data.pop('special_request', None)
+        if special_request and not validated_data.get('notes'):
+            validated_data['notes'] = special_request
         
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -99,10 +108,14 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     payments = PaymentSerializer(many=True, read_only=True)
     restaurant_name = serializers.CharField(source='restaurant.resturent_name', read_only=True)
     google_review_url = serializers.CharField(source='restaurant.google_review_url', read_only=True, allow_null=True)
+    special_request = serializers.SerializerMethodField()
+
+    def get_special_request(self, obj):
+        return obj.notes or ""
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'tip_amount', 'tip_type', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'google_review_url']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'tip_amount', 'tip_type', 'notes', 'special_request', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'google_review_url']
 
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)

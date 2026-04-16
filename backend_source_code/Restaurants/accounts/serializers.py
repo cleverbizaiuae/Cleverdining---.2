@@ -43,7 +43,19 @@ class RestaurantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Restaurant
-        fields = ['id', 'resturent_name', 'location', 'phone_number', 'package', 'image']
+        fields = [
+            'id',
+            'resturent_name',
+            'location',
+            'region',
+            'currency',
+            'timezone',
+            'country_code',
+            'default_payment_provider',
+            'phone_number',
+            'package',
+            'image',
+        ]
 
     def get_image(self, obj):
         try:

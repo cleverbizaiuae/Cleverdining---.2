@@ -35,6 +35,25 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass
   </div>
 );
 
+const parseTimings = (notes: string | null | undefined): Record<string, string> => {
+  if (!notes) return {};
+  const timings: Record<string, string> = {};
+  const regex = /\[TIMING:([^=\]]+)=([^\]]+)\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(notes)) !== null) {
+    timings[match[1]] = match[2];
+  }
+  return timings;
+};
+
+const cleanNotes = (notes: string | null | undefined): string => {
+  if (!notes) return "";
+  return notes
+    .replace(/\[TIMING:[^\]]+\]/g, "")
+    .replace(/\[Drinks:[^\]]+\]/g, "")
+    .trim();
+};
+
 const ScreenRestaurantOrderList = () => {
   const currencyCode = getActiveRestaurantCurrency();
   const regionCode = getActiveRestaurantRegion();
@@ -92,13 +111,30 @@ const ScreenRestaurantOrderList = () => {
     }
   }, [response, fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 
-  // GUARANTEED POLLING FALLBACK — 30s refresh regardless of WS status
+  // GUARANTEED POLLING FALLBACK — 5s refresh regardless of WS status
   useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      fetchOrders(ordersCurrentPage, ordersSearchQuery);
+    };
+
     const poll = setInterval(() => {
       console.log("[ORDERS-POLL] Auto-refreshing orders...");
-      fetchOrders(ordersCurrentPage, ordersSearchQuery);
-    }, 30000);
-    return () => clearInterval(poll);
+      tick();
+    }, 5000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    tick();
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -329,6 +365,23 @@ const ScreenRestaurantOrderList = () => {
   const handleStatusChange = async (orderId: number, newStatus: string) => {
     await updateOrderStatus(orderId, newStatus);
   };
+
+  const orderNotesSource =
+    selectedOrder?.notes ||
+    selectedOrder?.special_request ||
+    selectedOrder?.note ||
+    "";
+  const orderTimings = parseTimings(orderNotesSource);
+  const hasTimings = Object.keys(orderTimings).length > 0;
+  const timedEntries = Object.entries(orderTimings);
+  const nowItems = timedEntries.filter(([, value]) => value === "now").map(([name]) => name);
+  const withFoodItems = timedEntries
+    .filter(([, value]) => value === "with_food")
+    .map(([name]) => name);
+  const afterFoodItems = timedEntries
+    .filter(([, value]) => value === "after_food")
+    .map(([name]) => name);
+  const visibleNotes = cleanNotes(orderNotesSource);
 
   return (
     <div className="flex flex-col gap-6">
@@ -678,6 +731,44 @@ const ScreenRestaurantOrderList = () => {
 
             {/* Modal Body */}
             <div className="p-4 max-h-[60vh] overflow-y-auto">
+              {hasTimings && (
+                <div className="border border-slate-200 bg-slate-50 rounded-xl p-3 space-y-2 mb-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Service Instructions
+                  </p>
+                  {nowItems.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="text-[10px] font-semibold text-slate-700 border border-slate-300 bg-white px-2 py-0.5 rounded shrink-0 mt-0.5"
+                      >
+                        Now
+                      </span>
+                      <span className="text-xs font-medium text-slate-700">{nowItems.join(", ")}</span>
+                    </div>
+                  )}
+                  {withFoodItems.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="text-[10px] font-semibold text-slate-600 border border-slate-200 bg-white px-2 py-0.5 rounded shrink-0 mt-0.5"
+                      >
+                        With food
+                      </span>
+                      <span className="text-xs font-medium text-slate-700">{withFoodItems.join(", ")}</span>
+                    </div>
+                  )}
+                  {afterFoodItems.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="text-[10px] font-semibold text-slate-600 border border-slate-200 bg-white px-2 py-0.5 rounded shrink-0 mt-0.5"
+                      >
+                        After food
+                      </span>
+                      <span className="text-xs font-medium text-slate-700">{afterFoodItems.join(", ")}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Items */}
               <div className="space-y-3">
                 {/* Check both order_items (backend) and items (legacy/frontend) */}
@@ -705,11 +796,24 @@ const ScreenRestaurantOrderList = () => {
                 )}
               </div>
 
+              {orderNotesSource?.includes("[Drinks: serve immediately]") && (
+                <div className="mt-4 flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.8} />
+                  <span className="text-xs text-slate-600 font-medium">Drinks: Serve immediately</span>
+                </div>
+              )}
+              {orderNotesSource?.includes("[Drinks: serve with food]") && (
+                <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.8} />
+                  <span className="text-xs text-slate-600 font-medium">Drinks: Serve with food</span>
+                </div>
+              )}
+
               {/* Notes */}
-              {selectedOrder.special_request && (
+              {visibleNotes && (
                 <div className="mt-4 bg-yellow-50 border border-yellow-100 p-3 rounded-lg">
                   <p className="text-xs font-bold text-yellow-700 uppercase mb-1">Notes</p>
-                  <p className="text-xs text-yellow-800 italic">{selectedOrder.special_request}</p>
+                  <p className="text-xs text-yellow-800 italic">{visibleNotes}</p>
                 </div>
               )}
 

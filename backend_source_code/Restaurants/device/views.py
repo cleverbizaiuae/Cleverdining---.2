@@ -230,7 +230,7 @@ class CloseTableSessionView(APIView):
         # 3. Handle Active Orders
         # Mark unpaid/pending orders as cancelled
         from order.models import Order
-        unpaid_orders = Order.objects.filter(guest_session=session, payment_status__in=['unpaid', 'pending', 'pending_cash'])
+        unpaid_orders = Order.objects.filter(guest_session=session, payment_status__in=['unpaid', 'partially_paid', 'pending', 'pending_cash'])
         unpaid_orders.update(status='cancelled', payment_status='cancelled')
         
         # 4. Notify Dashboard & Customer (Safe Broadcast)

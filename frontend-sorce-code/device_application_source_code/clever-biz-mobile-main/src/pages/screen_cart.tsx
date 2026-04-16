@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Clock3, Coffee, X, Zap } from "lucide-react";
 import { useCart, type CartItem } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { API_BASE_URL } from "../lib/axios";
@@ -7,30 +7,68 @@ import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion"; // Corrected from "motion/react"
 import { useEffect, useMemo, useState } from "react";
 import { getSessionCurrencyCode } from "../utils/regionSession";
+import {
+  fetchUpsellSuggestions,
+  logUpsellEvent,
+  logUpsellShownBatch,
+  summarizeCart,
+  type UpsellSuggestion,
+  type UpsellTriggerPoint,
+} from "../lib/upsellApi";
+import { markUpsellItemDismissed, trackUpsellCategoryDecline } from "../lib/upsellSession";
 
-type UpsellSuggestion = {
-  id: number;
-  item_name: string;
-  price: string | number;
-  description?: string;
-  slug?: string;
-  category?: number;
-  restaurant?: number;
-  category_name?: string;
-  image1?: string;
-  availability?: boolean;
-  video?: string;
-  restaurant_name?: string;
-  upsell_rule?: string;
-  upsell_message?: string;
-  upsell_score?: number;
+const DRINK_CATS = ["c2"];
+const COFFEE_CATS = ["c6"];
+const DESSERT_CATS = ["c3"];
+
+type TimingValue = "now" | "with_food" | "after_food";
+
+const TIMING_LABEL: Record<TimingValue, string> = {
+  now: "Serve now",
+  with_food: "Serve with food",
+  after_food: "Serve after food",
 };
+
+function TimingButton({
+  label,
+  sublabel,
+  icon: Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  sublabel: string;
+  icon: typeof Clock3;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-center transition-all active:scale-95 ${
+        active
+          ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
+          : "bg-slate-50 text-slate-600 border-slate-200 hover:border-primary/40 hover:bg-primary/5"
+      }`}
+    >
+      <Icon className={`w-4 h-4 ${active ? "text-white" : "text-slate-400"}`} strokeWidth={1.8} />
+      <span className="text-xs font-bold leading-tight">{label}</span>
+      <span className={`text-[10px] leading-tight ${active ? "text-white/70" : "text-slate-400"}`}>
+        {sublabel}
+      </span>
+    </button>
+  );
+}
 
 const ScreenCart = () => {
   const navigate = useNavigate();
   const { cart, addToCart, removeFromCart, clearCart, incrementQuantity, decrementQuantity } = useCart();
   const [upsellSuggestions, setUpsellSuggestions] = useState<UpsellSuggestion[]>([]);
+  const [beforePaymentSuggestions, setBeforePaymentSuggestions] = useState<UpsellSuggestion[]>([]);
   const [upsellLoading, setUpsellLoading] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [itemTimings, setItemTimings] = useState<Record<string, TimingValue>>({});
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const toSafeNumber = (value: unknown): number => {
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
     if (typeof value === "string") {
@@ -38,6 +76,17 @@ const ScreenCart = () => {
       return Number.isFinite(parsed) ? parsed : 0;
     }
     return 0;
+  };
+
+  const getCategoryKey = (item: CartItem): string => {
+    if (Number.isInteger(item.category) && item.category > 0) {
+      return `c${item.category}`;
+    }
+    return String(item.category_name || "").trim().toLowerCase();
+  };
+
+  const setTiming = (itemId: string, timing: TimingValue) => {
+    setItemTimings((prev) => ({ ...prev, [itemId]: timing }));
   };
 
   const validCartItems = useMemo(
@@ -81,6 +130,7 @@ const ScreenCart = () => {
     () => validCartItems.map((item) => `${item.id}:${item.quantity}`).sort().join("|"),
     [validCartItems]
   );
+  const cartMetrics = useMemo(() => summarizeCart(validCartItems), [validCartItems]);
 
   useEffect(() => {
     const userInfo = localStorage.getItem("userInfo");
@@ -98,6 +148,22 @@ const ScreenCart = () => {
   }, []);
 
   useEffect(() => {
+    const validKeys = new Set(validCartItems.map((item) => String(item.id)));
+    setItemTimings((prev) => {
+      let changed = false;
+      const next: Record<string, TimingValue> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        if (validKeys.has(key)) {
+          next[key] = value;
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [validCartItems]);
+
+  useEffect(() => {
     let cancelled = false;
     const guestSessionToken = localStorage.getItem("guest_session_token");
     if (!guestSessionToken || validCartItems.length === 0) {
@@ -105,26 +171,31 @@ const ScreenCart = () => {
       return;
     }
 
-    const fetchUpsellSuggestions = async () => {
+    const fetchUpsellSuggestionsForTrigger = async (triggerPoint: UpsellTriggerPoint) => {
+      const targetSetter = triggerPoint === "before_payment" ? setBeforePaymentSuggestions : setUpsellSuggestions;
       setUpsellLoading(true);
       try {
-        const response = await axiosInstance.get("/api/customer/cart/upsell_suggestions/", {
-          params: { limit: 4 },
+        const rawSuggestions = await fetchUpsellSuggestions({
+          triggerPoint,
+          limit: triggerPoint === "cart" ? 4 : 2,
         });
-        const rawSuggestions = Array.isArray(response.data?.suggestions)
-          ? response.data.suggestions
-          : [];
         const cartIds = new Set(validCartItems.map((item) => item.id));
         const cleanedSuggestions = rawSuggestions
           .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
-          .slice(0, 4);
+          .slice(0, triggerPoint === "cart" ? 4 : 2);
 
         if (!cancelled) {
-          setUpsellSuggestions(cleanedSuggestions);
+          targetSetter(cleanedSuggestions);
+          await logUpsellShownBatch({
+            triggerPoint,
+            suggestions: cleanedSuggestions,
+            cartValueAtTime: cartMetrics.cartValueAtTime,
+            cartItemCount: cartMetrics.cartItemCount,
+          });
         }
       } catch (error) {
         if (!cancelled) {
-          setUpsellSuggestions([]);
+          targetSetter([]);
         }
       } finally {
         if (!cancelled) {
@@ -133,11 +204,12 @@ const ScreenCart = () => {
       }
     };
 
-    fetchUpsellSuggestions();
+    fetchUpsellSuggestionsForTrigger("cart");
+    fetchUpsellSuggestionsForTrigger("before_payment");
     return () => {
       cancelled = true;
     };
-  }, [cartFingerprint]);
+  }, [cartFingerprint, cartMetrics.cartItemCount, cartMetrics.cartValueAtTime, validCartItems]);
 
   const suggestionToCartItem = (item: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
     id: item.id,
@@ -154,16 +226,47 @@ const ScreenCart = () => {
     restaurant_name: item.restaurant_name || "",
   });
 
-  const addSuggestedItem = (item: UpsellSuggestion) => {
+  const addSuggestedItem = async (item: UpsellSuggestion, triggerPoint: UpsellTriggerPoint) => {
     addToCart(suggestionToCartItem(item), 1);
     toast.success(`${item.item_name} added to cart`);
+    await logUpsellEvent({
+      triggerPoint,
+      action: "accepted",
+      suggestion: item,
+      cartValueAtTime: cartMetrics.cartValueAtTime,
+      cartItemCount: cartMetrics.cartItemCount,
+    });
+  };
+
+  const dismissSuggestion = async (item: UpsellSuggestion, triggerPoint: UpsellTriggerPoint) => {
+    if (item.id) {
+      markUpsellItemDismissed(item.id);
+    }
+    if (item.category) {
+      trackUpsellCategoryDecline(item.category);
+    }
+    if (triggerPoint === "before_payment") {
+      setBeforePaymentSuggestions((prev) => prev.filter((entry) => entry.id !== item.id));
+    } else {
+      setUpsellSuggestions((prev) => prev.filter((entry) => entry.id !== item.id));
+    }
+    await logUpsellEvent({
+      triggerPoint,
+      action: "dismissed",
+      suggestion: item,
+      cartValueAtTime: cartMetrics.cartValueAtTime,
+      cartItemCount: cartMetrics.cartItemCount,
+    });
   };
 
   const handleOrderNow = async () => {
+    if (isSubmittingOrder) return;
+    setIsSubmittingOrder(true);
     try {
       const userInfo = localStorage.getItem("userInfo");
       if (!userInfo) {
         toast.error("User info not found");
+        setIsSubmittingOrder(false);
         return;
       }
 
@@ -181,27 +284,91 @@ const ScreenCart = () => {
         // Redundant check since useEffect handles it, but good for safety
         toast.error("Session token missing. Refreshing...");
         window.location.reload();
+        setIsSubmittingOrder(false);
         return;
       }
 
-      const orderData = {
+      const timingNotes = validCartItems
+        .filter((item) => itemTimings[String(item.id)])
+        .map((item) => {
+          const timingValue = itemTimings[String(item.id)];
+          const safeName = String(item.item_name || "").replace(/[\]=]/g, "").trim();
+          return safeName ? `[TIMING:${safeName}=${timingValue}]` : "";
+        })
+        .filter(Boolean)
+        .join("");
+
+      const specialRequest = "";
+      const mergedNotes = `${specialRequest}${timingNotes}`.trim();
+
+      const orderData: Record<string, unknown> = {
         restaurant,
         device,
         order_items: orderItems,
         guest_session_token: guestSessionToken,
       };
 
-      const response = await axiosInstance.post(
-        `/api/customer/orders/?guest_token=${guestSessionToken}`,
-        orderData,
-        {
-          headers: {
-            'X-Guest-Session-Token': guestSessionToken
+      if (mergedNotes) {
+        orderData.notes = mergedNotes;
+        orderData.special_request = mergedNotes;
+      }
+
+      let response;
+      try {
+        response = await axiosInstance.post(
+          `/api/customer/orders/?guest_token=${guestSessionToken}`,
+          orderData,
+          {
+            headers: {
+              "X-Guest-Session-Token": guestSessionToken,
+            },
           }
+        );
+      } catch (postError: any) {
+        // Backward-compatible fallback for backends that still reject notes/special_request
+        const responseData = postError?.response?.data;
+        const isTimingFieldValidationError =
+          responseData &&
+          typeof responseData === "object" &&
+          ("notes" in responseData ||
+            "special_request" in responseData ||
+            JSON.stringify(responseData).toLowerCase().includes("unknown field"));
+        if (
+          mergedNotes &&
+          postError?.response?.status === 400 &&
+          isTimingFieldValidationError
+        ) {
+          const fallbackOrderData = { ...orderData };
+          delete fallbackOrderData.notes;
+          delete fallbackOrderData.special_request;
+          response = await axiosInstance.post(
+            `/api/customer/orders/?guest_token=${guestSessionToken}`,
+            fallbackOrderData,
+            {
+              headers: {
+                "X-Guest-Session-Token": guestSessionToken,
+              },
+            }
+          );
+        } else {
+          throw postError;
         }
-      );
+      }
+
+      const placedAt = new Date().toISOString();
+      const placedItemsSnapshot = validCartItems.map((item) => ({
+        id: item.id,
+        item_id: item.id,
+        item_name: item.item_name,
+        name: item.item_name,
+        quantity: item.quantity,
+        price: toSafeNumber(item.price),
+      }));
+
       toast.success("Order placed successfully!");
       await clearCart();
+      setItemTimings({});
+      setShowReviewModal(false);
       // Double check cleanup
       if (guestSessionToken) {
         localStorage.removeItem(`cb:cart:${guestSessionToken}`);
@@ -209,6 +376,39 @@ const ScreenCart = () => {
 
       // Navigate to checkout with the new Order ID
       if (response.data && response.data.id) {
+        // Prime local orders storage so Orders page updates instantly after navigation.
+        const tableName = String(userData?.user?.restaurants?.[0]?.table_name || userData?.table_name || "").trim();
+        const deviceId = String(userData?.user?.restaurants?.[0]?.device_id || userData?.table_id || userData?.device_id || "").trim();
+        const tableStorageId = tableName || deviceId || "default";
+        const ordersStorageKey = `cleverbiz_orders_table_${tableStorageId}`;
+        const orderId = String(response.data.id);
+        const pendingOrder = {
+          id: `local-${orderId}`,
+          backendId: orderId,
+          items: placedItemsSnapshot,
+          total: totalCost,
+          total_price: totalCost,
+          status: "Pending",
+          paymentStatus: "Unpaid",
+          payment_status: "unpaid",
+          timestamp: placedAt,
+          created_time: placedAt,
+        };
+        try {
+          const existingRaw = localStorage.getItem(ordersStorageKey);
+          const existingOrders = existingRaw ? JSON.parse(existingRaw) : [];
+          if (Array.isArray(existingOrders)) {
+            const alreadyExists = existingOrders.some((order: any) => String(order?.backendId || "") === orderId);
+            if (!alreadyExists) {
+              localStorage.setItem(ordersStorageKey, JSON.stringify([pendingOrder, ...existingOrders]));
+            }
+          } else {
+            localStorage.setItem(ordersStorageKey, JSON.stringify([pendingOrder]));
+          }
+        } catch {
+          localStorage.setItem(ordersStorageKey, JSON.stringify([pendingOrder]));
+        }
+
         // Robust Persistence
         localStorage.setItem("pending_order_id", String(response.data.id));
         // Navigate to Orders Page (User requests this flow)
@@ -251,6 +451,8 @@ const ScreenCart = () => {
       }
 
       toast.error(errorMessage);
+    } finally {
+      setIsSubmittingOrder(false);
     }
   };
 
@@ -287,77 +489,162 @@ const ScreenCart = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -100 }}
                 transition={{ duration: 0.3 }}
-                className="flex items-center p-4 bg-white rounded-lg shadow-sm"
+                className="bg-white rounded-lg shadow-sm"
               >
-                {/* Image */}
-                {/* Image or Video Cover */}
-                <div className="w-20 h-20 shrink-0 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden relative">
-                  {(item.video && !item.image1) ? (
-                    <video
-                      src={resolveVideoUrl(item.video)}
-                      className="w-full h-full object-cover"
-                      muted
-                      playsInline
-                      webkit-playsinline="true"
-                      loop
-                      autoPlay
-                    />
-                  ) : (
-                    <img
-                      src={resolveImageUrl(item.image1)}
-                      alt={item.item_name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                      }}
-                    />
-                  )}
-                </div>
-                {/* Text & Price */}
-                <div className="ml-4 flex-1 min-w-0 flex flex-col justify-between">
-                  <div>
-                    <h2 className="text-primary font-medium leading-tight truncate">{item.item_name}</h2>
-                    <p className="text-primary/40 text-sm">{currencyCode} {item.price}</p>
-                  </div>
-                  {/* Quantity Controller with +/- buttons */}
-                  <div className="flex items-center space-x-2 mt-2">
-                    <button
-                      onClick={() => decrementQuantity(item.id)}
-                      className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full text-gray-700 font-bold transition-colors active:scale-90 duration-200"
-                    >
-                      −
-                    </button>
-                    <span className="font-semibold px-4">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => incrementQuantity(item.id)}
-                      className="w-8 h-8 flex items-center justify-center bg-primary hover:bg-primary/90 rounded-full text-white font-bold transition-colors active:scale-90 duration-200"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-                {/* Remove Button */}
-                <button
-                  className="ml-4 self-start text-gray-500 hover:text-gray-800"
-                  onClick={() => removeFromCart(item.id)}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    className="w-6 h-6"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                {(() => {
+                  const categoryKey = getCategoryKey(item);
+                  const categoryName = String(item.category_name || "").toLowerCase();
+                  const isDrink =
+                    DRINK_CATS.includes(categoryKey) ||
+                    (!COFFEE_CATS.includes(categoryKey) && /drink|beverage|juice|soda/.test(categoryName));
+                  const isCoffee =
+                    COFFEE_CATS.includes(categoryKey) || /coffee|espresso|latte|cappuccino/.test(categoryName);
+                  const isDessert =
+                    DESSERT_CATS.includes(categoryKey) || /dessert|sweet|cake|ice\s?cream/.test(categoryName);
+                  const needsTiming = isDrink || isCoffee || isDessert;
+                  const itemTiming = itemTimings[String(item.id)];
+
+                  return (
+                    <>
+                      <div className="flex items-center p-4">
+                        <div className="w-20 h-20 shrink-0 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden relative">
+                          {item.video && !item.image1 ? (
+                            <video
+                              src={resolveVideoUrl(item.video)}
+                              className="w-full h-full object-cover"
+                              muted
+                              playsInline
+                              webkit-playsinline="true"
+                              loop
+                              autoPlay
+                            />
+                          ) : (
+                            <img
+                              src={resolveImageUrl(item.image1)}
+                              alt={item.item_name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
+                              }}
+                            />
+                          )}
+                        </div>
+                        <div className="ml-4 flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <h2 className="text-primary font-medium leading-tight truncate">{item.item_name}</h2>
+                            <p className="text-primary/40 text-sm">
+                              {currencyCode} {item.price}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2 mt-2">
+                            <button
+                              onClick={() => decrementQuantity(item.id)}
+                              className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full text-gray-700 font-bold transition-colors active:scale-90 duration-200"
+                            >
+                              −
+                            </button>
+                            <span className="font-semibold px-4">{item.quantity}</span>
+                            <button
+                              onClick={() => incrementQuantity(item.id)}
+                              className="w-8 h-8 flex items-center justify-center bg-primary hover:bg-primary/90 rounded-full text-white font-bold transition-colors active:scale-90 duration-200"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        <button
+                          className="ml-4 self-start text-gray-500 hover:text-gray-800"
+                          onClick={() => removeFromCart(item.id)}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            className="w-6 h-6"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {needsTiming && (
+                        <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">
+                            {isDrink
+                              ? "When would you like your drink?"
+                              : isCoffee
+                              ? "When would you like your coffee?"
+                              : "When would you like your dessert?"}
+                          </p>
+                          <div className="flex gap-2">
+                            {isDrink && (
+                              <>
+                                <TimingButton
+                                  label="Right now"
+                                  sublabel="Bring immediately"
+                                  icon={Zap}
+                                  active={itemTiming === "now"}
+                                  onClick={() => setTiming(String(item.id), "now")}
+                                />
+                                <TimingButton
+                                  label="With food"
+                                  sublabel="Serve together"
+                                  icon={Clock3}
+                                  active={itemTiming === "with_food"}
+                                  onClick={() => setTiming(String(item.id), "with_food")}
+                                />
+                              </>
+                            )}
+
+                            {isCoffee && (
+                              <>
+                                <TimingButton
+                                  label="Right now"
+                                  sublabel="Bring immediately"
+                                  icon={Zap}
+                                  active={itemTiming === "now"}
+                                  onClick={() => setTiming(String(item.id), "now")}
+                                />
+                                <TimingButton
+                                  label="After food"
+                                  sublabel="End of meal"
+                                  icon={Coffee}
+                                  active={itemTiming === "after_food"}
+                                  onClick={() => setTiming(String(item.id), "after_food")}
+                                />
+                              </>
+                            )}
+
+                            {isDessert && (
+                              <>
+                                <TimingButton
+                                  label="With food"
+                                  sublabel="Together"
+                                  icon={Clock3}
+                                  active={itemTiming === "with_food"}
+                                  onClick={() => setTiming(String(item.id), "with_food")}
+                                />
+                                <TimingButton
+                                  label="After food"
+                                  sublabel="End of meal"
+                                  icon={Coffee}
+                                  active={itemTiming === "after_food"}
+                                  onClick={() => setTiming(String(item.id), "after_food")}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </motion.div>
             ))}
           </AnimatePresence>
@@ -388,10 +675,16 @@ const ScreenCart = () => {
                       </p>
                     </div>
                     <button
-                      onClick={() => addSuggestedItem(suggestion)}
+                      onClick={() => addSuggestedItem(suggestion, "cart")}
                       className="shrink-0 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold hover:bg-blue-100 transition-colors"
                     >
                       Add
+                    </button>
+                    <button
+                      onClick={() => dismissSuggestion(suggestion, "cart")}
+                      className="shrink-0 rounded-full border border-gray-200 text-gray-500 px-3 py-1 text-xs font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      No Thanks
                     </button>
                   </div>
                 ))}
@@ -403,12 +696,39 @@ const ScreenCart = () => {
       {validCartItems.length > 0 && (
         <div className="w-full mt-auto">
           <div className="fixed bottom-24 left-4 right-4 bg-white p-4 shadow-xl rounded-2xl z-50 max-w-2xl mx-auto border border-gray-100">
+            {beforePaymentSuggestions.length > 0 && (
+              <div className="mb-4 border border-blue-100 bg-blue-50/40 rounded-xl p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-2">Before You Pay</p>
+                {beforePaymentSuggestions.slice(0, 2).map((suggestion) => (
+                  <div key={`bp-${suggestion.id}`} className="flex items-center justify-between gap-2 py-1.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{suggestion.item_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{suggestion.upsell_message || "Last-minute add-on suggestion."}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => dismissSuggestion(suggestion, "before_payment")}
+                        className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-white"
+                      >
+                        No
+                      </button>
+                      <button
+                        onClick={() => addSuggestedItem(suggestion, "before_payment")}
+                        className="rounded-full bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between items-center mb-4">
               <span className="text-gray-600">Total Quantity: <span className="font-bold text-blue-600">{totalQuantity}</span></span>
               <span className="text-gray-600">Total Cost: <span className="font-bold text-blue-600">{currencyCode} {totalCost.toFixed(2)}</span></span>
             </div>
             <button
-              onClick={handleOrderNow}
+              onClick={() => setShowReviewModal(true)}
               className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-between group"
             >
               <span>Place Order</span>
@@ -416,6 +736,77 @@ const ScreenCart = () => {
                 {currencyCode} {totalCost.toFixed(2)} <ArrowRight className="inline ml-1 w-4 h-4" />
               </span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {showReviewModal && (
+        <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-[1px] p-4 flex items-end sm:items-center sm:justify-center">
+          <div className="w-full sm:max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Review Order</h3>
+                <p className="text-[11px] text-slate-400">Confirm details before placing</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReviewModal(false)}
+                className="w-7 h-7 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-4 py-3 max-h-[55vh] overflow-y-auto space-y-2.5">
+              {validCartItems.map((item) => (
+                <div key={`review-${item.id}`} className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg border border-slate-100 px-3 py-2">
+                  <span className="text-xs text-slate-700 font-medium truncate">
+                    {item.item_name} <span className="text-slate-400">x{item.quantity}</span>
+                  </span>
+                  <span className="text-xs font-semibold text-slate-700 shrink-0">
+                    {currencyCode} {(toSafeNumber(item.price) * item.quantity).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+
+              {validCartItems.filter((item) => itemTimings[String(item.id)]).length > 0 && (
+                <div className="space-y-1 mt-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">
+                    Service Timing
+                  </p>
+                  {validCartItems
+                    .filter((item) => itemTimings[String(item.id)])
+                    .map((item) => (
+                      <div
+                        key={`timing-${item.id}`}
+                        className="flex items-center gap-2 px-2 py-1.5 bg-primary/5 rounded-lg border border-primary/10"
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                        <span className="text-xs text-primary font-medium">
+                          {item.item_name} — {TIMING_LABEL[itemTimings[String(item.id)]!]}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-4 py-3 border-t border-slate-100 bg-white space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Total</span>
+                <span className="font-bold text-slate-900">
+                  {currencyCode} {totalCost.toFixed(2)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleOrderNow}
+                disabled={isSubmittingOrder}
+                className="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-70 transition-colors"
+              >
+                {isSubmittingOrder ? "Placing..." : "Confirm & Place Order"}
+              </button>
+            </div>
           </div>
         </div>
       )}

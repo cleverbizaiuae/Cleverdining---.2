@@ -1,150 +1,114 @@
-import { Order } from "./order-types";
 import { cn } from "clsx-for-tailwind";
-import { Check, ChefHat, Clock, Utensils, Receipt, Banknote } from "lucide-react";
+import { Order, OrderItem, OrderStage } from "./order-types";
 import { getSessionCurrencyCode } from "../../utils/regionSession";
 
 interface OrderCardProps {
-    order: Order;
-    onCheckout: (order: Order) => void;
+  order: Order;
 }
 
-export const OrderCard = ({ order, onCheckout }: OrderCardProps) => {
-    const currencyCode = getSessionCurrencyCode();
+const steps: Array<{ id: OrderStage; label: string }> = [
+  { id: "Pending", label: "Pending" },
+  { id: "Preparing", label: "Preparing" },
+  { id: "Served", label: "Served" },
+];
 
-    // Normalize items
-    const items = order.order_items || order.items || [];
+const normalizeStatus = (status: string | undefined): OrderStage => {
+  const value = String(status || "").toLowerCase();
+  if (value === "preparing" || value === "cooking") return "Preparing";
+  if (
+    value === "ready" ||
+    value === "served" ||
+    value === "completed" ||
+    value === "delivered" ||
+    value === "cancelled" ||
+    value === "awaiting_cash"
+  ) {
+    return "Served";
+  }
+  return "Pending";
+};
 
-    // Progress Tracker Logic
-    const steps = [
-        { id: "pending", label: "Pending", icon: Clock },
-        { id: "preparing", label: "Preparing", icon: ChefHat },
-        { id: "served", label: "Served", icon: Utensils },
-    ];
+const parseMoney = (value: string | number | undefined): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 
-    const getCurrentStepIndex = (status: string) => {
-        const s = status.toLowerCase();
-        if (s === "pending" || s === "new") return 0;
-        if (s === "preparing" || s === "cooking") return 1;
-        if (s === "served" || s === "completed" || s === "delivered" || s === "awaiting_cash") return 2;
-        return 0;
-    };
+const normalizeItems = (order: Order): OrderItem[] => {
+  const source = order.items || order.order_items || [];
+  if (!Array.isArray(source)) return [];
+  return source;
+};
 
-    const isAwaitingCash = order.status?.toLowerCase() === 'awaiting_cash' || order.payment_status === 'pending_cash';
+export const OrderCard = ({ order }: OrderCardProps) => {
+  const currencyCode = getSessionCurrencyCode();
+  const normalizedStatus = normalizeStatus(String(order.status));
+  const currentStepIndex = steps.findIndex((step) => step.id === normalizedStatus);
+  const items = normalizeItems(order);
+  const total = parseMoney(order.total ?? order.total_price);
+  const orderTime = order.timestamp || order.created_time;
 
-    const currentStepIndex = getCurrentStepIndex(order.status);
+  const fmt = (value: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    } catch {
+      return `${currencyCode} ${value.toFixed(2)}`;
+    }
+  };
 
-    return (
-        <>
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative">
-                {/* Decoration */}
-                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-10 -mt-10 opacity-50 pointer-events-none" />
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-4 pt-3.5 pb-3 border-b border-gray-50">
+        <p className="text-xs text-slate-400 font-medium">
+          Ordered at{" "}
+          {orderTime
+            ? new Date(orderTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : "--:--"}
+        </p>
+      </div>
 
-                {/* A. Status Header */}
-                <div className="p-5 pb-2">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="flex gap-3">
-                            <div>
-                                <h3 className="font-bold text-gray-900">{order.device_name || "Table 05"} (#{order.id})</h3>
-                                <p className="text-xs text-gray-500">
-                                    {new Date(order.created_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                            <span className={cn(
-                                "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide",
-                                (order.payment_status === 'paid')
-                                    ? "bg-green-100 text-green-600"
-                                    : isAwaitingCash
-                                        ? "bg-yellow-100 text-yellow-700 animate-pulse"
-                                        : "bg-red-100 text-red-600"
-                            )}>
-                                {order.payment_status === 'paid' ? 'Paid' : isAwaitingCash ? '💵 Awaiting Cash' : 'Unpaid'}
-                            </span>
-                            <span className="text-sm font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg">
-                                {currencyCode} {order.total_price}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* B. Items List */}
-                <div className="px-5">
-                    <div className="bg-gray-50/80 rounded-2xl p-4 space-y-3">
-                        {items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-start text-sm">
-                                <div className="flex gap-3">
-                                    <div className="w-6 h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shadow-sm flex-shrink-0">
-                                        {item.quantity}x
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="font-medium text-gray-800 leading-tight">{item.item_name}</span>
-                                        {/* Mock notes if needed */}
-                                        {/* <span className="text-[10px] text-gray-400 italic">No onions</span> */}
-                                    </div>
-                                </div>
-                                <span className="font-semibold text-gray-900">
-                                    {item.price}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* C. Progress Tracker */}
-                <div className="p-5">
-                    <div className="relative flex justify-between items-center">
-                        {/* Progress Line Background */}
-                        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -z-10 rounded-full" />
-
-                        {/* Active Progress Line */}
-                        <div
-                            className="absolute top-1/2 left-0 h-1 bg-green-500 -z-10 rounded-full transition-all duration-500"
-                            style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
-                        />
-
-                        {steps.map((step, idx) => {
-                            const isCompleted = idx < currentStepIndex;
-                            const isActive = idx === currentStepIndex;
-                            const Icon = step.icon;
-
-                            return (
-                                <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2">
-                                    <div className={cn(
-                                        "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 border-2",
-                                        isActive
-                                            ? "bg-green-500 border-green-500 text-white scale-110 shadow-md"
-                                            : isCompleted
-                                                ? "bg-white border-green-500 text-green-500"
-                                                : "bg-white border-gray-200 text-gray-300"
-                                    )}>
-                                        {isCompleted ? <Check size={14} strokeWidth={3} /> : <Icon size={14} />}
-                                    </div>
-                                    <span className={cn(
-                                        "text-[10px] font-medium transition-colors",
-                                        isActive || isCompleted ? "text-green-600" : "text-gray-400"
-                                    )}>
-                                        {step.label}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* D. Awaiting Cash Banner */}
-                {isAwaitingCash && (
-                    <div className="mx-5 mb-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-center gap-3">
-                        <Banknote size={20} className="text-yellow-600 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm font-semibold text-yellow-800">Cash collection requested</p>
-                            <p className="text-xs text-yellow-600">Staff will come to your table to collect payment</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* E. Action Buttons removed to enforce 'Pay All' flow */}
+      <div className="px-4 py-3 space-y-2">
+        {items.map((item, idx) => {
+          const quantity = Number(item.quantity || 0);
+          const itemName = item.name || item.item_name || "Item";
+          const lineTotal = parseMoney(item.price) * Math.max(1, quantity);
+          return (
+            <div key={`${order.id}-${idx}-${itemName}`} className="flex items-center justify-between gap-3">
+              <span className="w-5 h-5 rounded-full bg-slate-100 text-[10px] font-bold text-slate-600 flex items-center justify-center shrink-0">
+                {Math.max(1, quantity)}
+              </span>
+              <span className="text-sm text-slate-700 font-medium truncate flex-1">{itemName}</span>
+              <span className="text-sm text-slate-500 shrink-0">{fmt(lineTotal)}</span>
             </div>
-        </>
-    );
+          );
+        })}
+
+        {items.length === 0 && <p className="text-sm text-slate-400">No items in this order.</p>}
+      </div>
+
+      <div className="px-4 pb-4 pt-2 flex items-center justify-between border-t border-gray-50">
+        <div className="flex items-center gap-1.5">
+          {steps.map((step, idx) => (
+            <div
+              key={step.id}
+              className={cn(
+                "w-1.5 h-1.5 rounded-full transition-all",
+                idx <= currentStepIndex ? "bg-[#0055FE]" : "bg-slate-200",
+              )}
+            />
+          ))}
+          <span className="text-[11px] text-slate-400 ml-1">{normalizedStatus}</span>
+        </div>
+        <span className="text-sm font-bold text-slate-900">{fmt(total)}</span>
+      </div>
+    </div>
+  );
 };

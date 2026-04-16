@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router';
 import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
 import { getRegionConfig } from '../config/regionConfig';
+import { resetUpsellSession } from '../lib/upsellSession';
 
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
@@ -49,6 +50,7 @@ export default function TableLanding() {
 
                 // Clear old non-namespaced cart to prevent leaks
                 localStorage.removeItem('cart');
+                resetUpsellSession();
 
                 // Construct and store userInfo
                 const resolvedRegion =

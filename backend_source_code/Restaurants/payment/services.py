@@ -1,13 +1,30 @@
 from .models import PaymentGateway, Payment, StripeDetails
 from .adapters import StripeAdapter, CheckoutAdapter, CashAdapter, PayTabsAdapter, PaymeAdapter
 from rest_framework.exceptions import ValidationError
+from decimal import Decimal
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
 from django.db.models import Q
 from restaurant.region_config import get_region_config
+from .split_bill import (
+    apply_successful_payment,
+    ensure_bill_for_order,
+    mark_payment_failed,
+    prepare_split_checkout,
+    register_pending_allocations,
+)
 
 channel_layer = get_channel_layer()
+
+
+def _to_decimal(value):
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return Decimal("0")
 
 class PaymentService:
     ADAPTERS = {
@@ -171,24 +188,73 @@ class PaymentService:
         return adapter_class(gateway)
 
     @staticmethod
-    def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None, created_by=None):
+    def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None, created_by=None, split_data=None):
         adapter = PaymentService.get_adapter(order.restaurant, provider=provider)
-        # Use passed amount if available, else usage order total
-        final_amount = amount if amount is not None else order.total_price
-        
-        result = adapter.create_payment_session(order, success_url, cancel_url, amount=final_amount, metadata=metadata)
+        split_context = None
+        bill = None
+        split_type = 'full_bill'
+        payer_id_or_name = ''
+
+        # Keep existing bulk checkout behavior unchanged.
+        if created_by != 'guest_bulk':
+            if split_data:
+                split_context = prepare_split_checkout(order, split_data)
+                bill = split_context["bill"]
+                split_type = split_context["split_type"]
+                payer_id_or_name = split_context.get("payer_id_or_name", "")
+                final_amount = split_context["amount"]
+            else:
+                bill = ensure_bill_for_order(order)
+                final_amount = _to_decimal(amount) if amount is not None else _to_decimal(bill.remaining_amount)
+                if final_amount > _to_decimal(bill.remaining_amount):
+                    final_amount = bill.remaining_amount
+                if final_amount <= 0:
+                    raise ValidationError("This bill is already fully paid.")
+                split_context = {
+                    "plan": [
+                        {
+                            "allocation_type": "bill",
+                            "allocated_amount": final_amount,
+                            "participant_id": "",
+                        }
+                    ]
+                }
+        else:
+            final_amount = _to_decimal(amount) if amount is not None else _to_decimal(order.total_price)
+
+        request_metadata = dict(metadata or {})
+        if bill:
+            request_metadata.update(
+                {
+                    "bill_id": bill.id,
+                    "split_type": split_type,
+                }
+            )
+
+        result = adapter.create_payment_session(
+            order,
+            success_url,
+            cancel_url,
+            amount=final_amount,
+            metadata=request_metadata,
+        )
         
         # Create Payment Record
         payment = Payment.objects.create(
             order=order,
             restaurant=order.restaurant,
             device=order.device,
+            bill=bill,
             provider=result.get('provider', 'unknown'),
             transaction_id=result.get('transaction_id'),
             amount=final_amount, # Use the actual transaction amount
+            split_type=split_type,
+            payer_id_or_name=payer_id_or_name,
             status=result.get('status', 'pending'),
             created_by=created_by # Store who initiated (e.g., 'guest_bulk')
         )
+        if split_context and bill:
+            register_pending_allocations(payment, split_context["plan"])
 
         # Notify Restaurant of new payment
         try:
@@ -243,7 +309,38 @@ class PaymentService:
         
         if verification_result.get('status') == 'completed':
             payment.status = 'completed'
-            payment.save()
+            payment.save(update_fields=["status", "updated_at"])
+
+            if payment.bill_id:
+                updated_bill = apply_successful_payment(payment)
+                main_order = payment.order
+                main_order.refresh_from_db()
+
+                order_data = OrderDetailSerializer(main_order).data
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{main_order.restaurant.id}",
+                    {
+                        "type": "order_paid",
+                        "order": order_data
+                    }
+                )
+
+                from .serializers import PaymentSerializer
+                payment_data = PaymentSerializer(payment).data
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{payment.restaurant.id}",
+                    {
+                        "type": "payment_update",
+                        "event": "payment:updated",
+                        "payment": payment_data
+                    }
+                )
+
+                if main_order.guest_session and updated_bill and updated_bill.payment_status == "fully_paid":
+                    from order.models import Cart
+                    Cart.objects.filter(guest_session=main_order.guest_session).delete()
+                    PaymentService._close_session_and_clear_chat_if_settled(main_order)
+                return verification_result
             
             # Logic for Single vs Bulk
             main_order = payment.order
@@ -313,7 +410,16 @@ class PaymentService:
                 Cart.objects.filter(guest_session=main_order.guest_session).delete()
 
             PaymentService._close_session_and_clear_chat_if_settled(main_order)
-            
+        else:
+            resolved_status = str(verification_result.get("status") or "").lower()
+            if resolved_status in {"failed", "declined", "cancelled", "canceled"}:
+                payment.status = "failed"
+                payment.save(update_fields=["status", "updated_at"])
+                mark_payment_failed(payment)
+            elif resolved_status:
+                payment.status = "pending"
+                payment.save(update_fields=["status", "updated_at"])
+
         return verification_result
 
     @staticmethod

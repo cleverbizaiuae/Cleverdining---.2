@@ -13,6 +13,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 import environ
+from core.logging_config import get_logging_config
 # env = environ.Env()
 # environ.Env.read_env()
 env = environ.Env(
@@ -94,6 +95,7 @@ CORS_ALLOWED_ORIGINS = [
 
 # Allow credentials for authenticated requests
 CORS_ALLOW_CREDENTIALS = True
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 # Explicitly allow OPTIONS method for CORS preflight
 CORS_ALLOW_METHODS = [
@@ -118,6 +120,10 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-guest-session-token',
 ]
+
+# Allow base64 branding payloads (logo/cover images) up to 25MB.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
 
 
 # Application definition
@@ -162,6 +168,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.RequestContextLoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'restaurant.middleware.JSONExceptionMiddleware',  # Catch all exceptions and return JSON
@@ -381,6 +388,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # Ensure WhiteNoise serves files correctly
 WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+WHITENOISE_MAX_AGE = 60 * 60 * 24 * 30
 
 
 # Default primary key field type
@@ -404,47 +412,7 @@ else:
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging configuration
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-    },
-    'root': {
-        'handlers': ['console'],
-        'level': env('LOG_LEVEL', default='INFO'),
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': env('LOG_LEVEL', default='INFO'),
-            'propagate': False,
-        },
-        'accounts': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'restaurant': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-    },
-}
+LOGGING = get_logging_config(env('LOG_LEVEL', default='INFO'))
 
 STRIPE_PUBLISHABLE_KEY = env('STRIPE_PUBLISHABLE_KEY', default='')
 
@@ -491,3 +459,31 @@ else:
     }
 
     print(f"  ! Active Host: {DATABASES['default']['HOST']}")
+
+
+# Sentry configuration (non-invasive: disabled unless SENTRY_DSN is set)
+SENTRY_DSN = env('SENTRY_DSN', default='')
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
+        from core.sentry_config import before_send as sentry_before_send
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[
+                DjangoIntegration(),
+                RedisIntegration(),
+            ],
+            traces_sample_rate=env.float('SENTRY_TRACES_SAMPLE_RATE', default=0.1),
+            profiles_sample_rate=env.float('SENTRY_PROFILES_SAMPLE_RATE', default=0.0),
+            send_default_pii=True,
+            environment=env('SENTRY_ENVIRONMENT', default='production' if not DEBUG else 'development'),
+            release=env('SENTRY_RELEASE', default=''),
+            before_send=sentry_before_send,
+        )
+    except Exception as sentry_init_error:
+        import sys
+
+        print(f"[STARTUP] ⚠️ Failed to initialize Sentry: {sentry_init_error}", file=sys.stderr)

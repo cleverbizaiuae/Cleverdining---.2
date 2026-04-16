@@ -14,10 +14,10 @@ export const queryClient = new QueryClient({
             gcTime: 10 * 60 * 1000,
 
             // Refetch stale data when user returns to the browser tab
-            refetchOnWindowFocus: true,
+            refetchOnWindowFocus: false,
 
             // Don't refetch when component remounts if data is still fresh
-            refetchOnMount: true,
+            refetchOnMount: false,
 
             // Retry failed requests once
             retry: 1,

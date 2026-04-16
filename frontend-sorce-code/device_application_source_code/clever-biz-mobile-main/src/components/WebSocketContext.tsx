@@ -5,6 +5,7 @@ import React, {
   useContext,
   ReactNode,
 } from "react";
+import { captureWebSocketFailure } from "../monitoring/sentry";
 
 type WebSocketContextType = {
   ws: WebSocket | null;
@@ -102,6 +103,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     if (!device_id || !restaurant_id) {
       setConnectionStatus("disconnected");
+      captureWebSocketFailure("WebSocket skipped: missing device_id or restaurant_id", {
+        feature: "websocket",
+      });
       return;
     }
 
@@ -123,6 +127,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     if ((!accessToken || accessToken === "guest_token") && !tokenToUse) {
       console.warn("WebSocket Context: Missing Guest Token, aborting connection to prevent history loss.");
       setConnectionStatus("disconnected");
+      captureWebSocketFailure("WebSocket skipped: missing guest token", {
+        feature: "websocket",
+      });
       return;
     }
 
@@ -134,6 +141,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     } else {
       console.warn("Missing restaurant_id, cannot connect to Unified Chat Room.");
       setConnectionStatus("disconnected");
+      captureWebSocketFailure("WebSocket skipped: missing restaurant_id", {
+        feature: "websocket",
+      });
       return;
     }
 
@@ -220,6 +230,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         }
       } catch (e) {
         console.error("WS Message Error", e);
+        captureWebSocketFailure("WebSocket message parse failed", {
+          endpoint: wsUrl,
+          feature: "websocket",
+        });
       }
     };
 
@@ -247,6 +261,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
     socket.onerror = (err) => {
       console.error("WebSocket error:", err);
+      captureWebSocketFailure("WebSocket socket error", {
+        endpoint: wsUrl,
+        feature: "websocket",
+      });
       // onclose will fire after onerror, so reconnect is handled there
     };
   }, []);

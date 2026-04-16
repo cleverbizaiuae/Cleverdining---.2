@@ -20,6 +20,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
   const handleReview = () => {
     setIsModalOpen(true);
   };
+  const numericOrderId = Number(order.id) || 0;
 
   const formatMoney = (v: string | number) => {
     let currency = getRegionConfig().currency;
@@ -87,10 +88,10 @@ export const OrderRow = ({ order }: { order: Order }) => {
                 </h2>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 mt-1">
                   <p className="text-gray-700 font-medium text-sm sm:text-base">
-                    Total: {formatMoney(order.total_price)}
+                    Total: {formatMoney(order.total_price ?? order.total ?? 0)}
                   </p>
                   <p className="text-xs sm:text-[12px] text-gray-500 sm:text-right">
-                    {new Date(order.created_time).toLocaleString()}
+                    {new Date(order.created_time || order.timestamp || Date.now()).toLocaleString()}
                   </p>
                 </div>
 
@@ -107,7 +108,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
                           className="text-xs sm:text-sm text-gray-700 flex flex-wrap gap-1"
                         >
                           <span className="font-medium text-gray-900">
-                            {it.item_name.substring(0, 30)}
+                            {(it.item_name || it.name || "Item").substring(0, 30)}
                           </span>
                           <span className="text-gray-500">× {it.quantity}</span>
                           <span className="text-gray-600 ml-auto">
@@ -130,14 +131,14 @@ export const OrderRow = ({ order }: { order: Order }) => {
               {/* Checkout Button */}
               <div className="w-full md:w-2/3 mx-auto">
                 <CheckoutButton
-                  orderId={order.id}
+                  orderId={numericOrderId}
                   // disabled={
                   //   order.id == response?.order?.id &&
                   //   response?.type === "order_paid"
                   // }
                   disabled={
                     order.status === "paid" || // ✅ permanent check from DB
-                    (order.id === response?.order?.id &&
+                    (String(order.id) === String(response?.order?.id) &&
                       response?.type === "order_paid") // ✅ instant live update
                   }
                 />
@@ -170,7 +171,7 @@ export const OrderRow = ({ order }: { order: Order }) => {
       <ReviewModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        orderId={order.id}
+        orderId={numericOrderId}
       />
     </>
   );

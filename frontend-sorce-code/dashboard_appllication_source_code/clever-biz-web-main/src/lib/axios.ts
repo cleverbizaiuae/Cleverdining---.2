@@ -1,5 +1,6 @@
 // src/lib/axios.ts
 import axios from "axios";
+import { captureApiFailure } from "../monitoring/sentry";
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
 
@@ -17,14 +18,11 @@ const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
-
-console.log("🔥 Axios baseURL at runtime:", axiosInstance.defaults.baseURL);
-console.log("🔥 VITE_API_URL from env:", import.meta.env.VITE_API_URL);
-console.log("🔥 API_BASE_URL calculated:", API_BASE_URL);
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken") || localStorage.getItem("superAdminToken");
@@ -39,6 +37,13 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    captureApiFailure(error, {
+      feature: "api",
+      endpoint: originalRequest?.url,
+      method: originalRequest?.method,
+      status: error?.response?.status,
+    });
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

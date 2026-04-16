@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, ReactNode, useRef } from "react";
+import { captureWebSocketFailure } from "../monitoring/sentry";
 
 // Type definitions for the response and message data
 interface Message {
@@ -48,6 +49,9 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
   const connectWebSocket = () => {
     if (!id || !tokenToUse) {
       console.warn("WebSocket skipped: Missing ID or Token", { id, hasToken: !!tokenToUse });
+      captureWebSocketFailure("WebSocket skipped: missing restaurant id or auth token", {
+        feature: "websocket",
+      });
       return;
     }
 
@@ -83,6 +87,10 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
 
     socket.onerror = (error) => {
       console.error("WebSocket error:", error);
+      captureWebSocketFailure("WebSocket socket error", {
+        endpoint: wsUrl,
+        feature: "websocket",
+      });
     };
 
     socket.onclose = () => {

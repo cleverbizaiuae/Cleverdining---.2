@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   LayoutGrid,
-  ScanQrCode // Replacing QrCode if needed, checking lucide later, QrCode usually exists.
+  ScanQrCode,
+  Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -38,6 +39,7 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
+  { icon: Sparkles, label: 'Upsell', path: '/upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
 
 const RestaurantLayout = () => {

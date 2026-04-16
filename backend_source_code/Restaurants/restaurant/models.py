@@ -2,6 +2,7 @@ from django.db import models
 from accounts.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone as dj_timezone
+import uuid
 
 class Restaurant(models.Model):
     REGION_CHOICES = [
@@ -78,6 +79,40 @@ class Restaurant(models.Model):
     def region_settings(self):
         from restaurant.region_config import get_region_config
         return get_region_config(self.region)
+
+
+class BrandConfig(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    restaurant = models.OneToOneField(
+        Restaurant,
+        on_delete=models.CASCADE,
+        related_name='brand_config',
+    )
+    restaurant_name = models.TextField(default='My Restaurant')
+    logo_url = models.TextField(null=True, blank=True)
+    cover_image_url = models.TextField(null=True, blank=True)
+    primary_color = models.CharField(max_length=7, default='#0055FE')
+    secondary_color = models.CharField(max_length=7, null=True, blank=True)
+    accent_color = models.CharField(max_length=7, null=True, blank=True)
+    theme_preset = models.TextField(default='classic_clean')
+    font_preset = models.TextField(default='modern')
+    tagline = models.TextField(null=True, blank=True)
+    branding_enabled = models.BooleanField(default=False)
+    instagram_url = models.TextField(null=True, blank=True)
+    facebook_url = models.TextField(null=True, blank=True)
+    tiktok_url = models.TextField(null=True, blank=True)
+    twitter_url = models.TextField(null=True, blank=True)
+    website_url = models.TextField(null=True, blank=True)
+    wifi_name = models.TextField(null=True, blank=True)
+    wifi_password = models.TextField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'brand_configs'
+
+    def __str__(self):
+        return f"BrandConfig(restaurant={self.restaurant_id})"
+
 
 class BusinessDay(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='business_days')

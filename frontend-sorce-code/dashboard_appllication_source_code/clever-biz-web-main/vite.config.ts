@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+const isProd = process.env.NODE_ENV === "production";
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -143,6 +145,7 @@ export default defineConfig({
     },
   },
   build: {
+    cssMinify: "lightningcss",
     // Vendor chunk splitting for better caching
     rollupOptions: {
       output: {
@@ -151,6 +154,7 @@ export default defineConfig({
           "vendor-charts": ["chart.js", "react-chartjs-2"],
           "vendor-ui": ["react-hot-toast", "lucide-react", "framer-motion"],
           "vendor-utils": ["axios", "date-fns"],
+          "vendor-monitoring": ["@sentry/react"],
         }
       }
     },
@@ -159,6 +163,11 @@ export default defineConfig({
     // Enable source maps for debugging (optional)
     sourcemap: false,
   },
+  esbuild: isProd
+    ? {
+        drop: ["console", "debugger"],
+      }
+    : undefined,
   server: {
     host: true,
     port: 5175,

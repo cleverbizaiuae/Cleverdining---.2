@@ -19,11 +19,14 @@ from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
 from .health_views import health_check
+from restaurant.views import BrandConfigAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', health_check),
     path('api/health/', health_check),
+    path('api/brand-config', BrandConfigAPIView.as_view()),
+    path('api/brand-config/', BrandConfigAPIView.as_view()),
     path('', include('accounts.urls')),
     path('adminapi/', include('adminapi.urls')),
     path('owners/', include('owners.urls')), # Main Restaurant Owner API
@@ -33,6 +36,7 @@ urlpatterns = [
     path('api/reviews/', include('review.urls')),
     # path('api/payments/', include('payment.urls')),
     path('message/', include('message.urls')),
+    path('api/upsell/', include('order.upsell_urls')),
     path('vapi/', include('vapi.urls')),
     path('subscription/', include('subscription.urls')),
 ]

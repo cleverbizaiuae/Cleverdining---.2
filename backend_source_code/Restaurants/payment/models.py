@@ -19,9 +19,89 @@ if not SECRET_KEY:
 fernet = Fernet(SECRET_KEY.encode())
 
 
+class OrderBill(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ("unpaid", "Unpaid"),
+        ("partially_paid", "Partially Paid"),
+        ("fully_paid", "Fully Paid"),
+        ("refunded", "Refunded"),
+    ]
+    SPLIT_METHOD_CHOICES = [
+        ("", "Unset"),
+        ("full_bill", "Full Bill"),
+        ("evenly", "Evenly"),
+        ("my_items", "My Items"),
+    ]
+
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="bill")
+    table_or_order_id = models.CharField(max_length=120, blank=True, default="")
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    service_charge = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tip_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    remaining_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="unpaid")
+
+    split_method = models.CharField(max_length=20, choices=SPLIT_METHOD_CHOICES, blank=True, default="")
+    split_count = models.PositiveIntegerField(null=True, blank=True)
+    per_person_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    paid_shares_count = models.PositiveIntegerField(default=0)
+    unpaid_shares_count = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["payment_status"]),
+            models.Index(fields=["split_method"]),
+            models.Index(fields=["updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"Bill #{self.id} for Order #{self.order_id}"
+
+
+class OrderBillItem(models.Model):
+    ITEM_STATUS_CHOICES = [
+        ("unpaid", "Unpaid"),
+        ("partially_paid", "Partially Paid"),
+        ("paid", "Paid"),
+    ]
+
+    bill = models.ForeignKey(OrderBill, on_delete=models.CASCADE, related_name="bill_items")
+    order_item = models.OneToOneField("order.OrderItem", on_delete=models.SET_NULL, null=True, blank=True, related_name="bill_item")
+    item_name = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paid_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unpaid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    item_status = models.CharField(max_length=20, choices=ITEM_STATUS_CHOICES, default="unpaid")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["bill", "item_status"]),
+            models.Index(fields=["order_item"]),
+        ]
+
+    def __str__(self):
+        return f"{self.item_name} (Bill #{self.bill_id})"
+
 
 
 class Payment(models.Model):
+    SPLIT_TYPE_CHOICES = [
+        ("full_bill", "Full Bill"),
+        ("evenly", "Evenly"),
+        ("my_items", "My Items"),
+    ]
     PROVIDER_CHOICES = [
         ('stripe', 'Stripe'),
         ('checkout', 'Checkout.com'),
@@ -35,13 +115,16 @@ class Payment(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='payments')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payments')
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payments')
+    bill = models.ForeignKey(OrderBill, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
     
     # Generic fields
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default='stripe')
     transaction_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    split_type = models.CharField(max_length=20, choices=SPLIT_TYPE_CHOICES, default="full_bill")
+    payer_id_or_name = models.CharField(max_length=255, blank=True, default="")
     
     # Wallet-specific fields
-    # wallet_token_reference = models.CharField(max_length=255, null=True, blank=True)
+    wallet_token_reference = models.CharField(max_length=255, null=True, blank=True)
     
     # Legacy / Specific fields
     stripe_payment_intent_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
@@ -70,6 +153,43 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for Order #{self.order.id} by Device #{self.device.id}"
+
+
+class PaymentAllocation(models.Model):
+    PARTICIPANT_STATUS_CHOICES = [
+        ("unpaid", "Unpaid"),
+        ("paid", "Paid"),
+        ("failed", "Failed"),
+        ("refunded", "Refunded"),
+    ]
+    ALLOCATION_TYPE_CHOICES = [
+        ("bill", "Bill"),
+        ("share", "Share"),
+        ("item", "Item"),
+        ("fee", "Fee"),
+    ]
+
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="allocations")
+    bill = models.ForeignKey(OrderBill, on_delete=models.CASCADE, related_name="allocations")
+    bill_item = models.ForeignKey(OrderBillItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="allocations")
+    participant_id = models.CharField(max_length=255, blank=True, default="")
+    allocated_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    allocated_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    allocation_type = models.CharField(max_length=20, choices=ALLOCATION_TYPE_CHOICES, default="bill")
+    participant_status = models.CharField(max_length=20, choices=PARTICIPANT_STATUS_CHOICES, default="unpaid")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["bill", "allocation_type"]),
+            models.Index(fields=["participant_status"]),
+            models.Index(fields=["participant_id"]),
+        ]
+
+    def __str__(self):
+        return f"Allocation #{self.id} ({self.allocation_type}) for Payment #{self.payment_id}"
 
 
 
@@ -140,18 +260,18 @@ class PaymentGateway(models.Model):
     key_secret = models.CharField(max_length=255) # Secret Key (Stripe/Checkout) / Server Key (PayTabs)
     
     # Apple Pay Configuration
-    # apple_pay_enabled = models.BooleanField(default=False)
-    # apple_merchant_id = models.CharField(max_length=255, null=True, blank=True)
-    # apple_domain_verified = models.BooleanField(default=False)
+    apple_pay_enabled = models.BooleanField(default=False)
+    apple_merchant_id = models.CharField(max_length=255, null=True, blank=True)
+    apple_domain_verified = models.BooleanField(default=False)
     
-    # # Google Pay Configuration
-    # google_pay_enabled = models.BooleanField(default=False)
-    # google_merchant_id = models.CharField(max_length=255, null=True, blank=True)
-    # google_environment = models.CharField(
-    #     max_length=10, 
-    #     choices=GOOGLE_PAY_ENVIRONMENT_CHOICES,
-    #     default='TEST'
-    # )
+    # Google Pay Configuration
+    google_pay_enabled = models.BooleanField(default=False)
+    google_merchant_id = models.CharField(max_length=255, null=True, blank=True)
+    google_environment = models.CharField(
+        max_length=10,
+        choices=GOOGLE_PAY_ENVIRONMENT_CHOICES,
+        default='TEST'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

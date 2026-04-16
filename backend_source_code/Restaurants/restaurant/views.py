@@ -1,21 +1,146 @@
 from django.shortcuts import render
-from restaurant.serializers import OwnerRegisterSerializer,RestaurantSerializer
+from restaurant.serializers import OwnerRegisterSerializer, RestaurantSerializer, BrandConfigSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework import serializers
-from .models import Restaurant
+from .models import Restaurant, BrandConfig
 from device.models import Device
 from category.models import Category
 from item.models import Item
 from django.db.models import Prefetch
 from django.db import IntegrityError
-from accounts.models import User
+from accounts.models import User, ChefStaff
 from restaurant.region_config import resolve_region_defaults, get_region_config
 # Create your views here.
 
 # jwt
 from rest_framework.permissions import AllowAny
+
+
+def _brand_default_payload():
+    return {
+        "brandingEnabled": False,
+        "restaurantName": "My Restaurant",
+        "logoUrl": None,
+        "coverImageUrl": None,
+        "primaryColor": "#0055FE",
+        "secondaryColor": None,
+        "accentColor": None,
+        "themePreset": "classic_clean",
+        "fontPreset": "modern",
+        "tagline": None,
+        "instagramUrl": None,
+        "facebookUrl": None,
+        "tiktokUrl": None,
+        "twitterUrl": None,
+        "websiteUrl": None,
+        "wifiName": None,
+        "wifiPassword": None,
+        "googleReviewUrl": None,
+    }
+
+
+def _get_restaurant_for_brand_request(request, for_write=False):
+    user = getattr(request, "user", None)
+    restaurant_id = request.query_params.get("restaurant_id")
+    if not restaurant_id and hasattr(request, "data"):
+        restaurant_id = request.data.get("restaurant_id")
+
+    if user and user.is_authenticated:
+        role = getattr(user, "role", "")
+        if for_write and role not in {"owner", "admin", "manager"}:
+            return None
+
+        if role == "owner":
+            if restaurant_id:
+                try:
+                    return Restaurant.objects.get(pk=restaurant_id, owner=user)
+                except Restaurant.DoesNotExist:
+                    return None
+            return user.restaurants.first()
+
+        if role in {"manager", "chef", "staff"}:
+            if restaurant_id:
+                staff_link = ChefStaff.objects.filter(
+                    user=user,
+                    action="accepted",
+                    restaurant_id=restaurant_id,
+                ).select_related("restaurant").first()
+                return staff_link.restaurant if staff_link else None
+            staff_link = ChefStaff.objects.filter(
+                user=user,
+                action="accepted",
+            ).select_related("restaurant").first()
+            return staff_link.restaurant if staff_link else None
+
+        if role == "admin":
+            if restaurant_id:
+                return Restaurant.objects.filter(pk=restaurant_id).first()
+            return Restaurant.objects.order_by("id").first()
+
+        if role == "customer" and restaurant_id:
+            return Restaurant.objects.filter(pk=restaurant_id).first()
+
+        if restaurant_id:
+            return Restaurant.objects.filter(pk=restaurant_id).first()
+        return None
+
+    if for_write:
+        return None
+
+    if restaurant_id:
+        return Restaurant.objects.filter(pk=restaurant_id).first()
+
+    return None
+
+
+class BrandConfigAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        restaurant = _get_restaurant_for_brand_request(request, for_write=False)
+        if not restaurant:
+            return Response(_brand_default_payload(), status=status.HTTP_200_OK)
+
+        config, _ = BrandConfig.objects.get_or_create(
+            restaurant=restaurant,
+            defaults={
+                "restaurant_name": restaurant.resturent_name or "My Restaurant",
+            },
+        )
+        payload = BrandConfigSerializer(config).data
+        if not payload.get("googleReviewUrl"):
+            payload["googleReviewUrl"] = restaurant.google_review_url
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        restaurant = _get_restaurant_for_brand_request(request, for_write=True)
+        if not restaurant:
+            return Response({"error": "Restaurant not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        config, _ = BrandConfig.objects.get_or_create(
+            restaurant=restaurant,
+            defaults={"restaurant_name": restaurant.resturent_name or "My Restaurant"},
+        )
+        incoming = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        google_review_url = incoming.pop("googleReviewUrl", None)
+        incoming.pop("restaurant_id", None)
+
+        serializer = BrandConfigSerializer(config, data=incoming, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+
+        if google_review_url is not None:
+            restaurant.google_review_url = google_review_url or None
+            restaurant.save(update_fields=["google_review_url"])
+
+        payload = BrandConfigSerializer(updated).data
+        payload["googleReviewUrl"] = restaurant.google_review_url
+        return Response(payload, status=status.HTTP_200_OK)
 
 class OwnerRegisterView(APIView):
     permission_classes = [AllowAny]

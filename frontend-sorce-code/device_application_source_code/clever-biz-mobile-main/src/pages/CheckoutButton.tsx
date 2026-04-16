@@ -12,6 +12,7 @@ export default function CheckoutButton({
   tipType,
   tipValue,
   isBulkCheckout,
+  splitPayload,
 }: {
   orderId?: number | string; // Make optional for bulk
   disabled?: boolean;
@@ -20,6 +21,13 @@ export default function CheckoutButton({
   tipType?: string | null;
   tipValue?: number | string;
   isBulkCheckout?: boolean;
+  splitPayload?: {
+    split_type?: "full_bill" | "evenly" | "my_items";
+    split_count?: number;
+    selected_items?: Array<{ bill_item_id: number; quantity?: number }>;
+    payer_id_or_name?: string;
+    participant?: string;
+  };
 }) {
   console.log(orderId);
   const [loading, setLoading] = useState(false);
@@ -64,14 +72,16 @@ export default function CheckoutButton({
       } else {
         // SINGLE ORDER FLOW
         if (!orderId) throw new Error("Order ID missing for single checkout");
+        const payload = {
+          provider,
+          tip_amount: tipAmount,
+          tip_type: tipType,
+          tip_value: tipValue,
+          ...(splitPayload || {}),
+        };
         res = await axiosInstance.post(
           `/api/customer/create-checkout-session/${orderId}/?guest_token=${guestToken}`,
-          {
-            provider,
-            tip_amount: tipAmount,
-            tip_type: tipType,
-            tip_value: tipValue
-          },
+          payload,
           {
             headers: {
               "X-Guest-Session-Token": guestToken

@@ -1,114 +1,115 @@
-import { Gamepad2, X, Play } from "lucide-react";
+import { Gamepad2, Play, ArrowLeft } from "lucide-react";
 import { cn } from "clsx-for-tailwind";
-import { Footer } from "../../components/Footer";
-import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { Snake } from "./games/Snake";
 import { Connect4 } from "./games/Connect4";
 import { TicTacToe } from "./games/TicTacToe";
 import { FlappyBird } from "./games/FlappyBird";
+import Chwazi from "./games/Chwazi";
+
+type GameId = "chwazi" | "snake" | "connect4" | "tictactoe" | "flappybird";
 
 interface GameHubProps {
-    isOpen: boolean;
-    close: () => void;
+  onBack: () => void;
+  onChosenTreater: (name: string) => void;
 }
 
-export const GameHub = ({ isOpen, close }: GameHubProps) => {
-    const [activeGame, setActiveGame] = useState<string | null>(null);
+export const GameHub = ({ onBack, onChosenTreater }: GameHubProps) => {
+  const [activeGame, setActiveGame] = useState<GameId | null>(null);
 
-    if (!isOpen) return null;
+  const games: Array<{ id: GameId; name: string; description: string; color: string }> = [
+    {
+      id: "chwazi",
+      name: "Chwazi",
+      description: "Pick who pays in one tap",
+      color: "bg-emerald-500",
+    },
+    {
+      id: "snake",
+      name: "Snake",
+      description: "Classic arcade",
+      color: "bg-green-500",
+    },
+    {
+      id: "connect4",
+      name: "Connect 4",
+      description: "2-player strategy",
+      color: "bg-blue-500",
+    },
+    {
+      id: "tictactoe",
+      name: "Tic Tac Toe",
+      description: "Quick duel",
+      color: "bg-violet-500",
+    },
+    {
+      id: "flappybird",
+      name: "Flappy Bird",
+      description: "Tap to fly",
+      color: "bg-amber-500",
+    },
+  ];
 
-    const games = [
-        { id: "snake", name: "Snake", color: "bg-green-500", component: Snake },
-        { id: "connect4", name: "Connect 4", color: "bg-blue-500", component: Connect4 },
-        { id: "tictactoe", name: "Tic Tac Toe", color: "bg-purple-500", component: TicTacToe },
-        { id: "flappybird", name: "Flappy Bird", color: "bg-yellow-500", component: FlappyBird },
-    ];
+  const renderGame = () => {
+    if (activeGame === "chwazi") {
+      return <Chwazi onBack={() => setActiveGame(null)} onChosen={onChosenTreater} />;
+    }
+    if (activeGame === "snake") {
+      return <Snake onBack={() => setActiveGame(null)} />;
+    }
+    if (activeGame === "connect4") {
+      return <Connect4 onBack={() => setActiveGame(null)} />;
+    }
+    if (activeGame === "tictactoe") {
+      return <TicTacToe onBack={() => setActiveGame(null)} />;
+    }
+    if (activeGame === "flappybird") {
+      return <FlappyBird onBack={() => setActiveGame(null)} />;
+    }
+    return null;
+  };
 
-    const handleBack = () => setActiveGame(null);
+  if (activeGame) {
+    return <div className="flex-1 min-h-0">{renderGame()}</div>;
+  }
 
-    return (
-        <div className="fixed inset-0 z-50 bg-gray-900 text-white overflow-hidden animate-in fade-in duration-300 flex flex-col">
-            {/* Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between p-6 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-600 rounded-full">
-                        <Gamepad2 size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold">Arcade Hub</h2>
-                        <p className="text-xs text-gray-400">Play while you wait!</p>
-                    </div>
-                </div>
-                <button
-                    onClick={close}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-full text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                    <X size={16} />
-                    Check Order
-                </button>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 flex flex-col h-full">
-                <AnimatePresence mode="wait">
-                    {activeGame ? (
-                        <motion.div
-                            key="game-view"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="h-full"
-                        >
-                            {(() => {
-                                const GameComponent = games.find(g => g.id === activeGame)?.component;
-                                return GameComponent ? <GameComponent onBack={handleBack} /> : null;
-                            })()}
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="game-list"
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            className="p-6"
-                        >
-                            {/* Games Grid */}
-                            <div>
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                    <Play size={18} className="text-indigo-400" />
-                                    All Games
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {games.map((game, index) => (
-                                        <motion.div
-                                            key={game.id}
-                                            initial={{ y: -50, opacity: 0 }}
-                                            animate={{ y: 0, opacity: 1 }}
-                                            transition={{
-                                                type: "spring",
-                                                bounce: 0.4,
-                                                delay: index * 0.1
-                                            }}
-                                            onClick={() => setActiveGame(game.id)}
-                                            className="group relative aspect-square rounded-2xl bg-gray-800 border border-gray-700 overflow-hidden hover:border-indigo-500/50 transition-all cursor-pointer active:scale-95"
-                                        >
-                                            <div className={cn("absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity", game.color)} />
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-                                                <div className={cn("w-12 h-12 rounded-xl mb-3 flex items-center justify-center shadow-lg", game.color)}>
-                                                    <Gamepad2 size={24} className="text-white" />
-                                                </div>
-                                                <span className="font-bold text-sm">{game.name}</span>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-                <Footer />
-            </div>
+  return (
+    <div className="flex-1 min-h-0 bg-slate-950 text-white flex flex-col">
+      <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-200 hover:text-white"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Orders
+        </button>
+        <div className="flex items-center gap-2">
+          <Gamepad2 className="w-5 h-5 text-indigo-300" />
+          <h2 className="text-sm font-semibold">Wait & Play</h2>
         </div>
-    );
+        <div className="w-24" />
+      </div>
+
+      <div className="p-4 overflow-y-auto">
+        <h3 className="text-lg font-semibold mb-1">Game Hub</h3>
+        <p className="text-xs text-slate-400 mb-4">Play while your order is being prepared.</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          {games.map((game) => (
+            <button
+              key={game.id}
+              onClick={() => setActiveGame(game.id)}
+              className="group relative text-left rounded-2xl bg-slate-900 border border-slate-800 p-4 hover:border-indigo-400/60 transition-colors"
+            >
+              <div className={cn("w-10 h-10 rounded-xl mb-3 flex items-center justify-center", game.color)}>
+                <Play className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-sm font-semibold text-white">{game.name}</div>
+              <div className="text-xs text-slate-400 mt-1">{game.description}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 };

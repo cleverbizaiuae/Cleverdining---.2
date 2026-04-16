@@ -1,16 +1,4 @@
 import { lazy, Suspense } from "react";
-import {
-  ArcElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
 import { Route, Routes } from "react-router";
 
 // ─── Lightweight inline spinner (no external dependency) ────────────────
@@ -51,6 +39,7 @@ const ScreenRestaurantManagement = lazy(() => import("./pages/restaurant/screen_
 const ScreenRestaurantDevices = lazy(() => import("./pages/restaurant/screen_restaurant_devices").then(m => ({ default: m.ScreenRestaurantDevices })));
 const Payments = lazy(() => import("./pages/restaurant/Payments").then(m => ({ default: m.Payments })));
 const ScreenRestaurantReviews = lazy(() => import("./pages/restaurant/screen_restaurant_reviews"));
+const ScreenRestaurantUpsell = lazy(() => import("./pages/restaurant/screen_restaurant_upsell"));
 
 // Chef pages
 const ScreenChefDashboard = lazy(() => import("./pages/chef/screen_chef_dashboard"));
@@ -77,17 +66,17 @@ const ScreenAdminTermsAndCondition = lazy(() => import("./pages/super-admin/scre
 const ScreenAdminPrivacy = lazy(() => import("./pages/super-admin/screen_admin_privacy"));
 const ScreenAdminFaq = lazy(() => import("./pages/super-admin/screen_admin_faq"));
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Filler,
-  Legend,
-  ArcElement
+// Multi-location owner pages
+const MultiLocationLayout = lazy(() => import("./pages/multilocation/layout"));
+const ScreenMultiLocationDashboard = lazy(() => import("./pages/multilocation/screen_multilocation_dashboard"));
+const ScreenMultiLocationReports = lazy(() => import("./pages/multilocation/screen_multilocation_reports"));
+const ScreenMultiLocationLocations = lazy(() => import("./pages/multilocation/screen_multilocation_locations"));
+const ScreenMultiLocationLocationDetail = lazy(
+  () => import("./pages/multilocation/screen_multilocation_location_detail")
 );
+const ScreenMultiLocationStaff = lazy(() => import("./pages/multilocation/screen_multilocation_staff"));
+const ScreenMultiLocationActivity = lazy(() => import("./pages/multilocation/screen_multilocation_activity"));
+const ScreenMultiLocationBranding = lazy(() => import("./pages/multilocation/screen_multilocation_branding"));
 
 function App() {
   return (
@@ -202,6 +191,7 @@ function App() {
         <Route path="payments" element={<Payments />} />
         <Route path="reviews" element={<ScreenRestaurantReviews />} />
         <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="upsell" element={<ScreenRestaurantUpsell />} />
       </Route>
 
       {/* Staff Dashboard */}
@@ -239,6 +229,21 @@ function App() {
         <Route path="terms-condition" element={<ScreenAdminTermsAndCondition />} />
         <Route path="privacy-policy" element={<ScreenAdminPrivacy />} />
         <Route path="faq" element={<ScreenAdminFaq />} />
+      </Route>
+
+      {/* Multi-location owner workspace */}
+      <Route path="/multilocation" element={
+        <Suspense fallback={<PageLoader />}>
+          <MultiLocationLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenMultiLocationDashboard />} />
+        <Route path="reports" element={<ScreenMultiLocationReports />} />
+        <Route path="locations" element={<ScreenMultiLocationLocations />} />
+        <Route path="locations/:locationId" element={<ScreenMultiLocationLocationDetail />} />
+        <Route path="staff" element={<ScreenMultiLocationStaff />} />
+        <Route path="activity" element={<ScreenMultiLocationActivity />} />
+        <Route path="branding" element={<ScreenMultiLocationBranding />} />
       </Route>
     </Routes>
   );
