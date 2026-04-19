@@ -70,8 +70,13 @@ class CartItem(models.Model):
 class UpsellSetting(models.Model):
     STRATEGY_CHOICES = [
         ("balanced", "Balanced"),
-        ("margin", "Margin"),
-        ("volume", "Volume"),
+        ("highest_margin", "Highest Margin"),
+        ("highest_conversion", "Highest Conversion"),
+        ("premium_experience", "Premium Experience"),
+        ("inventory_movement", "Inventory Movement"),
+        # Legacy aliases kept for backward compatibility with existing stored values.
+        ("margin", "Margin (Legacy)"),
+        ("volume", "Volume (Legacy)"),
     ]
     AGGRESSIVENESS_CHOICES = [
         ("subtle", "Subtle"),
@@ -80,8 +85,12 @@ class UpsellSetting(models.Model):
     ]
     TONE_CHOICES = [
         ("friendly", "Friendly"),
-        ("professional", "Professional"),
-        ("playful", "Playful"),
+        ("premium", "Premium"),
+        ("minimal", "Minimal"),
+        ("luxury_casual", "Luxury Casual"),
+        # Legacy aliases kept for backward compatibility with existing stored values.
+        ("professional", "Professional (Legacy)"),
+        ("playful", "Playful (Legacy)"),
     ]
 
     restaurant = models.OneToOneField(Restaurant, on_delete=models.CASCADE, related_name="upsell_setting")
@@ -113,11 +122,12 @@ class UpsellRule(models.Model):
     RULE_TYPE_CHOICES = [
         ("pair", "Pair"),
         ("block", "Block"),
+        ("global_block", "Global Block"),
     ]
 
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="upsell_rules")
     type = models.CharField(max_length=20, choices=RULE_TYPE_CHOICES)
-    source_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="upsell_source_rules")
+    source_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="upsell_source_rules", null=True, blank=True)
     target_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="upsell_target_rules")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -173,3 +183,23 @@ class UpsellEvent(models.Model):
 
     def __str__(self):
         return f"{self.restaurant_id}:{self.trigger_point}:{self.action}:{self.upsell_item_id or 'na'}"
+
+
+class UpsellItemSetting(models.Model):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="upsell_item_settings")
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="upsell_item_settings")
+    enabled = models.BooleanField(default=True)
+    # Used by "Inventory Movement" strategy.
+    inventory_priority = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("restaurant", "item")
+        indexes = [
+            models.Index(fields=["restaurant", "enabled"]),
+            models.Index(fields=["restaurant", "inventory_priority"]),
+        ]
+
+    def __str__(self):
+        return f"{self.restaurant_id}:{self.item_id}:enabled={self.enabled}"

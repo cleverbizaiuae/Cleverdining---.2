@@ -4,9 +4,10 @@ from decimal import Decimal
 from typing import List
 
 from rest_framework import serializers
+from django.db.models import Count, Q, Sum
 
 from item.models import Item
-from .models import UpsellEvent, UpsellRule, UpsellSetting
+from .models import UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 
 
 def parse_category_ids(raw: str | List[int] | None) -> List[int]:
@@ -88,14 +89,19 @@ class UpsellRuleSerializer(serializers.ModelSerializer):
 
         source_item: Item = attrs.get("source_item") or getattr(self.instance, "source_item", None)
         target_item: Item = attrs.get("target_item") or getattr(self.instance, "target_item", None)
-        if not source_item or not target_item:
-            raise serializers.ValidationError("source_item and target_item are required.")
+        rule_type = attrs.get("type") or getattr(self.instance, "type", None)
+        if not target_item:
+            raise serializers.ValidationError("target_item is required.")
+        if rule_type in {"pair", "block"} and not source_item:
+            raise serializers.ValidationError("source_item is required for pair/block rules.")
+        if rule_type == "global_block" and source_item:
+            raise serializers.ValidationError("global_block rule must not include source_item.")
 
-        if source_item.restaurant_id != restaurant.id:
+        if source_item and source_item.restaurant_id != restaurant.id:
             raise serializers.ValidationError("source_item does not belong to this restaurant.")
         if target_item.restaurant_id != restaurant.id:
             raise serializers.ValidationError("target_item does not belong to this restaurant.")
-        if source_item.id == target_item.id:
+        if source_item and source_item.id == target_item.id:
             raise serializers.ValidationError("source_item and target_item must be different.")
         return attrs
 
@@ -131,3 +137,53 @@ class UpsellEventCreateSerializer(serializers.ModelSerializer):
     def validate_cart_value_at_time(self, value: Decimal) -> Decimal:
         return max(value, Decimal("0"))
 
+
+class UpsellItemSettingSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="item.item_name", read_only=True)
+    category_name = serializers.CharField(source="item.category.Category_name", read_only=True)
+    shown_count = serializers.IntegerField(read_only=True)
+    accepted_count = serializers.IntegerField(read_only=True)
+    rejected_count = serializers.IntegerField(read_only=True)
+    acceptance_rate = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = UpsellItemSetting
+        fields = [
+            "id",
+            "item",
+            "item_name",
+            "category_name",
+            "enabled",
+            "inventory_priority",
+            "shown_count",
+            "accepted_count",
+            "rejected_count",
+            "acceptance_rate",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "item_name", "category_name", "shown_count", "accepted_count", "rejected_count", "acceptance_rate", "updated_at"]
+
+
+def build_item_stats_map(restaurant_id: int):
+    rows = (
+        UpsellEvent.objects.filter(restaurant_id=restaurant_id, upsell_item_id__isnull=False)
+        .values("upsell_item_id")
+        .annotate(
+            shown=Count("id", filter=Q(action="shown")),
+            accepted=Count("id", filter=Q(action="accepted")),
+            rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
+            revenue=Sum("upsell_price", filter=Q(action="accepted")),
+        )
+    )
+    stats = {}
+    for row in rows:
+        shown = int(row.get("shown") or 0)
+        accepted = int(row.get("accepted") or 0)
+        stats[int(row["upsell_item_id"])] = {
+            "shown_count": shown,
+            "accepted_count": accepted,
+            "rejected_count": int(row.get("rejected") or 0),
+            "acceptance_rate": (accepted / shown * 100.0) if shown else 0.0,
+            "revenue": row.get("revenue"),
+        }
+    return stats

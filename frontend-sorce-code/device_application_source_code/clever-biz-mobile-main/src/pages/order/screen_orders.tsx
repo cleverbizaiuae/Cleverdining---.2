@@ -5,6 +5,7 @@ import { Order, OrderItem, OrderStage } from "./order-types";
 import { OrderCard } from "./order-card";
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import {
+  ArrowRight,
   Gift,
   X,
   Minus,
@@ -15,6 +16,7 @@ import {
   CreditCard,
   Banknote,
   Check,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
@@ -222,6 +224,8 @@ const ScreenOrders = () => {
   const [chwaziPoints, setChwaziPoints] = useState<ChwaziPointer[]>([]);
   const [chosenPointerId, setChosenPointerId] = useState<number | null>(null);
   const hasActiveBackendOrdersRef = useRef(false);
+  const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const [highlightedOrderIds, setHighlightedOrderIds] = useState<Set<string>>(new Set());
 
   const chwaziPointersRef = useRef<Map<number, ChwaziPointer>>(new Map());
   const chwaziIntervalRef = useRef<number | null>(null);
@@ -278,6 +282,36 @@ const ScreenOrders = () => {
 
   useEffect(() => {
     hasActiveBackendOrdersRef.current = orders.some((order) => Boolean(order.backendId));
+  }, [orders]);
+
+  useEffect(() => {
+    const currentIds = new Set(orders.map((order) => String(order.backendId || order.id)));
+    const prevIds = knownOrderIdsRef.current;
+    const newIds: string[] = [];
+    currentIds.forEach((id) => {
+      if (prevIds.size > 0 && !prevIds.has(id)) {
+        newIds.push(id);
+      }
+    });
+
+    if (newIds.length) {
+      setHighlightedOrderIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.add(id));
+        return next;
+      });
+      const timer = window.setTimeout(() => {
+        setHighlightedOrderIds((prev) => {
+          const next = new Set(prev);
+          newIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }, 2000);
+      knownOrderIdsRef.current = currentIds;
+      return () => window.clearTimeout(timer);
+    }
+
+    knownOrderIdsRef.current = currentIds;
   }, [orders]);
 
   const syncOrdersFromBackend = useCallback((backendList: BackendOrder[]) => {
@@ -634,7 +668,7 @@ const ScreenOrders = () => {
         clearTreat();
         setIsCheckoutOpen(false);
         navigate("/thankyou");
-      }, 1600);
+      }, 2500);
       return;
     }
 
@@ -813,11 +847,25 @@ const ScreenOrders = () => {
 
         {!loading && !err && orders.length === 0 && (
           <div className="flex flex-col items-center justify-center h-[52vh] text-center">
-            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-5">
-              <Receipt className="w-7 h-7 text-slate-400" />
+            <div className="w-24 h-24 rounded-full bg-slate-50 flex items-center justify-center mb-5">
+              <UtensilsCrossed className="w-16 h-16 text-slate-200" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">No active orders</h3>
-            <p className="text-slate-500 max-w-[240px] text-sm">Place your order from the menu and track status here.</p>
+            <h3 className="text-xl font-bold text-slate-700 mb-2">Nothing ordered yet</h3>
+            <p className="text-slate-400 max-w-[240px] text-sm">Head back to the menu to get started.</p>
+            <div className="mt-5 flex items-center gap-2">
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="h-10 px-4 rounded-xl bg-primary text-white text-sm font-bold inline-flex items-center gap-1.5"
+              >
+                Browse Menu <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={openChwazi}
+                className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50"
+              >
+                Play Games
+              </button>
+            </div>
           </div>
         )}
 
@@ -830,7 +878,7 @@ const ScreenOrders = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
               >
-                <OrderCard order={order} />
+                        <OrderCard order={order} isNew={highlightedOrderIds.has(String(order.backendId || order.id))} />
               </motion.div>
             ))}
           </div>
@@ -971,9 +1019,10 @@ const ScreenOrders = () => {
                             </button>
                           </div>
 
-                          <p className="text-xs text-center text-slate-500">
-                            Per-person amount <span className="font-bold text-slate-800">{fmt(displayTotal)}</span>
-                          </p>
+                          <div className="rounded-xl bg-primary/5 border border-primary/20 py-3 text-center">
+                            <p className="text-[11px] text-slate-500 uppercase tracking-wider">Per person</p>
+                            <p className="text-2xl font-black text-primary mt-0.5">{fmt(displayTotal)}</p>
+                          </div>
                         </div>
                       )}
 
@@ -1010,6 +1059,10 @@ const ScreenOrders = () => {
                               );
                             })}
                           </div>
+                          <div className="sticky bottom-0 bg-white border border-primary/20 rounded-xl px-3 py-2 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-500">Your items</span>
+                            <span className="text-sm font-black text-primary">{fmt(myItemsSubtotal)}</span>
+                          </div>
                         </div>
                       )}
 
@@ -1043,7 +1096,9 @@ const ScreenOrders = () => {
                                 : "border-slate-200 bg-white text-slate-500"
                             }`}
                           >
-                            {tip.label}
+                            {tip.id === "none"
+                              ? "None"
+                              : `${tip.label} (${fmt((subtotal * Number(tip.id)) / 100)})`}
                           </button>
                         ))}
                       </div>
@@ -1118,7 +1173,11 @@ const ScreenOrders = () => {
                       disabled={isProcessingPayment || !canPay}
                       className="w-full h-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20 bg-[#0055FE] text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isProcessingPayment ? "Processing..." : `Pay Now · ${fmt(displayTotal)}`}
+                      {isProcessingPayment
+                        ? "Processing..."
+                        : splitMode === "count"
+                          ? `Pay My Share · ${fmt(displayTotal)}`
+                          : `Pay Now · ${fmt(displayTotal)}`}
                     </button>
 
                     <button

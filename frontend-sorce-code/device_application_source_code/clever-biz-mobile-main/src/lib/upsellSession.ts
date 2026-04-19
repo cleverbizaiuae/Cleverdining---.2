@@ -1,6 +1,8 @@
 const SESSION_KEY = "upsell_session_id";
 const SIGNALS_KEY = "upsell_signals";
 const DISMISSED_ITEMS_KEY = "upsell_dismissed_items";
+const ACCEPTED_ITEMS_KEY = "upsell_accepted_items";
+const AFTER_ADD_COUNT_KEY = "cb_suggest_after_add";
 
 type SignalState = {
   categoryDeclines: Record<string, number>;
@@ -44,6 +46,12 @@ export function resetUpsellSession(): void {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SIGNALS_KEY);
   localStorage.removeItem(DISMISSED_ITEMS_KEY);
+  localStorage.removeItem(ACCEPTED_ITEMS_KEY);
+  try {
+    sessionStorage.removeItem(AFTER_ADD_COUNT_KEY);
+  } catch {
+    // Non-blocking
+  }
 }
 
 function getSignalState(): SignalState {
@@ -121,6 +129,37 @@ export function isUpsellItemDismissed(itemId: number): boolean {
   return current.includes(itemId);
 }
 
+export function markUpsellItemAccepted(itemId: number): void {
+  const current = readJson<number[]>(ACCEPTED_ITEMS_KEY, []);
+  if (current.includes(itemId)) return;
+  writeJson(ACCEPTED_ITEMS_KEY, [...current, itemId]);
+}
+
+export function isUpsellItemAccepted(itemId: number): boolean {
+  const current = readJson<number[]>(ACCEPTED_ITEMS_KEY, []);
+  return current.includes(itemId);
+}
+
+export function canShowAfterAddUpsell(limit = 2): boolean {
+  try {
+    const current = Number(sessionStorage.getItem(AFTER_ADD_COUNT_KEY) || "0");
+    return current < Math.max(1, limit);
+  } catch {
+    return true;
+  }
+}
+
+export function incrementAfterAddUpsellCount(): number {
+  try {
+    const current = Number(sessionStorage.getItem(AFTER_ADD_COUNT_KEY) || "0");
+    const next = Number.isFinite(current) ? current + 1 : 1;
+    sessionStorage.setItem(AFTER_ADD_COUNT_KEY, String(next));
+    return next;
+  } catch {
+    return 0;
+  }
+}
+
 export function getUpsellTableNumber(): string {
   try {
     const raw = localStorage.getItem("userInfo");
@@ -135,4 +174,3 @@ export function getUpsellTableNumber(): string {
     return "";
   }
 }
-

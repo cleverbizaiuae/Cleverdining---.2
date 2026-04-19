@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections import defaultdict
+from itertools import combinations
 from decimal import Decimal
 from typing import Optional
 
+from django.core.cache import cache
 from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -13,12 +16,15 @@ from rest_framework.views import APIView
 
 from accounts.models import ChefStaff
 from device.models import GuestSession
+from item.models import Item
 from restaurant.models import Restaurant
-from .models import UpsellEvent, UpsellRule, UpsellSetting
+from .models import OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .upsell_serializers import (
+    UpsellItemSettingSerializer,
     UpsellEventCreateSerializer,
     UpsellRuleSerializer,
     UpsellSettingSerializer,
+    build_item_stats_map,
 )
 
 
@@ -154,6 +160,20 @@ class UpsellEventCreateAPIView(APIView):
             getattr(getattr(upsell_item, "category", None), "Category_name", "") if upsell_item else ""
         )
 
+        # Prevent obvious double-counting of rapid duplicate actions from client retries.
+        if payload["action"] in {"accepted", "declined", "dismissed"}:
+            duplicate_window_start = event_time - timezone.timedelta(seconds=5)
+            duplicate_exists = UpsellEvent.objects.filter(
+                restaurant=restaurant,
+                session_id=payload["session_id"],
+                trigger_point=payload["trigger_point"],
+                action=payload["action"],
+                upsell_item=upsell_item,
+                created_at__gte=duplicate_window_start,
+            ).exists()
+            if duplicate_exists:
+                return Response({"status": "duplicate_ignored"}, status=status.HTTP_200_OK)
+
         UpsellEvent.objects.create(
             restaurant=restaurant,
             guest_session=session,
@@ -176,6 +196,60 @@ class UpsellEventCreateAPIView(APIView):
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
 
 
+class UpsellAssociationStatsAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session_token = request.headers.get("X-Guest-Session-Token") or request.data.get("guest_session_token")
+        restaurant = None
+
+        if request.user and request.user.is_authenticated:
+            restaurant = get_restaurant_for_user(request.user)
+
+        if session_token:
+            session = GuestSession.objects.filter(session_token=session_token).order_by("-is_active", "-created_at").first()
+            if session:
+                restaurant = session.device.restaurant
+
+        # Keep endpoint non-blocking for client flows; return 200 if restaurant cannot be resolved.
+        if not restaurant:
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+
+        action = str(request.data.get("action") or "").strip().lower()
+        trigger_point = str(request.data.get("trigger_point") or "").strip().lower()
+        source_item_raw = request.data.get("source_item_id")
+        target_item_raw = request.data.get("upsell_item_id")
+
+        if action not in {"shown", "accepted", "dismissed"}:
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+        if trigger_point not in {"add_to_cart", "cart", "before_payment"}:
+            trigger_point = "add_to_cart"
+        if not str(source_item_raw).isdigit() or not str(target_item_raw).isdigit():
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+
+        source_item_id = int(source_item_raw)
+        target_item_id = int(target_item_raw)
+        if source_item_id == target_item_id:
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+
+        key = f"upsell_assoc:{restaurant.id}:{trigger_point}:{source_item_id}:{target_item_id}"
+        payload = cache.get(key) or {
+            "restaurant_id": restaurant.id,
+            "trigger_point": trigger_point,
+            "source_item_id": source_item_id,
+            "target_item_id": target_item_id,
+            "shown_count": 0,
+            "accepted_count": 0,
+            "dismissed_count": 0,
+            "updated_at": None,
+        }
+        counter_field = f"{action}_count"
+        payload[counter_field] = int(payload.get(counter_field, 0)) + 1
+        payload["updated_at"] = timezone.now().isoformat()
+        cache.set(key, payload, timeout=60 * 60 * 24 * 30)  # 30 days rolling cache
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
 class UpsellAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -190,6 +264,7 @@ class UpsellAnalyticsAPIView(APIView):
         total_shown = events.filter(action="shown").count()
         accepted_qs = events.filter(action="accepted")
         total_accepted = accepted_qs.count()
+        total_rejected = events.filter(action__in=["declined", "dismissed"]).count()
         acceptance_rate = (float(total_accepted) / float(total_shown) * 100.0) if total_shown else 0.0
         upsell_revenue = accepted_qs.aggregate(total=Sum("upsell_price"))["total"] or Decimal("0")
         avg_upsell_value = (upsell_revenue / total_accepted) if total_accepted else Decimal("0")
@@ -288,6 +363,7 @@ class UpsellAnalyticsAPIView(APIView):
             {
                 "total_shown": total_shown,
                 "total_accepted": total_accepted,
+                "total_rejected": total_rejected,
                 "acceptance_rate": round(acceptance_rate, 2),
                 "upsell_revenue": str(upsell_revenue),
                 "avg_upsell_value": str(avg_upsell_value),
@@ -357,3 +433,141 @@ class UpsellEventsByTableAPIView(APIView):
                 }
             )
         return Response({"events": response_data})
+
+
+class UpsellItemsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        restaurant = get_restaurant_for_user(request.user)
+        if not restaurant:
+            return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
+
+        search = (request.query_params.get("search") or "").strip().lower()
+        category_id = request.query_params.get("category_id")
+
+        items_qs = Item.objects.filter(restaurant=restaurant).select_related("category").order_by("item_name")
+        if search:
+            items_qs = items_qs.filter(item_name__icontains=search)
+        if category_id and str(category_id).isdigit():
+            items_qs = items_qs.filter(category_id=int(category_id))
+
+        settings_map = {
+            cfg.item_id: cfg
+            for cfg in UpsellItemSetting.objects.filter(restaurant=restaurant, item_id__in=items_qs.values_list("id", flat=True))
+        }
+        stats_map = build_item_stats_map(restaurant.id)
+
+        response_rows = []
+        for item in items_qs:
+            cfg = settings_map.get(item.id)
+            stats = stats_map.get(item.id, {})
+            response_rows.append(
+                {
+                    "item": item.id,
+                    "item_name": item.item_name,
+                    "category_name": getattr(item.category, "Category_name", ""),
+                    "enabled": cfg.enabled if cfg else True,
+                    "inventory_priority": cfg.inventory_priority if cfg else False,
+                    "shown_count": int(stats.get("shown_count", 0)),
+                    "accepted_count": int(stats.get("accepted_count", 0)),
+                    "rejected_count": int(stats.get("rejected_count", 0)),
+                    "acceptance_rate": float(stats.get("acceptance_rate", 0.0)),
+                }
+            )
+
+        return Response({"results": response_rows, "count": len(response_rows)})
+
+    def patch(self, request):
+        restaurant = get_restaurant_for_user(request.user)
+        if not restaurant:
+            return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
+
+        item_id = request.data.get("item_id") or request.data.get("item")
+        if not item_id or not str(item_id).isdigit():
+            return Response({"detail": "item_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            item = Item.objects.get(pk=int(item_id), restaurant=restaurant)
+        except Item.DoesNotExist:
+            return Response({"detail": "Item not found for this restaurant."}, status=status.HTTP_404_NOT_FOUND)
+
+        cfg, _ = UpsellItemSetting.objects.get_or_create(restaurant=restaurant, item=item)
+        if "enabled" in request.data:
+            cfg.enabled = bool(request.data.get("enabled"))
+        if "inventory_priority" in request.data:
+            cfg.inventory_priority = bool(request.data.get("inventory_priority"))
+        cfg.save()
+        return Response(
+            {
+                "item": item.id,
+                "enabled": cfg.enabled,
+                "inventory_priority": cfg.inventory_priority,
+            }
+        )
+
+
+class UpsellPairingIntelligenceAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        restaurant = get_restaurant_for_user(request.user)
+        if not restaurant:
+            return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
+
+        min_frequency_raw = request.query_params.get("min_frequency")
+        try:
+            min_frequency = max(2, int(min_frequency_raw or 2))
+        except (TypeError, ValueError):
+            min_frequency = 2
+
+        # Completed-order statuses for learning co-occurrence.
+        completed_statuses = ["delivered", "completed", "served"]
+        order_item_rows = (
+            OrderItem.objects.filter(order__restaurant=restaurant, order__status__in=completed_statuses)
+            .values("order_id", "item_id", "item__item_name")
+            .order_by("order_id")
+        )
+
+        order_to_items = defaultdict(list)
+        for row in order_item_rows:
+            order_to_items[int(row["order_id"])].append((int(row["item_id"]), row["item__item_name"]))
+
+        pair_counts = defaultdict(int)
+        item_counts = defaultdict(int)
+
+        for item_rows in order_to_items.values():
+            unique_items = {}
+            for item_id, item_name in item_rows:
+                unique_items[item_id] = item_name
+            unique_item_ids = sorted(unique_items.keys())
+            for item_id in unique_item_ids:
+                item_counts[item_id] += 1
+            for left_id, right_id in combinations(unique_item_ids, 2):
+                pair_counts[(left_id, right_id)] += 1
+
+        item_name_map = {
+            row["id"]: row["item_name"]
+            for row in Item.objects.filter(restaurant=restaurant, id__in=list(item_counts.keys())).values("id", "item_name")
+        }
+
+        results = []
+        for (left_id, right_id), frequency in pair_counts.items():
+            if frequency < min_frequency:
+                continue
+            left_count = max(item_counts.get(left_id, 1), 1)
+            right_count = max(item_counts.get(right_id, 1), 1)
+            confidence = max(frequency / left_count, frequency / right_count)
+            results.append(
+                {
+                    "source_item_id": left_id,
+                    "source_item_name": item_name_map.get(left_id, f"Item {left_id}"),
+                    "target_item_id": right_id,
+                    "target_item_name": item_name_map.get(right_id, f"Item {right_id}"),
+                    "frequency": frequency,
+                    "confidence": round(confidence, 4),
+                }
+            )
+
+        results.sort(key=lambda row: (row["frequency"], row["confidence"]), reverse=True)
+        return Response({"results": results[:200], "count": len(results)})

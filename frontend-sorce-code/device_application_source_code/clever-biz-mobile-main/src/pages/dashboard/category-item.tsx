@@ -19,18 +19,11 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        // Layout: Relative for absolute positioning
         "relative flex flex-col items-center justify-center p-1 transition-all duration-200 overflow-hidden",
-        "w-[80px] h-[90px] shrink-0",
-        // Shape
-        "rounded-2xl border", // More rounded for modern look
-        // Border Styles
-        isActive
-          ? "border-primary ring-2 ring-primary ring-offset-1"
-          : "border-gray-200 hover:border-primary/50"
+        "w-[72px] h-[72px] shrink-0 rounded-2xl",
+        isActive ? "border-2 border-primary shadow-sm shadow-primary/15" : "border border-gray-200 hover:border-primary/40",
       )}
     >
-      {/* Background Image - Absolute Full Cover */}
       {cat.image ? (
         <div className="absolute inset-0 z-0">
           <img
@@ -41,30 +34,26 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
               return url;
             })()}
             alt={cat.Category_name}
-            className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-110"
+            loading="lazy"
+            className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-105"
             onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.classList.add('bg-slate-200');
+              e.currentTarget.style.display = "none";
+              e.currentTarget.parentElement?.classList.add("bg-slate-200");
             }}
           />
-          {/* Subtle overlay */}
-          <div className="absolute inset-0 bg-black/5" />
+          <div className="absolute inset-0 bg-black/10" />
         </div>
       ) : (
-        // Fallback Background
-        <div className={cn("absolute inset-0 z-0 flex items-center justify-center bg-slate-100")}>
-          <span className="text-2xl mb-6">📁</span>
+        <div className="absolute inset-0 z-0 flex items-center justify-center bg-slate-100">
+          <span className="text-xl">📁</span>
         </div>
       )}
 
-      {/* Text Badge - Centered Pill */}
       <span
         className={cn(
-          "relative z-10 text-[10px] font-bold px-2 py-1.5 rounded-xl shadow-sm backdrop-blur-md transition-colors duration-200",
-          "w-[90%] text-center leading-[1.1] whitespace-normal break-words", // Multi-line support
-          isActive
-            ? "bg-primary/95 text-white"
-            : "bg-white/90 text-gray-800"
+          "relative z-10 text-xs font-bold px-1.5 py-1 rounded-lg shadow-sm backdrop-blur-md transition-colors duration-200",
+          "w-[90%] text-center leading-[1.1] whitespace-normal break-words",
+          isActive ? "bg-primary/95 text-white" : "bg-white/90 text-gray-800",
         )}
         style={{
           display: "-webkit-box",
@@ -75,6 +64,8 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       >
         {cat.Category_name}
       </span>
+
+      {isActive ? <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-primary" /> : null}
     </button>
   );
 };

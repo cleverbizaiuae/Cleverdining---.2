@@ -9,7 +9,7 @@ import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion, AnimatePresence } from "motion/react";
 import toast from "react-hot-toast";
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
 import axiosInstance, { API_BASE_URL } from "../lib/axios";
@@ -17,7 +17,7 @@ import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
-import { Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
@@ -93,6 +93,7 @@ function getBrandingView(userInfo: any, remoteBranding?: BrandApiConfig | null):
 }
 
 const LayoutDashboard = () => {
+  const BRAND_SPLASH_SESSION_KEY = "cb_brand_splash_seen";
   const location = useLocation();
 
 
@@ -294,11 +295,22 @@ const LayoutDashboard = () => {
       setShowBrandSplash(false);
       return;
     }
-
-    setShowBrandSplash(true);
-    const timer = window.setTimeout(() => setShowBrandSplash(false), 1400);
-    return () => window.clearTimeout(timer);
+    try {
+      const alreadySeen = sessionStorage.getItem(BRAND_SPLASH_SESSION_KEY) === "true";
+      setShowBrandSplash(!alreadySeen);
+    } catch {
+      setShowBrandSplash(true);
+    }
   }, [hasBranding]);
+
+  const dismissBrandSplash = useCallback(() => {
+    setShowBrandSplash(false);
+    try {
+      sessionStorage.setItem(BRAND_SPLASH_SESSION_KEY, "true");
+    } catch {
+      // Non-blocking
+    }
+  }, []);
 
 
   useEffect(() => {
@@ -398,7 +410,7 @@ const LayoutDashboard = () => {
 
   // Memoized filtered items to avoid re-computing on every render
   const filteredItems = useMemo(() => {
-    let result = items.filter(item => item.availability); // Only show available items
+    let result = [...items];
 
     // Determine active main category
     let activeCategoryIndex = selectedCategory;
@@ -432,8 +444,13 @@ const LayoutDashboard = () => {
       return [];
     }
 
+    if (search.trim()) {
+      const query = search.trim().toLowerCase();
+      result = result.filter((item) => String(item.item_name || "").toLowerCase().includes(query));
+    }
+
     return result;
-  }, [items, selectedCategory, selectedSubCategory, categories]);
+  }, [items, selectedCategory, selectedSubCategory, categories, search]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -494,19 +511,37 @@ const LayoutDashboard = () => {
   return (
     <CartProvider>
       {showBrandSplash && hasBranding && (
-        <div className="fixed inset-0 z-[120] bg-slate-950">
+        <div className="fixed inset-0 z-[120] bg-slate-950" onClick={dismissBrandSplash} role="button" tabIndex={0}>
           {brandingView.cover ? (
             <img src={brandingView.cover} alt="Brand splash" className="absolute inset-0 w-full h-full object-cover opacity-45" />
           ) : null}
           <div className="absolute inset-0 bg-gradient-to-b from-slate-900/40 to-slate-950/90" />
           <div className="relative h-full flex flex-col items-center justify-center px-6 text-center">
-            {brandingView.logo ? (
-              <img src={brandingView.logo} alt="Brand logo" className="w-20 h-20 rounded-2xl object-cover border border-white/20 mb-4" />
-            ) : (
-              <Logo className="scale-110 mb-4" />
-            )}
-            <p className="text-white text-2xl font-semibold tracking-tight">
-              {brandingView.name || "Welcome"}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.2 }}
+              className="mb-4"
+            >
+              {brandingView.logo ? (
+                <img src={brandingView.logo} alt="Brand logo" className="w-20 h-20 rounded-2xl object-cover border border-white/20" />
+              ) : (
+                <Logo className="scale-110" />
+              )}
+            </motion.div>
+            <p className="text-white text-2xl font-semibold tracking-tight mb-8">{brandingView.name || "Welcome"}</p>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissBrandSplash();
+              }}
+              className="w-full max-w-[320px] h-14 rounded-2xl bg-white text-primary font-black text-base px-5 inline-flex items-center justify-between shadow-xl"
+            >
+              <span>Enter Menu</span>
+              <ArrowRight className="w-5 h-5" strokeWidth={2.2} />
+            </button>
+            <p className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/40 text-xs">
+              Tap anywhere to skip
             </p>
           </div>
         </div>
@@ -520,7 +555,7 @@ const LayoutDashboard = () => {
             <div className="flex flex-col min-h-full">
               {/* Sticky Header */}
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
-              <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-gray-200/50 pb-2 pt-safe-top transition-all duration-300 shadow-sm">
+              <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-gray-200/70 pb-2 pt-safe-top transition-all duration-300 shadow-md shadow-slate-200/40">
                 <div className="px-4 py-3 flex items-center justify-between">
                   {/* Logo */}
                   <div className="block shrink-0">
@@ -536,12 +571,11 @@ const LayoutDashboard = () => {
                   </div>
 
                   {/* Table Info */}
-                  {tableName && (
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Table</span>
-                      <span className="text-lg font-bold text-foreground leading-none">{tableName}</span>
+                  {tableName ? (
+                    <div className="bg-slate-100 rounded-full px-3 py-1 border border-slate-200">
+                      <span className="text-xs font-bold text-slate-700">Table {tableName}</span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 {hasBranding && (brandingView.cover || brandingView.name) && (
@@ -561,13 +595,13 @@ const LayoutDashboard = () => {
                 {/* Search Bar */}
                 <div className="px-4 mt-1 mb-3">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
                       type="text"
                       placeholder="Search for food..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="w-full bg-gray-100 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      className="w-full bg-slate-50 ring-1 ring-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     />
                   </div>
                 </div>
@@ -591,16 +625,16 @@ const LayoutDashboard = () => {
 
                 {/* Sub-categories */}
                 {subCategories.length > 0 && (
-                  <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 bg-gray-50/50 mt-2">
-                    <div className="flex gap-2 pr-4 min-w-max">
+                  <div className="relative w-full overflow-x-auto no-scrollbar py-2 pl-4 bg-gray-50/50 mt-2">
+                    <div className="flex gap-2.5 pr-5 min-w-max">
                       {subCategories.map((sub, idx) => (
                         <button
                           key={sub.id}
                           onClick={() => setSelectedSubCategory(sub.id)}
                           className={cn(
-                            "shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
+                            "shrink-0 px-5 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
                             selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                              ? "bg-foreground text-background border-foreground"
+                              ? "bg-primary/10 text-primary border-primary/30"
                               : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary"
                           )}
                         >
@@ -608,6 +642,7 @@ const LayoutDashboard = () => {
                         </button>
                       ))}
                     </div>
+                    <div className="pointer-events-none absolute right-0 top-0 h-full w-4 bg-gradient-to-r from-transparent to-background/80" />
                   </div>
                 )}
               </header>

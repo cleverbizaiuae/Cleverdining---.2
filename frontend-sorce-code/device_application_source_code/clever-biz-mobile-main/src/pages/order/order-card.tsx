@@ -4,6 +4,7 @@ import { getSessionCurrencyCode } from "../../utils/regionSession";
 
 interface OrderCardProps {
   order: Order;
+  isNew?: boolean;
 }
 
 const steps: Array<{ id: OrderStage; label: string }> = [
@@ -43,13 +44,33 @@ const normalizeItems = (order: Order): OrderItem[] => {
   return source;
 };
 
-export const OrderCard = ({ order }: OrderCardProps) => {
+export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
   const currencyCode = getSessionCurrencyCode();
   const normalizedStatus = normalizeStatus(String(order.status));
   const currentStepIndex = steps.findIndex((step) => step.id === normalizedStatus);
   const items = normalizeItems(order);
   const total = parseMoney(order.total ?? order.total_price);
   const orderTime = order.timestamp || order.created_time;
+  const statusMeta =
+    normalizedStatus === "Pending"
+      ? { icon: "⏳", label: "Pending" }
+      : normalizedStatus === "Preparing"
+        ? { icon: "👨‍🍳", label: "Preparing" }
+        : { icon: "✅", label: "Served" };
+
+  const relativeTime = (value: string | undefined) => {
+    if (!value) return "--";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "--";
+    const diffMs = Date.now() - parsed.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "Just now";
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} hr ago`;
+    const diffDay = Math.floor(diffHour / 24);
+    return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+  };
 
   const fmt = (value: number) => {
     try {
@@ -65,14 +86,9 @@ export const OrderCard = ({ order }: OrderCardProps) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className={cn("bg-white rounded-2xl shadow-sm border overflow-hidden transition-colors duration-700", isNew ? "border-primary shadow-primary/20" : "border-gray-100")}>
       <div className="px-4 pt-3.5 pb-3 border-b border-gray-50">
-        <p className="text-xs text-slate-400 font-medium">
-          Ordered at{" "}
-          {orderTime
-            ? new Date(orderTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            : "--:--"}
-        </p>
+        <p className="text-xs text-slate-400 font-medium">Ordered {relativeTime(orderTime)}</p>
       </div>
 
       <div className="px-4 py-3 space-y-2">
@@ -82,7 +98,12 @@ export const OrderCard = ({ order }: OrderCardProps) => {
           const lineTotal = parseMoney(item.price) * Math.max(1, quantity);
           return (
             <div key={`${order.id}-${idx}-${itemName}`} className="flex items-center justify-between gap-3">
-              <span className="w-5 h-5 rounded-full bg-slate-100 text-[10px] font-bold text-slate-600 flex items-center justify-center shrink-0">
+              <span
+                className={cn(
+                  "w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0",
+                  Math.max(1, quantity) > 1 ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-600",
+                )}
+              >
                 {Math.max(1, quantity)}
               </span>
               <span className="text-sm text-slate-700 font-medium truncate flex-1">{itemName}</span>
@@ -95,17 +116,30 @@ export const OrderCard = ({ order }: OrderCardProps) => {
       </div>
 
       <div className="px-4 pb-4 pt-2 flex items-center justify-between border-t border-gray-50">
-        <div className="flex items-center gap-1.5">
-          {steps.map((step, idx) => (
-            <div
-              key={step.id}
-              className={cn(
-                "w-1.5 h-1.5 rounded-full transition-all",
-                idx <= currentStepIndex ? "bg-[#0055FE]" : "bg-slate-200",
-              )}
-            />
-          ))}
-          <span className="text-[11px] text-slate-400 ml-1">{normalizedStatus}</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center">
+            {steps.map((step, idx) => {
+              const reached = idx <= currentStepIndex;
+              const isCurrent = idx === currentStepIndex;
+              return (
+                <div key={step.id} className="flex items-center">
+                  <span
+                    className={cn(
+                      "w-2 h-2 rounded-full transition-all",
+                      reached ? "bg-[#0055FE]" : "bg-slate-200",
+                      isCurrent ? "ring-2 ring-primary/20 animate-pulse" : "",
+                    )}
+                  />
+                  {idx < steps.length - 1 && (
+                    <span className={cn("w-5 h-[2px] mx-1", idx < currentStepIndex ? "bg-[#0055FE]" : "bg-slate-200")} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <span className="text-[11px] text-slate-500 ml-1">
+            {statusMeta.icon} {statusMeta.label}
+          </span>
         </div>
         <span className="text-sm font-bold text-slate-900">{fmt(total)}</span>
       </div>

@@ -19,11 +19,8 @@ export const BottomNav = () => {
         { id: "orders", icon: ClipboardList, label: "Orders", path: "/dashboard/orders" },
     ];
 
-    const activeTab = tabs.find(tab => tab.path === location.pathname) || tabs[0];
-
     const handleTabClick = (tab: typeof tabs[0]) => {
         if (tab.id === "call") {
-            // Dispatch custom event for call handler in layout
             window.dispatchEvent(new CustomEvent("trigger-call-staff"));
             return;
         }
@@ -35,7 +32,7 @@ export const BottomNav = () => {
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] pb-[env(safe-area-inset-bottom)] pt-2 px-2">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] pt-2 px-2 pb-[max(env(safe-area-inset-bottom),8px)]">
             <div className="flex justify-around items-center w-full">
                 {tabs.map((tab) => {
                     const isActive = location.pathname === tab.path || (tab.id === "call" && false);
@@ -69,7 +66,7 @@ export const BottomNav = () => {
                                     <motion.span
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
-                                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm"
+                                        className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm"
                                     >
                                         {cart.length}
                                     </motion.span>
@@ -85,11 +82,12 @@ export const BottomNav = () => {
                             </div>
 
                             <span className={cn(
-                                "text-[10px] font-medium transition-colors duration-300",
+                                "text-[11px] font-medium transition-colors duration-300",
                                 isActive ? "text-primary" : "text-gray-400 group-hover:text-gray-600"
                             )}>
                                 {tab.label}
                             </span>
+                            {isActive ? <span className="mt-0.5 w-1 h-1 rounded-full bg-primary" /> : <span className="mt-0.5 w-1 h-1 rounded-full bg-transparent" />}
                         </button>
                     );
                 })}

@@ -1,5 +1,5 @@
 import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axiosInstance from "../lib/axios";
 import { type CartItem, useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
@@ -8,14 +8,19 @@ import { cn } from "clsx-for-tailwind";
 import { API_BASE_URL } from "../lib/axios";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import UpsellBottomSheet from "./UpsellBottomSheet";
+import { ChevronLeft, CheckCircle2, Minus, Plus } from "lucide-react";
 import {
   fetchUpsellSuggestions,
+  logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
   summarizeCart,
   type UpsellSuggestion,
 } from "../lib/upsellApi";
 import {
+  canShowAfterAddUpsell,
+  incrementAfterAddUpsellCount,
+  markUpsellItemAccepted,
   markUpsellItemDismissed,
   trackUpsellCategoryDecline,
 } from "../lib/upsellSession";
@@ -50,9 +55,13 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [showVideo, setShowVideo] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isImageLoading, setIsImageLoading] = useState(true);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [upsellSuggestions, setUpsellSuggestions] = useState<UpsellSuggestion[]>([]);
   const [upsellCartMetrics, setUpsellCartMetrics] = useState({ cartValueAtTime: 0, cartItemCount: 0 });
+  const upsellActiveRef = useRef(false);
+  const upsellSourceItemIdRef = useRef<number | null>(null);
+  const pendingUpsellActionRef = useRef<null | (() => Promise<void>)>(null);
   const { cart, addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
 
@@ -90,17 +99,26 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   });
 
   const handleAddToCart = async () => {
-    if (item) {
-      addToCart(item, quantity);
-      toast.success(`Added ${quantity} to cart!`);
+    if (!item || isAddingToCart) return;
+
+    setIsAddingToCart(true);
+    addToCart(item, quantity);
+    toast.success(`Added ${quantity} to cart!`);
+
+    const nextCart = [...cart, { ...item, quantity }];
+    const metrics = summarizeCart(nextCart);
+    setUpsellCartMetrics(metrics);
+    upsellSourceItemIdRef.current = Number(item.id);
+
+    window.setTimeout(async () => {
       close();
       if (onAddToCart) onAddToCart();
-
-      const nextCart = [...cart, { ...item, quantity }];
-      const metrics = summarizeCart(nextCart);
-      setUpsellCartMetrics(metrics);
+      setIsAddingToCart(false);
 
       try {
+        if (upsellActiveRef.current || !canShowAfterAddUpsell(2)) {
+          return;
+        }
         const suggestions = await fetchUpsellSuggestions({
           triggerPoint: "add_to_cart",
           sourceItemId: Number(item.id),
@@ -109,6 +127,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         if (!suggestions.length) return;
         setUpsellSuggestions(suggestions);
         setUpsellOpen(true);
+        upsellActiveRef.current = true;
+
         await logUpsellShownBatch({
           triggerPoint: "add_to_cart",
           suggestions,
@@ -116,42 +136,120 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           cartItemCount: metrics.cartItemCount,
           metadata: { source_item_id: item.id, source_category_id: item.category },
         });
+        await Promise.allSettled(
+          suggestions.map((suggestion) =>
+            logUpsellAssociationStat({
+              triggerPoint: "add_to_cart",
+              action: "shown",
+              sourceItemId: Number(item.id),
+              upsellItemId: suggestion.id,
+              metadata: { source_category_id: item.category },
+            })
+          )
+        );
       } catch {
         // Non-blocking by design.
       }
-    }
+    }, 220);
   };
 
   const acceptUpsellSuggestion = async (suggestion: UpsellSuggestion) => {
     addToCart(toCartItemFromUpsell(suggestion), 1);
     setUpsellOpen(false);
-    setUpsellSuggestions([]);
     toast.success(`${suggestion.item_name} added to cart`);
-    await logUpsellEvent({
-      triggerPoint: "add_to_cart",
-      action: "accepted",
-      suggestion,
-      cartValueAtTime: upsellCartMetrics.cartValueAtTime,
-      cartItemCount: upsellCartMetrics.cartItemCount,
-    });
+    pendingUpsellActionRef.current = async () => {
+      if (suggestion.id) {
+        markUpsellItemAccepted(suggestion.id);
+      }
+      incrementAfterAddUpsellCount();
+      await Promise.allSettled([
+        logUpsellEvent({
+          triggerPoint: "add_to_cart",
+          action: "accepted",
+          suggestion,
+          cartValueAtTime: upsellCartMetrics.cartValueAtTime,
+          cartItemCount: upsellCartMetrics.cartItemCount,
+        }),
+        logUpsellAssociationStat({
+          triggerPoint: "add_to_cart",
+          action: "accepted",
+          sourceItemId: upsellSourceItemIdRef.current || undefined,
+          upsellItemId: suggestion.id,
+        }),
+      ]);
+    };
   };
 
-  const dismissUpsellSuggestion = async (suggestion: UpsellSuggestion) => {
-    if (suggestion.id) {
-      markUpsellItemDismissed(suggestion.id);
-    }
-    if (suggestion.category) {
-      trackUpsellCategoryDecline(suggestion.category);
-    }
+  const dismissSingleSuggestion = async (suggestion: UpsellSuggestion) => {
     setUpsellOpen(false);
+    pendingUpsellActionRef.current = async () => {
+      if (suggestion.id) {
+        markUpsellItemDismissed(suggestion.id);
+      }
+      if (suggestion.category) {
+        trackUpsellCategoryDecline(suggestion.category);
+      }
+      incrementAfterAddUpsellCount();
+      await Promise.allSettled([
+        logUpsellEvent({
+          triggerPoint: "add_to_cart",
+          action: "dismissed",
+          suggestion,
+          cartValueAtTime: upsellCartMetrics.cartValueAtTime,
+          cartItemCount: upsellCartMetrics.cartItemCount,
+        }),
+        logUpsellAssociationStat({
+          triggerPoint: "add_to_cart",
+          action: "dismissed",
+          sourceItemId: upsellSourceItemIdRef.current || undefined,
+          upsellItemId: suggestion.id,
+        }),
+      ]);
+    };
+  };
+
+  const dismissManySuggestions = async (suggestions: UpsellSuggestion[]) => {
+    setUpsellOpen(false);
+    pendingUpsellActionRef.current = async () => {
+      const tasks: Promise<unknown>[] = [];
+      for (const suggestion of suggestions) {
+        if (suggestion.id) {
+          markUpsellItemDismissed(suggestion.id);
+        }
+        if (suggestion.category) {
+          trackUpsellCategoryDecline(suggestion.category);
+        }
+        tasks.push(
+          logUpsellEvent({
+            triggerPoint: "add_to_cart",
+            action: "dismissed",
+            suggestion,
+            cartValueAtTime: upsellCartMetrics.cartValueAtTime,
+            cartItemCount: upsellCartMetrics.cartItemCount,
+          })
+        );
+        tasks.push(
+          logUpsellAssociationStat({
+            triggerPoint: "add_to_cart",
+            action: "dismissed",
+            sourceItemId: upsellSourceItemIdRef.current || undefined,
+            upsellItemId: suggestion.id,
+          })
+        );
+      }
+      incrementAfterAddUpsellCount();
+      await Promise.allSettled(tasks);
+    };
+  };
+
+  const handleUpsellExited = async () => {
     setUpsellSuggestions([]);
-    await logUpsellEvent({
-      triggerPoint: "add_to_cart",
-      action: "dismissed",
-      suggestion,
-      cartValueAtTime: upsellCartMetrics.cartValueAtTime,
-      cartItemCount: upsellCartMetrics.cartItemCount,
-    });
+    upsellActiveRef.current = false;
+    const action = pendingUpsellActionRef.current;
+    pendingUpsellActionRef.current = null;
+    if (action) {
+      await action();
+    }
   };
 
   return (
@@ -162,15 +260,12 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
           {/* Hero Media Area */}
           <div className="relative w-full h-72 shrink-0 bg-black">
-            {/* Close Button */}
+            {/* Back Button */}
             <button
               onClick={close}
-              className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+              className="absolute top-4 left-4 z-30 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
+              <ChevronLeft className="w-5 h-5" strokeWidth={2.2} />
             </button>
 
             {showVideo && item?.video ? (
@@ -258,6 +353,11 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 )}
               </>
             )}
+            <div className="absolute left-4 bottom-4 z-20">
+              <span className="inline-flex items-center rounded-full bg-white/95 backdrop-blur-md border border-white px-3 py-1 text-sm font-bold text-slate-900 shadow-sm">
+                {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
+              </span>
+            </div>
             {/* Gradient Overlay for text readability if needed, though design says -mt-4 pulls white card up */}
           </div>
 
@@ -293,27 +393,48 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               <div className="flex items-center bg-gray-50 p-1 rounded-full border border-gray-100 shrink-0">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-10 h-10 flex items-center justify-center bg-white text-gray-600 rounded-full shadow-sm hover:bg-gray-50 transition-colors active:scale-95"
+                  disabled={quantity <= 1}
+                  className={cn(
+                    "w-10 h-10 flex items-center justify-center rounded-full shadow-sm transition-colors",
+                    quantity <= 1
+                      ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 active:scale-95"
+                  )}
                 >
-                  <span className="text-lg font-bold mb-0.5">-</span>
+                  <Minus className="w-4 h-4" strokeWidth={2.4} />
                 </button>
                 <span className="w-8 text-center font-bold text-lg tabular-nums text-foreground">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
                   className="w-10 h-10 flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-black/90 transition-colors active:scale-95"
                 >
-                  <span className="text-lg font-bold mb-0.5">+</span>
+                  <Plus className="w-4 h-4" strokeWidth={2.4} />
                 </button>
               </div>
 
               <button
                 onClick={handleAddToCart}
-                className="flex-1 h-12 sm:h-14 px-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-xl shadow-primary/20 min-w-0"
+                disabled={isAddingToCart}
+                className={cn(
+                  "flex-1 h-12 sm:h-14 px-3 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all active:scale-[0.98] min-w-0",
+                  isAddingToCart
+                    ? "bg-emerald-500 shadow-xl shadow-emerald-500/25 scale-[1.01]"
+                    : "bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
+                )}
               >
-                <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate px-1">Add to Cart</span>
-                <span className="text-sm sm:text-base font-bold whitespace-nowrap">
-                  {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
-                </span>
+                {isAddingToCart ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-green-200 animate-pulse" strokeWidth={2.4} />
+                    <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate px-1">Added</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate px-1">Add to Cart</span>
+                    <span className="text-sm sm:text-base font-bold whitespace-nowrap">
+                      {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -325,11 +446,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         suggestions={upsellSuggestions}
         currencyCode={currencyCode}
         onAccept={acceptUpsellSuggestion}
-        onDismiss={dismissUpsellSuggestion}
-        onClose={() => {
-          setUpsellOpen(false);
-          setUpsellSuggestions([]);
-        }}
+        onDismissSingle={dismissSingleSuggestion}
+        onDismissMany={dismissManySuggestions}
+        onExited={handleUpsellExited}
       />
     </Dialog>
   );

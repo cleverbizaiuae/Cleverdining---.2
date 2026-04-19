@@ -1,4 +1,4 @@
-import { Plus, Play, X } from "lucide-react";
+import { Plus, Play, UtensilsCrossed, X } from "lucide-react";
 import { useState } from "react";
 import { FoodItemTypes } from "./food-items";
 import { cn } from "clsx-for-tailwind";
@@ -12,20 +12,36 @@ interface FoodItemCardProps {
 
 export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
     const [showVideo, setShowVideo] = useState(false);
+    const [imageFailed, setImageFailed] = useState(false);
     const price = parseFloat(item.price);
     const discount = item.discount_percentage || 0;
     const discountedPrice = discount > 0 ? price - (price * discount / 100) : price;
     const currencyCode = getSessionCurrencyCode();
+    const isAvailable = item.availability !== false;
 
     return (
         <div
-            onClick={onAdd}
-            className="group relative grid grid-cols-[auto_1fr] gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden min-h-[7rem]"
+            onClick={() => {
+                if (!isAvailable) return;
+                onAdd();
+            }}
+            className={cn(
+                "group relative grid grid-cols-[auto_1fr] gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden min-h-[7rem] active:scale-[0.98] transition-transform duration-100",
+                !isAvailable ? "opacity-65" : ""
+            )}
         >
             {/* Discount Badge */}
             {discount > 0 && (
                 <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
                     {discount}% OFF
+                </div>
+            )}
+
+            {!isAvailable && (
+                <div className="absolute inset-0 bg-white/40 z-20 pointer-events-none">
+                    <span className="absolute left-3 top-3 rounded-full bg-slate-700 text-white text-[10px] font-bold px-2.5 py-1">
+                        Sold out
+                    </span>
                 </div>
             )}
 
@@ -79,7 +95,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                         />
                     ) : (
                         <>
-                            {item.image1 ? (
+                            {item.image1 && !imageFailed ? (
                                 <img
                                     src={(() => {
                                         let url = item.image1;
@@ -90,17 +106,17 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                                     alt={item.item_name}
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                     onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                        e.currentTarget.style.display = "none";
+                                        setImageFailed(true);
                                     }}
                                 />
                             ) : null}
 
                             {/* Fallback Placeholder */}
-                            <div className={cn("absolute inset-0 bg-gray-100 flex items-center justify-center", item.image1 ? "hidden" : "")}>
-                                <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
+                            <div className={cn("absolute inset-0 bg-slate-100 flex items-center justify-center", item.image1 && !imageFailed ? "hidden" : "")}>
+                                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                                    <UtensilsCrossed className="w-5 h-5 text-slate-500" strokeWidth={1.8} />
+                                </div>
                             </div>
                         </>
                     )
@@ -128,7 +144,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                         {item.item_name}
                     </h3>
 
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                         {item.description || "No description available."}
                     </p>
                 </div>
@@ -148,9 +164,16 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
+                            if (!isAvailable) return;
                             onAdd();
                         }}
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-primary hover:text-white active:scale-90 shadow-sm"
+                        disabled={!isAvailable}
+                        className={cn(
+                            "w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors active:scale-90 shadow-sm",
+                            isAvailable
+                                ? "bg-primary text-white hover:bg-primary/90"
+                                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        )}
                     >
                         <Plus size={20} strokeWidth={2.5} />
                     </button>

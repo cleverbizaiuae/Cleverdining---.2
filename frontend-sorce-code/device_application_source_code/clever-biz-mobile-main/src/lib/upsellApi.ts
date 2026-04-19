@@ -1,5 +1,6 @@
 import axiosInstance from "./axios";
 import {
+  isUpsellItemAccepted,
   getUpsellSessionId,
   getUpsellSignalsQueryParams,
   getUpsellTableNumber,
@@ -74,6 +75,7 @@ export async function fetchUpsellSuggestions(params: {
     if (!item || !Number.isInteger(item.id)) return false;
     if (item.availability === false) return false;
     if (isUpsellItemDismissed(item.id)) return false;
+    if (isUpsellItemAccepted(item.id)) return false;
     return true;
   }) as UpsellSuggestion[];
 }
@@ -137,3 +139,24 @@ export async function logUpsellShownBatch(params: {
   );
 }
 
+export async function logUpsellAssociationStat(params: {
+  triggerPoint: UpsellTriggerPoint;
+  action: "shown" | "accepted" | "dismissed";
+  sourceItemId?: number;
+  upsellItemId?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await axiosInstance.post("/api/upsell/association-stats", {
+      session_id: getUpsellSessionId(),
+      table_number: getUpsellTableNumber(),
+      trigger_point: params.triggerPoint,
+      action: params.action,
+      source_item_id: params.sourceItemId || null,
+      upsell_item_id: params.upsellItemId || null,
+      metadata: params.metadata || {},
+    });
+  } catch {
+    // Fire-and-forget by design.
+  }
+}

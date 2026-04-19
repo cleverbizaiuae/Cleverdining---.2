@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Clock3, Coffee, X, Zap } from "lucide-react";
+import { AlertCircle, ArrowRight, ChefHat, Clock3, Coffee, X, Zap } from "lucide-react";
 import { useCart, type CartItem } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { API_BASE_URL } from "../lib/axios";
@@ -68,6 +68,8 @@ const ScreenCart = () => {
   const [upsellLoading, setUpsellLoading] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [itemTimings, setItemTimings] = useState<Record<string, TimingValue>>({});
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("card");
+  const [specialRequest, setSpecialRequest] = useState("");
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const toSafeNumber = (value: unknown): number => {
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -126,6 +128,19 @@ const ScreenCart = () => {
     0
   );
   const currencyCode = getSessionCurrencyCode();
+  const tableNumber = useMemo(() => {
+    try {
+      const userInfo = localStorage.getItem("userInfo");
+      if (!userInfo) return "N/A";
+      const parsed = JSON.parse(userInfo);
+      const fromRestaurant = parsed?.user?.restaurants?.[0]?.table_name;
+      const fromUser = parsed?.table_name;
+      const value = String(fromRestaurant || fromUser || "").trim();
+      return value || "N/A";
+    } catch {
+      return "N/A";
+    }
+  }, []);
   const cartFingerprint = useMemo(
     () => validCartItems.map((item) => `${item.id}:${item.quantity}`).sort().join("|"),
     [validCartItems]
@@ -298,8 +313,8 @@ const ScreenCart = () => {
         .filter(Boolean)
         .join("");
 
-      const specialRequest = "";
-      const mergedNotes = `${specialRequest}${timingNotes}`.trim();
+      const paymentTag = `[PAYMENT:${paymentMethod}]`;
+      const mergedNotes = `${specialRequest.trim()}${timingNotes}${paymentTag}`.trim();
 
       const orderData: Record<string, unknown> = {
         restaurant,
@@ -368,6 +383,8 @@ const ScreenCart = () => {
       toast.success("Order placed successfully!");
       await clearCart();
       setItemTimings({});
+      setSpecialRequest("");
+      setPaymentMethod("card");
       setShowReviewModal(false);
       // Double check cleanup
       if (guestSessionToken) {
@@ -741,70 +758,87 @@ const ScreenCart = () => {
       )}
 
       {showReviewModal && (
-        <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-[1px] p-4 flex items-end sm:items-center sm:justify-center">
-          <div className="w-full sm:max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Review Order</h3>
-                <p className="text-[11px] text-slate-400">Confirm details before placing</p>
-              </div>
+        <div className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[1px] p-4 flex items-center justify-center">
+          <div className="w-[92%] max-w-[380px] bg-white rounded-[22px] shadow-2xl border border-slate-100 overflow-hidden max-h-[88vh] flex flex-col">
+            <div className="relative px-5 pt-5 pb-4 text-center border-b border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowReviewModal(false)}
-                className="w-7 h-7 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center"
+                className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
               </button>
-            </div>
-
-            <div className="px-4 py-3 max-h-[55vh] overflow-y-auto space-y-2.5">
-              {validCartItems.map((item) => (
-                <div key={`review-${item.id}`} className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg border border-slate-100 px-3 py-2">
-                  <span className="text-xs text-slate-700 font-medium truncate">
-                    {item.item_name} <span className="text-slate-400">x{item.quantity}</span>
-                  </span>
-                  <span className="text-xs font-semibold text-slate-700 shrink-0">
-                    {currencyCode} {(toSafeNumber(item.price) * item.quantity).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-
-              {validCartItems.filter((item) => itemTimings[String(item.id)]).length > 0 && (
-                <div className="space-y-1 mt-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">
-                    Service Timing
-                  </p>
-                  {validCartItems
-                    .filter((item) => itemTimings[String(item.id)])
-                    .map((item) => (
-                      <div
-                        key={`timing-${item.id}`}
-                        className="flex items-center gap-2 px-2 py-1.5 bg-primary/5 rounded-lg border border-primary/10"
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                        <span className="text-xs text-primary font-medium">
-                          {item.item_name} — {TIMING_LABEL[itemTimings[String(item.id)]!]}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-
-            <div className="px-4 py-3 border-t border-slate-100 bg-white space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Total</span>
-                <span className="font-bold text-slate-900">
-                  {currencyCode} {totalCost.toFixed(2)}
-                </span>
+              <div className="w-11 h-11 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto mb-2">
+                <ChefHat className="w-5 h-5 text-slate-500" strokeWidth={1.8} />
               </div>
+              <h3 className="text-[28px] leading-none font-bold text-slate-900 tracking-tight">Review Your Order</h3>
+              <p className="text-xs text-slate-500 mt-1">We want your meal to be perfect.</p>
+              <p className="text-[11px] text-slate-400 mt-1.5">Table {tableNumber}</p>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-600 font-bold text-[11px] uppercase tracking-wider">
+                  <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                  Allergies & Special Requests
+                </div>
+                <textarea
+                  placeholder="e.g. Nut allergy, Gluten free, Extra spicy..."
+                  value={specialRequest}
+                  onChange={(e) => setSpecialRequest(e.target.value)}
+                  className="w-full bg-white border border-slate-300 focus-visible:ring-primary/20 focus:outline-none focus:border-primary/30 min-h-[60px] text-sm rounded-xl p-3"
+                />
+              </div>
+
+              <div className="space-y-2.5">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Your Order:</p>
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  {validCartItems.map((item) => (
+                    <div key={`review-${item.id}`} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">
+                          {item.quantity}x {item.item_name}
+                        </p>
+                        {itemTimings[String(item.id)] && (
+                          <p className="text-[10px] text-primary font-medium mt-0.5">
+                            {TIMING_LABEL[itemTimings[String(item.id)]!]}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-slate-800 shrink-0">
+                        {currencyCode} {(toSafeNumber(item.price) * item.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between items-center px-1 pt-0.5">
+                  <span className="text-xl font-bold text-slate-900">Total</span>
+                  <span className="text-xl font-bold text-slate-900">
+                    {currencyCode} {totalCost.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 pb-5 pt-1 bg-white border-t border-slate-100 flex flex-col gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={handleOrderNow}
                 disabled={isSubmittingOrder}
-                className="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-70 transition-colors"
+                className="w-full h-11 rounded-xl text-base font-bold shadow-lg bg-[#4B2800] hover:bg-[#3e2100] text-white disabled:opacity-70 transition-colors"
               >
-                {isSubmittingOrder ? "Placing..." : "Confirm & Place Order"}
+                {isSubmittingOrder
+                  ? "Placing Order..."
+                  : `Place Order · ${currencyCode} ${totalCost.toFixed(2)}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReviewModal(false)}
+                disabled={isSubmittingOrder}
+                className="rounded-xl text-slate-500 text-sm h-9 hover:bg-slate-50 transition-colors"
+              >
+                Wait, I forgot something...
               </button>
             </div>
           </div>
