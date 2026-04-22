@@ -12,7 +12,7 @@ interface WebSocketContextType {
   response: Message | {
     type: string,
     order: any
-  };
+  } | null;
 }
 
 // Create a WebSocket context
@@ -43,7 +43,10 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
   const tokenToUse = accessToken || guestSessionToken;
   const wsUrl = `${WS_BASE_URL}/ws/alldatalive/${id}/?token=${tokenToUse}`;
 
-  const [response, setResponse] = useState<Message | {}>({});
+  const [response, setResponse] = useState<Message | {
+    type: string;
+    order: any;
+  } | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connectWebSocket = () => {
