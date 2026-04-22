@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowRight, ChefHat, Clock3, Coffee, X, Zap } from "lucide-react";
+import { AlertCircle, ArrowRight, Banknote, ChefHat, Clock3, Coffee, CreditCard, MapPin, X, Zap } from "lucide-react";
 import { useCart, type CartItem } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { API_BASE_URL } from "../lib/axios";
@@ -759,8 +759,8 @@ const ScreenCart = () => {
 
       {showReviewModal && (
         <div className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[1px] p-4 flex items-center justify-center">
-          <div className="w-[92%] max-w-[380px] bg-white rounded-[22px] shadow-2xl border border-slate-100 overflow-hidden max-h-[88vh] flex flex-col">
-            <div className="relative px-5 pt-5 pb-4 text-center border-b border-slate-100">
+          <div className="w-[90%] max-w-sm bg-white rounded-3xl border-none shadow-2xl p-0 overflow-hidden gap-0 max-h-[88vh] flex flex-col">
+            <div className="relative p-5 pb-4 border-b border-slate-100 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowReviewModal(false)}
@@ -768,17 +768,98 @@ const ScreenCart = () => {
               >
                 <X className="w-4 h-4" />
               </button>
-              <div className="w-11 h-11 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto mb-2">
-                <ChefHat className="w-5 h-5 text-slate-500" strokeWidth={1.8} />
+
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
+                  <ChefHat className="w-4 h-4 text-slate-500" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 leading-tight">Review Your Order</h3>
+                  <p className="text-xs text-slate-500">Check everything looks right</p>
+                </div>
               </div>
-              <h3 className="text-[28px] leading-none font-bold text-slate-900 tracking-tight">Review Your Order</h3>
-              <p className="text-xs text-slate-500 mt-1">We want your meal to be perfect.</p>
-              <p className="text-[11px] text-slate-400 mt-1.5">Table {tableNumber}</p>
+
+              <div className="flex items-center gap-2 mt-3">
+                <span className="flex items-center gap-1 bg-slate-100 text-slate-600 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  <MapPin className="w-3 h-3" strokeWidth={1.8} />
+                  Table {tableNumber}
+                </span>
+                <span className="flex items-center gap-1 bg-primary/8 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
+                  <Clock3 className="w-3 h-3" strokeWidth={1.8} />
+                  ~15–20 min
+                </span>
+              </div>
             </div>
 
-            <div className="px-5 py-4 overflow-y-auto space-y-4">
+            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-slate-600 font-bold text-[11px] uppercase tracking-wider">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Order</p>
+                {validCartItems.map((item) => (
+                  <div key={`review-${item.id}`} className="flex items-center gap-3 bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0">
+                      <img
+                        src={resolveImageUrl(item.image1)}
+                        alt={item.item_name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{item.item_name}</p>
+                      {itemTimings[String(item.id)] && (
+                        <p className="text-[10px] text-primary font-medium mt-0.5">
+                          {TIMING_LABEL[itemTimings[String(item.id)]!]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-gray-900">{currencyCode} {(toSafeNumber(item.price) * item.quantity).toFixed(2)}</p>
+                      <p className="text-[10px] text-slate-400">×{item.quantity}</p>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex justify-between items-center px-1 pt-1">
+                  <span className="text-sm font-bold text-gray-900">Total</span>
+                  <span className="text-lg font-bold text-primary">
+                    {currencyCode} {totalCost.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment</p>
+                <div className="flex gap-2">
+                  {(["card", "cash"] as const).map((method) => (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                        paymentMethod === method
+                          ? "bg-primary text-white border-primary shadow-sm"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:border-primary/40"
+                      }`}
+                    >
+                      {method === "card" ? (
+                        <>
+                          <CreditCard className="w-4 h-4" strokeWidth={1.8} />
+                          Card
+                        </>
+                      ) : (
+                        <>
+                          <Banknote className="w-4 h-4" strokeWidth={1.8} />
+                          Cash
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-600 font-bold text-[10px] uppercase tracking-widest">
                   <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
                   Allergies & Special Requests
                 </div>
@@ -786,47 +867,17 @@ const ScreenCart = () => {
                   placeholder="e.g. Nut allergy, Gluten free, Extra spicy..."
                   value={specialRequest}
                   onChange={(e) => setSpecialRequest(e.target.value)}
-                  className="w-full bg-white border border-slate-300 focus-visible:ring-primary/20 focus:outline-none focus:border-primary/30 min-h-[60px] text-sm rounded-xl p-3"
+                  className="bg-gray-50 border border-gray-200 focus-visible:ring-primary/20 min-h-[56px] text-sm rounded-xl w-full p-3"
                 />
-              </div>
-
-              <div className="space-y-2.5">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Your Order:</p>
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                  {validCartItems.map((item) => (
-                    <div key={`review-${item.id}`} className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-800 truncate">
-                          {item.quantity}x {item.item_name}
-                        </p>
-                        {itemTimings[String(item.id)] && (
-                          <p className="text-[10px] text-primary font-medium mt-0.5">
-                            {TIMING_LABEL[itemTimings[String(item.id)]!]}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-sm font-semibold text-slate-800 shrink-0">
-                        {currencyCode} {(toSafeNumber(item.price) * item.quantity).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-between items-center px-1 pt-0.5">
-                  <span className="text-xl font-bold text-slate-900">Total</span>
-                  <span className="text-xl font-bold text-slate-900">
-                    {currencyCode} {totalCost.toFixed(2)}
-                  </span>
-                </div>
               </div>
             </div>
 
-            <div className="px-5 pb-5 pt-1 bg-white border-t border-slate-100 flex flex-col gap-2.5 shrink-0">
+            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={handleOrderNow}
                 disabled={isSubmittingOrder}
-                className="w-full h-11 rounded-xl text-base font-bold shadow-lg bg-[#4B2800] hover:bg-[#3e2100] text-white disabled:opacity-70 transition-colors"
+                className="w-full h-12 rounded-xl text-base font-bold shadow-lg shadow-primary/20 bg-[#4B2800] hover:bg-[#3e2100] text-white disabled:opacity-70 transition-colors"
               >
                 {isSubmittingOrder
                   ? "Placing Order..."
@@ -836,7 +887,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={() => setShowReviewModal(false)}
                 disabled={isSubmittingOrder}
-                className="rounded-xl text-slate-500 text-sm h-9 hover:bg-slate-50 transition-colors"
+                className="rounded-xl text-muted-foreground text-sm h-10 hover:bg-slate-50 transition-colors"
               >
                 Wait, I forgot something...
               </button>
