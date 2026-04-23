@@ -21,6 +21,7 @@ from asgiref.sync import async_to_sync
 from datetime import date,timedelta
 from django.db.models import Sum
 from channels.layers import get_channel_layer
+from .schema_guard import ensure_order_notes_column
 channel_layer = get_channel_layer()
 from message.models import ChatMessage
 from datetime import datetime
@@ -33,6 +34,8 @@ class OrderCreateAPIView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
+        # Production safety: self-heal legacy DBs missing `order_order.notes`
+        ensure_order_notes_column()
         # Override create to return full OrderDetailSerializer data (including ID)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -421,6 +424,7 @@ class MyOrdersAPIView(generics.ListAPIView):
     search_fields = ['id', 'device__table_name']
 
     def get_queryset(self):
+        ensure_order_notes_column()
         user = self.request.user
         # Optimized: Use select_related and prefetch_related to avoid N+1 queries
         base_qs = Order.objects.select_related(
@@ -464,6 +468,7 @@ class MySingleOrderAPIView(generics.RetrieveAPIView):
     lookup_field = 'pk' 
 
     def get_queryset(self):
+        ensure_order_notes_column()
         user = self.request.user
         if user.is_authenticated:
             return Order.objects.filter(
@@ -494,6 +499,7 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
     search_fields = ['id', 'device__table_name']
 
     def get_queryset(self):
+        ensure_order_notes_column()
         try:
             user = self.request.user
             
@@ -686,6 +692,7 @@ class OwnerOrderDetailAPIView(generics.RetrieveAPIView):
     lookup_field = 'pk'
 
     def get_queryset(self):
+        ensure_order_notes_column()
         user = self.request.user
         base_qs = Order.objects.select_related(
             'device', 'restaurant', 'guest_session', 'business_day'
@@ -715,6 +722,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
     search_fields = ['id', 'device__table_name']
 
     def get_queryset(self):
+        ensure_order_notes_column()
         user = self.request.user
         print(f"DEBUG_ORDERS: Fetching orders for user {user.email} (ID: {user.id}) Role: {getattr(user, 'role', 'N/A')}")
         

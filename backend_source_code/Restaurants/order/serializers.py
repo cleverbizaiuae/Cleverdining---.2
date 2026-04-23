@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Order, OrderItem, Cart, CartItem
 from item.models import Item
+from .schema_guard import ensure_order_notes_column
 
 class OrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name')
@@ -51,6 +52,11 @@ class OrderCreateSerializerFixed(serializers.ModelSerializer):
         notes = validated_data.get('notes')
         if (notes is None or notes == '') and special_request:
             validated_data['notes'] = special_request
+
+        # Production safety: ensure legacy databases have `order_order.notes`
+        # before model insert is attempted.
+        ensure_order_notes_column()
+
         order = Order.objects.create(**validated_data)
         total = 0
         from rest_framework.exceptions import ValidationError
