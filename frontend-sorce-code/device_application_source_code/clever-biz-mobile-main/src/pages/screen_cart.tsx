@@ -15,7 +15,6 @@ import {
   type UpsellSuggestion,
   type UpsellTriggerPoint,
 } from "../lib/upsellApi";
-import { markUpsellItemDismissed, trackUpsellCategoryDecline } from "../lib/upsellSession";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -126,6 +125,10 @@ const ScreenCart = () => {
   const totalCost = validCartItems.reduce(
     (sum, item) => sum + toSafeNumber(item.price) * item.quantity,
     0
+  );
+  const activeCartUpsells = useMemo(
+    () => (beforePaymentSuggestions.length > 0 ? beforePaymentSuggestions : upsellSuggestions).slice(0, 1),
+    [beforePaymentSuggestions, upsellSuggestions]
   );
   const currencyCode = getSessionCurrencyCode();
   const tableNumber = useMemo(() => {
@@ -269,27 +272,6 @@ const ScreenCart = () => {
     await logUpsellEvent({
       triggerPoint,
       action: "accepted",
-      suggestion: item,
-      cartValueAtTime: cartMetrics.cartValueAtTime,
-      cartItemCount: cartMetrics.cartItemCount,
-    });
-  };
-
-  const dismissSuggestion = async (item: UpsellSuggestion, triggerPoint: UpsellTriggerPoint) => {
-    if (item.id) {
-      markUpsellItemDismissed(item.id);
-    }
-    if (item.category) {
-      trackUpsellCategoryDecline(item.category);
-    }
-    if (triggerPoint === "before_payment") {
-      setBeforePaymentSuggestions((prev) => prev.filter((entry) => entry.id !== item.id));
-    } else {
-      setUpsellSuggestions((prev) => prev.filter((entry) => entry.id !== item.id));
-    }
-    await logUpsellEvent({
-      triggerPoint,
-      action: "dismissed",
       suggestion: item,
       cartValueAtTime: cartMetrics.cartValueAtTime,
       cartItemCount: cartMetrics.cartItemCount,
@@ -689,86 +671,81 @@ const ScreenCart = () => {
           </AnimatePresence>
         )}
 
-        {validCartItems.length > 0 && beforePaymentSuggestions.length === 0 && (upsellLoading || upsellSuggestions.length > 0) && (
-          <div className="mt-4 bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">Recommended Add-ons</h3>
-              {upsellLoading && <span className="text-xs text-gray-400">Loading...</span>}
-            </div>
-            {upsellSuggestions.length === 0 ? (
-              <p className="text-xs text-gray-500">No add-on suggestions right now.</p>
-            ) : (
-              <div className="space-y-3">
-                {upsellSuggestions.map((suggestion) => (
-                  <div
-                    key={suggestion.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{suggestion.item_name}</p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {suggestion.upsell_message || "You might like this add-on."}
+        {validCartItems.length > 0 && (upsellLoading || activeCartUpsells.length > 0) && (
+          <div className="mt-2">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B39F89]">
+              Before you forget...
+            </p>
+            <div className="mt-1.5 bg-white border border-[#EFE7DD] rounded-2xl p-3 shadow-[0_8px_24px_rgba(75,40,0,0.06)]">
+              {upsellLoading && activeCartUpsells.length === 0 ? (
+                <p className="text-xs text-[#9B8D7B]">Loading suggestion...</p>
+              ) : activeCartUpsells.length === 0 ? (
+                <p className="text-xs text-[#9B8D7B]">No add-on suggestion right now.</p>
+              ) : (
+                activeCartUpsells.map((suggestion) => (
+                  <div key={suggestion.id} className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden border border-[#F3ECE2] bg-[#F9F6F1] shrink-0">
+                      <img
+                        src={resolveImageUrl(suggestion.image1)}
+                        alt={suggestion.item_name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9B7A4E]">
+                        While you wait
                       </p>
-                      <p className="text-xs text-blue-600 mt-1">
+                      <p className="text-[15px] font-bold text-[#2F2418] leading-tight truncate">
+                        {suggestion.item_name}
+                      </p>
+                      <p className="text-[11px] text-[#9B8D7B] leading-tight line-clamp-2">
+                        {suggestion.upsell_message || "A starter to keep things going before the main arrives."}
+                      </p>
+                      <p className="text-base font-bold text-[#4B2800] mt-1">
                         {currencyCode} {toSafeNumber(suggestion.price).toFixed(2)}
                       </p>
                     </div>
                     <button
-                      onClick={() => addSuggestedItem(suggestion, "cart")}
-                      className="shrink-0 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold hover:bg-blue-100 transition-colors"
+                      onClick={() =>
+                        addSuggestedItem(
+                          suggestion,
+                          beforePaymentSuggestions.length > 0 ? "before_payment" : "cart"
+                        )
+                      }
+                      className="shrink-0 rounded-full bg-[#4B2800] text-white px-3.5 py-1.5 text-sm font-bold hover:bg-[#3F2200] transition-colors"
                     >
-                      Add
-                    </button>
-                    <button
-                      onClick={() => dismissSuggestion(suggestion, "cart")}
-                      className="shrink-0 rounded-full border border-gray-200 text-gray-500 px-3 py-1 text-xs font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      No Thanks
+                      + Add
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
       {validCartItems.length > 0 && (
         <div className="w-full mt-auto">
-          <div className="fixed bottom-24 left-4 right-4 bg-white p-4 shadow-xl rounded-2xl z-50 max-w-2xl mx-auto border border-gray-100">
-            {beforePaymentSuggestions.length > 0 && (
-              <div className="mb-4 border border-blue-100 bg-blue-50/40 rounded-xl p-3">
-                <p className="text-xs font-semibold text-blue-700 mb-2">Before You Pay</p>
-                {beforePaymentSuggestions.slice(0, 2).map((suggestion) => (
-                  <div key={`bp-${suggestion.id}`} className="flex items-center justify-between gap-2 py-1.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{suggestion.item_name}</p>
-                      <p className="text-xs text-gray-500 truncate">{suggestion.upsell_message || "Last-minute add-on suggestion."}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => dismissSuggestion(suggestion, "before_payment")}
-                        className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-white"
-                      >
-                        No
-                      </button>
-                      <button
-                        onClick={() => addSuggestedItem(suggestion, "before_payment")}
-                        className="rounded-full bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                ))}
+          <div className="fixed bottom-[calc(68px+env(safe-area-inset-bottom))] left-3 right-3 bg-white px-4 pt-3 pb-3 shadow-[0_14px_40px_rgba(75,40,0,0.12)] rounded-3xl z-50 max-w-2xl mx-auto border border-[#EFE7DD]">
+            <div className="flex justify-between items-start mb-3 px-0.5">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#9B8D7B]">Total Quantity</p>
+                <p className="text-[31px] leading-[1.05] font-bold text-[#221A10]">
+                  {totalQuantity} <span className="text-[28px]">Items</span>
+                </p>
               </div>
-            )}
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-gray-600">Total Quantity: <span className="font-bold text-blue-600">{totalQuantity}</span></span>
-              <span className="text-gray-600">Total Cost: <span className="font-bold text-blue-600">{currencyCode} {totalCost.toFixed(2)}</span></span>
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#9B8D7B]">Total Cost</p>
+                <p className="text-[38px] leading-[1.02] font-black text-[#4B2800]">
+                  {currencyCode} {totalCost.toFixed(2)}
+                </p>
+              </div>
             </div>
             <button
               onClick={() => setShowReviewModal(true)}
-              className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-between group"
+              className="w-full bg-[#4B2800] text-white font-bold py-3 px-5 rounded-2xl shadow-lg shadow-[#4B2800]/30 hover:bg-[#3F2200] active:scale-95 transition-all flex items-center justify-between group"
             >
               <span>Place Order</span>
               <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors">

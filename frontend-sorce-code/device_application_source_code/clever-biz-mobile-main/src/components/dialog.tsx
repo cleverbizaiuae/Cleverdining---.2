@@ -98,12 +98,32 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     restaurant_name: suggestion.restaurant_name || "",
   });
 
+  const showAddedToCartToast = (qty: number, name: string) => {
+    toast.custom(
+      (t) => (
+        <div
+          className={cn(
+            "pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white border border-slate-200 shadow-xl px-4 py-3",
+            "transition-all duration-250",
+            t.visible ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
+          )}
+        >
+          <p className="text-sm font-semibold text-slate-900">Added to cart</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {qty}x {name} added.
+          </p>
+        </div>
+      ),
+      { duration: 1900, position: "top-center" }
+    );
+  };
+
   const handleAddToCart = async () => {
     if (!item || isAddingToCart) return;
 
     setIsAddingToCart(true);
     addToCart(item, quantity);
-    toast.success(`Added ${quantity} to cart!`);
+    showAddedToCartToast(quantity, item.item_name || "Item");
 
     const nextCart = [...cart, { ...item, quantity }];
     const metrics = summarizeCart(nextCart);
