@@ -183,34 +183,56 @@ const ScreenCart = () => {
     const guestSessionToken = localStorage.getItem("guest_session_token");
     if (!guestSessionToken || validCartItems.length === 0) {
       setUpsellSuggestions([]);
+      setBeforePaymentSuggestions([]);
+      setUpsellLoading(false);
       return;
     }
 
-    const fetchUpsellSuggestionsForTrigger = async (triggerPoint: UpsellTriggerPoint) => {
-      const targetSetter = triggerPoint === "before_payment" ? setBeforePaymentSuggestions : setUpsellSuggestions;
+    const fetchUpsellSuggestionsForTrigger = async (triggerPoint: UpsellTriggerPoint): Promise<UpsellSuggestion[]> => {
+      const rawSuggestions = await fetchUpsellSuggestions({
+        triggerPoint,
+        limit: triggerPoint === "cart" ? 4 : 2,
+      });
+      const cartIds = new Set(validCartItems.map((item) => item.id));
+      return rawSuggestions
+        .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
+        .slice(0, triggerPoint === "cart" ? 4 : 2);
+    };
+
+    const loadUpsellSuggestions = async () => {
       setUpsellLoading(true);
       try {
-        const rawSuggestions = await fetchUpsellSuggestions({
-          triggerPoint,
-          limit: triggerPoint === "cart" ? 4 : 2,
-        });
-        const cartIds = new Set(validCartItems.map((item) => item.id));
-        const cleanedSuggestions = rawSuggestions
-          .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
-          .slice(0, triggerPoint === "cart" ? 4 : 2);
+        // Only render one upsell section on this page. "Before You Pay" has priority.
+        const beforePay = await fetchUpsellSuggestionsForTrigger("before_payment");
+        if (cancelled) return;
 
-        if (!cancelled) {
-          targetSetter(cleanedSuggestions);
+        if (beforePay.length > 0) {
+          setBeforePaymentSuggestions(beforePay);
+          setUpsellSuggestions([]);
           await logUpsellShownBatch({
-            triggerPoint,
-            suggestions: cleanedSuggestions,
+            triggerPoint: "before_payment",
+            suggestions: beforePay,
             cartValueAtTime: cartMetrics.cartValueAtTime,
             cartItemCount: cartMetrics.cartItemCount,
-          });
+          }).catch(() => {});
+          return;
         }
-      } catch (error) {
+
+        setBeforePaymentSuggestions([]);
+        const cartLevel = await fetchUpsellSuggestionsForTrigger("cart");
+        if (cancelled) return;
+
+        setUpsellSuggestions(cartLevel);
+        await logUpsellShownBatch({
+          triggerPoint: "cart",
+          suggestions: cartLevel,
+          cartValueAtTime: cartMetrics.cartValueAtTime,
+          cartItemCount: cartMetrics.cartItemCount,
+        }).catch(() => {});
+      } catch {
         if (!cancelled) {
-          targetSetter([]);
+          setUpsellSuggestions([]);
+          setBeforePaymentSuggestions([]);
         }
       } finally {
         if (!cancelled) {
@@ -219,8 +241,8 @@ const ScreenCart = () => {
       }
     };
 
-    fetchUpsellSuggestionsForTrigger("cart");
-    fetchUpsellSuggestionsForTrigger("before_payment");
+    void loadUpsellSuggestions();
+
     return () => {
       cancelled = true;
     };
@@ -667,7 +689,7 @@ const ScreenCart = () => {
           </AnimatePresence>
         )}
 
-        {validCartItems.length > 0 && (
+        {validCartItems.length > 0 && beforePaymentSuggestions.length === 0 && (upsellLoading || upsellSuggestions.length > 0) && (
           <div className="mt-4 bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900">Recommended Add-ons</h3>
