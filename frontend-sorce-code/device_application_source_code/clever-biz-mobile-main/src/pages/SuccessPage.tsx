@@ -1,12 +1,24 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  Facebook,
+  Instagram,
+  Music2,
+  Star,
+  Twitter,
+} from "lucide-react";
 import { motion } from "motion/react";
 import axiosInstance from "@/lib/axios";
+import { useBrandConfig } from "@/lib/useBrandConfig";
+import logoImg from "@/assets/icon-32.png";
 
 const SuccessPage = () => {
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>("");
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const brand = useBrandConfig(restaurantId);
 
   // Cleanup function - clears ALL session-related state for complete isolation
   const cleanupSession = () => {
@@ -37,11 +49,19 @@ const SuccessPage = () => {
         if (orderId && guestToken) {
           // Fetch order to get restaurant info
           const res = await axiosInstance.get(`/api/customer/uncomplete/orders/${orderId}/`, {
-            headers: { "X-Guest-Session-Token": guestToken }
+            headers: { "X-Guest-Session-Token": guestToken },
           });
 
           if (res.data) {
             setRestaurantName(res.data.restaurant_name || "");
+            const resolvedRestaurantId =
+              res.data.restaurant_id ??
+              res.data.restaurant ??
+              res.data?.restaurant_details?.id ??
+              null;
+            if (resolvedRestaurantId !== null && resolvedRestaurantId !== undefined) {
+              setRestaurantId(String(resolvedRestaurantId));
+            }
             // The restaurant google_review_url should be included in order response
             // If not, we need to add it to the order serializer
             setGoogleReviewUrl(res.data.restaurant_google_review_url || res.data.google_review_url || null);
@@ -64,8 +84,28 @@ const SuccessPage = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  const resolvedRestaurantName = useMemo(() => {
+    const remoteName = (brand.restaurantName || "").trim();
+    if (remoteName && remoteName !== "My Restaurant") return remoteName;
+    return restaurantName || "Restaurant";
+  }, [brand.restaurantName, restaurantName]);
+
+  const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
+  const primaryColor = brand.primaryColor || "#0055FE";
+
+  const socialLinks = useMemo(
+    () =>
+      [
+        { key: "instagram", label: "Instagram", href: brand.instagramUrl, Icon: Instagram },
+        { key: "facebook", label: "Facebook", href: brand.facebookUrl, Icon: Facebook },
+        { key: "twitter", label: "Twitter", href: brand.twitterUrl, Icon: Twitter },
+        { key: "tiktok", label: "TikTok", href: brand.tiktokUrl, Icon: Music2 },
+      ].filter((social) => social.href),
+    [brand.facebookUrl, brand.instagramUrl, brand.tiktokUrl, brand.twitterUrl]
+  );
+
   const handleGoogleReview = () => {
-    if (!googleReviewUrl) {
+    if (!resolvedGoogleReviewUrl) {
       // No URL configured - don't do anything
       return;
     }
@@ -74,21 +114,47 @@ const SuccessPage = () => {
     cleanupSession();
 
     // Open in new tab/window (external)
-    window.open(googleReviewUrl, "_blank", "noopener,noreferrer");
+    window.open(resolvedGoogleReviewUrl, "_blank", "noopener,noreferrer");
   };
 
+  const overlayClass =
+    brand.themePreset === "luxury_dark"
+      ? "bg-gradient-to-b from-black/80 to-black/30"
+      : brand.themePreset === "warm_casual"
+        ? "bg-gradient-to-b from-black/40 via-amber-900/20 to-transparent"
+        : "bg-gradient-to-b from-black/50 to-transparent";
+
   return (
-    <div className="flex flex-col h-screen w-full bg-white sm:bg-slate-50 items-center justify-center sm:p-4">
+    <div className="flex flex-col min-h-screen w-full bg-gray-50 items-center justify-center sm:p-4">
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.4 }}
-        className="w-full h-full sm:h-auto sm:max-w-md bg-white sm:rounded-3xl sm:shadow-xl sm:border sm:border-slate-100 flex flex-col p-6 overflow-y-auto sm:overflow-visible"
+        className="w-full h-full sm:h-auto sm:max-w-md bg-white sm:rounded-3xl sm:shadow-xl sm:border sm:border-slate-100 flex flex-col overflow-y-auto sm:overflow-visible"
       >
-        <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+        {brand.coverImageUrl ? (
+          <div className="relative h-52 w-full overflow-hidden">
+            <img src={brand.coverImageUrl} alt={`${resolvedRestaurantName} cover`} className="h-52 w-full object-cover" />
+            <div className={`absolute inset-0 ${overlayClass}`} />
+          </div>
+        ) : (
+          <div className="h-52 w-full bg-gray-50" />
+        )}
+
+        <div className="flex-1 flex flex-col items-center justify-center min-h-0 px-6 py-8">
+          {/* Restaurant branding slot */}
+          <div className="mb-6">
+            {brand.logoUrl ? (
+              <img src={brand.logoUrl} alt={`${resolvedRestaurantName} logo`} className="h-16 w-auto object-contain mx-auto" />
+            ) : (
+              <p className="text-2xl font-bold text-center" style={{ color: primaryColor }}>
+                {resolvedRestaurantName}
+              </p>
+            )}
+          </div>
 
           {/* Success Icon */}
-          <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-8 shadow-sm">
+          <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6 shadow-sm">
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -98,55 +164,78 @@ const SuccessPage = () => {
             </motion.div>
           </div>
 
-          {/* Main Title - Centered */}
-          <h1 className="text-2xl font-bold text-slate-900 mb-4 text-center">
-            Payment Successful!
+          <p className="text-[11px] tracking-[0.16em] uppercase text-slate-400 font-semibold mb-2 text-center">
+            {resolvedRestaurantName}
+          </p>
+
+          {/* Main Title */}
+          <h1 className="text-2xl font-bold mb-3 text-center" style={{ color: primaryColor }}>
+            Thank You
           </h1>
 
-          {/* Supporting Text - Centered */}
-          <p className="text-slate-500 text-base mb-6 text-center leading-relaxed max-w-[90%]">
-            Thank you for joining us, we hope you had an exceptional experience.
+          {/* Supporting Text */}
+          <p className="text-slate-500 text-sm mb-6 text-center leading-relaxed max-w-[90%] italic">
+            {brand.tagline || "We hope you enjoyed your meal. See you again soon!"}
           </p>
 
           {/* Google Review Section - Only show if URL is configured */}
-          {!loading && googleReviewUrl && (
-            <>
-              {/* Call-to-Action Message - Centered */}
-              <p className="text-slate-600 text-sm mb-8 text-center leading-relaxed max-w-[85%]">
+          {!loading && resolvedGoogleReviewUrl && (
+            <div className="w-full max-w-sm border border-slate-200 rounded-2xl p-4 mb-5" data-testid="google-review-card">
+              <div className="flex items-center justify-center gap-1 mb-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star key={index} className="w-4 h-4 fill-amber-400 text-amber-400" strokeWidth={1.8} />
+                ))}
+              </div>
+              <p className="text-slate-600 text-sm mb-4 text-center leading-relaxed">
                 Please leave a quick Google review and share your experience with others.
               </p>
-
-              {/* Google Review Button */}
               <button
                 onClick={handleGoogleReview}
-                className="w-full max-w-xs flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 py-4 px-6 rounded-xl font-semibold text-slate-800 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md hover:brightness-95 active:scale-[0.98]"
+                style={{ backgroundColor: primaryColor }}
+                data-testid="google-review-button"
               >
-                {/* Google "G" Icon */}
-                <svg viewBox="0 0 24 24" width="24" height="24" className="shrink-0">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
                 <span>Leave a Google Review</span>
+                <ExternalLink className="w-4 h-4" strokeWidth={1.8} />
               </button>
-            </>
+            </div>
           )}
 
           {/* Fallback message if no Google Review URL configured */}
-          {!loading && !googleReviewUrl && (
-            <p className="text-slate-400 text-sm text-center mt-4">
-              Thank you for your visit!
-            </p>
+          {!loading && !resolvedGoogleReviewUrl && (
+            <p className="text-slate-400 text-sm text-center mt-2 mb-4">Thank you for your visit!</p>
           )}
 
+          {/* Social links */}
+          {socialLinks.length > 0 && (
+            <div className="flex items-center justify-center gap-3 mt-1 mb-4">
+              {socialLinks.map(({ key, label, href, Icon }) => (
+                <a
+                  key={key}
+                  href={href || undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="w-10 h-10 rounded-full border border-transparent flex items-center justify-center transition-transform active:scale-95"
+                  style={{ backgroundColor: `${primaryColor}1a`, color: primaryColor }}
+                  data-testid={`social-link-${key}`}
+                >
+                  <Icon className="w-4 h-4" strokeWidth={1.8} />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Footer - Session ends text */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-slate-300">Session ends automatically</p>
+        {/* Footer */}
+        <div className="border-t border-slate-100 px-6 py-4 text-center">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className="text-xs text-gray-400">Powered by</span>
+            <img src={logoImg} alt="Cleverbiz AI" className="h-4 w-auto opacity-60" />
+            <span className="text-xs text-gray-400">Cleverbiz AI</span>
+          </div>
+          <p className="text-xs text-gray-400">Scan QR code to start a new session</p>
         </div>
-
       </motion.div>
     </div>
   );
