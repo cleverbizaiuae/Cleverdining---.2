@@ -3,6 +3,16 @@ const SIGNALS_KEY = "upsell_signals";
 const DISMISSED_ITEMS_KEY = "upsell_dismissed_items";
 const ACCEPTED_ITEMS_KEY = "upsell_accepted_items";
 const AFTER_ADD_COUNT_KEY = "cb_suggest_after_add";
+const CART_COUNT_KEY = "cb_suggest_cart";
+const PREPAY_COUNT_KEY = "cb_suggest_prepay";
+
+export type UpsellTouchpoint = "add_to_cart" | "cart" | "before_payment";
+
+const TOUCHPOINT_COUNTER_KEYS: Record<UpsellTouchpoint, string> = {
+  add_to_cart: AFTER_ADD_COUNT_KEY,
+  cart: CART_COUNT_KEY,
+  before_payment: PREPAY_COUNT_KEY,
+};
 
 type SignalState = {
   categoryDeclines: Record<string, number>;
@@ -48,7 +58,9 @@ export function resetUpsellSession(): void {
   localStorage.removeItem(DISMISSED_ITEMS_KEY);
   localStorage.removeItem(ACCEPTED_ITEMS_KEY);
   try {
-    sessionStorage.removeItem(AFTER_ADD_COUNT_KEY);
+    Object.values(TOUCHPOINT_COUNTER_KEYS).forEach((key) => {
+      sessionStorage.removeItem(key);
+    });
   } catch {
     // Non-blocking
   }
@@ -141,8 +153,13 @@ export function isUpsellItemAccepted(itemId: number): boolean {
 }
 
 export function canShowAfterAddUpsell(limit = 2): boolean {
+  return canShowUpsellTouchpoint("add_to_cart", limit);
+}
+
+export function canShowUpsellTouchpoint(triggerPoint: UpsellTouchpoint, limit = 1): boolean {
   try {
-    const current = Number(sessionStorage.getItem(AFTER_ADD_COUNT_KEY) || "0");
+    const storageKey = TOUCHPOINT_COUNTER_KEYS[triggerPoint];
+    const current = Number(sessionStorage.getItem(storageKey) || "0");
     return current < Math.max(1, limit);
   } catch {
     return true;
@@ -150,10 +167,15 @@ export function canShowAfterAddUpsell(limit = 2): boolean {
 }
 
 export function incrementAfterAddUpsellCount(): number {
+  return incrementUpsellTouchpointCount("add_to_cart");
+}
+
+export function incrementUpsellTouchpointCount(triggerPoint: UpsellTouchpoint): number {
   try {
-    const current = Number(sessionStorage.getItem(AFTER_ADD_COUNT_KEY) || "0");
+    const storageKey = TOUCHPOINT_COUNTER_KEYS[triggerPoint];
+    const current = Number(sessionStorage.getItem(storageKey) || "0");
     const next = Number.isFinite(current) ? current + 1 : 1;
-    sessionStorage.setItem(AFTER_ADD_COUNT_KEY, String(next));
+    sessionStorage.setItem(storageKey, String(next));
     return next;
   } catch {
     return 0;

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from itertools import combinations
 from decimal import Decimal
 from typing import Optional
 
@@ -42,6 +41,21 @@ def get_restaurant_for_user(user) -> Optional[Restaurant]:
     return None
 
 
+def get_restaurant_for_guest_request(request) -> Optional[Restaurant]:
+    session_token = (
+        request.headers.get("X-Guest-Session-Token")
+        or request.query_params.get("guest_session_token")
+        or request.query_params.get("guest_token")
+        or request.data.get("guest_session_token")
+    )
+    if not session_token:
+        return None
+    session = GuestSession.objects.filter(session_token=session_token).order_by("-is_active", "-created_at").first()
+    if not session:
+        return None
+    return session.device.restaurant
+
+
 def _date_range_queryset(base_qs, request):
     date_from_raw = request.query_params.get("date_from")
     date_to_raw = request.query_params.get("date_to")
@@ -60,11 +74,117 @@ def _date_range_queryset(base_qs, request):
     return base_qs
 
 
+def _safe_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _compute_pairing_intelligence(restaurant: Restaurant, min_frequency: int = 2):
+    # Completed-order statuses used for co-order learning.
+    completed_statuses = ["delivered", "completed", "served"]
+    order_item_rows = (
+        OrderItem.objects.filter(order__restaurant=restaurant, order__status__in=completed_statuses)
+        .values("order_id", "item_id", "item__item_name")
+        .order_by("order_id")
+    )
+
+    order_to_items = defaultdict(list)
+    for row in order_item_rows:
+        order_to_items[int(row["order_id"])].append((int(row["item_id"]), row["item__item_name"]))
+
+    # Directional co-order pairs: "when source appears, target also appears in the same order."
+    directed_pair_counts = defaultdict(int)
+    item_counts = defaultdict(int)
+    for item_rows in order_to_items.values():
+        unique_items = {}
+        for item_id, item_name in item_rows:
+            unique_items[item_id] = item_name
+        unique_item_ids = sorted(unique_items.keys())
+        for source_id in unique_item_ids:
+            item_counts[source_id] += 1
+        for source_id in unique_item_ids:
+            for target_id in unique_item_ids:
+                if source_id == target_id:
+                    continue
+                directed_pair_counts[(source_id, target_id)] += 1
+
+    item_name_map = {
+        row["id"]: row["item_name"]
+        for row in Item.objects.filter(restaurant=restaurant, id__in=list(item_counts.keys())).values("id", "item_name")
+    }
+
+    # Pair interaction stats from live upsell events (source item is stored in event metadata).
+    pair_interaction_rows = (
+        UpsellEvent.objects.filter(restaurant=restaurant, upsell_item_id__isnull=False)
+        .exclude(metadata__source_item_id__isnull=True)
+        .values("metadata__source_item_id", "upsell_item_id")
+        .annotate(
+            shown=Count("id", filter=Q(action="shown")),
+            accepted=Count("id", filter=Q(action="accepted")),
+            dismissed=Count("id", filter=Q(action__in=["dismissed", "declined"])),
+        )
+    )
+    pair_interaction_map = {}
+    for row in pair_interaction_rows:
+        source_item_id = _safe_int(row.get("metadata__source_item_id"))
+        target_item_id = _safe_int(row.get("upsell_item_id"))
+        if not source_item_id or not target_item_id:
+            continue
+        shown_count = int(row.get("shown") or 0)
+        accepted_count = int(row.get("accepted") or 0)
+        pair_interaction_map[(source_item_id, target_item_id)] = {
+            "shown_count": shown_count,
+            "accepted_count": accepted_count,
+            "dismissed_count": int(row.get("dismissed") or 0),
+            "accept_rate": (accepted_count / shown_count * 100.0) if shown_count else 0.0,
+        }
+
+    results = []
+    for (source_id, target_id), frequency in directed_pair_counts.items():
+        if frequency < min_frequency:
+            continue
+        source_count = max(item_counts.get(source_id, 1), 1)
+        # Keep association strength in 0..1 range for consistent downstream weighting.
+        association_strength = float(Decimal(frequency) / Decimal(source_count))
+        interaction = pair_interaction_map.get((source_id, target_id), {})
+        results.append(
+            {
+                "source_item_id": source_id,
+                "source_item_name": item_name_map.get(source_id, f"Item {source_id}"),
+                "target_item_id": target_id,
+                "target_item_name": item_name_map.get(target_id, f"Item {target_id}"),
+                "frequency": frequency,
+                "association_strength": round(association_strength, 6),
+                "shown_count": int(interaction.get("shown_count", 0)),
+                "accepted_count": int(interaction.get("accepted_count", 0)),
+                "dismissed_count": int(interaction.get("dismissed_count", 0)),
+                "accept_rate": round(float(interaction.get("accept_rate", 0.0)), 2),
+            }
+        )
+
+    results.sort(
+        key=lambda row: (
+            row["frequency"],
+            row["association_strength"],
+            row["accept_rate"],
+            row["accepted_count"],
+        ),
+        reverse=True,
+    )
+    return results
+
+
 class UpsellSettingsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        restaurant = get_restaurant_for_user(request.user)
+        restaurant = None
+        if request.user and request.user.is_authenticated:
+            restaurant = get_restaurant_for_user(request.user)
+        if not restaurant:
+            restaurant = get_restaurant_for_guest_request(request)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -72,6 +192,8 @@ class UpsellSettingsAPIView(APIView):
         return Response(UpsellSettingSerializer(setting).data)
 
     def put(self, request):
+        if not (request.user and request.user.is_authenticated):
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -259,12 +381,11 @@ class UpsellAnalyticsAPIView(APIView):
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
 
         events = UpsellEvent.objects.filter(restaurant=restaurant)
-        events = _date_range_queryset(events, request)
 
-        total_shown = events.filter(action="shown").count()
+        total_shown = events.count()
         accepted_qs = events.filter(action="accepted")
         total_accepted = accepted_qs.count()
-        total_rejected = events.filter(action__in=["declined", "dismissed"]).count()
+        total_rejected = events.filter(action="declined").count()
         acceptance_rate = (float(total_accepted) / float(total_shown) * 100.0) if total_shown else 0.0
         upsell_revenue = accepted_qs.aggregate(total=Sum("upsell_price"))["total"] or Decimal("0")
         avg_upsell_value = (upsell_revenue / total_accepted) if total_accepted else Decimal("0")
@@ -272,51 +393,61 @@ class UpsellAnalyticsAPIView(APIView):
         by_trigger_rows = (
             events.values("trigger_point")
             .annotate(
-                shown=Count("id", filter=Q(action="shown")),
+                shown=Count("id"),
                 accepted=Count("id", filter=Q(action="accepted")),
                 revenue=Sum("upsell_price", filter=Q(action="accepted")),
             )
             .order_by("trigger_point")
         )
-        by_trigger = [
-            {
-                "trigger_point": row["trigger_point"],
-                "shown": row["shown"],
-                "accepted": row["accepted"],
-                "acceptance_rate": (row["accepted"] / row["shown"] * 100.0) if row["shown"] else 0.0,
-                "revenue": str(row["revenue"] or Decimal("0")),
-            }
-            for row in by_trigger_rows
-        ]
+        by_trigger_map = {row["trigger_point"]: row for row in by_trigger_rows}
+        by_trigger = []
+        for trigger in ["add_to_cart", "cart", "before_payment"]:
+            row = by_trigger_map.get(trigger, {"shown": 0, "accepted": 0, "revenue": Decimal("0")})
+            shown = int(row.get("shown") or 0)
+            accepted = int(row.get("accepted") or 0)
+            by_trigger.append(
+                {
+                    "trigger_point": trigger,
+                    "shown": shown,
+                    "accepted": accepted,
+                    "acceptance_rate": (accepted / shown * 100.0) if shown else 0.0,
+                    "revenue": str(row.get("revenue") or Decimal("0")),
+                }
+            )
 
         by_category_rows = (
             events.values("upsell_category")
             .annotate(
-                shown=Count("id", filter=Q(action="shown")),
+                shown=Count("id"),
                 accepted=Count("id", filter=Q(action="accepted")),
                 revenue=Sum("upsell_price", filter=Q(action="accepted")),
             )
             .order_by("-accepted", "-shown")
         )
-        by_category = [
-            {
-                "category": row["upsell_category"] or "Uncategorized",
-                "shown": row["shown"],
-                "accepted": row["accepted"],
-                "acceptance_rate": (row["accepted"] / row["shown"] * 100.0) if row["shown"] else 0.0,
-                "revenue": str(row["revenue"] or Decimal("0")),
-            }
-            for row in by_category_rows
-        ]
+        by_category = sorted(
+            [
+                {
+                    "category": row["upsell_category"] or "Uncategorized",
+                    "shown": row["shown"],
+                    "accepted": row["accepted"],
+                    "acceptance_rate": (row["accepted"] / row["shown"] * 100.0) if row["shown"] else 0.0,
+                    "revenue": str(row["revenue"] or Decimal("0")),
+                }
+                for row in by_category_rows
+            ],
+            key=lambda row: Decimal(row["revenue"]),
+            reverse=True,
+        )
 
         top_items_rows = (
             events.values("upsell_item_id", "upsell_item_name")
             .annotate(
-                shown=Count("id", filter=Q(action="shown")),
+                shown=Count("id"),
                 accepted=Count("id", filter=Q(action="accepted")),
+                rejected=Count("id", filter=Q(action="declined")),
                 revenue=Sum("upsell_price", filter=Q(action="accepted")),
             )
-            .order_by("-accepted", "-revenue")[:10]
+            .order_by("-accepted", "-revenue")[:25]
         )
         top_items = [
             {
@@ -324,6 +455,8 @@ class UpsellAnalyticsAPIView(APIView):
                 "item_name": row["upsell_item_name"],
                 "shown": row["shown"],
                 "accepted": row["accepted"],
+                "rejected": row["rejected"],
+                "acceptance_rate": (row["accepted"] / row["shown"] * 100.0) if row["shown"] else 0.0,
                 "revenue": str(row["revenue"] or Decimal("0")),
             }
             for row in top_items_rows
@@ -332,20 +465,25 @@ class UpsellAnalyticsAPIView(APIView):
         by_hour_rows = (
             events.values("hour_of_day")
             .annotate(
-                shown=Count("id", filter=Q(action="shown")),
+                shown=Count("id"),
                 accepted=Count("id", filter=Q(action="accepted")),
             )
             .order_by("hour_of_day")
         )
-        by_hour = [
-            {
-                "hour": row["hour_of_day"],
-                "shown": row["shown"],
-                "accepted": row["accepted"],
-                "acceptance_rate": (row["accepted"] / row["shown"] * 100.0) if row["shown"] else 0.0,
-            }
-            for row in by_hour_rows
-        ]
+        hour_map = {int(row["hour_of_day"]): row for row in by_hour_rows}
+        by_hour = []
+        for hour in range(24):
+            row = hour_map.get(hour, {"shown": 0, "accepted": 0})
+            shown = int(row.get("shown") or 0)
+            accepted = int(row.get("accepted") or 0)
+            by_hour.append(
+                {
+                    "hour": hour,
+                    "shown": shown,
+                    "accepted": accepted,
+                    "acceptance_rate": (accepted / shown * 100.0) if shown else 0.0,
+                }
+            )
 
         revenue_trend_rows = (
             events.filter(action="accepted")
@@ -462,10 +600,21 @@ class UpsellItemsAPIView(APIView):
         for item in items_qs:
             cfg = settings_map.get(item.id)
             stats = stats_map.get(item.id, {})
+            image_url = ""
+            try:
+                if getattr(item, "image1", None):
+                    image_url = request.build_absolute_uri(item.image1.url)
+            except Exception:
+                image_url = ""
             response_rows.append(
                 {
+                    "id": item.id,
                     "item": item.id,
                     "item_name": item.item_name,
+                    "price": str(item.price),
+                    "image_url": image_url,
+                    "availability": bool(getattr(item, "availability", True)),
+                    "category_id": item.category_id,
                     "category_name": getattr(item.category, "Category_name", ""),
                     "enabled": cfg.enabled if cfg else True,
                     "inventory_priority": cfg.inventory_priority if cfg else False,
@@ -520,54 +669,25 @@ class UpsellPairingIntelligenceAPIView(APIView):
             min_frequency = max(2, int(min_frequency_raw or 2))
         except (TypeError, ValueError):
             min_frequency = 2
+        results = _compute_pairing_intelligence(restaurant, min_frequency=min_frequency)
+        return Response({"results": results[:50], "count": len(results), "computed_at": timezone.now().isoformat()})
 
-        # Completed-order statuses for learning co-occurrence.
-        completed_statuses = ["delivered", "completed", "served"]
-        order_item_rows = (
-            OrderItem.objects.filter(order__restaurant=restaurant, order__status__in=completed_statuses)
-            .values("order_id", "item_id", "item__item_name")
-            .order_by("order_id")
+    def post(self, request):
+        # "Run Intelligence" trigger – computes fresh pairing insights from live data.
+        restaurant = get_restaurant_for_user(request.user)
+        if not restaurant:
+            return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
+        min_frequency_raw = request.data.get("min_frequency") or request.query_params.get("min_frequency")
+        try:
+            min_frequency = max(2, int(min_frequency_raw or 2))
+        except (TypeError, ValueError):
+            min_frequency = 2
+        results = _compute_pairing_intelligence(restaurant, min_frequency=min_frequency)
+        return Response(
+            {
+                "status": "ok",
+                "results": results[:50],
+                "count": len(results),
+                "computed_at": timezone.now().isoformat(),
+            }
         )
-
-        order_to_items = defaultdict(list)
-        for row in order_item_rows:
-            order_to_items[int(row["order_id"])].append((int(row["item_id"]), row["item__item_name"]))
-
-        pair_counts = defaultdict(int)
-        item_counts = defaultdict(int)
-
-        for item_rows in order_to_items.values():
-            unique_items = {}
-            for item_id, item_name in item_rows:
-                unique_items[item_id] = item_name
-            unique_item_ids = sorted(unique_items.keys())
-            for item_id in unique_item_ids:
-                item_counts[item_id] += 1
-            for left_id, right_id in combinations(unique_item_ids, 2):
-                pair_counts[(left_id, right_id)] += 1
-
-        item_name_map = {
-            row["id"]: row["item_name"]
-            for row in Item.objects.filter(restaurant=restaurant, id__in=list(item_counts.keys())).values("id", "item_name")
-        }
-
-        results = []
-        for (left_id, right_id), frequency in pair_counts.items():
-            if frequency < min_frequency:
-                continue
-            left_count = max(item_counts.get(left_id, 1), 1)
-            right_count = max(item_counts.get(right_id, 1), 1)
-            confidence = max(frequency / left_count, frequency / right_count)
-            results.append(
-                {
-                    "source_item_id": left_id,
-                    "source_item_name": item_name_map.get(left_id, f"Item {left_id}"),
-                    "target_item_id": right_id,
-                    "target_item_name": item_name_map.get(right_id, f"Item {right_id}"),
-                    "frequency": frequency,
-                    "confidence": round(confidence, 4),
-                }
-            )
-
-        results.sort(key=lambda row: (row["frequency"], row["confidence"]), reverse=True)
-        return Response({"results": results[:200], "count": len(results)})

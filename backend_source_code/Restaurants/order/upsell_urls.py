@@ -23,4 +23,7 @@ urlpatterns = [
     path("events/by-table", UpsellEventsByTableAPIView.as_view(), name="upsell-events-by-table"),
     path("items", UpsellItemsAPIView.as_view(), name="upsell-items"),
     path("pairing-intelligence", UpsellPairingIntelligenceAPIView.as_view(), name="upsell-pairing-intelligence"),
+    # Compatibility aliases with the reference AI-upsell implementation.
+    path("association-analytics", UpsellPairingIntelligenceAPIView.as_view(), name="upsell-association-analytics"),
+    path("compute-associations", UpsellPairingIntelligenceAPIView.as_view(), name="upsell-compute-associations"),
 ]

@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from category.models import Category
 from item.models import Item
-from order.models import Cart, UpsellRule, UpsellSetting
+from order.models import Cart, UpsellItemSetting, UpsellRule, UpsellSetting
 from core.region_config import normalize_region
 
 
@@ -321,6 +321,12 @@ def _strategy_bonus(setting: UpsellSetting, candidate_price: Decimal, cart_total
     return 0
 
 
+def _tiebreaker_points(item_id: int) -> int:
+    # Rotates every 3 minutes to avoid repeatedly suggesting the exact same item.
+    bucket = int(timezone.now().timestamp() // 180)
+    return int(((item_id * 17) + (bucket * 31)) % 7)
+
+
 def _active_manual_rules(restaurant_id: int) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]]]:
     pair_rules: Dict[int, Set[int]] = {}
     block_rules: Dict[int, Set[int]] = {}
@@ -352,11 +358,8 @@ def build_cart_upsell_suggestions(
     restaurant = cart.device.restaurant
     setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
 
-    if not setting.enabled:
-        return []
-    trigger_field = TRIGGER_TO_SETTING_FIELD.get(trigger_point)
-    if trigger_field and not getattr(setting, trigger_field, True):
-        return []
+    # Always compute engine output. UI decides whether each touchpoint is rendered.
+    _ = TRIGGER_TO_SETTING_FIELD.get(trigger_point)
 
     cart_items = list(cart.items.select_related("item__category", "item__sub_category").all())
     if not cart_items:
@@ -381,6 +384,10 @@ def build_cart_upsell_suggestions(
     )
     if not available_items:
         return []
+
+    disabled_item_ids = set(
+        UpsellItemSetting.objects.filter(restaurant=restaurant, enabled=False).values_list("item_id", flat=True)
+    )
 
     # Cart role state.
     cart_role_set: Set[str] = set()
@@ -409,6 +416,8 @@ def build_cart_upsell_suggestions(
     results: List[Dict] = []
 
     for candidate in available_items:
+        if candidate.id in disabled_item_ids:
+            continue
         if source_item_id and candidate.id == source_item_id:
             continue
         if candidate.id in blocked_target_ids:
@@ -431,53 +440,118 @@ def build_cart_upsell_suggestions(
         score = 0
         reasons: Dict[str, int] = {}
 
-        # 1) Gap fill (max 55)
+        # 1) Gap fill (exact weighting)
         matching_gap_rank = min((gap_rank.get(role, 99) for role in candidate_roles), default=99)
         if matching_gap_rank == 0:
             score += 55
             reasons["gap"] = reasons.get("gap", 0) + 55
         elif matching_gap_rank == 1:
-            score += 40
-            reasons["gap"] = reasons.get("gap", 0) + 40
+            score += 32
+            reasons["gap"] = reasons.get("gap", 0) + 32
         elif matching_gap_rank == 2:
-            score += 25
-            reasons["gap"] = reasons.get("gap", 0) + 25
+            score += 18
+            reasons["gap"] = reasons.get("gap", 0) + 18
+        else:
+            score -= 25
 
-        # 2) Category pairing (max 20)
-        if source_roles:
-            pair_targets = set()
-            for role in source_roles:
-                pair_targets.update(PAIRING_BY_ROLE.get(role, set()))
-            if candidate_roles.intersection(pair_targets):
-                score += 20
-                reasons["pair"] = reasons.get("pair", 0) + 20
+        # 2) Culinary pairing (+18|+11|+6|+3 per cart item, capped at +36 total)
+        culinary_points = 0
+        for cart_source in cart_source_items:
+            source_role_set = _item_roles(cart_source, role_categories)
+            if not source_role_set:
+                continue
+            points_for_source = 0
+            for source_role in source_role_set:
+                pair_targets = PAIRING_BY_ROLE.get(source_role, set())
+                if not candidate_roles.intersection(pair_targets):
+                    continue
+                if source_role == "main" and ("drinks" in candidate_roles or "starters" in candidate_roles):
+                    points_for_source = max(points_for_source, 18)
+                elif source_role == "main" and "desserts" in candidate_roles:
+                    points_for_source = max(points_for_source, 11)
+                elif source_role in {"drinks", "desserts"} and "main" in candidate_roles:
+                    points_for_source = max(points_for_source, 6)
+                else:
+                    points_for_source = max(points_for_source, 3)
+            culinary_points += points_for_source
+            if culinary_points >= 36:
+                culinary_points = 36
+                break
+        if culinary_points:
+            score += culinary_points
+            reasons["pair"] = reasons.get("pair", 0) + culinary_points
 
-        # 3) Subcategory pairing (max 14)
-        if trigger_source_item and trigger_source_item.sub_category_id and candidate.sub_category_id:
-            if trigger_source_item.sub_category_id == candidate.sub_category_id:
-                score += 14
-                reasons["pair"] = reasons.get("pair", 0) + 14
+        # 3) Category/sub-category pairing
+        # With trigger item: +14 | +8 | +4
+        # Without trigger item: +10 | +5
+        category_pair_points = 0
+        if trigger_source_item:
+            if trigger_source_item.sub_category_id and candidate.sub_category_id and trigger_source_item.sub_category_id == candidate.sub_category_id:
+                category_pair_points = 14
+            elif trigger_source_item.category_id and candidate.category_id and trigger_source_item.category_id == candidate.category_id:
+                category_pair_points = 8
+            else:
+                trigger_roles = _item_roles(trigger_source_item, role_categories)
+                trigger_targets = set()
+                for role in trigger_roles:
+                    trigger_targets.update(PAIRING_BY_ROLE.get(role, set()))
+                if candidate_roles.intersection(trigger_targets):
+                    category_pair_points = 4
+        else:
+            shares_category = any(source.category_id == candidate.category_id for source in cart_source_items)
+            if shares_category:
+                category_pair_points = 10
+            else:
+                shares_subcategory = any(
+                    source.sub_category_id and candidate.sub_category_id and source.sub_category_id == candidate.sub_category_id
+                    for source in cart_source_items
+                )
+                if shares_subcategory:
+                    category_pair_points = 5
+        if category_pair_points:
+            score += category_pair_points
+            reasons["pair"] = reasons.get("pair", 0) + category_pair_points
 
-        # 4) Time of day (max 10)
-        if 5 <= hour <= 11 and ("drinks" in candidate_roles):
-            score += 10
-            reasons["time"] = reasons.get("time", 0) + 10
-        elif 17 <= hour <= 23 and ("drinks" in candidate_roles or "desserts" in candidate_roles):
-            score += 10
-            reasons["time"] = reasons.get("time", 0) + 10
+        # 4) Time-of-day bonus (+10 | +6 | +3)
+        time_points = 0
+        if 5 <= hour <= 11:
+            if "drinks" in candidate_roles:
+                time_points = 10
+            elif "starters" in candidate_roles:
+                time_points = 6
+            elif "desserts" in candidate_roles:
+                time_points = 3
+        elif 17 <= hour <= 23:
+            if "desserts" in candidate_roles:
+                time_points = 10
+            elif "drinks" in candidate_roles:
+                time_points = 6
+            elif "starters" in candidate_roles:
+                time_points = 3
+        else:
+            if "drinks" in candidate_roles or "starters" in candidate_roles:
+                time_points = 3
+        if time_points:
+            score += time_points
+            reasons["time"] = reasons.get("time", 0) + time_points
 
-        # 5) Price sweet spot (max 8)
+        # 5) Price sweet spot (+8 | +3 | -12)
         candidate_price = _effective_item_price(candidate)
         if cart_total > 0:
             ratio = candidate_price / cart_total
             if Decimal("0.10") <= ratio <= Decimal("0.45"):
                 score += 8
                 reasons["price"] = reasons.get("price", 0) + 8
+            elif Decimal("0.45") < ratio <= Decimal("0.70"):
+                score += 3
+                reasons["price"] = reasons.get("price", 0) + 3
+            elif ratio > Decimal("1.50"):
+                score -= 12
 
-        # 6) Browsing behavior (max 15)
+        # 6) Browsing behavior (+3 per view, cap +15)
         view_count = signals.category_views.get(candidate_category_id, 0)
         if view_count > 0:
-            browsing_points = min(15, view_count * 5)
+            browsing_points = min(15, view_count * 3)
             score += browsing_points
             reasons["pair"] = reasons.get("pair", 0) + browsing_points
 
@@ -500,6 +574,7 @@ def build_cart_upsell_suggestions(
             reasons["pair"] = reasons.get("pair", 0) + 25
 
         score += _strategy_bonus(setting, candidate_price, cart_total)
+        score += _tiebreaker_points(candidate.id)
 
         if score <= 0:
             continue

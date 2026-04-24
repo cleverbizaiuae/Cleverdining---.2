@@ -29,6 +29,13 @@ export type UpsellSuggestion = {
 
 export type UpsellTriggerPoint = "add_to_cart" | "cart" | "before_payment";
 
+export type UpsellSettingsSnapshot = {
+  enabled: boolean;
+  show_after_add_to_cart: boolean;
+  show_in_cart: boolean;
+  show_before_payment: boolean;
+};
+
 type CartLikeItem = {
   id: number;
   quantity?: number;
@@ -78,6 +85,20 @@ export async function fetchUpsellSuggestions(params: {
     if (isUpsellItemAccepted(item.id)) return false;
     return true;
   }) as UpsellSuggestion[];
+}
+
+export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
+  const sessionToken = localStorage.getItem("guest_session_token");
+  const response = await axiosInstance.get("/api/upsell/settings", {
+    params: sessionToken ? { guest_session_token: sessionToken } : undefined,
+    headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
+  });
+  return {
+    enabled: Boolean(response.data?.enabled ?? true),
+    show_after_add_to_cart: Boolean(response.data?.show_after_add_to_cart ?? true),
+    show_in_cart: Boolean(response.data?.show_in_cart ?? true),
+    show_before_payment: Boolean(response.data?.show_before_payment ?? true),
+  };
 }
 
 export async function logUpsellEvent(params: {
@@ -147,15 +168,23 @@ export async function logUpsellAssociationStat(params: {
   metadata?: Record<string, unknown>;
 }) {
   try {
-    await axiosInstance.post("/api/upsell/association-stats", {
-      session_id: getUpsellSessionId(),
-      table_number: getUpsellTableNumber(),
-      trigger_point: params.triggerPoint,
-      action: params.action,
-      source_item_id: params.sourceItemId || null,
-      upsell_item_id: params.upsellItemId || null,
-      metadata: params.metadata || {},
-    });
+    const sessionToken = localStorage.getItem("guest_session_token");
+    await axiosInstance.post(
+      "/api/upsell/association-stats",
+      {
+        session_id: getUpsellSessionId(),
+        table_number: getUpsellTableNumber(),
+        guest_session_token: sessionToken || undefined,
+        trigger_point: params.triggerPoint,
+        action: params.action,
+        source_item_id: params.sourceItemId || null,
+        upsell_item_id: params.upsellItemId || null,
+        metadata: params.metadata || {},
+      },
+      {
+        headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
+      }
+    );
   } catch {
     // Fire-and-forget by design.
   }

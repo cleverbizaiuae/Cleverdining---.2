@@ -10,16 +10,18 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import UpsellBottomSheet from "./UpsellBottomSheet";
 import { ChevronLeft, CheckCircle2, Minus, Plus } from "lucide-react";
 import {
+  fetchUpsellSettings,
   fetchUpsellSuggestions,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
   summarizeCart,
+  type UpsellSettingsSnapshot,
   type UpsellSuggestion,
 } from "../lib/upsellApi";
 import {
-  canShowAfterAddUpsell,
-  incrementAfterAddUpsellCount,
+  canShowUpsellTouchpoint,
+  incrementUpsellTouchpointCount,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
   trackUpsellCategoryDecline,
@@ -58,6 +60,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [upsellSuggestions, setUpsellSuggestions] = useState<UpsellSuggestion[]>([]);
+  const [upsellSettings, setUpsellSettings] = useState<UpsellSettingsSnapshot | null>(null);
   const [upsellCartMetrics, setUpsellCartMetrics] = useState({ cartValueAtTime: 0, cartItemCount: 0 });
   const upsellActiveRef = useRef(false);
   const upsellSourceItemIdRef = useRef<number | null>(null);
@@ -136,7 +139,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       setIsAddingToCart(false);
 
       try {
-        if (upsellActiveRef.current || !canShowAfterAddUpsell(2)) {
+        if (upsellActiveRef.current || !canShowUpsellTouchpoint("add_to_cart", 2)) {
           return;
         }
         const suggestions = await fetchUpsellSuggestions({
@@ -144,10 +147,19 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           sourceItemId: Number(item.id),
           limit: 2,
         });
-        if (!suggestions.length) return;
+
+        const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
+        if (settingsSnapshot) setUpsellSettings(settingsSnapshot);
+
+        const shouldRender =
+          (settingsSnapshot?.enabled ?? upsellSettings?.enabled ?? true) &&
+          (settingsSnapshot?.show_after_add_to_cart ?? upsellSettings?.show_after_add_to_cart ?? true);
+
+        if (!suggestions.length || !shouldRender) return;
         setUpsellSuggestions(suggestions);
         setUpsellOpen(true);
         upsellActiveRef.current = true;
+        incrementUpsellTouchpointCount("add_to_cart");
 
         await logUpsellShownBatch({
           triggerPoint: "add_to_cart",
@@ -181,7 +193,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       if (suggestion.id) {
         markUpsellItemAccepted(suggestion.id);
       }
-      incrementAfterAddUpsellCount();
       await Promise.allSettled([
         logUpsellEvent({
           triggerPoint: "add_to_cart",
@@ -209,11 +220,10 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       if (suggestion.category) {
         trackUpsellCategoryDecline(suggestion.category);
       }
-      incrementAfterAddUpsellCount();
       await Promise.allSettled([
         logUpsellEvent({
           triggerPoint: "add_to_cart",
-          action: "dismissed",
+          action: "declined",
           suggestion,
           cartValueAtTime: upsellCartMetrics.cartValueAtTime,
           cartItemCount: upsellCartMetrics.cartItemCount,
@@ -226,6 +236,37 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         }),
       ]);
     };
+  };
+
+  const dismissCardSuggestion = async (suggestion: UpsellSuggestion) => {
+    if (suggestion.id) {
+      markUpsellItemDismissed(suggestion.id);
+    }
+    if (suggestion.category) {
+      trackUpsellCategoryDecline(suggestion.category);
+    }
+    setUpsellSuggestions((prev) => {
+      const next = prev.filter((row) => row.id !== suggestion.id);
+      if (next.length === 0) {
+        setUpsellOpen(false);
+      }
+      return next;
+    });
+    await Promise.allSettled([
+      logUpsellEvent({
+        triggerPoint: "add_to_cart",
+        action: "dismissed",
+        suggestion,
+        cartValueAtTime: upsellCartMetrics.cartValueAtTime,
+        cartItemCount: upsellCartMetrics.cartItemCount,
+      }),
+      logUpsellAssociationStat({
+        triggerPoint: "add_to_cart",
+        action: "dismissed",
+        sourceItemId: upsellSourceItemIdRef.current || undefined,
+        upsellItemId: suggestion.id,
+      }),
+    ]);
   };
 
   const dismissManySuggestions = async (suggestions: UpsellSuggestion[]) => {
@@ -257,7 +298,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           })
         );
       }
-      incrementAfterAddUpsellCount();
       await Promise.allSettled(tasks);
     };
   };
@@ -466,7 +506,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         suggestions={upsellSuggestions}
         currencyCode={currencyCode}
         onAccept={acceptUpsellSuggestion}
-        onDismissSingle={dismissSingleSuggestion}
+        onDeclineSingle={dismissSingleSuggestion}
+        onDismissSingle={dismissCardSuggestion}
         onDismissMany={dismissManySuggestions}
         onExited={handleUpsellExited}
       />

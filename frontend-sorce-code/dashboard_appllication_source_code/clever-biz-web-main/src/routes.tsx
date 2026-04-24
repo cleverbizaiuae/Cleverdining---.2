@@ -191,6 +191,25 @@ function App() {
         <Route path="payments" element={<Payments />} />
         <Route path="reviews" element={<ScreenRestaurantReviews />} />
         <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
+        <Route path="upsell" element={<ScreenRestaurantUpsell />} />
+      </Route>
+
+      {/* Manager Dashboard (alias workspace path) */}
+      <Route path="/manageradmindashboard" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantLayout />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenRestaurantDashboard />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="reservations" element={<ScreenRestaurantReservations />} />
+        <Route path="management" element={<ScreenRestaurantManagement />} />
+        <Route path="devices" element={<ScreenRestaurantDevices />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
       </Route>
 

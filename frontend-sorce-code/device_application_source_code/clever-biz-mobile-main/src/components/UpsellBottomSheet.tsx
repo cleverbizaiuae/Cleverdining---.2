@@ -8,6 +8,7 @@ type Props = {
   suggestions: UpsellSuggestion[];
   currencyCode: string;
   onAccept: (suggestion: UpsellSuggestion) => void;
+  onDeclineSingle: (suggestion: UpsellSuggestion) => void;
   onDismissSingle: (suggestion: UpsellSuggestion) => void;
   onDismissMany: (suggestions: UpsellSuggestion[]) => void;
   onExited?: () => void;
@@ -27,6 +28,7 @@ export default function UpsellBottomSheet({
   suggestions,
   currencyCode,
   onAccept,
+  onDeclineSingle,
   onDismissSingle,
   onDismissMany,
   onExited,
@@ -37,20 +39,25 @@ export default function UpsellBottomSheet({
   useEffect(() => {
     if (open) {
       setLocalDismissed([]);
-      displayRef.current = suggestions;
+      displayRef.current = suggestions.slice(0, 2);
     }
   }, [open, suggestions]);
 
   const shownItems = useMemo(() => {
     const base = open ? suggestions : displayRef.current;
-    return base.filter((item) => !localDismissed.includes(item.id));
+    return base.filter((item) => !localDismissed.includes(item.id)).slice(0, 2);
   }, [open, suggestions, localDismissed]);
-  const primaryItem = shownItems[0];
 
+  const isMulti = shownItems.length > 1;
+  const primaryItem = shownItems[0];
   const label = "PERFECT WITH YOUR ORDER";
 
-  const handleSingleDismiss = (item: UpsellSuggestion) => {
-    // Exit-before-update: close first, mark dismissed after animation in parent callback.
+  const handleDeclineSingle = (item: UpsellSuggestion) => {
+    setLocalDismissed((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+    onDeclineSingle(item);
+  };
+
+  const handleDismissSingle = (item: UpsellSuggestion) => {
     setLocalDismissed((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
     onDismissSingle(item);
   };
@@ -66,80 +73,129 @@ export default function UpsellBottomSheet({
       {open && shownItems.length > 0 ? (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/40 z-[60]"
+            className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={handleDismissAll}
           />
+
           <motion.div
-            className="fixed left-3 right-3 bottom-[calc(66px+env(safe-area-inset-bottom))] z-[70] bg-white rounded-3xl p-4 shadow-[0_20px_45px_rgba(15,23,42,0.18)] border border-slate-100"
+            className="fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl border border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 290, mass: 0.7 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
           >
-            <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-3" />
+            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-200" />
 
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-[#7A5B36] uppercase tracking-[0.13em] flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
-                  {label}
-                </p>
-              </div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#7A5B36]">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
+                </span>
+                {label}
+              </p>
+
               <button
                 onClick={handleDismissAll}
-                className="w-7 h-7 rounded-full text-slate-400 hover:bg-slate-50 flex items-center justify-center shrink-0"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100"
+                type="button"
               >
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {primaryItem ? (
+            {isMulti ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {shownItems.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm">
+                      <div className="relative overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+                        <button
+                          type="button"
+                          onClick={() => handleDismissSingle(item)}
+                          className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                        <img
+                          src={item.image1 || "https://placehold.co/240x180?text=No+Image"}
+                          alt={item.item_name}
+                          className="h-28 w-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = "https://placehold.co/240x180?text=No+Image";
+                          }}
+                        />
+                      </div>
+
+                      <p className="mt-2 truncate text-sm font-semibold text-slate-900">{item.item_name}</p>
+                      <p className="mt-0.5 text-sm font-bold text-[#4B2800]">
+                        {currencyCode} {toSafePrice(item.price).toFixed(2)}
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() => onAccept(item)}
+                        className="mt-2 h-9 w-full rounded-xl bg-[#4B2800] text-sm font-semibold text-white hover:bg-[#3E2100]"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleDismissAll}
+                  className="mt-3 w-full text-center text-xs font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  No thanks
+                </button>
+              </>
+            ) : primaryItem ? (
               <>
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-2.5">
-                  <div className="w-[64px] h-[64px] rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
                     <img
                       src={primaryItem.image1 || "https://placehold.co/200x200?text=No+Image"}
                       alt={primaryItem.item_name}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover"
                       onError={(e) => {
                         e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
                       }}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{primaryItem.item_name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                      {primaryItem.upsell_message || "Perfect with your order."}
+                    <p className="truncate text-sm font-semibold text-slate-900">{primaryItem.item_name}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                      {primaryItem.upsell_message || "A smart add-on for this order."}
                     </p>
-                    <p className="text-xs text-slate-500 line-clamp-1">
-                      {primaryItem.description || "A classic add-on choice."}
-                    </p>
-                    <p className="text-base font-black text-[#4B2800] mt-1">
+                    <p className="line-clamp-1 text-xs text-slate-400">{primaryItem.description || "Popular with this meal."}</p>
+                    <p className="mt-1 text-lg font-black text-[#4B2800]">
                       {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-3">
+
+                <div className="mt-3 flex gap-2">
                   <button
-                    onClick={() => handleSingleDismiss(primaryItem)}
-                    className="h-10 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 px-4 flex-1"
+                    type="button"
+                    onClick={() => handleDeclineSingle(primaryItem)}
+                    className="h-10 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     No thanks
                   </button>
                   <button
+                    type="button"
                     onClick={() => onAccept(primaryItem)}
-                    className="h-10 rounded-xl bg-[#4B2800] text-white text-sm font-semibold hover:bg-[#3E2100] px-4 flex-[1.9]"
+                    className="h-10 flex-[1.9] rounded-xl bg-[#4B2800] px-4 text-sm font-semibold text-white hover:bg-[#3E2100]"
                   >
-                    + Add · {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
+                    Add · {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
                   </button>
                 </div>
               </>
-            ) : (
-              <div />
-            )}
+            ) : null}
           </motion.div>
         </>
       ) : null}

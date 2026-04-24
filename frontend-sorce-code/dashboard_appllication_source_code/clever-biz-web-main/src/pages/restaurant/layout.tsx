@@ -30,6 +30,8 @@ type MenuItem = {
   roles: string[]; // Added roles property
 };
 
+type DashboardRole = "owner" | "manager" | "staff" | "chef" | "admin";
+
 const MENU_ITEMS: MenuItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['owner', 'manager', 'staff', 'chef'] },
   { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
@@ -39,8 +41,48 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
-  { icon: Sparkles, label: 'Upsell', path: '/upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: Sparkles, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
+
+const ROLE_ALIASES: Record<string, DashboardRole> = {
+  owner: "owner",
+  manager: "manager",
+  staff: "staff",
+  chef: "chef",
+  admin: "admin",
+  "owner user": "owner",
+  restaurant_owner: "owner",
+  "restaurant owner": "owner",
+  "manager user": "manager",
+  restaurant_manager: "manager",
+  "restaurant manager": "manager",
+  "admin user": "manager",
+};
+
+const normalizeDashboardRole = (roleValue: unknown): DashboardRole | "" => {
+  const key = String(roleValue || "").trim().toLowerCase();
+  if (!key) return "";
+  return ROLE_ALIASES[key] || "";
+};
+
+const resolveSidebarRole = (user: any, pathname: string): DashboardRole => {
+  const candidates = [
+    user?.role,
+    user?.user?.role,
+    user?.profile?.role,
+    localStorage.getItem("adminRole"),
+    localStorage.getItem("role"),
+  ];
+
+  for (const roleCandidate of candidates) {
+    const normalized = normalizeDashboardRole(roleCandidate);
+    if (normalized) return normalized;
+  }
+
+  if (pathname.startsWith("/chef")) return "chef";
+  if (pathname.startsWith("/staff")) return "staff";
+  return "manager";
+};
 
 const RestaurantLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -51,14 +93,19 @@ const RestaurantLayout = () => {
   // Get User Info
   const userStr = localStorage.getItem("userInfo");
   const user = userStr ? JSON.parse(userStr) : { username: "Manager", role: "manager" };
+  const currentRole = resolveSidebarRole(user, location.pathname);
+  const displayUser = user?.user || user || {};
+  const username = String(displayUser?.username || user?.username || "Manager");
 
   // Determine Base Path based on current URL
   const isStaffDashboard = location.pathname.startsWith('/staff');
   const isChefDashboard = location.pathname.startsWith('/chef');
+  const isManagerDashboard = location.pathname.startsWith('/manageradmindashboard');
 
   let basePath = '/restaurant';
   if (isStaffDashboard) basePath = '/staff';
   if (isChefDashboard) basePath = '/chef';
+  if (isManagerDashboard) basePath = '/manageradmindashboard';
 
   const handleLogout = () => {
     localStorage.clear();
@@ -68,9 +115,11 @@ const RestaurantLayout = () => {
 
   const isActive = (item: MenuItem) => {
     const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
+    const legacyUpsellPath = `${basePath}/upsell`;
 
     // Explicitly handle root path matching for dashboard/orders
     if (item.path === '' && location.pathname === basePath) return true;
+    if (item.path === '/ai-upsell' && location.pathname.startsWith(legacyUpsellPath)) return true;
 
     // For Staff/Chef, default route index is Orders (empty string path in Routes, but mapped to OrderList which has /orders path in MENU).
     // Wait, OrderList path in MENU is '/orders'.
@@ -94,6 +143,7 @@ const RestaurantLayout = () => {
     const activeItem = filteredItems.find(item => {
       const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
       if (item.path === '' && location.pathname === basePath) return true;
+      if (item.path === '/ai-upsell' && location.pathname.startsWith(`${basePath}/upsell`)) return true;
       return location.pathname.startsWith(fullPath) && item.path !== '';
     });
 
@@ -104,17 +154,6 @@ const RestaurantLayout = () => {
 
     return "Dashboard";
   };
-
-  // Filter items based on role
-  let currentRole = user.role || 'staff';
-
-  // Only override if we are sure (Fallback safety, but user.role is better source of truth)
-  // If user is logged in as 'manager', currentRole is 'manager'.
-  // If user is 'staff', currentRole is 'staff'.
-
-  // Ensure 'manager' can see manager items even on /staff route
-  // The previous logic forced 'staff' role based on URL, blocking sidebar items.
-  // Now we trust the token/localStorage.
 
   const filteredItems = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
@@ -228,13 +267,13 @@ const RestaurantLayout = () => {
           {/* Right: Profile */}
           <div className="flex items-center gap-4 h-full">
             <div className="hidden sm:flex flex-col items-end pr-4 border-r border-slate-200 h-10 justify-center">
-              <p className="text-sm font-bold text-slate-900 leading-tight">Welcome, {user.username}</p>
-              <p className="text-xs font-medium text-[#0055FE] capitalize">{user.role}</p>
+              <p className="text-sm font-bold text-slate-900 leading-tight">Welcome, {username}</p>
+              <p className="text-xs font-medium text-[#0055FE] capitalize">{currentRole}</p>
             </div>
 
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#0055FE] to-cyan-400 p-[2px]">
               <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-                <span className="text-[#0055FE] font-bold text-lg uppercase">{user.username[0]}</span>
+                <span className="text-[#0055FE] font-bold text-lg uppercase">{username[0]}</span>
               </div>
             </div>
           </div>
