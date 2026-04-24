@@ -10,6 +10,7 @@ from .upsell_views import (
     UpsellRuleDeleteAPIView,
     UpsellRulesAPIView,
     UpsellSettingsAPIView,
+    UpsellSmartSuggestionsAPIView,
 )
 
 
@@ -26,4 +27,5 @@ urlpatterns = [
     # Compatibility aliases with the reference AI-upsell implementation.
     path("association-analytics", UpsellPairingIntelligenceAPIView.as_view(), name="upsell-association-analytics"),
     path("compute-associations", UpsellPairingIntelligenceAPIView.as_view(), name="upsell-compute-associations"),
+    path("smart-suggestions", UpsellSmartSuggestionsAPIView.as_view(), name="upsell-smart-suggestions"),
 ]

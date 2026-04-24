@@ -6,12 +6,26 @@ from django.utils.text import slugify
 
 
 class Category(models.Model):
+    CATEGORY_TYPE_CHOICES = [
+        ("main", "Main"),
+        ("drink", "Drink"),
+        ("dessert", "Dessert"),
+        ("starter", "Starter"),
+        ("other", "Other"),
+    ]
+
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='categories')
     Category_name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100)
     image = models.ImageField(upload_to='media/category_images/', null=True, blank=True)
     icon = models.CharField(max_length=50, blank=True, null=True)
     icon_image = models.ImageField(upload_to='media/category_icons/', null=True, blank=True)
+    category_type = models.CharField(
+        max_length=20,
+        choices=CATEGORY_TYPE_CHOICES,
+        default="other",
+        db_index=True,
+    )
     
     # Hierarchical fields
     parent_category = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='subcategories')

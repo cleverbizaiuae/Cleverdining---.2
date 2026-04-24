@@ -209,6 +209,8 @@ const ScreenCart = () => {
       const rawSuggestions = await fetchUpsellSuggestions({
         triggerPoint,
         limit: triggerPoint === "cart" ? 2 : 1,
+        cartItemIds: validCartItems.map((item) => item.id),
+        excludeItemIds: validCartItems.map((item) => item.id),
       });
       const cartIds = new Set(validCartItems.map((item) => item.id));
       return rawSuggestions

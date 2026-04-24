@@ -7,7 +7,17 @@ class CategorySerializer(serializers.ModelSerializer):
     image = serializers.ImageField(required=False)
     class Meta:
         model = Category
-        fields = ['id', 'Category_name', 'slug','image', 'parent_category', 'level', 'icon', 'icon_image']
+        fields = [
+            'id',
+            'Category_name',
+            'slug',
+            'image',
+            'parent_category',
+            'level',
+            'icon',
+            'icon_image',
+            'category_type',
+        ]
         read_only_fields = ['slug', 'level']
 
     def create(self, validated_data):
@@ -19,7 +29,17 @@ class CategorySerializer(serializers.ModelSerializer):
 class CustomerCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['id', 'Category_name', 'slug', 'image', 'parent_category', 'level', 'icon', 'icon_image']
+        fields = [
+            'id',
+            'Category_name',
+            'slug',
+            'image',
+            'parent_category',
+            'level',
+            'icon',
+            'icon_image',
+            'category_type',
+        ]
 
 class HierarchicalCategorySerializer(CategorySerializer):
     subcategories = serializers.SerializerMethodField()
@@ -36,5 +56,5 @@ class SubCategorySerializer(serializers.ModelSerializer):
     image = serializers.ImageField(required=False)
     class Meta:
         model = Category
-        fields = ['id', 'Category_name', 'parent_category', 'image']
+        fields = ['id', 'Category_name', 'parent_category', 'image', 'category_type']
         extra_kwargs = {'parent_category': {'required': True}}

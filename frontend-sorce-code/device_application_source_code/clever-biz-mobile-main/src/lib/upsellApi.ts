@@ -34,6 +34,9 @@ export type UpsellSettingsSnapshot = {
   show_after_add_to_cart: boolean;
   show_in_cart: boolean;
   show_before_payment: boolean;
+  strategy?: string;
+  aggressiveness?: "subtle" | "moderate" | "aggressive";
+  tone?: string;
 };
 
 type CartLikeItem = {
@@ -67,9 +70,13 @@ export async function fetchUpsellSuggestions(params: {
   triggerPoint: UpsellTriggerPoint;
   limit?: number;
   sourceItemId?: number;
+  cartItemIds?: number[];
+  excludeItemIds?: number[];
+  stage?: string;
 }) {
   const signalParams = getUpsellSignalsQueryParams();
-  const response = await axiosInstance.get("/api/customer/cart/upsell_suggestions/", {
+  const sessionToken = localStorage.getItem("guest_session_token");
+  const primaryPromise = axiosInstance.get("/api/customer/cart/upsell_suggestions/", {
     params: {
       trigger_point: params.triggerPoint,
       limit: params.limit ?? 2,
@@ -77,14 +84,49 @@ export async function fetchUpsellSuggestions(params: {
       ...signalParams,
     },
   });
-  const raw = Array.isArray(response.data?.suggestions) ? response.data.suggestions : [];
-  return raw.filter((item: UpsellSuggestion) => {
+  const historicalPromise =
+    params.cartItemIds && params.cartItemIds.length > 0
+      ? axiosInstance
+          .get("/api/upsell/smart-suggestions", {
+            params: {
+              cartItemIds: params.cartItemIds.join(","),
+              excludeItemIds: (params.excludeItemIds || []).join(","),
+              stage: params.stage || "",
+              limit: params.limit ?? 2,
+            },
+            headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
+          })
+          .then((response) => (Array.isArray(response.data?.results) ? response.data.results : []))
+          .catch(() => [] as UpsellSuggestion[])
+      : Promise.resolve([] as UpsellSuggestion[]);
+
+  const [primaryResponse, historicalSuggestions] = await Promise.all([primaryPromise, historicalPromise]);
+  const primarySuggestions = Array.isArray(primaryResponse.data?.suggestions) ? primaryResponse.data.suggestions : [];
+
+  const mergedById = new Map<number, UpsellSuggestion>();
+  for (const item of [...primarySuggestions, ...historicalSuggestions]) {
+    if (item && Number.isInteger(item.id)) {
+      mergedById.set(item.id, item as UpsellSuggestion);
+    }
+  }
+
+  const merged = Array.from(mergedById.values());
+  const strongHistorical = historicalSuggestions
+    .filter((item: any) => Number(item?.association_strength || 0) >= 0.5 && Number(item?.co_order_frequency || 0) >= 10)
+    .sort((a: any, b: any) => Number(b.association_strength || 0) - Number(a.association_strength || 0));
+  if (strongHistorical.length > 0) {
+    const topHistorical = strongHistorical[0] as UpsellSuggestion;
+    const remaining = merged.filter((item) => item.id !== topHistorical.id);
+    merged.splice(0, merged.length, topHistorical, ...remaining);
+  }
+
+  return merged.filter((item: UpsellSuggestion) => {
     if (!item || !Number.isInteger(item.id)) return false;
     if (item.availability === false) return false;
     if (isUpsellItemDismissed(item.id)) return false;
     if (isUpsellItemAccepted(item.id)) return false;
     return true;
-  }) as UpsellSuggestion[];
+  }).slice(0, params.limit ?? 2) as UpsellSuggestion[];
 }
 
 export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
@@ -98,6 +140,9 @@ export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
     show_after_add_to_cart: Boolean(response.data?.show_after_add_to_cart ?? true),
     show_in_cart: Boolean(response.data?.show_in_cart ?? true),
     show_before_payment: Boolean(response.data?.show_before_payment ?? true),
+    strategy: response.data?.strategy || "balanced",
+    aggressiveness: response.data?.aggressiveness || "moderate",
+    tone: response.data?.tone || "friendly",
   };
 }
 

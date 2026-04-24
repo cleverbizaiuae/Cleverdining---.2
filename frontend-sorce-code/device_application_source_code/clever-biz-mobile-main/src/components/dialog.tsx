@@ -146,6 +146,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           triggerPoint: "add_to_cart",
           sourceItemId: Number(item.id),
           limit: 2,
+          cartItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
+          excludeItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
         });
 
         const settingsSnapshot = await fetchUpsellSettings().catch(() => null);

@@ -6,12 +6,11 @@ from decimal import Decimal
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
-from django.db.models import Q
 from django.utils import timezone
 
 from category.models import Category
 from item.models import Item
-from order.models import Cart, UpsellItemSetting, UpsellRule, UpsellSetting
+from order.models import Cart, ItemAssociation, UpsellItemSetting, UpsellRule, UpsellSetting
 from core.region_config import normalize_region
 
 
@@ -181,6 +180,12 @@ def _derive_role_categories(restaurant_id: int, setting: UpsellSetting) -> Dict[
         "desserts": set(),
         "starters": set(),
     }
+    category_type_to_role = {
+        "main": "main",
+        "drink": "drinks",
+        "dessert": "desserts",
+        "starter": "starters",
+    }
 
     override_map = setting.category_role_map or {}
     for role in roles:
@@ -192,10 +197,13 @@ def _derive_role_categories(restaurant_id: int, setting: UpsellSetting) -> Dict[
                 except (TypeError, ValueError):
                     continue
 
-    categories = Category.objects.filter(restaurant_id=restaurant_id).values("id", "Category_name")
+    categories = Category.objects.filter(restaurant_id=restaurant_id).values("id", "Category_name", "category_type")
     for category in categories:
         category_name = _normalize_text(category["Category_name"])
         category_id = int(category["id"])
+        role_from_type = category_type_to_role.get(_normalize_text(category.get("category_type")))
+        if role_from_type:
+            roles[role_from_type].add(category_id)
         for role, keywords in CATEGORY_KEYWORDS.items():
             if any(keyword in category_name for keyword in keywords):
                 roles[role].add(category_id)
@@ -265,37 +273,47 @@ def _reason_for_top_factor(reasons: Dict[str, int], setting: UpsellSetting) -> s
         return "You might like this add-on."
 
     top_reason = max(reasons.items(), key=lambda pair: pair[1])[0]
-    tone = setting.tone
+    tone_aliases = {
+        "professional": "premium",
+        "playful": "luxury_casual",
+    }
+    tone = tone_aliases.get(setting.tone, setting.tone)
     messages = {
         "gap": {
             "friendly": "Your meal is missing this pairing.",
-            "professional": "Recommended to complete this order.",
-            "playful": "A perfect add-on for your plate.",
+            "premium": "Recommended to complete this order.",
+            "minimal": "Recommended add-on.",
+            "luxury_casual": "A perfect add-on for your plate.",
         },
         "pair": {
             "friendly": "Guests often pair these together.",
-            "professional": "Commonly purchased together.",
-            "playful": "This combo is a fan favorite.",
+            "premium": "Commonly purchased together.",
+            "minimal": "Popular pairing.",
+            "luxury_casual": "This combo is a fan favorite.",
         },
         "time": {
             "friendly": "A great pick for this time of day.",
-            "professional": "Optimized for current service period.",
-            "playful": "This hits different right now.",
+            "premium": "Optimized for current service period.",
+            "minimal": "Best for right now.",
+            "luxury_casual": "This hits different right now.",
         },
         "price": {
             "friendly": "A quick add-on without stretching your total.",
-            "professional": "Fits your current cart value range.",
-            "playful": "Small upgrade, big satisfaction.",
+            "premium": "Fits your current cart value range.",
+            "minimal": "Good value add-on.",
+            "luxury_casual": "Small upgrade, big satisfaction.",
         },
         "priority": {
             "friendly": "Chef-recommended for this table.",
-            "professional": "Prioritized by your restaurant settings.",
-            "playful": "Featured pick from this menu.",
+            "premium": "Prioritized by your restaurant settings.",
+            "minimal": "Recommended by settings.",
+            "luxury_casual": "Featured pick from this menu.",
         },
         "default": {
             "friendly": "You might like this add-on.",
-            "professional": "Suggested item for this order.",
-            "playful": "Want to add this too?",
+            "premium": "Suggested item for this order.",
+            "minimal": "Suggested add-on.",
+            "luxury_casual": "Want to add this too?",
         },
     }
     return messages.get(top_reason, messages["default"]).get(tone, messages["default"]["friendly"])
@@ -309,16 +327,50 @@ def _current_hour_for_restaurant(tz_name: str) -> int:
         return int(datetime.utcnow().hour)
 
 
-def _strategy_bonus(setting: UpsellSetting, candidate_price: Decimal, cart_total: Decimal) -> int:
+def _strategy_bonus(
+    setting: UpsellSetting,
+    candidate_price: Decimal,
+    cart_total: Decimal,
+    *,
+    is_inventory_priority: bool = False,
+    candidate_acceptance_rate: float = 0.0,
+) -> int:
     if cart_total <= 0:
-        return 0
+        cart_total = Decimal("0.01")
     ratio = candidate_price / cart_total
+    strategy = setting.strategy
 
-    if setting.strategy == "margin":
-        return 8 if ratio >= Decimal("0.35") else 0
-    if setting.strategy == "volume":
-        return 8 if ratio <= Decimal("0.25") else 0
-    return 0
+    if strategy in {"highest_margin", "margin"}:
+        if ratio >= Decimal("0.45"):
+            return 20
+        if ratio >= Decimal("0.30"):
+            return 12
+        return 0
+
+    if strategy == "highest_conversion":
+        if candidate_acceptance_rate >= 0.50:
+            return 22
+        if candidate_acceptance_rate >= 0.30:
+            return 12
+        if candidate_acceptance_rate > 0:
+            return 6
+        return 0
+
+    if strategy == "premium_experience":
+        if ratio >= Decimal("0.55"):
+            return 22
+        if ratio >= Decimal("0.35"):
+            return 12
+        return 0
+
+    if strategy in {"inventory_movement", "volume"}:
+        if is_inventory_priority:
+            return 20
+        if ratio <= Decimal("0.25"):
+            return 8
+        return 0
+
+    return 0  # balanced
 
 
 def _tiebreaker_points(item_id: int) -> int:
@@ -327,20 +379,81 @@ def _tiebreaker_points(item_id: int) -> int:
     return int(((item_id * 17) + (bucket * 31)) % 7)
 
 
-def _active_manual_rules(restaurant_id: int) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]]]:
+def _active_manual_rules(restaurant_id: int) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]], Set[int]]:
     pair_rules: Dict[int, Set[int]] = {}
     block_rules: Dict[int, Set[int]] = {}
+    global_block_targets: Set[int] = set()
     rules = UpsellRule.objects.filter(restaurant_id=restaurant_id, is_active=True).values(
         "type", "source_item_id", "target_item_id"
     )
     for rule in rules:
-        source_item_id = int(rule["source_item_id"])
         target_item_id = int(rule["target_item_id"])
         if rule["type"] == "pair":
+            if not rule["source_item_id"]:
+                continue
+            source_item_id = int(rule["source_item_id"])
             pair_rules.setdefault(source_item_id, set()).add(target_item_id)
         elif rule["type"] == "block":
+            if not rule["source_item_id"]:
+                continue
+            source_item_id = int(rule["source_item_id"])
             block_rules.setdefault(source_item_id, set()).add(target_item_id)
-    return pair_rules, block_rules
+        elif rule["type"] == "global_block":
+            global_block_targets.add(target_item_id)
+    return pair_rules, block_rules, global_block_targets
+
+
+def _historical_signals_by_target(
+    restaurant_id: int,
+    source_item_ids: Set[int],
+    excluded_target_ids: Set[int],
+) -> Dict[int, Dict[str, float]]:
+    if not source_item_ids:
+        return {}
+
+    rows = (
+        ItemAssociation.objects.filter(restaurant_id=restaurant_id, source_item_id__in=source_item_ids)
+        .exclude(target_item_id__in=excluded_target_ids)
+        .values(
+            "source_item_id",
+            "target_item_id",
+            "co_order_frequency",
+            "association_strength",
+            "times_shown",
+            "times_accepted",
+        )
+    )
+
+    result: Dict[int, Dict[str, float]] = {}
+    for row in rows:
+        target_item_id = int(row["target_item_id"])
+        current = result.setdefault(
+            target_item_id,
+            {
+                "sum_strength": 0.0,
+                "max_strength": 0.0,
+                "total_frequency": 0.0,
+                "max_frequency": 0.0,
+                "times_shown": 0.0,
+                "times_accepted": 0.0,
+            },
+        )
+        strength = float(row.get("association_strength") or 0)
+        frequency = float(row.get("co_order_frequency") or 0)
+        shown = float(row.get("times_shown") or 0)
+        accepted = float(row.get("times_accepted") or 0)
+
+        current["sum_strength"] += strength
+        current["total_frequency"] += frequency
+        current["times_shown"] += shown
+        current["times_accepted"] += accepted
+        current["max_strength"] = max(current["max_strength"], strength)
+        current["max_frequency"] = max(current["max_frequency"], frequency)
+
+    for metrics in result.values():
+        shown = metrics["times_shown"]
+        metrics["acceptance_rate"] = (metrics["times_accepted"] / shown) if shown > 0 else 0.0
+    return result
 
 
 def build_cart_upsell_suggestions(
@@ -368,7 +481,7 @@ def build_cart_upsell_suggestions(
     signals = _parse_signals(session_signals)
     role_categories = _derive_role_categories(restaurant.id, setting)
     prioritized_categories = _parse_prioritized_category_ids(setting)
-    pair_rules, block_rules = _active_manual_rules(restaurant.id)
+    pair_rules, block_rules, global_block_targets = _active_manual_rules(restaurant.id)
 
     cart_item_ids = {cart_item.item_id for cart_item in cart_items}
     cart_source_items = _flatten_cart_sources(cart_items)
@@ -385,9 +498,17 @@ def build_cart_upsell_suggestions(
     if not available_items:
         return []
 
-    disabled_item_ids = set(
-        UpsellItemSetting.objects.filter(restaurant=restaurant, enabled=False).values_list("item_id", flat=True)
+    item_setting_rows = UpsellItemSetting.objects.filter(restaurant=restaurant, item_id__in=[item.id for item in available_items]).values(
+        "item_id", "enabled", "inventory_priority"
     )
+    disabled_item_ids: Set[int] = set()
+    inventory_priority_ids: Set[int] = set()
+    for row in item_setting_rows:
+        item_id = int(row["item_id"])
+        if not row.get("enabled", True):
+            disabled_item_ids.add(item_id)
+        if row.get("inventory_priority"):
+            inventory_priority_ids.add(item_id)
 
     # Cart role state.
     cart_role_set: Set[str] = set()
@@ -406,12 +527,18 @@ def build_cart_upsell_suggestions(
     gap_rank = {role: index for index, role in enumerate(gaps)}
 
     hour = _current_hour_for_restaurant(getattr(restaurant, "timezone", "UTC"))
-    source_roles = _item_roles(trigger_source_item, role_categories) if trigger_source_item else set()
     blocked_target_ids: Set[int] = set()
     pair_boost_targets: Set[int] = set()
     for source_item in cart_source_items:
         blocked_target_ids.update(block_rules.get(source_item.id, set()))
         pair_boost_targets.update(pair_rules.get(source_item.id, set()))
+    blocked_target_ids.update(global_block_targets)
+
+    historical_signals = _historical_signals_by_target(
+        restaurant.id,
+        source_item_ids={item.id for item in cart_source_items},
+        excluded_target_ids=cart_item_ids.union(blocked_target_ids),
+    )
 
     results: List[Dict] = []
 
@@ -564,16 +691,36 @@ def build_cart_upsell_suggestions(
         if decline_count > 0:
             score -= 10 * decline_count
 
+        # Historical learning engine (brain 2)
+        historical = historical_signals.get(candidate.id)
+        historical_acceptance_rate = 0.0
+        if historical:
+            historical_acceptance_rate = float(historical.get("acceptance_rate", 0.0))
+            historical_points = 0
+            historical_points += min(40, int(float(historical.get("sum_strength", 0.0)) * 40))
+            historical_points += min(20, int(float(historical.get("total_frequency", 0.0))))
+            historical_points += min(20, int(historical_acceptance_rate * 20))
+            if historical_points:
+                score += historical_points
+                reasons["pair"] = reasons.get("pair", 0) + historical_points
+
         # Settings-driven boosts
         if candidate_category_id in prioritized_categories:
             score += 15
             reasons["priority"] = reasons.get("priority", 0) + 15
 
+        # Manual pair rule is an explicit override signal.
         if candidate.id in pair_boost_targets:
-            score += 25
-            reasons["pair"] = reasons.get("pair", 0) + 25
+            score += 200
+            reasons["pair"] = reasons.get("pair", 0) + 200
 
-        score += _strategy_bonus(setting, candidate_price, cart_total)
+        score += _strategy_bonus(
+            setting,
+            candidate_price,
+            cart_total,
+            is_inventory_priority=candidate.id in inventory_priority_ids,
+            candidate_acceptance_rate=historical_acceptance_rate,
+        )
         score += _tiebreaker_points(candidate.id)
 
         if score <= 0:
@@ -586,6 +733,8 @@ def build_cart_upsell_suggestions(
                 "message": _reason_for_top_factor(reasons, setting),
                 "score": int(score),
                 "stage": stage,
+                "historical_max_strength": float(historical.get("max_strength", 0.0)) if historical else 0.0,
+                "historical_max_frequency": int(historical.get("max_frequency", 0.0)) if historical else 0,
             }
         )
 
@@ -594,7 +743,32 @@ def build_cart_upsell_suggestions(
 
     results.sort(key=lambda row: row["score"], reverse=True)
 
-    # Aggressiveness controls default output depth; caller `limit` still caps it.
-    aggressive_limit = 2 if setting.aggressiveness == "aggressive" else 1
-    effective_limit = min(limit, max(aggressive_limit, limit if trigger_point != "add_to_cart" else aggressive_limit))
+    # Historical high-confidence override:
+    # if association is reliable (>=0.5 strength and >=10 co-orders),
+    # lift that item to the first slot.
+    high_confidence = [
+        row
+        for row in results
+        if row.get("historical_max_strength", 0.0) >= 0.5 and row.get("historical_max_frequency", 0) >= 10
+    ]
+    if high_confidence:
+        top_override = max(
+            high_confidence,
+            key=lambda row: (
+                row.get("historical_max_strength", 0.0),
+                row.get("historical_max_frequency", 0),
+                row["score"],
+            ),
+        )
+        results = [top_override] + [row for row in results if row["item"].id != top_override["item"].id]
+
+    # Aggressiveness controls output depth.
+    if setting.aggressiveness == "subtle":
+        settings_limit = 1
+    elif setting.aggressiveness == "moderate":
+        settings_limit = 2 if trigger_point in {"add_to_cart", "cart"} else 1
+    else:
+        settings_limit = 2
+
+    effective_limit = min(limit, settings_limit)
     return results[:effective_limit]

@@ -203,3 +203,33 @@ class UpsellItemSetting(models.Model):
 
     def __str__(self):
         return f"{self.restaurant_id}:{self.item_id}:enabled={self.enabled}"
+
+
+class ItemAssociation(models.Model):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="item_associations")
+    source_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="upsell_association_sources")
+    target_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="upsell_association_targets")
+    co_order_frequency = models.PositiveIntegerField(default=0)
+    association_strength = models.DecimalField(max_digits=12, decimal_places=6, default=0)
+    times_shown = models.PositiveIntegerField(default=0)
+    times_accepted = models.PositiveIntegerField(default=0)
+    times_dismissed = models.PositiveIntegerField(default=0)
+    revenue_generated = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    last_computed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("restaurant", "source_item", "target_item")
+        indexes = [
+            models.Index(fields=["restaurant", "source_item"]),
+            models.Index(fields=["restaurant", "target_item"]),
+            models.Index(fields=["restaurant", "co_order_frequency"]),
+            models.Index(fields=["restaurant", "association_strength"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.restaurant_id}:{self.source_item_id}->{self.target_item_id}"
+            f" freq={self.co_order_frequency}"
+        )
