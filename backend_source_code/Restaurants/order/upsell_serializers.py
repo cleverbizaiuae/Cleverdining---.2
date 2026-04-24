@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import List
 
+from django.db.utils import OperationalError, ProgrammingError
 from rest_framework import serializers
 from django.db.models import Count, Q, Sum
 
@@ -165,16 +166,19 @@ class UpsellItemSettingSerializer(serializers.ModelSerializer):
 
 
 def build_item_stats_map(restaurant_id: int):
-    rows = (
-        UpsellEvent.objects.filter(restaurant_id=restaurant_id, upsell_item_id__isnull=False)
-        .values("upsell_item_id")
-        .annotate(
-            shown=Count("id", filter=Q(action="shown")),
-            accepted=Count("id", filter=Q(action="accepted")),
-            rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
-            revenue=Sum("upsell_price", filter=Q(action="accepted")),
+    try:
+        rows = (
+            UpsellEvent.objects.filter(restaurant_id=restaurant_id, upsell_item_id__isnull=False)
+            .values("upsell_item_id")
+            .annotate(
+                shown=Count("id", filter=Q(action="shown")),
+                accepted=Count("id", filter=Q(action="accepted")),
+                rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
+                revenue=Sum("upsell_price", filter=Q(action="accepted")),
+            )
         )
-    )
+    except (OperationalError, ProgrammingError):
+        return {}
     stats = {}
     for row in rows:
         shown = int(row.get("shown") or 0)

@@ -18,6 +18,7 @@ from device.models import GuestSession
 from item.models import Item
 from restaurant.models import Restaurant
 from .models import OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
+from .schema_guard import ensure_upsell_tables
 from .upsell_serializers import (
     UpsellItemSettingSerializer,
     UpsellEventCreateSerializer,
@@ -25,6 +26,11 @@ from .upsell_serializers import (
     UpsellSettingSerializer,
     build_item_stats_map,
 )
+
+
+def _ensure_upsell_schema() -> None:
+    # Non-blocking runtime heal for partially migrated environments.
+    ensure_upsell_tables()
 
 
 def get_restaurant_for_user(user) -> Optional[Restaurant]:
@@ -180,6 +186,7 @@ class UpsellSettingsAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        _ensure_upsell_schema()
         restaurant = None
         if request.user and request.user.is_authenticated:
             restaurant = get_restaurant_for_user(request.user)
@@ -192,6 +199,7 @@ class UpsellSettingsAPIView(APIView):
         return Response(UpsellSettingSerializer(setting).data)
 
     def put(self, request):
+        _ensure_upsell_schema()
         if not (request.user and request.user.is_authenticated):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         restaurant = get_restaurant_for_user(request.user)
@@ -212,6 +220,7 @@ class UpsellRulesAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -221,6 +230,7 @@ class UpsellRulesAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -235,6 +245,7 @@ class UpsellRuleDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, pk: int):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -249,6 +260,7 @@ class UpsellEventCreateAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        _ensure_upsell_schema()
         session_token = request.headers.get("X-Guest-Session-Token") or request.data.get("guest_session_token")
         session = None
         restaurant = None
@@ -376,6 +388,7 @@ class UpsellAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -518,6 +531,7 @@ class UpsellEventsByTableAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -577,6 +591,7 @@ class UpsellItemsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -628,6 +643,7 @@ class UpsellItemsAPIView(APIView):
         return Response({"results": response_rows, "count": len(response_rows)})
 
     def patch(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -660,6 +676,7 @@ class UpsellPairingIntelligenceAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        _ensure_upsell_schema()
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -673,6 +690,7 @@ class UpsellPairingIntelligenceAPIView(APIView):
         return Response({"results": results[:50], "count": len(results), "computed_at": timezone.now().isoformat()})
 
     def post(self, request):
+        _ensure_upsell_schema()
         # "Run Intelligence" trigger – computes fresh pairing insights from live data.
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
