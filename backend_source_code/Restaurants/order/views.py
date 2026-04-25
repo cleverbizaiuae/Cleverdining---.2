@@ -22,6 +22,7 @@ from datetime import date,timedelta
 from django.db.models import Sum
 from channels.layers import get_channel_layer
 from .schema_guard import ensure_order_notes_column
+from payment.schema_guard import ensure_payment_schema
 channel_layer = get_channel_layer()
 from message.models import ChatMessage
 from datetime import datetime
@@ -36,6 +37,7 @@ class OrderCreateAPIView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         # Production safety: self-heal legacy DBs missing `order_order.notes`
         ensure_order_notes_column()
+        ensure_payment_schema()
         # Override create to return full OrderDetailSerializer data (including ID)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -195,6 +197,7 @@ class ConfirmCashPaymentAPIView(APIView):
     def patch(self, request, pk):
         from payment.models import Payment
         import uuid
+        ensure_payment_schema()
 
         try:
             # Verify permission (Owner/Staff of restaurant)
@@ -390,6 +393,7 @@ class OrderCancelAPIView(APIView):
     permission_classes = [IsAuthenticated,IsCustomerRole]
 
     def patch(self, request, pk):
+        ensure_payment_schema()
         try:
             order = Order.objects.get(pk=pk, device__user=request.user)
         except Order.DoesNotExist:
@@ -425,6 +429,7 @@ class MyOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         ensure_order_notes_column()
+        ensure_payment_schema()
         user = self.request.user
         # Optimized: Use select_related and prefetch_related to avoid N+1 queries
         base_qs = Order.objects.select_related(
@@ -469,6 +474,7 @@ class MySingleOrderAPIView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         ensure_order_notes_column()
+        ensure_payment_schema()
         user = self.request.user
         if user.is_authenticated:
             return Order.objects.filter(
@@ -500,6 +506,7 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         ensure_order_notes_column()
+        ensure_payment_schema()
         try:
             user = self.request.user
             
@@ -592,6 +599,7 @@ class OwnerUpdateOrderStatusAPIView(APIView):
     permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
 
     def patch(self, request, pk):
+        ensure_payment_schema()
         user = request.user
         try:
             if getattr(user, 'role', None) == 'owner':
@@ -693,6 +701,7 @@ class OwnerOrderDetailAPIView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         ensure_order_notes_column()
+        ensure_payment_schema()
         user = self.request.user
         base_qs = Order.objects.select_related(
             'device', 'restaurant', 'guest_session', 'business_day'
@@ -723,6 +732,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         ensure_order_notes_column()
+        ensure_payment_schema()
         user = self.request.user
         print(f"DEBUG_ORDERS: Fetching orders for user {user.email} (ID: {user.id}) Role: {getattr(user, 'role', 'N/A')}")
         
@@ -801,6 +811,7 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
     permission_classes = [IsAuthenticated,IsOwnerChefOrStaff]
 
     def patch(self, request, pk):
+        ensure_payment_schema()
         user = request.user
         new_status = request.data.get('status')
 

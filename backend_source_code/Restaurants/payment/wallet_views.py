@@ -17,6 +17,7 @@ import uuid
 
 from .models import PaymentGateway, Payment
 from .serializers import PaymentSerializer
+from .schema_guard import ensure_payment_schema
 from order.models import Order
 from order.serializers import OrderDetailSerializer
 from restaurant.models import Restaurant
@@ -100,6 +101,7 @@ class WalletPaymentConfirmView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
+        ensure_payment_schema()
         order_id = request.data.get('order_id')
         wallet_type = request.data.get('wallet_type')
         wallet_token = request.data.get('wallet_token')

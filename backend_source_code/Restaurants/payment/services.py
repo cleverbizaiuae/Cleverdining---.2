@@ -14,6 +14,7 @@ from .split_bill import (
     prepare_split_checkout,
     register_pending_allocations,
 )
+from .schema_guard import ensure_payment_schema
 
 channel_layer = get_channel_layer()
 
@@ -189,6 +190,7 @@ class PaymentService:
 
     @staticmethod
     def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None, created_by=None, split_data=None):
+        ensure_payment_schema()
         adapter = PaymentService.get_adapter(order.restaurant, provider=provider)
         split_context = None
         bill = None
@@ -275,6 +277,7 @@ class PaymentService:
 
     @staticmethod
     def verify_payment(payment, data):
+        ensure_payment_schema()
         # Idempotency guard: don't re-process already completed transactions.
         if payment.status == 'completed':
             return {

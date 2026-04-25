@@ -111,13 +111,30 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     order_items = OrderItemSerializer(many=True, read_only=True)
     device_name = serializers.CharField(source='device.table_name')
     device_table_name = serializers.CharField(source='device.table_name', read_only=True)
-    payments = PaymentSerializer(many=True, read_only=True)
+    payments = serializers.SerializerMethodField()
     restaurant_name = serializers.CharField(source='restaurant.resturent_name', read_only=True)
     google_review_url = serializers.CharField(source='restaurant.google_review_url', read_only=True, allow_null=True)
     special_request = serializers.SerializerMethodField()
 
     def get_special_request(self, obj):
         return obj.notes or ""
+
+    def get_payments(self, obj):
+        try:
+            from payment.models import Payment
+            from payment.schema_guard import ensure_payment_schema
+
+            # Keep responses alive on partially-migrated deployments.
+            ensure_payment_schema()
+            qs = (
+                Payment.objects.filter(order_id=obj.id)
+                .only('id', 'provider', 'transaction_id', 'amount', 'status', 'created_at', 'order_id')
+                .order_by('-created_at')
+            )
+            return PaymentSerializer(qs, many=True).data
+        except Exception as exc:
+            print(f"[ORDER-SERIALIZER] Failed loading payments for order {obj.id}: {exc}")
+            return []
 
     class Meta:
         model = Order

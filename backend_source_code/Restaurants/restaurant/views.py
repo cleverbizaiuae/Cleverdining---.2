@@ -12,6 +12,7 @@ from django.db.models import Prefetch
 from django.db import IntegrityError
 from accounts.models import User, ChefStaff
 from restaurant.region_config import resolve_region_defaults, get_region_config
+from .schema_guard import ensure_brand_config_schema
 # Create your views here.
 
 # jwt
@@ -99,48 +100,63 @@ class BrandConfigAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        restaurant = _get_restaurant_for_brand_request(request, for_write=False)
-        if not restaurant:
-            return Response(_brand_default_payload(), status=status.HTTP_200_OK)
+        try:
+            ensure_brand_config_schema()
+            restaurant = _get_restaurant_for_brand_request(request, for_write=False)
+            if not restaurant:
+                return Response(_brand_default_payload(), status=status.HTTP_200_OK)
 
-        config, _ = BrandConfig.objects.get_or_create(
-            restaurant=restaurant,
-            defaults={
-                "restaurant_name": restaurant.resturent_name or "My Restaurant",
-            },
-        )
-        payload = BrandConfigSerializer(config).data
-        if not payload.get("googleReviewUrl"):
-            payload["googleReviewUrl"] = restaurant.google_review_url
-        return Response(payload, status=status.HTTP_200_OK)
+            config, _ = BrandConfig.objects.get_or_create(
+                restaurant=restaurant,
+                defaults={
+                    "restaurant_name": restaurant.resturent_name or "My Restaurant",
+                },
+            )
+            payload = BrandConfigSerializer(config).data
+            if not payload.get("googleReviewUrl"):
+                payload["googleReviewUrl"] = restaurant.google_review_url
+            return Response(payload, status=status.HTTP_200_OK)
+        except Exception as exc:
+            print(f"[BRAND-CONFIG] GET fallback due to schema/data error: {exc}")
+            return Response(_brand_default_payload(), status=status.HTTP_200_OK)
 
     def put(self, request):
         if not request.user or not request.user.is_authenticated:
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        restaurant = _get_restaurant_for_brand_request(request, for_write=True)
-        if not restaurant:
-            return Response({"error": "Restaurant not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            ensure_brand_config_schema()
+            restaurant = _get_restaurant_for_brand_request(request, for_write=True)
+            if not restaurant:
+                return Response({"error": "Restaurant not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        config, _ = BrandConfig.objects.get_or_create(
-            restaurant=restaurant,
-            defaults={"restaurant_name": restaurant.resturent_name or "My Restaurant"},
-        )
-        incoming = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
-        google_review_url = incoming.pop("googleReviewUrl", None)
-        incoming.pop("restaurant_id", None)
+            config, _ = BrandConfig.objects.get_or_create(
+                restaurant=restaurant,
+                defaults={"restaurant_name": restaurant.resturent_name or "My Restaurant"},
+            )
+            incoming = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+            google_review_url = incoming.pop("googleReviewUrl", None)
+            incoming.pop("restaurant_id", None)
 
-        serializer = BrandConfigSerializer(config, data=incoming, partial=True)
-        serializer.is_valid(raise_exception=True)
-        updated = serializer.save()
+            serializer = BrandConfigSerializer(config, data=incoming, partial=True)
+            serializer.is_valid(raise_exception=True)
+            updated = serializer.save()
 
-        if google_review_url is not None:
-            restaurant.google_review_url = google_review_url or None
-            restaurant.save(update_fields=["google_review_url"])
+            if google_review_url is not None:
+                restaurant.google_review_url = google_review_url or None
+                restaurant.save(update_fields=["google_review_url"])
 
-        payload = BrandConfigSerializer(updated).data
-        payload["googleReviewUrl"] = restaurant.google_review_url
-        return Response(payload, status=status.HTTP_200_OK)
+            payload = BrandConfigSerializer(updated).data
+            payload["googleReviewUrl"] = restaurant.google_review_url
+            return Response(payload, status=status.HTTP_200_OK)
+        except serializers.ValidationError:
+            raise
+        except Exception as exc:
+            print(f"[BRAND-CONFIG] PUT failed: {exc}")
+            return Response(
+                {"error": "Failed to update brand config"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class OwnerRegisterView(APIView):
     permission_classes = [AllowAny]

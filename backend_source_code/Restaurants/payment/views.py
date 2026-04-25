@@ -18,6 +18,7 @@ from order.serializers import OrderDetailSerializer
 from message.models import ChatMessage
 from restaurant.region_config import get_region_config
 from .split_bill import build_bill_summary, mark_payment_failed
+from .schema_guard import ensure_payment_schema
 
 channel_layer = get_channel_layer()
 
@@ -463,6 +464,7 @@ class SplitBillSummaryView(APIView):
 class VerifyPaymentView(APIView):
     """Unified Payment Verification View"""
     def post(self, request):
+        ensure_payment_schema()
         data = request.data
         # We need to identify the payment to verify. 
         # For Checkout.com, we get cko-session-id. For Stripe, we get session_id.
@@ -539,6 +541,7 @@ class PayTabsReturnView(APIView):
     authentication_classes = []
 
     def post(self, request):
+        ensure_payment_schema()
         data = request.data
         # PayTabs sends status in POST body: response_status, tran_ref, etc.
         
@@ -619,6 +622,7 @@ class PaymeReturnView(APIView):
         )
 
     def post(self, request):
+        ensure_payment_schema()
         data = self._payload(request)
         transaction_id = (
             data.get("transaction_id")

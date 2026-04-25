@@ -10,6 +10,7 @@ from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.models import Order
+from .schema_guard import ensure_payment_schema
 
 channel_layer = get_channel_layer()
 
@@ -133,6 +134,7 @@ class PaymentAdminViewSet(ModelViewSet):
     def get_queryset(self):
         """Return real Payment records for the user's restaurants."""
         try:
+            ensure_payment_schema()
             rest_ids = self._get_user_restaurant_ids()
             if not rest_ids:
                 return Payment.objects.none()
@@ -155,6 +157,7 @@ class PaymentAdminViewSet(ModelViewSet):
         These are the 'orphaned' orders that need synthetic payments.
         """
         try:
+            ensure_payment_schema()
             from order.models import Order
             
             # Get order IDs that already have payments
