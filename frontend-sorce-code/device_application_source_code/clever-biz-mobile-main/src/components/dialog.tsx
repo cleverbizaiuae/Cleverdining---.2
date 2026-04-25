@@ -225,7 +225,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       await Promise.allSettled([
         logUpsellEvent({
           triggerPoint: "add_to_cart",
-          action: "declined",
+          action: "dismissed",
           suggestion,
           cartValueAtTime: upsellCartMetrics.cartValueAtTime,
           cartItemCount: upsellCartMetrics.cartItemCount,
@@ -310,7 +310,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     const action = pendingUpsellActionRef.current;
     pendingUpsellActionRef.current = null;
     if (action) {
-      await action();
+      window.setTimeout(() => {
+        void action();
+      }, 420);
     }
   };
 

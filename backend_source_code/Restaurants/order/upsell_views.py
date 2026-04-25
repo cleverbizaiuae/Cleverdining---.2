@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import ChefStaff
+from category.models import Category
 from category.schema_guard import ensure_category_schema
 from device.models import GuestSession
 from item.models import Item
@@ -106,10 +107,19 @@ def _parse_int_list(raw_value) -> list[int]:
     return parsed
 
 
-def _stage_bonus_for_item(stage: str, item: Item) -> int:
+def _stage_bonus_for_item(
+    stage: str,
+    item: Item,
+    *,
+    category_name_hint: str = "",
+    category_type_hint: str = "",
+) -> int:
     stage_key = str(stage or "").strip().lower()
-    category_type = str(getattr(getattr(item, "category", None), "category_type", "") or "").strip().lower()
-    category_name = str(getattr(getattr(item, "category", None), "Category_name", "") or "").lower()
+    category_type = str(category_type_hint or "").strip().lower()
+    category_name = str(category_name_hint or "").lower()
+    if not category_type or not category_name:
+        category_name = category_name or str(getattr(getattr(item, "category", None), "Category_name", "") or "").lower()
+        category_type = category_type or str(getattr(getattr(item, "category", None), "category_type", "") or "").strip().lower()
     if not category_type:
         if any(token in category_name for token in ("drink", "coffee", "tea", "juice", "beverage")):
             category_type = "drink"
@@ -533,24 +543,63 @@ class UpsellSmartSuggestionsAPIView(APIView):
             bucket["max_strength"] = max(bucket["max_strength"], strength)
             bucket["max_frequency"] = max(bucket["max_frequency"], frequency)
 
+        disabled_item_ids = set(
+            UpsellItemSetting.objects.filter(
+                restaurant=restaurant,
+                enabled=False,
+                item_id__in=list(aggregate.keys()),
+            ).values_list("item_id", flat=True)
+        )
+
+        candidate_item_ids = [item_id for item_id in aggregate.keys() if item_id not in disabled_item_ids]
         items = {
             item.id: item
             for item in Item.objects.filter(
                 restaurant=restaurant,
                 availability=True,
-                id__in=list(aggregate.keys()),
-            ).select_related("category")
+                id__in=candidate_item_ids,
+            )
         }
+
+        category_name_map: dict[int, str] = {}
+        category_type_map: dict[int, str] = {}
+        category_ids = sorted({item.category_id for item in items.values() if item.category_id})
+        if category_ids:
+            try:
+                for category_id, category_name, category_type in Category.objects.filter(id__in=category_ids).values_list(
+                    "id",
+                    "Category_name",
+                    "category_type",
+                ):
+                    category_name_map[int(category_id)] = str(category_name or "")
+                    category_type_map[int(category_id)] = str(category_type or "")
+            except Exception:
+                try:
+                    for category_id, category_name in Category.objects.filter(id__in=category_ids).values_list(
+                        "id",
+                        "Category_name",
+                    ):
+                        category_name_map[int(category_id)] = str(category_name or "")
+                except Exception:
+                    category_name_map = {}
+                    category_type_map = {}
 
         results = []
         for item_id, metrics in aggregate.items():
             item = items.get(item_id)
             if not item:
                 continue
+            category_name = category_name_map.get(item.category_id or 0, "")
+            category_type = category_type_map.get(item.category_id or 0, "")
             shown = metrics["times_shown"]
             accepted = metrics["times_accepted"]
             accept_rate = (accepted / shown) if shown > 0 else 0.0
-            stage_bonus = _stage_bonus_for_item(stage, item)
+            stage_bonus = _stage_bonus_for_item(
+                stage,
+                item,
+                category_name_hint=category_name,
+                category_type_hint=category_type,
+            )
             historical_score = (
                 (metrics["sum_strength"] * 100.0)
                 + min(metrics["total_frequency"], 50)
@@ -571,7 +620,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
                     "price": str(item.price or Decimal("0")),
                     "description": item.description or "",
                     "category": item.category_id,
-                    "category_name": getattr(item.category, "Category_name", ""),
+                    "category_name": category_name,
                     "image1": image_url,
                     "availability": bool(item.availability),
                     "historical_score": round(historical_score, 3),
@@ -812,11 +861,25 @@ class UpsellItemsAPIView(APIView):
         search = (request.query_params.get("search") or "").strip().lower()
         category_id = request.query_params.get("category_id")
 
-        items_qs = Item.objects.filter(restaurant=restaurant).select_related("category").order_by("item_name")
+        items_qs = Item.objects.filter(restaurant=restaurant).order_by("item_name")
         if search:
             items_qs = items_qs.filter(item_name__icontains=search)
         if category_id and str(category_id).isdigit():
             items_qs = items_qs.filter(category_id=int(category_id))
+
+        category_ids = list(items_qs.values_list("category_id", flat=True))
+        category_name_map: dict[int, str] = {}
+        if category_ids:
+            try:
+                category_name_map = {
+                    int(category_pk): str(category_name or "")
+                    for category_pk, category_name in Category.objects.filter(id__in=category_ids).values_list(
+                        "id",
+                        "Category_name",
+                    )
+                }
+            except Exception:
+                category_name_map = {}
 
         settings_map = {
             cfg.item_id: cfg
@@ -843,7 +906,7 @@ class UpsellItemsAPIView(APIView):
                     "image_url": image_url,
                     "availability": bool(getattr(item, "availability", True)),
                     "category_id": item.category_id,
-                    "category_name": getattr(item.category, "Category_name", ""),
+                    "category_name": category_name_map.get(item.category_id or 0, ""),
                     "enabled": cfg.enabled if cfg else True,
                     "inventory_priority": cfg.inventory_priority if cfg else False,
                     "shown_count": int(stats.get("shown_count", 0)),

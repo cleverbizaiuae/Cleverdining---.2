@@ -5,7 +5,7 @@ import axiosInstance from "../lib/axios";
 import { API_BASE_URL } from "../lib/axios";
 import toast from "react-hot-toast";
 import { AnimatePresence, motion } from "framer-motion"; // Corrected from "motion/react"
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import {
   fetchUpsellSettings,
@@ -76,11 +76,14 @@ const ScreenCart = () => {
   const [beforePaymentSuggestions, setBeforePaymentSuggestions] = useState<UpsellSuggestion[]>([]);
   const [upsellSettings, setUpsellSettings] = useState<UpsellSettingsSnapshot | null>(null);
   const [upsellLoading, setUpsellLoading] = useState(false);
+  const [beforePaymentLoading, setBeforePaymentLoading] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [itemTimings, setItemTimings] = useState<Record<string, TimingValue>>({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("card");
   const [specialRequest, setSpecialRequest] = useState("");
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const cartShownSignatureRef = useRef("");
+  const beforePaymentShownSignatureRef = useRef("");
   const toSafeNumber = (value: unknown): number => {
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
     if (typeof value === "string") {
@@ -137,13 +140,8 @@ const ScreenCart = () => {
     (sum, item) => sum + toSafeNumber(item.price) * item.quantity,
     0
   );
-  const activeCartUpsells = useMemo(
-    () => (beforePaymentSuggestions.length > 0 ? beforePaymentSuggestions : upsellSuggestions).slice(0, 2),
-    [beforePaymentSuggestions, upsellSuggestions]
-  );
+  const activeCartUpsells = useMemo(() => upsellSuggestions.slice(0, 2), [upsellSuggestions]);
   const upsellUiEnabled = upsellSettings?.enabled ?? true;
-  const activeInlineTrigger: UpsellTriggerPoint =
-    beforePaymentSuggestions.length > 0 ? "before_payment" : "cart";
   const currencyCode = getSessionCurrencyCode();
   const tableNumber = useMemo(() => {
     try {
@@ -200,25 +198,12 @@ const ScreenCart = () => {
     const guestSessionToken = localStorage.getItem("guest_session_token");
     if (!guestSessionToken || validCartItems.length === 0) {
       setUpsellSuggestions([]);
-      setBeforePaymentSuggestions([]);
       setUpsellLoading(false);
+      cartShownSignatureRef.current = "";
       return;
     }
 
-    const fetchUpsellSuggestionsForTrigger = async (triggerPoint: UpsellTriggerPoint): Promise<UpsellSuggestion[]> => {
-      const rawSuggestions = await fetchUpsellSuggestions({
-        triggerPoint,
-        limit: triggerPoint === "cart" ? 2 : 1,
-        cartItemIds: validCartItems.map((item) => item.id),
-        excludeItemIds: validCartItems.map((item) => item.id),
-      });
-      const cartIds = new Set(validCartItems.map((item) => item.id));
-      return rawSuggestions
-        .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
-        .slice(0, triggerPoint === "cart" ? 2 : 1);
-    };
-
-    const loadUpsellSuggestions = async () => {
+    const loadCartUpsells = async () => {
       setUpsellLoading(true);
       try {
         const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
@@ -235,53 +220,51 @@ const ScreenCart = () => {
           show_before_payment: true,
         };
 
-        // Fetch runs regardless of settings; rendering is controlled by toggle flags.
-        const beforePay = await fetchUpsellSuggestionsForTrigger("before_payment");
-        if (cancelled) return;
-
-        const canRenderBeforePay =
-          effectiveSettings.enabled &&
-          effectiveSettings.show_before_payment &&
-          canShowUpsellTouchpoint("before_payment", 1);
-
-        if (beforePay.length > 0 && canRenderBeforePay) {
-          setBeforePaymentSuggestions(beforePay);
-          setUpsellSuggestions([]);
-          incrementUpsellTouchpointCount("before_payment");
-          await logUpsellShownBatch({
-            triggerPoint: "before_payment",
-            suggestions: beforePay,
-            cartValueAtTime: cartMetrics.cartValueAtTime,
-            cartItemCount: cartMetrics.cartItemCount,
-          }).catch(() => {});
-          return;
-        }
-
-        setBeforePaymentSuggestions([]);
-        const cartLevel = await fetchUpsellSuggestionsForTrigger("cart");
-        if (cancelled) return;
-
-        const canRenderCart =
+        const shouldRenderCart =
           effectiveSettings.enabled &&
           effectiveSettings.show_in_cart &&
           canShowUpsellTouchpoint("cart", 3);
 
-        if (cartLevel.length > 0 && canRenderCart) {
-          setUpsellSuggestions(cartLevel);
-          incrementUpsellTouchpointCount("cart");
-          await logUpsellShownBatch({
-            triggerPoint: "cart",
-            suggestions: cartLevel,
-            cartValueAtTime: cartMetrics.cartValueAtTime,
-            cartItemCount: cartMetrics.cartItemCount,
-          }).catch(() => {});
-        } else {
+        if (!shouldRenderCart) {
           setUpsellSuggestions([]);
+          cartShownSignatureRef.current = "";
+          return;
+        }
+
+        const rawSuggestions = await fetchUpsellSuggestions({
+          triggerPoint: "cart",
+          limit: 2,
+          cartItemIds: validCartItems.map((item) => item.id),
+          excludeItemIds: validCartItems.map((item) => item.id),
+        });
+        if (cancelled) return;
+
+        const cartIds = new Set(validCartItems.map((item) => item.id));
+        const suggestions = rawSuggestions
+          .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
+          .slice(0, 2);
+
+        setUpsellSuggestions(suggestions);
+
+        if (suggestions.length > 0) {
+          const signature = `${cartFingerprint}|${suggestions.map((item) => item.id).join(",")}`;
+          if (signature !== cartShownSignatureRef.current) {
+            cartShownSignatureRef.current = signature;
+            incrementUpsellTouchpointCount("cart");
+            await logUpsellShownBatch({
+              triggerPoint: "cart",
+              suggestions,
+              cartValueAtTime: cartMetrics.cartValueAtTime,
+              cartItemCount: cartMetrics.cartItemCount,
+            }).catch(() => {});
+          }
+        } else {
+          cartShownSignatureRef.current = "";
         }
       } catch {
         if (!cancelled) {
           setUpsellSuggestions([]);
-          setBeforePaymentSuggestions([]);
+          cartShownSignatureRef.current = "";
         }
       } finally {
         if (!cancelled) {
@@ -290,12 +273,113 @@ const ScreenCart = () => {
       }
     };
 
-    void loadUpsellSuggestions();
+    void loadCartUpsells();
 
     return () => {
       cancelled = true;
     };
   }, [cartFingerprint, cartMetrics.cartItemCount, cartMetrics.cartValueAtTime, validCartItems]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const guestSessionToken = localStorage.getItem("guest_session_token");
+
+    if (!showReviewModal) {
+      setBeforePaymentLoading(false);
+      setBeforePaymentSuggestions([]);
+      beforePaymentShownSignatureRef.current = "";
+      return;
+    }
+
+    if (!guestSessionToken || validCartItems.length === 0) {
+      setBeforePaymentSuggestions([]);
+      setBeforePaymentLoading(false);
+      return;
+    }
+
+    const loadBeforePaymentUpsell = async () => {
+      setBeforePaymentLoading(true);
+      try {
+        const settingsSnapshot =
+          upsellSettings ||
+          (await fetchUpsellSettings().catch(() => null));
+
+        if (cancelled) return;
+        if (settingsSnapshot) {
+          setUpsellSettings(settingsSnapshot);
+        }
+
+        const effectiveSettings: UpsellSettingsSnapshot = settingsSnapshot || {
+          enabled: true,
+          show_after_add_to_cart: true,
+          show_in_cart: true,
+          show_before_payment: true,
+        };
+
+        const shouldRender =
+          effectiveSettings.enabled &&
+          effectiveSettings.show_before_payment &&
+          canShowUpsellTouchpoint("before_payment", 1);
+
+        if (!shouldRender) {
+          setBeforePaymentSuggestions([]);
+          beforePaymentShownSignatureRef.current = "";
+          return;
+        }
+
+        const rawSuggestions = await fetchUpsellSuggestions({
+          triggerPoint: "before_payment",
+          limit: 1,
+          cartItemIds: validCartItems.map((item) => item.id),
+          excludeItemIds: validCartItems.map((item) => item.id),
+        });
+        if (cancelled) return;
+
+        const cartIds = new Set(validCartItems.map((item) => item.id));
+        const suggestions = rawSuggestions
+          .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
+          .slice(0, 1);
+
+        setBeforePaymentSuggestions(suggestions);
+        if (suggestions.length > 0) {
+          const signature = `${cartFingerprint}|${suggestions.map((item) => item.id).join(",")}`;
+          if (signature !== beforePaymentShownSignatureRef.current) {
+            beforePaymentShownSignatureRef.current = signature;
+            incrementUpsellTouchpointCount("before_payment");
+            await logUpsellShownBatch({
+              triggerPoint: "before_payment",
+              suggestions,
+              cartValueAtTime: cartMetrics.cartValueAtTime,
+              cartItemCount: cartMetrics.cartItemCount,
+            }).catch(() => {});
+          }
+        } else {
+          beforePaymentShownSignatureRef.current = "";
+        }
+      } catch {
+        if (!cancelled) {
+          setBeforePaymentSuggestions([]);
+          beforePaymentShownSignatureRef.current = "";
+        }
+      } finally {
+        if (!cancelled) {
+          setBeforePaymentLoading(false);
+        }
+      }
+    };
+
+    void loadBeforePaymentUpsell();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showReviewModal,
+    cartFingerprint,
+    cartMetrics.cartItemCount,
+    cartMetrics.cartValueAtTime,
+    validCartItems,
+  ]);
 
   const suggestionToCartItem = (item: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
     id: item.id,
@@ -762,7 +846,7 @@ const ScreenCart = () => {
         {validCartItems.length > 0 && upsellUiEnabled && (upsellLoading || activeCartUpsells.length > 0) && (
           <div className="mt-2">
             <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B39F89]">
-              {beforePaymentSuggestions.length > 0 ? "Before you pay" : "Before you forget..."}
+              Also worth adding
             </p>
             <div className="mt-1.5 bg-white border border-[#EFE7DD] rounded-2xl p-3 shadow-[0_8px_24px_rgba(75,40,0,0.06)]">
               {upsellLoading && activeCartUpsells.length === 0 ? (
@@ -787,7 +871,7 @@ const ScreenCart = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9B7A4E]">
-                        {beforePaymentSuggestions.length > 0 ? "Before you pay" : "While you wait"}
+                        While you wait
                       </p>
                       <p className="text-[15px] font-bold text-[#2F2418] leading-tight truncate">
                         {suggestion.item_name}
@@ -801,13 +885,13 @@ const ScreenCart = () => {
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       <button
-                        onClick={() => dismissSuggestedItem(suggestion, activeInlineTrigger, "declined")}
+                        onClick={() => dismissSuggestedItem(suggestion, "cart", "declined")}
                         className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
                       >
                         No Thanks
                       </button>
                       <button
-                        onClick={() => addSuggestedItem(suggestion, activeInlineTrigger)}
+                        onClick={() => addSuggestedItem(suggestion, "cart")}
                         className="rounded-full bg-[#4B2800] text-white px-3.5 py-1.5 text-sm font-bold hover:bg-[#3F2200] transition-colors"
                       >
                         + Add
@@ -966,6 +1050,51 @@ const ScreenCart = () => {
             </div>
 
             <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2.5 shrink-0">
+              {upsellUiEnabled && (beforePaymentLoading || beforePaymentSuggestions.length > 0) && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                    Before you pay
+                  </p>
+                  {beforePaymentLoading && beforePaymentSuggestions.length === 0 ? (
+                    <p className="text-xs text-slate-500">Loading a smart add-on...</p>
+                  ) : (
+                    beforePaymentSuggestions.map((suggestion) => (
+                      <div key={`before-pay-${suggestion.id}`} className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white shrink-0">
+                          <img
+                            src={resolveImageUrl(suggestion.image1)}
+                            alt={suggestion.item_name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-800 truncate">{suggestion.item_name}</p>
+                          <p className="text-xs text-primary font-bold">
+                            {currencyCode} {toSafeNumber(suggestion.price).toFixed(2)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => dismissSuggestedItem(suggestion, "before_payment", "declined")}
+                          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500"
+                        >
+                          No
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addSuggestedItem(suggestion, "before_payment")}
+                          className="rounded-full bg-primary text-white px-3 py-1 text-[11px] font-semibold shadow-sm shadow-primary/20"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleOrderNow}

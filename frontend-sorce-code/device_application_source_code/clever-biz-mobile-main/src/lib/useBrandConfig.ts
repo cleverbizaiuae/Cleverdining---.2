@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE_URL } from "./axios";
 
 export type ThemePreset = "classic_clean" | "luxury_dark" | "warm_casual";
+export type FontPreset = "modern" | "elegant" | "bold";
 
 export interface BrandConfig {
   restaurantName: string;
   logoUrl: string | null;
   coverImageUrl: string | null;
   primaryColor: string;
+  secondaryColor: string | null;
+  accentColor: string | null;
   themePreset: ThemePreset;
+  fontPreset: FontPreset;
   tagline: string | null;
   brandingEnabled: boolean;
   instagramUrl: string | null;
@@ -16,6 +20,8 @@ export interface BrandConfig {
   tiktokUrl: string | null;
   twitterUrl: string | null;
   websiteUrl: string | null;
+  wifiName: string | null;
+  wifiPassword: string | null;
   googleReviewUrl: string | null;
 }
 
@@ -26,12 +32,18 @@ type BrandingSnapshot = {
   coverImageDataUrl?: string;
 };
 
+const BRAND_CACHE_KEY = "cb_brand_config_cache";
+const BRAND_BRIDGE_KEY = "customer_branding";
+
 export const DEFAULT_BRAND: BrandConfig = {
   restaurantName: "My Restaurant",
   logoUrl: null,
   coverImageUrl: null,
   primaryColor: "#0055FE",
+  secondaryColor: null,
+  accentColor: null,
   themePreset: "classic_clean",
+  fontPreset: "modern",
   tagline: null,
   brandingEnabled: false,
   instagramUrl: null,
@@ -39,17 +51,15 @@ export const DEFAULT_BRAND: BrandConfig = {
   tiktokUrl: null,
   twitterUrl: null,
   websiteUrl: null,
+  wifiName: null,
+  wifiPassword: null,
   googleReviewUrl: null,
 };
 
-function readBrandingSnapshot(): BrandingSnapshot {
-  try {
-    const raw = localStorage.getItem("customer_branding");
-    if (!raw) return {};
-    return JSON.parse(raw) as BrandingSnapshot;
-  } catch {
-    return {};
-  }
+function cleanText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function normalizeThemePreset(value: unknown): ThemePreset {
@@ -57,50 +67,86 @@ function normalizeThemePreset(value: unknown): ThemePreset {
   return "classic_clean";
 }
 
-function normalizeHexColor(value: unknown): string {
-  if (typeof value !== "string") return DEFAULT_BRAND.primaryColor;
+function normalizeFontPreset(value: unknown): FontPreset {
+  if (value === "elegant" || value === "bold") return value;
+  return "modern";
+}
+
+function normalizeHexColor(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
-  return DEFAULT_BRAND.primaryColor;
+  return fallback;
 }
 
 function mapBrandConfig(payload: unknown): BrandConfig {
   const src = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   return {
-    restaurantName:
-      typeof src.restaurantName === "string" && src.restaurantName.trim()
-        ? src.restaurantName.trim()
-        : DEFAULT_BRAND.restaurantName,
-    logoUrl: typeof src.logoUrl === "string" && src.logoUrl.trim() ? src.logoUrl.trim() : null,
-    coverImageUrl:
-      typeof src.coverImageUrl === "string" && src.coverImageUrl.trim() ? src.coverImageUrl.trim() : null,
-    primaryColor: normalizeHexColor(src.primaryColor),
+    restaurantName: cleanText(src.restaurantName) || DEFAULT_BRAND.restaurantName,
+    logoUrl: cleanText(src.logoUrl),
+    coverImageUrl: cleanText(src.coverImageUrl),
+    primaryColor: normalizeHexColor(src.primaryColor, DEFAULT_BRAND.primaryColor),
+    secondaryColor: cleanText(src.secondaryColor),
+    accentColor: cleanText(src.accentColor),
     themePreset: normalizeThemePreset(src.themePreset),
-    tagline: typeof src.tagline === "string" && src.tagline.trim() ? src.tagline.trim() : null,
+    fontPreset: normalizeFontPreset(src.fontPreset),
+    tagline: cleanText(src.tagline),
     brandingEnabled: Boolean(src.brandingEnabled),
-    instagramUrl:
-      typeof src.instagramUrl === "string" && src.instagramUrl.trim() ? src.instagramUrl.trim() : null,
-    facebookUrl: typeof src.facebookUrl === "string" && src.facebookUrl.trim() ? src.facebookUrl.trim() : null,
-    tiktokUrl: typeof src.tiktokUrl === "string" && src.tiktokUrl.trim() ? src.tiktokUrl.trim() : null,
-    twitterUrl: typeof src.twitterUrl === "string" && src.twitterUrl.trim() ? src.twitterUrl.trim() : null,
-    websiteUrl: typeof src.websiteUrl === "string" && src.websiteUrl.trim() ? src.websiteUrl.trim() : null,
-    googleReviewUrl:
-      typeof src.googleReviewUrl === "string" && src.googleReviewUrl.trim() ? src.googleReviewUrl.trim() : null,
+    instagramUrl: cleanText(src.instagramUrl),
+    facebookUrl: cleanText(src.facebookUrl),
+    tiktokUrl: cleanText(src.tiktokUrl),
+    twitterUrl: cleanText(src.twitterUrl),
+    websiteUrl: cleanText(src.websiteUrl),
+    wifiName: cleanText(src.wifiName),
+    wifiPassword: cleanText(src.wifiPassword),
+    googleReviewUrl: cleanText(src.googleReviewUrl),
   };
 }
 
-function getSnapshotFallback(): Partial<BrandConfig> {
-  const snapshot = readBrandingSnapshot();
+function readBridgeSnapshot(): BrandingSnapshot {
+  try {
+    const raw = localStorage.getItem(BRAND_BRIDGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as BrandingSnapshot;
+  } catch {
+    return {};
+  }
+}
+
+function readCachedConfig(): Partial<BrandConfig> {
+  try {
+    const raw = localStorage.getItem(BRAND_CACHE_KEY);
+    if (!raw) return {};
+    return mapBrandConfig(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+function writeCachedConfig(config: BrandConfig): void {
+  try {
+    localStorage.setItem(BRAND_CACHE_KEY, JSON.stringify(config));
+  } catch {
+    // Best effort.
+  }
+}
+
+function getLocalFallback(): Partial<BrandConfig> {
+  const bridge = readBridgeSnapshot();
   return {
-    brandingEnabled: Boolean(snapshot.brandingEnabled),
-    restaurantName: snapshot.restaurantName?.trim() || DEFAULT_BRAND.restaurantName,
-    logoUrl: snapshot.logoDataUrl?.trim() || null,
-    coverImageUrl: snapshot.coverImageDataUrl?.trim() || null,
+    brandingEnabled: Boolean(bridge.brandingEnabled),
+    restaurantName: bridge.restaurantName?.trim() || DEFAULT_BRAND.restaurantName,
+    logoUrl: bridge.logoDataUrl?.trim() || null,
+    coverImageUrl: bridge.coverImageDataUrl?.trim() || null,
   };
 }
 
 export function useBrandConfig(restaurantId?: string | number | null) {
-  const [brand, setBrand] = useState<BrandConfig>({ ...DEFAULT_BRAND, ...getSnapshotFallback() });
+  const [brand, setBrand] = useState<BrandConfig>(() => ({
+    ...DEFAULT_BRAND,
+    ...readCachedConfig(),
+    ...getLocalFallback(),
+  }));
 
   const normalizedRestaurantId = useMemo(() => {
     if (restaurantId === null || restaurantId === undefined) return null;
@@ -108,34 +154,55 @@ export function useBrandConfig(restaurantId?: string | number | null) {
     return value || null;
   }, [restaurantId]);
 
+  const syncFromCache = useCallback(() => {
+    setBrand((prev) => ({
+      ...prev,
+      ...readCachedConfig(),
+      ...getLocalFallback(),
+    }));
+  }, []);
+
   useEffect(() => {
-    let active = true;
+    if (!normalizedRestaurantId) {
+      syncFromCache();
+      return;
+    }
 
-    const fetchBrandConfig = async () => {
-      if (!normalizedRestaurantId) {
-        setBrand((prev) => ({ ...DEFAULT_BRAND, ...getSnapshotFallback(), ...prev }));
-        return;
-      }
+    let isMounted = true;
 
+    const fetchRemote = async () => {
       try {
         const response = await fetch(
           `${API_BASE_URL}api/brand-config/?restaurant_id=${encodeURIComponent(normalizedRestaurantId)}`,
           { headers: { "Content-Type": "application/json" } }
         );
         if (!response.ok) return;
-        const payload = await response.json();
-        if (!active) return;
-        setBrand((prev) => ({ ...prev, ...mapBrandConfig(payload) }));
+        const mapped = mapBrandConfig(await response.json());
+        if (!isMounted) return;
+        setBrand(mapped);
+        writeCachedConfig(mapped);
       } catch {
-        // Silent fallback to local snapshot/defaults.
+        // Silent fallback.
       }
     };
 
-    fetchBrandConfig();
-    return () => {
-      active = false;
+    fetchRemote();
+    const intervalId = window.setInterval(fetchRemote, 4_000);
+
+    const handleStorageRefresh = () => {
+      syncFromCache();
+      fetchRemote();
     };
-  }, [normalizedRestaurantId]);
+
+    window.addEventListener("storage", handleStorageRefresh);
+    window.addEventListener("branding-updated", handleStorageRefresh as EventListener);
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("storage", handleStorageRefresh);
+      window.removeEventListener("branding-updated", handleStorageRefresh as EventListener);
+    };
+  }, [normalizedRestaurantId, syncFromCache]);
 
   return brand;
 }

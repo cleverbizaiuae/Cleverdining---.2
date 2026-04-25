@@ -57,6 +57,22 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
+const getDisabledUpsellItems = (): Set<number> => {
+  try {
+    const raw = localStorage.getItem("upsell_disabled_items");
+    if (!raw) return new Set<number>();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<number>();
+    return new Set(
+      parsed
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    );
+  } catch {
+    return new Set<number>();
+  }
+};
+
 export function summarizeCart(items: CartLikeItem[]) {
   const cartValue = items.reduce((sum, item) => sum + safeNumber(item.price) * Math.max(1, Number(item.quantity || 1)), 0);
   const cartItemCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 1)), 0);
@@ -111,6 +127,7 @@ export async function fetchUpsellSuggestions(params: {
   }
 
   const merged = Array.from(mergedById.values());
+  const disabledItems = getDisabledUpsellItems();
   const strongHistorical = historicalSuggestions
     .filter((item: any) => Number(item?.association_strength || 0) >= 0.5 && Number(item?.co_order_frequency || 0) >= 10)
     .sort((a: any, b: any) => Number(b.association_strength || 0) - Number(a.association_strength || 0));
@@ -123,6 +140,7 @@ export async function fetchUpsellSuggestions(params: {
   return merged.filter((item: UpsellSuggestion) => {
     if (!item || !Number.isInteger(item.id)) return false;
     if (item.availability === false) return false;
+    if (disabledItems.has(item.id)) return false;
     if (isUpsellItemDismissed(item.id)) return false;
     if (isUpsellItemAccepted(item.id)) return false;
     return true;

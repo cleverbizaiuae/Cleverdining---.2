@@ -12,88 +12,65 @@ import toast from "react-hot-toast";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
-import axiosInstance, { API_BASE_URL } from "../lib/axios";
+import axiosInstance from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
-import { ArrowRight, Search } from "lucide-react";
+import { ArrowRight, Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
+import { useBrandConfig } from "@/lib/useBrandConfig";
 
-type BrandingSnapshot = {
-  brandingEnabled?: boolean;
-  restaurantName?: string;
-  logoDataUrl?: string;
-  coverImageDataUrl?: string;
-};
-
-type BrandApiConfig = {
-  brandingEnabled?: boolean;
-  restaurantName?: string | null;
-  logoUrl?: string | null;
-  coverImageUrl?: string | null;
-};
-
-type BrandingView = {
-  name: string;
-  logo: string;
-  cover: string;
-  brandingEnabled: boolean;
-  hasConfiguredContent: boolean;
-};
-
-function readBrandingSnapshot(): BrandingSnapshot {
-  try {
-    const raw = localStorage.getItem("customer_branding");
-    if (!raw) return {};
-    return JSON.parse(raw) as BrandingSnapshot;
-  } catch {
-    return {};
+function hexToRgba(hex: string, alpha: number): string {
+  const cleaned = (hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+    return `rgba(0, 85, 254, ${alpha})`;
   }
+  const r = parseInt(cleaned.slice(0, 2), 16);
+  const g = parseInt(cleaned.slice(2, 4), 16);
+  const b = parseInt(cleaned.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-async function fetchBrandConfig(restaurantId: number | null): Promise<BrandApiConfig | null> {
-  if (!restaurantId) return null;
-  try {
-    const response = await fetch(`${API_BASE_URL}api/brand-config/?restaurant_id=${restaurantId}`);
-    if (!response.ok) return null;
-    return (await response.json()) as BrandApiConfig;
-  } catch {
-    return null;
+function hexToHsl(hex: string): string {
+  const cleaned = (hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return "221 100% 50%";
+  const r = parseInt(cleaned.slice(0, 2), 16) / 255;
+  const g = parseInt(cleaned.slice(2, 4), 16) / 255;
+  const b = parseInt(cleaned.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lum = (max + min) / 2;
+  let hue = 0;
+  let sat = 0;
+  if (max !== min) {
+    const d = max - min;
+    sat = lum > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        hue = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        hue = ((b - r) / d + 2) / 6;
+        break;
+      default:
+        hue = ((r - g) / d + 4) / 6;
+        break;
+    }
   }
+  return `${Math.round(hue * 360)} ${Math.round(sat * 100)}% ${Math.round(lum * 100)}%`;
 }
 
-function getBrandingView(userInfo: any, remoteBranding?: BrandApiConfig | null): BrandingView {
-  const branding = readBrandingSnapshot();
-  const restaurant = userInfo?.user?.restaurants?.[0] || {};
-  const configuredName = String(remoteBranding?.restaurantName || branding.restaurantName || "").trim();
-  const restaurantLogo = String(restaurant.logo || restaurant.logo_url || restaurant.image || "").trim();
-  const restaurantCover = String(restaurant.cover_image || restaurant.coverImage || "").trim();
-  const logo = String(remoteBranding?.logoUrl || branding.logoDataUrl || restaurantLogo || "").trim();
-  const cover = String(remoteBranding?.coverImageUrl || branding.coverImageDataUrl || restaurantCover || "").trim();
-  const fallbackRestaurantName = String(
-    restaurant.resturent_name || restaurant.restaurant_name || ""
-  ).trim();
-  const brandingEnabled = Boolean(
-    remoteBranding?.brandingEnabled ?? branding.brandingEnabled ?? false
-  );
-  const hasConfiguredContent = Boolean(
-    logo || cover || (configuredName && configuredName !== "My Restaurant")
-  );
-
-  return {
-    name: configuredName || fallbackRestaurantName || "Restaurant",
-    logo,
-    cover,
-    brandingEnabled,
-    hasConfiguredContent,
-  };
+function getFontFamily(fontPreset: string): string {
+  if (fontPreset === "elegant") return "'Playfair Display', Georgia, serif";
+  if (fontPreset === "bold") return "'Plus Jakarta Sans', system-ui, sans-serif";
+  return "'Inter', system-ui, sans-serif";
 }
 
 const LayoutDashboard = () => {
-  const BRAND_SPLASH_SESSION_KEY = "cb_brand_splash_seen";
+  const BRAND_SPLASH_SESSION_KEY = "cb_splash_seen";
   const location = useLocation();
 
 
@@ -192,16 +169,68 @@ const LayoutDashboard = () => {
 
   const [userInfo, setUserInfo] = useState<any>(null);
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
-  const [brandingView, setBrandingView] = useState<BrandingView>({
-    name: "",
-    logo: "",
-    cover: "",
-    brandingEnabled: false,
-    hasConfiguredContent: false,
-  });
-  const [showBrandSplash, setShowBrandSplash] = useState(false);
+  const brand = useBrandConfig(restaurantId);
+  const splashTimerRef = useRef<number | null>(null);
 
-  const hasBranding = brandingView.brandingEnabled || brandingView.hasConfiguredContent;
+  const fallbackRestaurantName = useMemo(() => {
+    const restaurant = userInfo?.user?.restaurants?.[0];
+    if (!restaurant) return "";
+    return String(restaurant.resturent_name || restaurant.restaurant_name || "").trim();
+  }, [userInfo]);
+
+  const hasConfiguredContent = Boolean(
+    brand.logoUrl || brand.coverImageUrl || (brand.restaurantName && brand.restaurantName !== "My Restaurant")
+  );
+  const hasBranding = brand.brandingEnabled || hasConfiguredContent;
+  const restaurantName =
+    hasBranding && brand.restaurantName
+      ? brand.restaurantName
+      : fallbackRestaurantName || "Welcome";
+  const brandLogoUrl = hasBranding ? brand.logoUrl : null;
+  const brandCoverUrl = hasBranding ? brand.coverImageUrl : null;
+  const brandFontFamily = getFontFamily(brand.fontPreset);
+  const brandPrimaryHsl = useMemo(() => hexToHsl(brand.primaryColor), [brand.primaryColor]);
+
+  const socialLinks = useMemo(
+    () =>
+      [
+        { key: "instagram", href: brand.instagramUrl, Icon: Instagram, label: "Instagram" },
+        { key: "facebook", href: brand.facebookUrl, Icon: Facebook, label: "Facebook" },
+        { key: "tiktok", href: brand.tiktokUrl, Icon: Music2, label: "TikTok" },
+        { key: "twitter", href: brand.twitterUrl, Icon: Twitter, label: "X" },
+        { key: "website", href: brand.websiteUrl, Icon: Globe, label: "Website" },
+      ].filter((entry) => entry.href),
+    [brand.facebookUrl, brand.instagramUrl, brand.tiktokUrl, brand.twitterUrl, brand.websiteUrl]
+  );
+
+  const splashGradient = useMemo(() => {
+    if (brand.themePreset === "luxury_dark") {
+      return "linear-gradient(160deg, #0f0f0f 0%, #1a1a2e 100%)";
+    }
+    if (brand.themePreset === "warm_casual") {
+      return "linear-gradient(160deg, #7c2d12 0%, #c2410c 100%)";
+    }
+    return `linear-gradient(160deg, ${hexToRgba(brand.primaryColor, 0.87)} 0%, ${brand.primaryColor} 100%)`;
+  }, [brand.primaryColor, brand.themePreset]);
+
+  const heroOverlayStyle = useMemo(() => {
+    if (brand.themePreset === "luxury_dark") return { backgroundColor: "rgba(0, 0, 0, 0.72)" };
+    if (brand.themePreset === "warm_casual") return { backgroundColor: "rgba(100, 30, 5, 0.55)" };
+    return { backgroundColor: "rgba(0, 0, 0, 0.45)" };
+  }, [brand.themePreset]);
+
+  const [coverImgFailed, setCoverImgFailed] = useState(false);
+  useEffect(() => {
+    setCoverImgFailed(false);
+  }, [brandCoverUrl]);
+
+  const [splashState, setSplashState] = useState<"splash" | "collapsing" | "done">(() => {
+    try {
+      return sessionStorage.getItem(BRAND_SPLASH_SESSION_KEY) ? "done" : "splash";
+    } catch {
+      return "splash";
+    }
+  });
 
   useEffect(() => {
     const fetchUserInfo = () => {
@@ -255,61 +284,31 @@ const LayoutDashboard = () => {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const syncBranding = async () => {
-      let parsedUserInfo: any = userInfo;
-      try {
-        const rawUserInfo = localStorage.getItem("userInfo");
-        if (rawUserInfo) parsedUserInfo = JSON.parse(rawUserInfo);
-      } catch {
-        // keep previous value
-      }
-
-      const resolvedRestaurantId = parsedUserInfo?.user?.restaurants?.[0]?.id
-        ? Number(parsedUserInfo.user.restaurants[0].id)
-        : null;
-      const remoteBranding = await fetchBrandConfig(resolvedRestaurantId);
-      const nextBranding = getBrandingView(parsedUserInfo, remoteBranding);
-
-      if (isMounted) {
-        setBrandingView(nextBranding);
-      }
-    };
-
-    syncBranding();
-    const interval = window.setInterval(syncBranding, 4000);
-
-    window.addEventListener("storage", syncBranding as EventListener);
-    window.addEventListener("branding-updated", syncBranding as EventListener);
-    return () => {
-      isMounted = false;
-      window.clearInterval(interval);
-      window.removeEventListener("storage", syncBranding as EventListener);
-      window.removeEventListener("branding-updated", syncBranding as EventListener);
-    };
-  }, [userInfo]);
-
-  useEffect(() => {
     if (!hasBranding) {
-      setShowBrandSplash(false);
-      return;
-    }
-    try {
-      const alreadySeen = sessionStorage.getItem(BRAND_SPLASH_SESSION_KEY) === "true";
-      setShowBrandSplash(!alreadySeen);
-    } catch {
-      setShowBrandSplash(true);
+      setSplashState("done");
     }
   }, [hasBranding]);
 
   const dismissBrandSplash = useCallback(() => {
-    setShowBrandSplash(false);
     try {
-      sessionStorage.setItem(BRAND_SPLASH_SESSION_KEY, "true");
+      sessionStorage.setItem(BRAND_SPLASH_SESSION_KEY, "1");
     } catch {
-      // Non-blocking
+      // Non-blocking.
     }
+    setSplashState("collapsing");
+    if (splashTimerRef.current) window.clearTimeout(splashTimerRef.current);
+    splashTimerRef.current = window.setTimeout(() => {
+      setSplashState("done");
+      splashTimerRef.current = null;
+    }, 520);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (splashTimerRef.current) {
+        window.clearTimeout(splashTimerRef.current);
+      }
+    };
   }, []);
 
 
@@ -510,61 +509,145 @@ const LayoutDashboard = () => {
 
   return (
     <CartProvider>
-      {showBrandSplash && hasBranding && (
-        <div className="fixed inset-0 z-[120] bg-slate-950" onClick={dismissBrandSplash} role="button" tabIndex={0}>
-          {brandingView.cover ? (
-            <img src={brandingView.cover} alt="Brand splash" className="absolute inset-0 w-full h-full object-cover opacity-45" />
+      {splashState !== "done" && hasBranding && (
+        <div
+          className="fixed inset-0 z-[120] bg-slate-950"
+          onClick={dismissBrandSplash}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="absolute inset-0" style={{ background: splashGradient }} />
+          {brandCoverUrl && !coverImgFailed ? (
+            <>
+              <img
+                src={brandCoverUrl}
+                alt="Brand cover"
+                className="absolute inset-0 h-full w-full object-cover scale-110"
+                style={{ filter: "blur(18px)" }}
+                onError={() => setCoverImgFailed(true)}
+              />
+              <motion.img
+                src={brandCoverUrl}
+                alt="Brand splash"
+                className="absolute inset-0 h-full w-full object-cover"
+                initial={{ opacity: 0.45, scale: 1 }}
+                animate={splashState === "collapsing" ? { opacity: 0.35, scale: 1.06 } : { opacity: 0.55, scale: 1 }}
+                transition={{ duration: 0.48, ease: [0.4, 0, 0.2, 1] }}
+                onError={() => setCoverImgFailed(true)}
+              />
+            </>
           ) : null}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/40 to-slate-950/90" />
-          <div className="relative h-full flex flex-col items-center justify-center px-6 text-center">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/55 to-black/80" />
+
+          <motion.div
+            className="relative h-full flex flex-col items-center justify-center px-6 text-center"
+            initial={{ opacity: 1, y: 0 }}
+            animate={splashState === "collapsing" ? { opacity: 0, y: -16 } : { opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, ease: "easeIn" }}
+          >
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.2 }}
-              className="mb-4"
+              className="mb-4 h-24 w-24 rounded-[1.75rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
             >
-              {brandingView.logo ? (
-                <img src={brandingView.logo} alt="Brand logo" className="w-20 h-20 rounded-2xl object-cover border border-white/20" />
+              {brandLogoUrl ? (
+                <img src={brandLogoUrl} alt="Brand logo" className="h-16 w-16 object-contain" />
               ) : (
-                <Logo className="scale-110" />
+                <span className="text-white text-5xl font-bold leading-none">{(restaurantName || "W").charAt(0).toUpperCase()}</span>
               )}
             </motion.div>
-            <p className="text-white text-2xl font-semibold tracking-tight mb-8">{brandingView.name || "Welcome"}</p>
-            <button
+            <motion.p
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.32, duration: 0.28 }}
+              className="text-white font-semibold tracking-tight mb-8"
+              style={{ fontFamily: brandFontFamily, fontSize: "clamp(1.75rem, 6vw, 2.5rem)" }}
+            >
+              {restaurantName}
+            </motion.p>
+            <motion.button
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.28 }}
               onClick={(e) => {
                 e.stopPropagation();
                 dismissBrandSplash();
               }}
-              className="w-full max-w-[320px] h-14 rounded-2xl bg-white text-primary font-black text-base px-5 inline-flex items-center justify-between shadow-xl"
+              className="w-full max-w-[320px] h-14 rounded-2xl bg-white text-slate-900 font-black text-base px-5 inline-flex items-center justify-between shadow-2xl shadow-black/40"
+              whileTap={{ scale: 0.97 }}
             >
-              <span>Enter Menu</span>
+              <span>View Menu</span>
               <ArrowRight className="w-5 h-5" strokeWidth={2.2} />
-            </button>
+            </motion.button>
             <p className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/40 text-xs">
               Tap anywhere to skip
             </p>
-          </div>
+          </motion.div>
         </div>
       )}
 
-      <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
+      <div
+        className="h-[100dvh] flex flex-col bg-background overflow-hidden"
+        style={hasBranding ? ({ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties) : undefined}
+      >
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
+              {hasBranding ? (
+                <section className="relative min-h-36 w-full overflow-hidden">
+                  <div className="absolute inset-0" style={{ background: splashGradient }} />
+                  {brandCoverUrl && !coverImgFailed ? (
+                    <img
+                      src={brandCoverUrl}
+                      alt={`${restaurantName} cover`}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      onError={() => setCoverImgFailed(true)}
+                    />
+                  ) : null}
+                  <div className="absolute inset-0" style={heroOverlayStyle} />
+
+                  {socialLinks.length > 0 ? (
+                    <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+                      {socialLinks.map(({ key, href, Icon, label }) => (
+                        <a
+                          key={key}
+                          href={href || undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={label}
+                          className="w-7 h-7 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-white/90 hover:text-white inline-flex items-center justify-center"
+                        >
+                          <Icon className="w-3.5 h-3.5" strokeWidth={1.8} />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="relative z-10 px-4 pt-12 pb-4">
+                    <p
+                      className="text-xl font-bold tracking-tight text-white truncate"
+                      style={{ fontFamily: brandFontFamily }}
+                    >
+                      {restaurantName}
+                    </p>
+                    {brand.tagline ? (
+                      <p className="text-sm text-white/75 truncate mt-0.5">{brand.tagline}</p>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+
               {/* Sticky Header */}
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
               <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-gray-200/70 pb-2 pt-safe-top transition-all duration-300 shadow-md shadow-slate-200/40">
                 <div className="px-4 py-3 flex items-center justify-between">
                   {/* Logo */}
                   <div className="block shrink-0">
-                    {hasBranding ? (
-                      brandingView.logo ? (
-                        <img src={brandingView.logo} alt="Brand logo" className="h-9 w-auto max-w-[140px] object-contain" />
-                      ) : (
-                        <p className="font-semibold text-base text-foreground max-w-[150px] truncate">{brandingView.name || "Restaurant"}</p>
-                      )
+                    {hasBranding && brandLogoUrl ? (
+                      <img src={brandLogoUrl} alt="Brand logo" className="h-9 w-auto max-w-[140px] object-contain" />
                     ) : (
                       <Logo />
                     )}
@@ -577,20 +660,6 @@ const LayoutDashboard = () => {
                     </div>
                   ) : null}
                 </div>
-
-                {hasBranding && (brandingView.cover || brandingView.name) && (
-                  <div className="px-4 pb-2">
-                    <div className="h-20 rounded-2xl overflow-hidden relative border border-gray-200/70 bg-slate-100">
-                      {brandingView.cover ? (
-                        <img src={brandingView.cover} alt="Brand cover" className="w-full h-full object-cover" />
-                      ) : null}
-                      <div className="absolute inset-0 bg-gradient-to-r from-black/45 to-black/10" />
-                      <div className="absolute inset-0 px-3 py-2 flex items-end">
-                        <p className="text-white text-sm font-semibold truncate">{brandingView.name || "Restaurant"}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Search Bar */}
                 <div className="px-4 mt-1 mb-3">

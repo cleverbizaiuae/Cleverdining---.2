@@ -3,14 +3,26 @@ import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 import {
   AlertCircle,
+  BarChart3,
   Check,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
   Eye,
+  GitFork,
   Loader2,
   Plus,
   RefreshCcw,
+  ShoppingCart,
   Sparkles,
+  Tag,
+  Target,
   Trash2,
+  TrendingUp,
+  UtensilsCrossed,
   WandSparkles,
+  XCircle,
+  Zap,
 } from "lucide-react";
 
 type UpsellSettings = {
@@ -172,6 +184,13 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const classNames = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
+const formatHour = (hour: number) => {
+  const h = hour % 24;
+  const suffix = h >= 12 ? "pm" : "am";
+  const normalized = h % 12 === 0 ? 12 : h % 12;
+  return `${normalized}${suffix}`;
+};
+
 const ROLE_ALIASES: Record<string, string> = {
   owner: "owner",
   manager: "manager",
@@ -254,6 +273,8 @@ const ScreenRestaurantUpsell = () => {
   const [itemSearch, setItemSearch] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const [newRule, setNewRule] = useState<NewRuleDraft>({ type: "pair" });
+  const [addingRule, setAddingRule] = useState(false);
+  const [hoverHour, setHoverHour] = useState<number | null>(null);
 
   const userRole = useMemo(() => resolveUpsellUserRole(), []);
 
@@ -290,7 +311,7 @@ const ScreenRestaurantUpsell = () => {
 
   const groupedItems = useMemo(() => {
     const search = itemSearch.trim().toLowerCase();
-    const groups = new Map<string, UpsellItemRow[]>();
+    const groups = new Map<string, { name: string; rows: UpsellItemRow[]; shownTotal: number }>();
 
     items
       .filter((item) => !search || item.item_name.toLowerCase().includes(search))
@@ -302,12 +323,16 @@ const ScreenRestaurantUpsell = () => {
       })
       .forEach((item) => {
         const groupKey = item.category_name || "Uncategorized";
-        const existing = groups.get(groupKey) || [];
-        existing.push(item);
+        const existing = groups.get(groupKey) || { name: groupKey, rows: [], shownTotal: 0 };
+        existing.rows.push(item);
+        existing.shownTotal += Number(item.shown_count || 0);
         groups.set(groupKey, existing);
       });
 
-    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return Array.from(groups.values()).sort((a, b) => {
+      if (b.shownTotal !== a.shownTotal) return b.shownTotal - a.shownTotal;
+      return a.name.localeCompare(b.name);
+    });
   }, [items, itemSearch]);
 
   const revenueSeries14Days = useMemo(() => {
@@ -338,6 +363,44 @@ const ScreenRestaurantUpsell = () => {
   const maxHourShown = useMemo(() => {
     return Math.max(1, ...analytics.by_hour.map((row) => row.shown || 0));
   }, [analytics.by_hour]);
+
+  const byHourRows = useMemo(() => {
+    const map = new Map<number, { hour: number; shown: number; accepted: number; acceptance_rate: number }>();
+    (analytics.by_hour || []).forEach((row) => {
+      map.set(Number(row.hour), {
+        hour: Number(row.hour),
+        shown: Number(row.shown || 0),
+        accepted: Number(row.accepted || 0),
+        acceptance_rate: Number(row.acceptance_rate || 0),
+      });
+    });
+    return Array.from({ length: 24 }).map((_, hour) => map.get(hour) || { hour, shown: 0, accepted: 0, acceptance_rate: 0 });
+  }, [analytics.by_hour]);
+
+  const peakHour = useMemo(() => {
+    return byHourRows.reduce(
+      (best, row) => {
+        if (!row.shown) return best;
+        if (row.acceptance_rate > best.acceptance_rate) return row;
+        return best;
+      },
+      { hour: 0, shown: 0, accepted: 0, acceptance_rate: 0 },
+    );
+  }, [byHourRows]);
+
+  const activeHours = useMemo(() => byHourRows.filter((row) => row.shown > 0).length, [byHourRows]);
+
+  const bestRevenueDay = useMemo(() => {
+    return revenueSeries14Days.reduce(
+      (best, row) => (row.value > best.value ? row : best),
+      { iso: "", label: "--", value: 0 },
+    );
+  }, [revenueSeries14Days]);
+
+  const trendTotalRevenue = useMemo(
+    () => revenueSeries14Days.reduce((sum, row) => sum + row.value, 0),
+    [revenueSeries14Days],
+  );
 
   const acceptedVsRejected = useMemo(() => {
     const accepted = analytics.total_accepted || 0;
@@ -377,19 +440,72 @@ const ScreenRestaurantUpsell = () => {
       if (showLoader) setLoading(true);
       else setRefreshing(true);
 
-      const [settingsRes, rulesRes, analyticsRes, itemsRes] = await Promise.all([
+      const [settingsRes, rulesRes, analyticsRes, itemsRes] = await Promise.allSettled([
         axiosInstance.get("/api/upsell/settings"),
         axiosInstance.get("/api/upsell/rules"),
         axiosInstance.get("/api/upsell/analytics"),
         axiosInstance.get("/api/upsell/items"),
       ]);
 
-      setSettings(normalizeSettings(settingsRes.data || DEFAULT_SETTINGS));
-      setRules(Array.isArray(rulesRes.data) ? rulesRes.data : []);
-      setAnalytics({ ...DEFAULT_ANALYTICS, ...(analyticsRes.data || {}) });
-      setItems(Array.isArray(itemsRes.data?.results) ? itemsRes.data.results : []);
+      const settingsData =
+        settingsRes.status === "fulfilled" ? settingsRes.value.data : DEFAULT_SETTINGS;
+      const rulesData =
+        rulesRes.status === "fulfilled" && Array.isArray(rulesRes.value.data)
+          ? rulesRes.value.data
+          : [];
+      const analyticsData =
+        analyticsRes.status === "fulfilled" ? analyticsRes.value.data : DEFAULT_ANALYTICS;
+
+      let itemRows: UpsellItemRow[] = [];
+      let usedItemsFallback = false;
+      if (itemsRes.status === "fulfilled" && Array.isArray(itemsRes.value.data?.results)) {
+        itemRows = itemsRes.value.data.results;
+      } else {
+        usedItemsFallback = true;
+        const ownerItemsFallback = await axiosInstance
+          .get("/owners/items/")
+          .then((response) => (Array.isArray(response.data?.results) ? response.data.results : []))
+          .catch(() => []);
+        itemRows = ownerItemsFallback.map((row: any) => ({
+          id: Number(row?.id || 0),
+          item: Number(row?.id || 0),
+          item_name: String(row?.item_name || "Item"),
+          price: String(row?.price || "0"),
+          image_url: String(row?.image1 || ""),
+          availability: row?.availability !== false,
+          category_id: Number(row?.category ?? row?.category_id ?? 0) || null,
+          category_name: String(row?.category_name || ""),
+          enabled: true,
+          inventory_priority: false,
+          shown_count: 0,
+          accepted_count: 0,
+          rejected_count: 0,
+          acceptance_rate: 0,
+        }));
+      }
+
+      setSettings(normalizeSettings(settingsData || DEFAULT_SETTINGS));
+      setRules(rulesData);
+      setAnalytics({ ...DEFAULT_ANALYTICS, ...(analyticsData || {}) });
+      setItems(itemRows.filter((row) => Number.isInteger(row.id) && row.id > 0));
+
+      const criticalFailed = settingsRes.status !== "fulfilled" || analyticsRes.status !== "fulfilled";
+      const partialFailed = rulesRes.status !== "fulfilled" || itemsRes.status !== "fulfilled";
+      if (criticalFailed) {
+        toast.error("Failed to load AI upsell data.");
+      } else if (partialFailed) {
+        toast.error(
+          usedItemsFallback
+            ? "Some AI upsell sources failed. Using fallback item list."
+            : "Some AI upsell sources failed. Showing available data.",
+        );
+      }
     } catch {
       toast.error("Failed to load AI upsell data.");
+      setSettings(DEFAULT_SETTINGS);
+      setRules([]);
+      setAnalytics(DEFAULT_ANALYTICS);
+      setItems([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -425,7 +541,10 @@ const ScreenRestaurantUpsell = () => {
     }
   }, [activeTab, pairingLoaded, fetchPairingIntelligence]);
 
-  const persistSettings = async (nextSettings: UpsellSettings, successMessage: string) => {
+  const persistSettings = async (
+    nextSettings: UpsellSettings,
+    options?: { successMessage?: string; suppressToast?: boolean },
+  ) => {
     const payload = {
       ...nextSettings,
       prioritized_categories: (nextSettings.prioritized_categories_list || []).join(","),
@@ -435,13 +554,31 @@ const ScreenRestaurantUpsell = () => {
     const response = await axiosInstance.put("/api/upsell/settings", payload);
     const normalized = normalizeSettings(response.data || payload);
     setSettings(normalized);
-    toast.success(successMessage);
+    if (!options?.suppressToast && options?.successMessage) {
+      toast.success(options.successMessage);
+    }
+    return normalized;
+  };
+
+  const patchSettings = async (partial: Partial<UpsellSettings>, successMessage?: string) => {
+    const previous = settings;
+    const merged = normalizeSettings({ ...settings, ...partial });
+    setSettings(merged);
+    try {
+      setSavingSettings(true);
+      await persistSettings(merged, { successMessage, suppressToast: !successMessage });
+    } catch {
+      setSettings(previous);
+      toast.error("Failed to update upsell settings.");
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   const handleSaveSettings = async () => {
     try {
       setSavingSettings(true);
-      await persistSettings(settings, "Upsell settings saved.");
+      await persistSettings(settings, { successMessage: "Upsell settings saved." });
     } catch {
       toast.error("Failed to save settings.");
     } finally {
@@ -466,26 +603,21 @@ const ScreenRestaurantUpsell = () => {
   };
 
   const handleTogglePrioritizedCategory = (categoryId: number) => {
-    setSettings((prev) => {
-      const active = new Set(prev.prioritized_categories_list || []);
-      if (active.has(categoryId)) active.delete(categoryId);
-      else active.add(categoryId);
-      return { ...prev, prioritized_categories_list: Array.from(active) };
-    });
+    const active = new Set(settings.prioritized_categories_list || []);
+    if (active.has(categoryId)) active.delete(categoryId);
+    else active.add(categoryId);
+    patchSettings({ prioritized_categories_list: Array.from(active) });
   };
 
   const handleToggleRoleCategory = (role: (typeof ROLE_KEYS)[number], categoryId: number) => {
-    setSettings((prev) => {
-      const active = new Set(prev.category_role_map?.[role] || []);
-      if (active.has(categoryId)) active.delete(categoryId);
-      else active.add(categoryId);
-      return {
-        ...prev,
-        category_role_map: {
-          ...prev.category_role_map,
-          [role]: Array.from(active),
-        },
-      };
+    const active = new Set(settings.category_role_map?.[role] || []);
+    if (active.has(categoryId)) active.delete(categoryId);
+    else active.add(categoryId);
+    patchSettings({
+      category_role_map: {
+        ...settings.category_role_map,
+        [role]: Array.from(active),
+      },
     });
   };
 
@@ -507,6 +639,7 @@ const ScreenRestaurantUpsell = () => {
       });
       setRules((prev) => [response.data, ...prev]);
       setNewRule({ type: newRule.type });
+      setAddingRule(false);
       toast.success("Rule added.");
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || "Failed to add rule.");
@@ -546,13 +679,6 @@ const ScreenRestaurantUpsell = () => {
     return `${currency} ${Number(value || 0).toFixed(2)}`;
   };
 
-  const getHourZoneClass = (hour: number) => {
-    if (hour <= 5 || hour === 23) return "bg-slate-300";
-    if (hour < 12) return "bg-blue-400";
-    if (hour < 18) return "bg-amber-400";
-    return "bg-violet-400";
-  };
-
   if (!["owner", "manager"].includes(userRole)) {
     return (
       <div className="bg-white border border-slate-200 rounded-2xl p-6 text-slate-600">
@@ -574,7 +700,10 @@ const ScreenRestaurantUpsell = () => {
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">AI Upsell Engine</h2>
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-slate-400" strokeWidth={1.8} />
+              AI Upsell Engine
+            </h2>
             <p className="text-sm text-slate-500 mt-1">Increase order value with smart, timely suggestions.</p>
           </div>
 
@@ -599,62 +728,109 @@ const ScreenRestaurantUpsell = () => {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-2 md:grid-cols-4">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={classNames(
-                "rounded-xl border px-4 py-3 text-left transition",
-                activeTab === tab.key
-                  ? "border-[#0055FE] bg-blue-50 text-[#0055FE]"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-              )}
-            >
-              <p className="text-sm font-semibold">{tab.label}</p>
-              <p className="text-xs mt-1 opacity-90">{tab.description}</p>
-            </button>
-          ))}
+        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-1 overflow-x-auto">
+          <div className="flex min-w-max gap-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={classNames(
+                  "rounded-lg border px-4 py-3 text-left transition min-w-[220px] sm:min-w-[230px]",
+                  activeTab === tab.key
+                    ? "border-[#0055FE] bg-[#0055FE] text-white shadow"
+                    : "border-transparent bg-white text-slate-700 hover:bg-slate-50",
+                )}
+              >
+                <p className="text-sm font-semibold">{tab.label}</p>
+                <p className={classNames("text-xs mt-1", activeTab === tab.key ? "text-white/85" : "text-slate-500")}>
+                  {tab.description}
+                </p>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {activeTab === "performance" && (
         <div className="space-y-5">
-          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {[
-              { label: "Offers Shown", value: analytics.total_shown.toLocaleString() },
-              { label: "Add to Cart", value: analytics.total_accepted.toLocaleString() },
-              { label: "No Thanks", value: analytics.total_rejected.toLocaleString() },
-              { label: "Acceptance Rate", value: `${analytics.acceptance_rate.toFixed(2)}%` },
-              { label: "Upsell Revenue", value: formatCurrency(analytics.upsell_revenue) },
-              { label: "Avg Upsell Value", value: formatCurrency(analytics.avg_upsell_value) },
+              {
+                label: "OFFERS SHOWN",
+                value: analytics.total_shown.toLocaleString(),
+                icon: Zap,
+                iconClass: "text-slate-500",
+                sub: "",
+              },
+              {
+                label: "ADD TO CART",
+                value: analytics.total_accepted.toLocaleString(),
+                icon: ShoppingCart,
+                iconClass: "text-[#0055FE]",
+                sub: "",
+              },
+              {
+                label: "NO THANKS",
+                value: analytics.total_rejected.toLocaleString(),
+                icon: XCircle,
+                iconClass: "text-red-500",
+                sub: "",
+              },
+              {
+                label: "ACCEPTANCE RATE",
+                value: `${analytics.acceptance_rate.toFixed(2)}%`,
+                icon: TrendingUp,
+                iconClass: "text-emerald-500",
+                sub: "Of upsells shown",
+              },
+              {
+                label: "UPSELL REVENUE",
+                value: formatCurrency(analytics.upsell_revenue),
+                icon: BarChart3,
+                iconClass: "text-[#0055FE]",
+                sub: "From accepted upsells",
+              },
+              {
+                label: "AVG UPSELL VALUE",
+                value: formatCurrency(analytics.avg_upsell_value),
+                icon: Target,
+                iconClass: "text-slate-600",
+                sub: "Per accepted upsell",
+              },
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white border border-slate-200 rounded-2xl p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{kpi.label}</p>
-                <p className="text-2xl font-bold text-slate-900 mt-2">{kpi.value}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{kpi.label}</p>
+                  <kpi.icon className={classNames("h-4 w-4 shrink-0", kpi.iconClass)} strokeWidth={1.8} />
+                </div>
+                <p className="text-3xl font-bold text-slate-900 mt-3">{kpi.value}</p>
+                {kpi.sub ? <p className="text-xs text-slate-500 mt-1">{kpi.sub}</p> : null}
               </div>
             ))}
           </section>
 
           {analytics.total_shown === 0 ? (
-            <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-8 text-center">
-              <Sparkles className="w-10 h-10 text-slate-300 mx-auto" />
-              <p className="text-lg font-semibold text-slate-700 mt-3">No upsell interaction data yet</p>
-              <p className="text-sm text-slate-500 mt-1">Once customers start seeing suggestions, performance analytics will appear here.</p>
+            <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-10 text-center">
+              <BarChart3 className="w-10 h-10 text-slate-300 mx-auto" />
+              <p className="text-lg font-semibold text-slate-700 mt-3">No data yet</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Analytics will appear here once customers start interacting with upsell suggestions. Make sure AI Upsell is enabled.
+              </p>
             </div>
           ) : (
             <>
               <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                  <h3 className="text-base font-semibold text-slate-900 mb-4">Performance by Trigger Point</h3>
+                  <h3 className="text-base font-semibold text-slate-900">Performance by Trigger Point</h3>
+                  <p className="text-xs text-slate-500 mt-1 mb-4">Where customers are most likely to accept suggestions.</p>
                   <div className="space-y-3">
                     {(analytics.by_trigger || []).map((row) => {
                       const pct = Math.max(0, Math.min(100, row.acceptance_rate));
                       return (
-                        <div key={row.trigger_point}>
-                          <div className="flex items-center justify-between text-sm mb-1">
-                            <span className="text-slate-700 font-medium">{TRIGGER_LABELS[row.trigger_point] || row.trigger_point}</span>
-                            <span className="text-slate-500">{row.accepted}/{row.shown} ({pct.toFixed(1)}%)</span>
+                        <div key={row.trigger_point} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-sm gap-2">
+                            <span className="text-slate-700 font-medium truncate">{TRIGGER_LABELS[row.trigger_point] || row.trigger_point}</span>
+                            <span className="text-slate-500 text-xs sm:text-sm shrink-0">{row.accepted}/{row.shown} ({pct.toFixed(1)}%)</span>
                           </div>
                           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                             <div className="h-full bg-[#0055FE] rounded-full" style={{ width: `${pct}%` }} />
@@ -666,18 +842,19 @@ const ScreenRestaurantUpsell = () => {
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                  <h3 className="text-base font-semibold text-slate-900 mb-4">Performance by Category</h3>
+                  <h3 className="text-base font-semibold text-slate-900">Performance by Category</h3>
+                  <p className="text-xs text-slate-500 mt-1 mb-4">Categories ordered by upsell revenue impact.</p>
                   <div className="space-y-3">
                     {(analytics.by_category || []).slice(0, 8).map((row) => {
                       const pct = Math.max(0, Math.min(100, row.acceptance_rate));
                       return (
-                        <div key={row.category}>
-                          <div className="flex items-center justify-between text-sm mb-1">
+                        <div key={row.category} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-sm gap-2 mb-0.5">
                             <span className="text-slate-700 font-medium">{row.category}</span>
-                            <span className="text-slate-500">{row.accepted}/{row.shown} ({pct.toFixed(1)}%)</span>
+                            <span className="text-slate-500 text-xs sm:text-sm">{row.accepted}/{row.shown} ({pct.toFixed(1)}%)</span>
                           </div>
                           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                            <div className="h-full bg-[#0055FE]/70 rounded-full" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       );
@@ -690,44 +867,85 @@ const ScreenRestaurantUpsell = () => {
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
                   <h3 className="text-base font-semibold text-slate-900 mb-4">No Thanks vs Add to Cart</h3>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                    <div className="h-4 w-full rounded-full overflow-hidden bg-slate-200 flex">
-                      <div className="h-full bg-emerald-500" style={{ width: `${acceptedVsRejected.acceptedPct}%` }} />
-                      <div className="h-full bg-rose-500" style={{ width: `${acceptedVsRejected.rejectedPct}%` }} />
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                        <div className="flex items-center gap-1.5 text-[#0055FE] text-xs font-semibold">
+                          <ShoppingCart className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          Add to Cart
+                        </div>
+                        <p className="text-2xl font-bold text-[#0055FE] mt-1">{acceptedVsRejected.accepted.toLocaleString()}</p>
+                      </div>
+                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                        <div className="flex items-center gap-1.5 text-slate-600 text-xs font-semibold">
+                          <XCircle className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          No Thanks
+                        </div>
+                        <p className="text-2xl font-bold text-slate-700 mt-1">{acceptedVsRejected.rejected.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
-                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                        <p className="text-slate-500 text-xs">Add to Cart</p>
-                        <p className="font-bold text-emerald-600">{acceptedVsRejected.accepted.toLocaleString()} ({acceptedVsRejected.acceptedPct.toFixed(1)}%)</p>
-                      </div>
-                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                        <p className="text-slate-500 text-xs">No Thanks</p>
-                        <p className="font-bold text-rose-600">{acceptedVsRejected.rejected.toLocaleString()} ({acceptedVsRejected.rejectedPct.toFixed(1)}%)</p>
-                      </div>
+                    <div className="h-4 w-full rounded-full overflow-hidden bg-slate-200 flex">
+                      <div className="h-full bg-[#0055FE]" style={{ width: `${acceptedVsRejected.acceptedPct}%` }} />
+                      <div className="h-full bg-red-400" style={{ width: `${acceptedVsRejected.rejectedPct}%` }} />
+                      <div
+                        className="h-full bg-slate-100"
+                        style={{ width: `${Math.max(0, 100 - acceptedVsRejected.acceptedPct - acceptedVsRejected.rejectedPct)}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs font-semibold">
+                      <span className="text-[#0055FE]">{acceptedVsRejected.acceptedPct.toFixed(1)}% accepted</span>
+                      <span className="text-red-500">{acceptedVsRejected.rejectedPct.toFixed(1)}% dismissed</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
                   <h3 className="text-base font-semibold text-slate-900 mb-4">Performance by Time of Day</h3>
-                  <div className="grid grid-cols-12 gap-1 items-end h-36">
-                    {(analytics.by_hour || []).map((row) => {
-                      const height = Math.max(8, (row.shown / maxHourShown) * 100);
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+                      <Clock3 className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.8} />
+                      Peak hour: <span className="font-semibold">{peakHour.shown ? `${formatHour(peakHour.hour)} · ${peakHour.acceptance_rate.toFixed(0)}%` : "--"}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+                      <Zap className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.8} />
+                      Active hours: <span className="font-semibold">{activeHours} of 24</span>
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-1.5 h-36">
+                    {byHourRows.map((row) => {
+                      const height = Math.max(6, (row.shown / maxHourShown) * 100);
+                      const hasData = row.shown > 0;
+                      const isPeak = peakHour.shown > 0 && row.hour === peakHour.hour;
+                      const isHovered = hoverHour === row.hour;
+                      const barClass = isPeak
+                        ? isHovered
+                          ? "bg-[#3378FF]"
+                          : "bg-[#0055FE]"
+                        : isHovered
+                          ? "bg-[#7ea5ff]"
+                          : hasData
+                            ? "bg-[#93b4ff]"
+                            : "bg-slate-100";
                       return (
-                        <div key={`hour-${row.hour}`} className="group flex justify-center">
+                        <div
+                          key={`hour-${row.hour}`}
+                          className="group flex flex-1 min-w-0 justify-center"
+                          onMouseEnter={() => setHoverHour(row.hour)}
+                          onMouseLeave={() => setHoverHour(null)}
+                          title={`${formatHour(row.hour)} · ${row.acceptance_rate.toFixed(1)}% · ${row.accepted}/${row.shown}`}
+                        >
                           <div
-                            className={classNames("w-full rounded-t-sm transition-opacity", getHourZoneClass(row.hour))}
+                            className={classNames("w-full rounded-t-md transition-colors", barClass)}
                             style={{ height: `${height}%` }}
-                            title={`${String(row.hour).padStart(2, "0")}:00 • shown ${row.shown}, accepted ${row.accepted}`}
                           />
                         </div>
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-slate-300" /> Night</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400" /> Morning</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-400" /> Afternoon</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded bg-violet-400" /> Evening</span>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-500">
+                    <span className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1 text-center">Night (11pm-5am)</span>
+                    <span className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1 text-center">Morning (6am-10am)</span>
+                    <span className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1 text-center">Afternoon (11am-4pm)</span>
+                    <span className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1 text-center">Evening (5pm-10pm)</span>
                   </div>
                 </div>
               </section>
@@ -739,39 +957,57 @@ const ScreenRestaurantUpsell = () => {
                     <thead>
                       <tr className="text-left text-slate-500 border-b border-slate-200">
                         <th className="py-2 pr-3">Item</th>
-                        <th className="py-2 pr-3">Shown</th>
-                        <th className="py-2 pr-3">Accepted</th>
-                        <th className="py-2 pr-3">Declined</th>
-                        <th className="py-2 pr-3">Rate</th>
-                        <th className="py-2 pr-3">Revenue</th>
-                        <th className="py-2 pr-0">Win/Lose</th>
+                        <th className="py-2 pr-3 text-right">Shown</th>
+                        <th className="py-2 pr-3 text-right">Add to Cart</th>
+                        <th className="py-2 pr-3 text-right">No Thanks</th>
+                        <th className="py-2 pr-0 text-right">Accept %</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.top_items.length === 0 ? (
                         <tr>
-                          <td className="py-3 text-slate-500" colSpan={7}>No item-level data yet.</td>
+                          <td className="py-3 text-slate-500" colSpan={5}>No item-level data yet.</td>
                         </tr>
                       ) : (
                         analytics.top_items.slice(0, 20).map((row) => {
                           const isWin = (row.accepted || 0) >= (row.rejected || 0);
+                          const acceptRate = Number(row.acceptance_rate || 0);
+                          const rateClass = acceptRate >= 50 ? "text-[#0055FE]" : acceptRate >= 25 ? "text-slate-600" : "text-red-500";
+                          const imageUrl = row.item_id ? itemLookup.get(row.item_id)?.image_url : "";
                           return (
                             <tr key={`${row.item_id}-${row.item_name}`} className="border-b border-slate-100">
-                              <td className="py-2 pr-3 text-slate-800 font-medium">{row.item_name || "Unknown"}</td>
-                              <td className="py-2 pr-3 text-slate-600">{row.shown}</td>
-                              <td className="py-2 pr-3 text-slate-600">{row.accepted}</td>
-                              <td className="py-2 pr-3 text-slate-600">{row.rejected || 0}</td>
-                              <td className="py-2 pr-3 text-slate-600">{(row.acceptance_rate || 0).toFixed(1)}%</td>
-                              <td className="py-2 pr-3 text-slate-600">{formatCurrency(row.revenue)}</td>
-                              <td className="py-2 pr-0">
-                                <span
-                                  className={classNames(
-                                    "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                                    isWin ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700",
-                                  )}
-                                >
-                                  {isWin ? "Win" : "Lose"}
-                                </span>
+                              <td className="py-2 pr-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="h-8 w-8 rounded-md border border-slate-200 overflow-hidden bg-slate-50 shrink-0 flex items-center justify-center">
+                                    {imageUrl ? (
+                                      <img src={imageUrl} alt={row.item_name} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <UtensilsCrossed className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-slate-800 font-medium max-w-[190px]">{row.item_name || "Unknown"}</p>
+                                    <span
+                                      className={classNames(
+                                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold mt-0.5",
+                                        isWin ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700",
+                                      )}
+                                    >
+                                      {isWin ? "Win" : "Lose"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3 text-slate-600 text-right tabular-nums">{row.shown}</td>
+                              <td className="py-2 pr-3 text-[#0055FE] text-right tabular-nums">{row.accepted}</td>
+                              <td className="py-2 pr-3 text-red-500 text-right tabular-nums">{row.rejected || 0}</td>
+                              <td className="py-2 pr-0 text-right">
+                                <div className="inline-flex items-center gap-2">
+                                  <div className="h-1.5 w-16 rounded-full bg-slate-100 overflow-hidden">
+                                    <div className="h-full bg-[#0055FE]" style={{ width: `${Math.max(0, Math.min(100, acceptRate))}%` }} />
+                                  </div>
+                                  <span className={classNames("text-xs font-semibold tabular-nums", rateClass)}>{acceptRate.toFixed(1)}%</span>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -783,13 +1019,31 @@ const ScreenRestaurantUpsell = () => {
               </section>
 
               <section className="bg-white border border-slate-200 rounded-2xl p-5">
-                <h3 className="text-base font-semibold text-slate-900 mb-4">Revenue Trend (Last 14 Days)</h3>
+                <h3 className="text-base font-semibold text-slate-900 mb-2">Revenue Trend (Last 14 Days)</h3>
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs text-[#0055FE]">
+                    <TrendingUp className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    Best day: <span className="font-semibold">{bestRevenueDay.label} · {formatCurrency(bestRevenueDay.value)}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+                    <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    14-day total: <span className="font-semibold">{formatCurrency(trendTotalRevenue)}</span>
+                  </span>
+                </div>
                 <div className="grid grid-cols-14 gap-2 items-end h-44">
                   {revenueSeries14Days.map((row) => {
                     const height = Math.max(10, (row.value / maxRevenue) * 100);
+                    const isBest = bestRevenueDay.iso === row.iso && row.value > 0;
                     return (
                       <div key={row.iso} className="flex flex-col items-center gap-2">
-                        <div className="w-full rounded-t-md bg-[#0055FE]/85" style={{ height: `${height}%` }} title={`${row.label}: ${formatCurrency(row.value)}`} />
+                        <div
+                          className={classNames(
+                            "w-full rounded-t-md",
+                            row.value === 0 ? "bg-slate-100" : isBest ? "bg-[#0055FE]" : "bg-[#93b4ff]",
+                          )}
+                          style={{ height: `${height}%` }}
+                          title={`${row.label}: ${formatCurrency(row.value)}`}
+                        />
                         <span className="text-[10px] text-slate-500">{row.label}</span>
                       </div>
                     );
@@ -803,69 +1057,99 @@ const ScreenRestaurantUpsell = () => {
 
       {activeTab === "pairing" && (
         <div className="space-y-4">
-          <section className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Pairing Intelligence</h3>
-              <p className="text-sm text-slate-500 mt-1">Learns from completed orders to discover high-converting pairings.</p>
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <GitFork className="h-4 w-4 text-slate-400" strokeWidth={1.8} />
+                Top Pairing Intelligence
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Learned from real completed orders - which items customers actually buy together. Stronger associations rise to the top and influence upsell rankings.
+              </p>
             </div>
             <button
               onClick={() => fetchPairingIntelligence(true)}
               disabled={runningIntelligence}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#0055FE] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#0055FE] bg-white px-4 py-2 text-sm font-semibold text-[#0055FE] hover:bg-blue-50 disabled:opacity-60"
             >
               {runningIntelligence ? <Loader2 size={14} className="animate-spin" /> : <WandSparkles size={14} />}
               Run Intelligence
             </button>
           </section>
 
-          <section className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm text-blue-900 flex gap-3">
+          <section className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-700 flex gap-3">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold">How it works</p>
-              <p className="text-blue-800/90 mt-1">
+              <p className="text-slate-600 mt-1">
                 Association strength is derived from co-order frequency in delivered/completed/served orders. Pairs with fewer than 2 co-orders are ignored.
               </p>
             </div>
           </section>
 
-          <section className="bg-white border border-slate-200 rounded-2xl p-5">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-500 border-b border-slate-200">
-                    <th className="py-2 pr-3">When customer adds</th>
-                    <th className="py-2 pr-3">Suggest</th>
-                    <th className="py-2 pr-3">Co-order frequency</th>
-                    <th className="py-2 pr-3">Association strength</th>
-                    <th className="py-2 pr-3">Shown</th>
-                    <th className="py-2 pr-3">Accepted</th>
-                    <th className="py-2 pr-0">Accept rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pairingRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-4 text-slate-500">
-                        No pairing intelligence yet. Click "Run Intelligence" to compute pairings.
-                      </td>
+          {pairingRows.length === 0 ? (
+            <section className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+              <GitFork className="mx-auto h-8 w-8 text-slate-300" strokeWidth={1.8} />
+              <p className="mt-3 text-base font-semibold text-slate-700">No pairings yet</p>
+              <p className="mt-1 text-sm text-slate-500">Run intelligence to compute co-order pairings from completed orders.</p>
+              <button
+                onClick={() => fetchPairingIntelligence(true)}
+                disabled={runningIntelligence}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#0055FE] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {runningIntelligence ? <Loader2 size={14} className="animate-spin" /> : <WandSparkles size={14} />}
+                Run Intelligence Now
+              </button>
+            </section>
+          ) : (
+            <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-slate-500 border-b border-slate-200">
+                      <th className="py-2.5 px-4">When Customer Adds</th>
+                      <th className="py-2.5 pr-3">Suggest</th>
+                      <th className="py-2.5 pr-3 text-right">Co-orders</th>
+                      <th className="py-2.5 pr-3 text-right">Strength</th>
+                      <th className="py-2.5 pr-3 text-right">Accepted</th>
+                      <th className="py-2.5 pr-3 text-right">Shown</th>
+                      <th className="py-2.5 pr-4 text-right">Accept %</th>
                     </tr>
-                  ) : (
-                    pairingRows.map((row, idx) => (
-                      <tr key={`${row.source_item_id}-${row.target_item_id}-${idx}`} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 text-slate-800 font-medium">{row.source_item_name}</td>
-                        <td className="py-2 pr-3 text-slate-800 font-medium">{row.target_item_name}</td>
-                        <td className="py-2 pr-3 text-slate-600">{row.frequency}</td>
-                        <td className="py-2 pr-3 text-slate-600">{Number(row.association_strength || 0).toFixed(6)}</td>
-                        <td className="py-2 pr-3 text-slate-600">{row.shown_count || 0}</td>
-                        <td className="py-2 pr-3 text-slate-600">{row.accepted_count || 0}</td>
-                        <td className="py-2 pr-0 text-slate-600">{(row.accept_rate || 0).toFixed(1)}%</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    {pairingRows.map((row, idx) => {
+                      const strengthPct = Math.max(0, Math.min(Number(row.association_strength || 0) * 100, 100));
+                      const acceptRate = Number(row.accept_rate || 0);
+                      const rateClass = acceptRate >= 50 ? "text-[#0055FE]" : acceptRate >= 25 ? "text-slate-600" : "text-red-500";
+                      return (
+                        <tr key={`${row.source_item_id}-${row.target_item_id}-${idx}`} className="border-b border-slate-100 last:border-none">
+                          <td className="py-2.5 px-4 text-slate-800 font-medium max-w-[230px] truncate">{row.source_item_name}</td>
+                          <td className="py-2.5 pr-3 text-slate-700 max-w-[220px] truncate">{row.target_item_name}</td>
+                          <td className="py-2.5 pr-3 text-slate-600 text-right tabular-nums">{row.frequency}</td>
+                          <td className="py-2.5 pr-3">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div className="h-full bg-[#0055FE]" style={{ width: `${strengthPct}%` }} />
+                              </div>
+                              <span className="text-xs text-slate-600 w-10 text-right tabular-nums">{strengthPct.toFixed(0)}%</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 pr-3 text-[#0055FE] text-right tabular-nums">{row.accepted_count || 0}</td>
+                          <td className="py-2.5 pr-3 text-slate-600 text-right tabular-nums">{row.shown_count || 0}</td>
+                          <td className={classNames("py-2.5 pr-4 text-right text-xs font-semibold tabular-nums", rateClass)}>
+                            {acceptRate.toFixed(1)}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+                {pairingRows.length} associations learned from order history. Strength is normalized association confidence.
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -874,31 +1158,37 @@ const ScreenRestaurantUpsell = () => {
           <section className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">All Items</h3>
-              <p className="text-sm text-slate-500 mt-1">Disable items that should never appear in AI suggestions.</p>
+              <p className="text-sm text-slate-500 mt-1">Toggle items on/off for suggestions. Off means never shown to customers.</p>
             </div>
-            <input
-              value={itemSearch}
-              onChange={(e) => setItemSearch(e.target.value)}
-              placeholder="Search item..."
-              className="w-full md:w-72 rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
+            <div className="flex w-full md:w-auto items-center gap-3">
+              <div className="hidden md:flex items-center gap-3 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#0055FE]" /> Enabled</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-400" /> Disabled</span>
+              </div>
+              <input
+                value={itemSearch}
+                onChange={(e) => setItemSearch(e.target.value)}
+                placeholder="Search item..."
+                className="w-full md:w-72 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
           </section>
 
-          {groupedItems.map(([categoryName, rows]) => (
-            <section key={categoryName} className="bg-white border border-slate-200 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-base font-semibold text-slate-800">{categoryName}</h4>
-                <span className="text-xs text-slate-500">{rows.length} items</span>
+          {groupedItems.map((group) => (
+            <section key={group.name} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
+                <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-700">{group.name}</h4>
+                <span className="text-xs text-slate-500">{group.rows.length} items</span>
               </div>
-              <div className="space-y-2">
-                {rows.map((item) => (
-                  <div key={item.id} className="border border-slate-100 rounded-xl px-3 py-2 bg-slate-50/60">
+              <div className="divide-y divide-slate-100">
+                {group.rows.map((item) => (
+                  <div key={item.id} className={classNames("px-4 py-3 transition", item.enabled ? "bg-white" : "bg-slate-50 opacity-50")}>
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-lg bg-slate-100 overflow-hidden shrink-0">
+                      <div className="h-10 w-10 rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                         {item.image_url ? (
-                          <img src={item.image_url} alt={item.item_name} className="w-full h-full object-cover" />
+                          <img src={item.image_url} alt={item.item_name} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-400 text-[10px]">No image</div>
+                          <UtensilsCrossed className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} />
                         )}
                       </div>
 
@@ -907,23 +1197,23 @@ const ScreenRestaurantUpsell = () => {
                         <p className="text-xs text-slate-500 mt-0.5">{formatCurrency(item.price)}</p>
                       </div>
 
-                      <div className="hidden md:flex items-center gap-3 text-xs text-slate-600">
-                        <span>Shown: {item.shown_count || 0}</span>
-                        <span>Accepted: {item.accepted_count || 0}</span>
-                        <span>Accept %: {(item.acceptance_rate || 0).toFixed(1)}%</span>
+                      <div className="hidden xl:flex items-center gap-3 text-[11px] text-slate-600">
+                        <span>Shown: <span className="font-semibold tabular-nums">{item.shown_count || 0}</span></span>
+                        <span className="text-[#0055FE]">Add: <span className="font-semibold tabular-nums">{item.accepted_count || 0}</span></span>
+                        <span className="text-red-500">No: <span className="font-semibold tabular-nums">{item.rejected_count || 0}</span></span>
+                        <span className={classNames("font-semibold tabular-nums", item.acceptance_rate >= 50 ? "text-[#0055FE]" : item.acceptance_rate >= 25 ? "text-slate-600" : "text-red-500")}>
+                          {Number(item.acceptance_rate || 0).toFixed(1)}%
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className={classNames("text-xs font-semibold", item.enabled ? "text-emerald-600" : "text-slate-500")}>
+                        <span className={classNames("text-xs font-semibold", item.enabled ? "text-[#0055FE]" : "text-slate-500")}>
                           {item.enabled ? "Enabled" : "Disabled"}
                         </span>
                         {updatingItemId === item.id ? (
                           <Loader2 className="w-4 h-4 animate-spin text-[#0055FE]" />
                         ) : (
-                          <ToggleSwitch
-                            checked={item.enabled}
-                            onChange={(next) => toggleItemEnabled(item.id, next)}
-                          />
+                          <ToggleSwitch checked={item.enabled} onChange={(next) => toggleItemEnabled(item.id, next)} />
                         )}
                       </div>
                     </div>
@@ -944,16 +1234,12 @@ const ScreenRestaurantUpsell = () => {
       {activeTab === "settings" && (
         <div className="space-y-4">
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Upsell Strategy</h3>
-              <button
-                onClick={handleSaveSettings}
-                disabled={savingSettings}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0055FE] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Save Changes
-              </button>
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Upsell Strategy</h3>
+                <p className="text-sm text-slate-500 mt-1">How the engine prioritizes which items to recommend.</p>
+              </div>
+              {savingSettings ? <Loader2 className="h-4 w-4 animate-spin text-[#0055FE]" /> : null}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -961,7 +1247,7 @@ const ScreenRestaurantUpsell = () => {
                 <p className="text-xs text-slate-500 mb-1">Strategy</p>
                 <select
                   value={settings.strategy}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, strategy: e.target.value as UpsellSettings["strategy"] }))}
+                  onChange={(e) => patchSettings({ strategy: e.target.value as UpsellSettings["strategy"] })}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 >
                   {STRATEGY_OPTIONS.map((opt) => (
@@ -974,7 +1260,7 @@ const ScreenRestaurantUpsell = () => {
                 <p className="text-xs text-slate-500 mb-1">Aggressiveness</p>
                 <select
                   value={settings.aggressiveness}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, aggressiveness: e.target.value as UpsellSettings["aggressiveness"] }))}
+                  onChange={(e) => patchSettings({ aggressiveness: e.target.value as UpsellSettings["aggressiveness"] })}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 >
                   {AGGRESSIVENESS_OPTIONS.map((opt) => (
@@ -987,7 +1273,7 @@ const ScreenRestaurantUpsell = () => {
                 <p className="text-xs text-slate-500 mb-1">Tone</p>
                 <select
                   value={settings.tone}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, tone: e.target.value as UpsellSettings["tone"] }))}
+                  onChange={(e) => patchSettings({ tone: e.target.value as UpsellSettings["tone"] })}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 >
                   {TONE_OPTIONS.map((opt) => (
@@ -997,8 +1283,8 @@ const ScreenRestaurantUpsell = () => {
               </div>
             </div>
 
-            <div className="mt-4">
-              <p className="text-xs text-slate-500 mb-2">Prioritized Categories</p>
+            <div className="mt-5">
+              <p className="text-xs text-slate-500 mb-2">Prioritized Categories (optional)</p>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                 {categoryOptions.map((category) => {
                   const active = (settings.prioritized_categories_list || []).includes(category.id);
@@ -1019,40 +1305,58 @@ const ScreenRestaurantUpsell = () => {
                 })}
               </div>
             </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#0055FE] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save Changes
+              </button>
+            </div>
           </section>
 
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Trigger Points</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <h3 className="text-lg font-semibold text-slate-900">Trigger Points</h3>
+            <p className="text-sm text-slate-500 mt-1 mb-4">Choose where upsell suggestions appear in the customer journey.</p>
+            <div className="space-y-2">
               {[
                 {
                   key: "show_after_add_to_cart",
+                  icon: ShoppingCart,
                   title: "After Add to Cart",
-                  desc: "Bottom-sheet popup after item add",
+                  desc: "Show one smart suggestion immediately after a customer adds an item.",
                   value: settings.show_after_add_to_cart,
                 },
                 {
                   key: "show_in_cart",
+                  icon: Tag,
                   title: "Inside Cart",
-                  desc: "Inline cards between cart and pay button",
+                  desc: "Show 1-2 suggestions between cart items and the place order button.",
                   value: settings.show_in_cart,
                 },
                 {
                   key: "show_before_payment",
+                  icon: CreditCard,
                   title: "Before Payment",
-                  desc: "Final suggestion above confirm button",
+                  desc: "One final subtle suggestion above the confirm order button.",
                   value: settings.show_before_payment,
                 },
               ].map((trigger) => (
                 <div key={trigger.key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
+                    <div className="flex items-start gap-2">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white">
+                        <trigger.icon className="h-4 w-4 text-slate-500" strokeWidth={1.8} />
+                      </span>
                       <p className="text-sm font-semibold text-slate-800">{trigger.title}</p>
                       <p className="text-xs text-slate-500 mt-1">{trigger.desc}</p>
                     </div>
                     <ToggleSwitch
                       checked={trigger.value}
-                      onChange={(next) => setSettings((prev) => ({ ...prev, [trigger.key]: next }))}
+                      onChange={(next) => patchSettings({ [trigger.key]: next } as Partial<UpsellSettings>)}
                     />
                   </div>
                 </div>
@@ -1074,7 +1378,7 @@ const ScreenRestaurantUpsell = () => {
                           className={classNames(
                             "rounded-lg border px-3 py-1.5 text-left text-xs",
                             active
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                              ? "border-[#0055FE] bg-blue-50 text-[#0055FE]"
                               : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
                           )}
                         >
@@ -1089,48 +1393,71 @@ const ScreenRestaurantUpsell = () => {
           </section>
 
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Manual Pairings & Blocks</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <select
-                value={newRule.type}
-                onChange={(e) => setNewRule((prev) => ({ ...prev, type: e.target.value as "pair" | "block" }))}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              >
-                <option value="pair">Pair Rule</option>
-                <option value="block">Block Rule</option>
-              </select>
-
-              <select
-                value={newRule.source_item || ""}
-                onChange={(e) => setNewRule((prev) => ({ ...prev, source_item: Number(e.target.value) }))}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              >
-                <option value="">When customer adds</option>
-                {items.map((item) => (
-                  <option key={`src-${item.id}`} value={item.id}>{item.item_name}</option>
-                ))}
-              </select>
-
-              <select
-                value={newRule.target_item || ""}
-                onChange={(e) => setNewRule((prev) => ({ ...prev, target_item: Number(e.target.value) }))}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              >
-                <option value="">Suggest / Block this item</option>
-                {items.map((item) => (
-                  <option key={`tgt-${item.id}`} value={item.id}>{item.item_name}</option>
-                ))}
-              </select>
-
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Manual Pairings & Blocks</h3>
+                <p className="text-sm text-slate-500 mt-1">Define item combinations to always pair or never suggest together.</p>
+              </div>
               <button
-                onClick={addRule}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={() => setAddingRule((prev) => !prev)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#0055FE] bg-white px-3 py-2 text-sm font-semibold text-[#0055FE] hover:bg-blue-50"
               >
                 <Plus size={14} />
-                Add Rule
+                {addingRule ? "Close" : "Add Rule"}
               </button>
             </div>
+
+            {addingRule ? (
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <select
+                    value={newRule.type}
+                    onChange={(e) => setNewRule((prev) => ({ ...prev, type: e.target.value as "pair" | "block" }))}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="pair">Pair Rule</option>
+                    <option value="block">Block Rule</option>
+                  </select>
+
+                  <select
+                    value={newRule.source_item || ""}
+                    onChange={(e) => setNewRule((prev) => ({ ...prev, source_item: Number(e.target.value) }))}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">When customer adds...</option>
+                    {items.slice(0, 40).map((item) => (
+                      <option key={`src-${item.id}`} value={item.id}>{item.item_name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={newRule.target_item || ""}
+                    onChange={(e) => setNewRule((prev) => ({ ...prev, target_item: Number(e.target.value) }))}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">Suggest / Block this item...</option>
+                    {items.filter((item) => item.id !== newRule.source_item).slice(0, 40).map((item) => (
+                      <option key={`tgt-${item.id}`} value={item.id}>{item.item_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    onClick={() => setAddingRule(false)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={addRule}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    <Plus size={14} />
+                    Save Rule
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
@@ -1150,7 +1477,17 @@ const ScreenRestaurantUpsell = () => {
                   ) : (
                     rules.map((rule) => (
                       <tr key={rule.id} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 capitalize font-medium text-slate-700">{rule.type}</td>
+                        <td className="py-2 pr-3 capitalize font-medium text-slate-700">
+                          <span
+                            className={classNames(
+                              "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs",
+                              rule.type === "pair" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
+                            )}
+                          >
+                            {rule.type === "pair" ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                            {rule.type}
+                          </span>
+                        </td>
                         <td className="py-2 pr-3 text-slate-600">{rule.source_item_name || itemLookup.get(rule.source_item)?.item_name || rule.source_item}</td>
                         <td className="py-2 pr-3 text-slate-600">{rule.target_item_name || itemLookup.get(rule.target_item)?.item_name || rule.target_item}</td>
                         <td className="py-2 pr-0">
