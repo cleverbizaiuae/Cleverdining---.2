@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import ChefStaff
+from category.schema_guard import ensure_category_schema
 from device.models import GuestSession
 from item.models import Item
 from restaurant.models import Restaurant
@@ -30,6 +31,7 @@ from .upsell_serializers import (
 def _ensure_upsell_schema() -> None:
     # Non-blocking runtime heal for partially migrated environments.
     ensure_upsell_tables()
+    ensure_category_schema()
 
 
 def get_restaurant_for_user(user) -> Optional[Restaurant]:
