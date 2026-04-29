@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -239,6 +240,13 @@ type ImageUploadFieldProps = {
 
 function ImageUploadField({ label, hint, value, uploading, onChange, onFile }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleIncomingFiles = async (files: FileList | File[]) => {
+    const candidate = [...files].find((file) => file.type.startsWith("image/"));
+    if (!candidate) return;
+    await onFile(candidate);
+  };
 
   return (
     <div className="space-y-1.5">
@@ -248,8 +256,32 @@ function ImageUploadField({ label, hint, value, uploading, onChange, onFile }: I
       </p>
 
       <div
-        className="group relative rounded-xl"
+        className={`group relative rounded-xl transition-colors outline-none ${dragging ? "ring-2 ring-[#0055FE]/40 ring-offset-2 ring-offset-white" : ""}`}
         onClick={() => inputRef.current?.click()}
+        onDragOver={(event: DragEvent<HTMLDivElement>) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event: DragEvent<HTMLDivElement>) => {
+          event.preventDefault();
+          setDragging(false);
+          void handleIncomingFiles(event.dataTransfer.files);
+        }}
+        onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+          const files = extractFilesFromClipboard(event);
+          if (files.length > 0) {
+            event.preventDefault();
+            void handleIncomingFiles(files);
+          }
+        }}
+        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        tabIndex={0}
       >
         {value ? (
           <div className="w-full h-28 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
@@ -293,9 +325,9 @@ function ImageUploadField({ label, hint, value, uploading, onChange, onFile }: I
           accept="image/*"
           className="hidden"
           onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (file) {
-              await onFile(file);
+            const files = event.target.files;
+            if (files?.length) {
+              await handleIncomingFiles(files);
             }
             event.currentTarget.value = "";
           }}
@@ -806,6 +838,7 @@ export default function ScreenMultiLocationBranding() {
   const mutation = useBrandConfigMutation(restaurantId);
 
   const [form, setForm] = useState<BrandConfig>(DEFAULT_BRAND);
+  const [isDirty, setIsDirty] = useState(false);
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [savedOk, setSavedOk] = useState(false);
   const [isProcessing, setProcessing] = useState(false);
@@ -814,10 +847,55 @@ export default function ScreenMultiLocationBranding() {
   const [extracting, setExtracting] = useState(false);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [suggestedPalette, setSuggestedPalette] = useState<SuggestedPalette | null>(null);
+  const hydratedRestaurantKeyRef = useRef<string | null>(null);
+
+  const brandSnapshotKey = useMemo(
+    () =>
+      JSON.stringify({
+        id: brand.id ?? null,
+        restaurantName: brand.restaurantName,
+        logoUrl: brand.logoUrl,
+        coverImageUrl: brand.coverImageUrl,
+        primaryColor: brand.primaryColor,
+        secondaryColor: brand.secondaryColor,
+        accentColor: brand.accentColor,
+        themePreset: brand.themePreset,
+        fontPreset: brand.fontPreset,
+        tagline: brand.tagline,
+        brandingEnabled: brand.brandingEnabled,
+        instagramUrl: brand.instagramUrl,
+        facebookUrl: brand.facebookUrl,
+        tiktokUrl: brand.tiktokUrl,
+        twitterUrl: brand.twitterUrl,
+        websiteUrl: brand.websiteUrl,
+        wifiName: brand.wifiName,
+        wifiPassword: brand.wifiPassword,
+        googleReviewUrl: brand.googleReviewUrl,
+      }),
+    [brand]
+  );
+
+  const setField = useCallback(
+    <K extends keyof BrandConfig>(key: K, value: BrandConfig[K]) => {
+      setIsDirty(true);
+      setForm((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
 
   useEffect(() => {
-    setForm(brand);
-  }, [brand]);
+    const restaurantKey = restaurantId ? String(restaurantId) : "default";
+    if (hydratedRestaurantKeyRef.current !== restaurantKey) {
+      hydratedRestaurantKeyRef.current = restaurantKey;
+      setForm({ ...DEFAULT_BRAND, ...brand });
+      setIsDirty(false);
+      return;
+    }
+
+    if (!isDirty) {
+      setForm({ ...DEFAULT_BRAND, ...brand });
+    }
+  }, [brand, brandSnapshotKey, isDirty, restaurantId]);
 
   useEffect(() => {
     return () => {
@@ -905,6 +983,7 @@ export default function ScreenMultiLocationBranding() {
 
   const applySuggestedPalette = () => {
     if (!suggestedPalette) return;
+    setIsDirty(true);
     setForm((prev) => ({
       ...prev,
       primaryColor: suggestedPalette.primaryColor,
@@ -928,9 +1007,9 @@ export default function ScreenMultiLocationBranding() {
     try {
       const compressed = await compressImage(file);
       if (target === "logo") {
-        setForm((prev) => ({ ...prev, logoUrl: compressed }));
+        setField("logoUrl", compressed);
       } else {
-        setForm((prev) => ({ ...prev, coverImageUrl: compressed }));
+        setField("coverImageUrl", compressed);
       }
     } catch {
       alert("Could not process image — please try a different file.");
@@ -957,6 +1036,7 @@ export default function ScreenMultiLocationBranding() {
     try {
       const saved = await mutation.mutateAsync(payload);
       setForm(saved);
+      setIsDirty(false);
       saveBrandingSettings({
         restaurantName: saved.restaurantName,
         logoDataUrl: saved.logoUrl ?? "",
@@ -1018,7 +1098,7 @@ export default function ScreenMultiLocationBranding() {
                 type="button"
                 role="switch"
                 aria-checked={form.brandingEnabled}
-                onClick={() => setForm((prev) => ({ ...prev, brandingEnabled: !prev.brandingEnabled }))}
+                onClick={() => setField("brandingEnabled", !form.brandingEnabled)}
                 className={`h-7 w-12 rounded-full p-1 transition-colors ${form.brandingEnabled ? "bg-[#0055FE]" : "bg-slate-300"}`}
               >
                 <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${form.brandingEnabled ? "translate-x-5" : "translate-x-0"}`} />
@@ -1039,7 +1119,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm"
                   placeholder="e.g. Ember & Oak"
                   value={form.restaurantName || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, restaurantName: event.target.value }))}
+                  onChange={(event) => setField("restaurantName", event.target.value)}
                 />
               </label>
 
@@ -1051,7 +1131,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm"
                   placeholder="e.g. Fire-grilled, every time"
                   value={form.tagline || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, tagline: event.target.value || null }))}
+                  onChange={(event) => setField("tagline", event.target.value || null)}
                 />
               </label>
             </div>
@@ -1062,7 +1142,7 @@ export default function ScreenMultiLocationBranding() {
                 hint="Recommended: PNG with transparent background. Shows in the menu hero."
                 value={form.logoUrl}
                 uploading={isProcessing}
-                onChange={(next) => setForm((prev) => ({ ...prev, logoUrl: next }))}
+                onChange={(next) => setField("logoUrl", next)}
                 onFile={async (file) => handleUploadImage(file, "logo")}
               />
 
@@ -1071,7 +1151,7 @@ export default function ScreenMultiLocationBranding() {
                 hint="Shown in the menu hero header. An overlay is applied automatically."
                 value={form.coverImageUrl}
                 uploading={isProcessing}
-                onChange={(next) => setForm((prev) => ({ ...prev, coverImageUrl: next }))}
+                onChange={(next) => setField("coverImageUrl", next)}
                 onFile={async (file) => handleUploadImage(file, "cover")}
               />
             </div>
@@ -1091,17 +1171,17 @@ export default function ScreenMultiLocationBranding() {
                 label="Primary"
                 required
                 value={form.primaryColor}
-                onChange={(value) => setForm((prev) => ({ ...prev, primaryColor: value || "#0055FE" }))}
+                onChange={(value) => setField("primaryColor", value || "#0055FE")}
               />
               <ColorField
                 label="Secondary"
                 value={form.secondaryColor}
-                onChange={(value) => setForm((prev) => ({ ...prev, secondaryColor: value }))}
+                onChange={(value) => setField("secondaryColor", value)}
               />
               <ColorField
                 label="Accent"
                 value={form.accentColor}
-                onChange={(value) => setForm((prev) => ({ ...prev, accentColor: value }))}
+                onChange={(value) => setField("accentColor", value)}
               />
             </div>
 
@@ -1133,7 +1213,7 @@ export default function ScreenMultiLocationBranding() {
                 <select
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white"
                   value={form.themePreset}
-                  onChange={(event) => setForm((prev) => ({ ...prev, themePreset: event.target.value as ThemePreset }))}
+                  onChange={(event) => setField("themePreset", event.target.value as ThemePreset)}
                 >
                   {THEME_PRESETS.map((preset) => (
                     <option key={preset.value} value={preset.value}>
@@ -1148,7 +1228,7 @@ export default function ScreenMultiLocationBranding() {
                 <select
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white"
                   value={form.fontPreset}
-                  onChange={(event) => setForm((prev) => ({ ...prev, fontPreset: event.target.value as FontPreset }))}
+                  onChange={(event) => setField("fontPreset", event.target.value as FontPreset)}
                 >
                   {FONT_PRESETS.map((preset) => (
                     <option key={preset.value} value={preset.value} style={{ fontFamily: preset.family }}>
@@ -1180,7 +1260,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="https://instagram.com/yourrestaurant"
                   value={form.instagramUrl || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, instagramUrl: event.target.value || null }))}
+                  onChange={(event) => setField("instagramUrl", event.target.value || null)}
                 />
               </label>
 
@@ -1192,7 +1272,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="https://facebook.com/yourrestaurant"
                   value={form.facebookUrl || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, facebookUrl: event.target.value || null }))}
+                  onChange={(event) => setField("facebookUrl", event.target.value || null)}
                 />
               </label>
 
@@ -1204,7 +1284,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="https://tiktok.com/@yourrestaurant"
                   value={form.tiktokUrl || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, tiktokUrl: event.target.value || null }))}
+                  onChange={(event) => setField("tiktokUrl", event.target.value || null)}
                 />
               </label>
 
@@ -1216,7 +1296,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="https://x.com/yourrestaurant"
                   value={form.twitterUrl || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, twitterUrl: event.target.value || null }))}
+                  onChange={(event) => setField("twitterUrl", event.target.value || null)}
                 />
               </label>
 
@@ -1228,7 +1308,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="https://yourrestaurant.com"
                   value={form.websiteUrl || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, websiteUrl: event.target.value || null }))}
+                  onChange={(event) => setField("websiteUrl", event.target.value || null)}
                 />
               </label>
             </div>
@@ -1252,7 +1332,7 @@ export default function ScreenMultiLocationBranding() {
                 className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                 placeholder="https://g.page/r/your-place/review"
                 value={form.googleReviewUrl || ""}
-                onChange={(event) => setForm((prev) => ({ ...prev, googleReviewUrl: event.target.value || null }))}
+                onChange={(event) => setField("googleReviewUrl", event.target.value || null)}
               />
             </label>
 
@@ -1275,7 +1355,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="e.g. Restaurant_Guest"
                   value={form.wifiName || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, wifiName: event.target.value || null }))}
+                  onChange={(event) => setField("wifiName", event.target.value || null)}
                 />
               </label>
 
@@ -1285,7 +1365,7 @@ export default function ScreenMultiLocationBranding() {
                   className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs"
                   placeholder="e.g. Welcome2024"
                   value={form.wifiPassword || ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, wifiPassword: event.target.value || null }))}
+                  onChange={(event) => setField("wifiPassword", event.target.value || null)}
                 />
               </label>
             </div>

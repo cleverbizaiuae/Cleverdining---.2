@@ -58,6 +58,8 @@ export const FONT_PRESETS = [
   { value: "bold" as FontPreset, label: "Bold Casual", family: "'Plus Jakarta Sans', system-ui, sans-serif" },
 ];
 
+const BRAND_CACHE_KEY = "cb_brand_config_cache";
+
 function normalizeBaseUrl(url: string) {
   return url.replace(/\/+$/, "");
 }
@@ -79,6 +81,25 @@ function mapConfig(payload: Partial<BrandConfig> | undefined | null): BrandConfi
     ...DEFAULT_BRAND,
     ...payload,
   };
+}
+
+function readBrandCache(): Partial<BrandConfig> {
+  try {
+    const raw = localStorage.getItem(BRAND_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<BrandConfig>;
+    return mapConfig(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function writeBrandCache(config: BrandConfig): void {
+  try {
+    localStorage.setItem(BRAND_CACHE_KEY, JSON.stringify(config));
+  } catch {
+    // Best effort cache.
+  }
 }
 
 // Converts a hex color to HSL string for CSS variables.
@@ -114,6 +135,8 @@ export function hexToHsl(hex: string): string {
 }
 
 export function useBrandConfig(restaurantId?: string | number | null) {
+  const cached = readBrandCache();
+
   const { data } = useQuery<BrandConfig>({
     queryKey: ["brand-config", restaurantId ?? null],
     queryFn: async () => {
@@ -129,18 +152,21 @@ export function useBrandConfig(restaurantId?: string | number | null) {
         },
       });
       if (!response.ok) {
-        return DEFAULT_BRAND;
+        return mapConfig(cached);
       }
 
       const payload = await response.json();
-      return mapConfig(payload);
+      const mapped = mapConfig(payload);
+      writeBrandCache(mapped);
+      return mapped;
     },
+    placeholderData: mapConfig(cached),
     staleTime: 0,
     refetchInterval: 4_000,
     refetchOnWindowFocus: true,
   });
 
-  return data ?? DEFAULT_BRAND;
+  return data ?? mapConfig(cached);
 }
 
 export function useBrandConfigMutation(restaurantId?: string | number | null) {
@@ -168,7 +194,9 @@ export function useBrandConfigMutation(restaurantId?: string | number | null) {
       }
 
       const payload = await response.json();
-      return mapConfig(payload);
+      const mapped = mapConfig(payload);
+      writeBrandCache(mapped);
+      return mapped;
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["brand-config"] });
