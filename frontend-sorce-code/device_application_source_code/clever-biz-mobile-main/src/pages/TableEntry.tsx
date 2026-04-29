@@ -81,8 +81,8 @@ const TableEntry = () => {
                 localStorage.setItem("accessToken", "guest_token"); // Marker for axios interceptor (optional but keeps flow)
                 localStorage.setItem("guest_session_token", session_token); // CRITICAL for backend auth
 
-                // 5. Redirect to dashboard (Force reload)
-                window.location.href = "/dashboard";
+                // 5. Redirect to splash (Force reload)
+                window.location.href = "/splash";
 
             } catch (err: any) {
                 console.error("Failed to fetch device/session:", err);

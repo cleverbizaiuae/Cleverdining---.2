@@ -9,6 +9,7 @@ const ScreenOrders = lazy(() => import("./pages/order/screen_orders"));
 const ScreenCart = lazy(() => import("./pages/screen_cart"));
 const ScreenHome = lazy(() => import("./pages/screen_home"));
 const ScreenMessage = lazy(() => import("./pages/screen_message"));
+const ScreenSplash = lazy(() => import("./pages/screen_splash"));
 const SuccessPage = lazy(() => import("./pages/SuccessPage"));
 const NotFoundPage = lazy(() => import("./pages/not-found").then((m) => ({ default: m.NotFoundPage })));
 const TableEntry = lazy(() => import("./pages/TableEntry"));
@@ -44,8 +45,8 @@ function App() {
       return;
 
     } else if (storedUserInfo) {
-      // Case 2: Session already exists (and no new table scan) - redirect to dashboard
-      navigate("/dashboard");
+      // Case 2: Session already exists (and no new table scan) - redirect to splash first
+      navigate("/splash");
 
     } else {
       // Case 3: No params and no session - Redirect to Scan Table
@@ -61,6 +62,14 @@ function App() {
       <Route path="/scan-table" element={<ScreenScanTable />} />
       <Route path="/login" element={<TableLanding />} /> {/* Added for QR Code compatibility */}
       <Route path="/t/:restaurantId/:tableToken" element={<TableLanding />} />
+      <Route
+        path="/splash"
+        element={
+          <PrivateRouteGuard>
+            <ScreenSplash />
+          </PrivateRouteGuard>
+        }
+      />
 
       <Route path="/dashboard" element={
         <PrivateRouteGuard>

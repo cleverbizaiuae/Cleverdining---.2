@@ -12,5 +12,5 @@ export const PrivateRouteGuard = ({ children }: { children: React.ReactNode }) =
 
 export const PublicRouteGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = localStorage.getItem("accessToken");
-  return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
+  return !isAuthenticated ? <>{children}</> : <Navigate to="/splash" replace />;
 };
