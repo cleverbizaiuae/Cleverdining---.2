@@ -42,6 +42,11 @@ def ensure_upsell_tables() -> bool:
 
     Returns True when all expected tables exist (or were created).
     """
+    def existing_columns(table_name: str) -> set[str]:
+        with connection.cursor() as cursor:
+            description = connection.introspection.get_table_description(cursor, table_name)
+        return {col.name for col in description}
+
     try:
         with connection.cursor() as cursor:
             existing_tables = set(connection.introspection.table_names(cursor))
@@ -64,6 +69,33 @@ def ensure_upsell_tables() -> bool:
                 existing_tables.add(table_name)
                 created_any = True
                 print(f"[SCHEMA-HEAL] Created missing table: {table_name}")
+
+        # Some deployments have the base upsell tables but missed later columns
+        # (for example inventory_priority or item associations). Backfill those
+        # columns without relying on the whole migration history having run.
+        for model in required_models:
+            table_name = model._meta.db_table
+            if table_name not in existing_tables:
+                continue
+            try:
+                existing = existing_columns(table_name)
+            except Exception as column_exc:
+                print(f"[SCHEMA-HEAL] Failed inspecting {table_name}: {column_exc}")
+                continue
+
+            for field in model._meta.local_fields:
+                if getattr(field, "primary_key", False):
+                    continue
+                if field.column in existing:
+                    continue
+                try:
+                    with connection.schema_editor() as schema_editor:
+                        schema_editor.add_field(model, field)
+                    existing.add(field.column)
+                    created_any = True
+                    print(f"[SCHEMA-HEAL] Added missing column: {table_name}.{field.column}")
+                except Exception as field_exc:
+                    print(f"[SCHEMA-HEAL] Failed adding column {table_name}.{field.column}: {field_exc}")
 
         if created_any:
             print("[SCHEMA-HEAL] Upsell schema backfilled at runtime.")

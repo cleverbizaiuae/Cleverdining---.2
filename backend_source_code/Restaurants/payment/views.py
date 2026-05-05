@@ -147,6 +147,7 @@ class CreateBulkCheckoutSessionView(APIView):
     authentication_classes = []
 
     def post(self, request):
+        ensure_payment_schema()
         # 1. Resolve Guest Session
         session_token = request.headers.get('X-Guest-Session-Token')
         if not session_token:
@@ -321,6 +322,7 @@ class CreateCheckoutSessionView(APIView):
     authentication_classes = []
 
     def post(self, request, order_id):
+        ensure_payment_schema()
         # 1. Resolve Guest Session
         session_token = request.headers.get('X-Guest-Session-Token')
         if not session_token:
@@ -436,6 +438,7 @@ class SplitBillSummaryView(APIView):
     authentication_classes = []
 
     def get(self, request, order_id):
+        ensure_payment_schema()
         session_token = request.headers.get('X-Guest-Session-Token')
         if not session_token:
             session_token = request.query_params.get('guest_token')
