@@ -26,9 +26,9 @@ const ScreenResetPassword = lazy(() => import("./pages/authentication/screen_res
 const ScreenPrivacy = lazy(() => import("./pages/authentication/screen_privacy"));
 const ScreenTermsCondition = lazy(() => import("./pages/authentication/screen_terms"));
 
-// Layouts (keep these eager – they are small and always needed)
-import Layout from "./pages/authentication/layout";
-import RestaurantLayout from "./pages/restaurant/layout";
+// Layouts
+const AuthLayout = lazy(() => import("./pages/authentication/layout"));
+const RestaurantRuntime = lazy(() => import("./pages/restaurant/RestaurantRuntime"));
 
 // Restaurant pages
 const ScreenRestaurantDashboard = lazy(() => import("./pages/restaurant/screen_restaurant_dashboard"));
@@ -59,7 +59,7 @@ const ScreenSuperAdminDashboard = lazy(() => import("./pages/super-admin/ScreenS
 const ScreenSuperAdminManagement = lazy(() => import("./pages/super-admin/ScreenSuperAdminManagement"));
 
 // Admin pages
-const AdminLayout = lazy(() => import("./pages/super-admin/layout").then(m => ({ default: m.default })));
+const AdminRuntime = lazy(() => import("./pages/super-admin/AdminRuntime"));
 const ScreenAdminDashboard = lazy(() => import("./pages/super-admin/screen_admin_dashboard"));
 const ScreenAdminManagement = lazy(() => import("./pages/super-admin/screen_admin_management"));
 const ScreenAdminTermsAndCondition = lazy(() => import("./pages/super-admin/screen_admin_terms"));
@@ -142,7 +142,11 @@ function App() {
       } />
 
       {/* Entry screens */}
-      <Route element={<Layout />}>
+      <Route element={
+        <Suspense fallback={<PageLoader />}>
+          <AuthLayout />
+        </Suspense>
+      }>
         <Route path="verify-email" element={<ScreenEmailVerification />} />
         <Route path="create-password" element={<ScreenPassword />} />
         <Route path="verify-otp" element={<ScreenOtpVerification />} />
@@ -153,7 +157,7 @@ function App() {
       {/* Staff screens */}
       <Route path="/staff" element={
         <Suspense fallback={<PageLoader />}>
-          <RestaurantLayout />
+          <RestaurantRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenRestaurantDashboard />} />
@@ -169,7 +173,7 @@ function App() {
       {/* Chef screens */}
       <Route path="/chef" element={
         <Suspense fallback={<PageLoader />}>
-          <RestaurantLayout />
+          <RestaurantRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenChefDashboard />} />
@@ -180,7 +184,7 @@ function App() {
       {/* Restaurant screens */}
       <Route path="/restaurant" element={
         <Suspense fallback={<PageLoader />}>
-          <RestaurantLayout />
+          <RestaurantRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenRestaurantDashboard />} />
@@ -198,7 +202,7 @@ function App() {
       {/* Manager Dashboard (alias workspace path) */}
       <Route path="/manageradmindashboard" element={
         <Suspense fallback={<PageLoader />}>
-          <RestaurantLayout />
+          <RestaurantRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenRestaurantDashboard />} />
@@ -216,7 +220,7 @@ function App() {
       {/* Staff Dashboard */}
       <Route path="/staffadmindashboard" element={
         <Suspense fallback={<PageLoader />}>
-          <RestaurantLayout />
+          <RestaurantRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenRestaurantOrderList />} />
@@ -229,7 +233,7 @@ function App() {
       {/* Chef Dashboard */}
       <Route path="/chefadmindashboard" element={
         <Suspense fallback={<PageLoader />}>
-          <RestaurantLayout />
+          <RestaurantRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenRestaurantOrderList />} />
@@ -240,7 +244,7 @@ function App() {
       {/* Admin screens */}
       <Route path="/admin" element={
         <Suspense fallback={<PageLoader />}>
-          <AdminLayout />
+          <AdminRuntime />
         </Suspense>
       }>
         <Route index={true} element={<ScreenAdminDashboard />} />

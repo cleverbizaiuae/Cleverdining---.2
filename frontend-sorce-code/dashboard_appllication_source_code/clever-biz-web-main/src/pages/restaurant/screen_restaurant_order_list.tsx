@@ -130,7 +130,6 @@ const ScreenRestaurantOrderList = () => {
     };
     document.addEventListener("visibilitychange", onVisible);
 
-    tick();
     return () => {
       clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisible);

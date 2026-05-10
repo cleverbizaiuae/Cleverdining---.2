@@ -32,6 +32,28 @@ type MenuItem = {
 
 type DashboardRole = "owner" | "manager" | "staff" | "chef" | "admin";
 
+const SEGMENT_PRELOADERS: Record<string, () => Promise<unknown>> = {
+  Dashboard: () => import("./screen_restaurant_dashboard"),
+  OrderList: () => import("./screen_restaurant_order_list"),
+  Reservation: () => import("./screen_restaurant_reservations"),
+  Messages: () => import("./screen_restaurant_chat"),
+  Management: () => import("./screen_restaurant_management"),
+  Tables: () => import("./screen_restaurant_devices"),
+  Payments: () => import("./Payments"),
+  Reviews: () => import("./screen_restaurant_reviews"),
+  "AI Upsell": () => import("./screen_restaurant_upsell"),
+};
+
+const prefetchedSegments = new Set<string>();
+
+const prefetchSegment = (label: string) => {
+  if (prefetchedSegments.has(label)) return;
+  prefetchedSegments.add(label);
+  SEGMENT_PRELOADERS[label]?.().catch(() => {
+    prefetchedSegments.delete(label);
+  });
+};
+
 const MENU_ITEMS: MenuItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['owner', 'manager', 'staff', 'chef'] },
   { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
@@ -198,6 +220,9 @@ const RestaurantLayout = () => {
               <Link
                 key={item.label}
                 to={fullPath}
+                onMouseEnter={() => prefetchSegment(item.label)}
+                onFocus={() => prefetchSegment(item.label)}
+                onTouchStart={() => prefetchSegment(item.label)}
                 onClick={() => setSidebarOpen(false)} // Close on mobile click
                 className={`
                    flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200

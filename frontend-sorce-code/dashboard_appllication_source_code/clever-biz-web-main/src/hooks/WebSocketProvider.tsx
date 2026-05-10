@@ -184,6 +184,7 @@ const WebSocketProvider = ({ children }) => {
   useEffect(() => {
     if (!accessToken) return;
 
+    const timeoutId = window.setTimeout(() => {
     const fetchUnreadCount = async () => {
       try {
         const envApiUrl = import.meta.env.VITE_API_URL;
@@ -213,11 +214,14 @@ const WebSocketProvider = ({ children }) => {
     };
 
     fetchUnreadCount();
+    }, 800);
+    return () => window.clearTimeout(timeoutId);
   }, [accessToken, syncUnreadState]);
 
   useEffect(() => {
     if (!accessToken) return;
 
+    const timeoutId = window.setTimeout(() => {
     const fetchUnreadTables = async () => {
       try {
         const role = parseUser?.role;
@@ -254,6 +258,8 @@ const WebSocketProvider = ({ children }) => {
     };
 
     fetchUnreadTables();
+    }, 1000);
+    return () => window.clearTimeout(timeoutId);
   }, [accessToken, parseUser?.role, syncUnreadState]);
 
   useEffect(() => {
@@ -419,7 +425,7 @@ const WebSocketProvider = ({ children }) => {
       // Do not return socket, setWs controls it
     };
 
-    connectWebSocket();
+    const initialConnectTimer = window.setTimeout(connectWebSocket, 400);
 
     // Reconnect on visibility change (when PWA comes to foreground)
     const handleVisibilityChange = () => {
@@ -440,6 +446,7 @@ const WebSocketProvider = ({ children }) => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      window.clearTimeout(initialConnectTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       setWs((prevWs) => {

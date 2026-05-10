@@ -154,8 +154,9 @@ const ScreenRestaurantDashboard = () => {
   useEffect(() => {
     if (userRole === 'owner' || userRole === 'manager') {
       fetchAnalytics(timeRange, compareEnabled);
+      fetchMostSellingItems();
     }
-  }, [timeRange, compareEnabled, fetchAnalytics, userRole]);
+  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, userRole]);
 
   // Real-time Updates
   useEffect(() => {
@@ -194,13 +195,20 @@ const ScreenRestaurantDashboard = () => {
   // We DO NOT fetch here on mount to avoid waterfall.
 
 
-  // Effects for initial load (Categories handled by Context too, but keeping for safety if needed, 
-  // though Context should handle it. We can leave it as Context debounces/checks loading props)
   useEffect(() => {
-    // Optional: Context already fetches this. Redundant but harmless if check exists.
-    // fetchCategories(); 
-    // fetchSubCategories();
-  }, []);
+    if (userRole !== "owner" && userRole !== "manager") return;
+    const timer = window.setTimeout(() => {
+      if (categories.length === 0) fetchCategories();
+      if (subCategories.length === 0) fetchSubCategories();
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [
+    userRole,
+    categories.length,
+    subCategories.length,
+    fetchCategories,
+    fetchSubCategories,
+  ]);
 
   // Edit/Delete State
   const [editingItem, setEditingItem] = useState<any>(null);

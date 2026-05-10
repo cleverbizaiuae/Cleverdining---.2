@@ -114,6 +114,7 @@ type NewRuleDraft = {
 };
 
 type TabKey = "performance" | "pairing" | "items" | "settings";
+type UpsellLoadScope = "base" | "items" | "settings" | "all";
 
 const DEFAULT_SETTINGS: UpsellSettings = {
   enabled: true,
@@ -270,6 +271,8 @@ const ScreenRestaurantUpsell = () => {
   const [analytics, setAnalytics] = useState<UpsellAnalytics>(DEFAULT_ANALYTICS);
   const [pairingRows, setPairingRows] = useState<PairingRow[]>([]);
   const [pairingLoaded, setPairingLoaded] = useState(false);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
+  const [rulesLoaded, setRulesLoaded] = useState(false);
   const [itemSearch, setItemSearch] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const [newRule, setNewRule] = useState<NewRuleDraft>({ type: "pair" });
@@ -435,32 +438,31 @@ const ScreenRestaurantUpsell = () => {
     };
   };
 
-  const fetchUpsellData = useCallback(async (showLoader = false) => {
+  const fetchUpsellData = useCallback(async (showLoader = false, scope: UpsellLoadScope = "base") => {
     try {
       if (showLoader) setLoading(true);
       else setRefreshing(true);
 
-      const [settingsRes, rulesRes, analyticsRes, itemsRes] = await Promise.allSettled([
+      const shouldFetchRules = scope === "settings" || scope === "all";
+      const shouldFetchItems = scope === "items" || scope === "settings" || scope === "all";
+
+      const [settingsRes, analyticsRes, rulesRes, itemsRes] = await Promise.allSettled([
         axiosInstance.get("/api/upsell/settings"),
-        axiosInstance.get("/api/upsell/rules"),
         axiosInstance.get("/api/upsell/analytics"),
-        axiosInstance.get("/api/upsell/items"),
+        shouldFetchRules ? axiosInstance.get("/api/upsell/rules") : Promise.resolve(null),
+        shouldFetchItems ? axiosInstance.get("/api/upsell/items") : Promise.resolve(null),
       ]);
 
       const settingsData =
         settingsRes.status === "fulfilled" ? settingsRes.value.data : DEFAULT_SETTINGS;
-      const rulesData =
-        rulesRes.status === "fulfilled" && Array.isArray(rulesRes.value.data)
-          ? rulesRes.value.data
-          : [];
       const analyticsData =
         analyticsRes.status === "fulfilled" ? analyticsRes.value.data : DEFAULT_ANALYTICS;
 
       let itemRows: UpsellItemRow[] = [];
       let usedItemsFallback = false;
-      if (itemsRes.status === "fulfilled" && Array.isArray(itemsRes.value.data?.results)) {
+      if (shouldFetchItems && itemsRes.status === "fulfilled" && Array.isArray(itemsRes.value?.data?.results)) {
         itemRows = itemsRes.value.data.results;
-      } else {
+      } else if (shouldFetchItems) {
         usedItemsFallback = true;
         const ownerItemsFallback = await axiosInstance
           .get("/owners/items/")
@@ -485,12 +487,26 @@ const ScreenRestaurantUpsell = () => {
       }
 
       setSettings(normalizeSettings(settingsData || DEFAULT_SETTINGS));
-      setRules(rulesData);
       setAnalytics({ ...DEFAULT_ANALYTICS, ...(analyticsData || {}) });
-      setItems(itemRows.filter((row) => Number.isInteger(row.id) && row.id > 0));
+
+      if (shouldFetchRules) {
+        const rulesData =
+          rulesRes.status === "fulfilled" && Array.isArray(rulesRes.value?.data)
+            ? rulesRes.value.data
+            : [];
+        setRules(rulesData);
+        setRulesLoaded(rulesRes.status === "fulfilled");
+      }
+
+      if (shouldFetchItems) {
+        setItems(itemRows.filter((row) => Number.isInteger(row.id) && row.id > 0));
+        setItemsLoaded(itemsRes.status === "fulfilled" || usedItemsFallback);
+      }
 
       const criticalFailed = settingsRes.status !== "fulfilled" || analyticsRes.status !== "fulfilled";
-      const partialFailed = rulesRes.status !== "fulfilled" || itemsRes.status !== "fulfilled";
+      const partialFailed =
+        (shouldFetchRules && rulesRes.status !== "fulfilled") ||
+        (shouldFetchItems && itemsRes.status !== "fulfilled");
       if (criticalFailed) {
         toast.error("Failed to load AI upsell data.");
       } else if (partialFailed) {
@@ -503,9 +519,9 @@ const ScreenRestaurantUpsell = () => {
     } catch {
       toast.error("Failed to load AI upsell data.");
       setSettings(DEFAULT_SETTINGS);
-      setRules([]);
       setAnalytics(DEFAULT_ANALYTICS);
-      setItems([]);
+      if (scope === "settings" || scope === "all") setRules([]);
+      if (scope === "items" || scope === "settings" || scope === "all") setItems([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -532,7 +548,7 @@ const ScreenRestaurantUpsell = () => {
   }, []);
 
   useEffect(() => {
-    fetchUpsellData(true);
+    fetchUpsellData(true, "base");
   }, [fetchUpsellData]);
 
   useEffect(() => {
@@ -540,6 +556,15 @@ const ScreenRestaurantUpsell = () => {
       fetchPairingIntelligence(false);
     }
   }, [activeTab, pairingLoaded, fetchPairingIntelligence]);
+
+  useEffect(() => {
+    if (activeTab === "items" && !itemsLoaded) {
+      fetchUpsellData(false, "items");
+    }
+    if (activeTab === "settings" && (!itemsLoaded || !rulesLoaded)) {
+      fetchUpsellData(false, "settings");
+    }
+  }, [activeTab, fetchUpsellData, itemsLoaded, rulesLoaded]);
 
   const persistSettings = async (
     nextSettings: UpsellSettings,
@@ -669,7 +694,9 @@ const ScreenRestaurantUpsell = () => {
   };
 
   const refreshAll = async () => {
-    await fetchUpsellData(false);
+    const scope: UpsellLoadScope =
+      activeTab === "settings" ? "settings" : activeTab === "items" ? "items" : "base";
+    await fetchUpsellData(false, scope);
     if (pairingLoaded) {
       await fetchPairingIntelligence(false);
     }

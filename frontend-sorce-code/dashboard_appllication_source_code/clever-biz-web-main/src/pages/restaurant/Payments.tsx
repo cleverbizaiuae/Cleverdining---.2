@@ -188,8 +188,8 @@ export const Payments = () => {
     const [receivedAmount, setReceivedAmount] = useState<string>('0.00');
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    const fetchPayments = useCallback(async () => {
-        setLoading(true);
+    const fetchPayments = useCallback(async (showLoader = true) => {
+        if (showLoader) setLoading(true);
         try {
             let url = '/owners/payments/';
             const params = new URLSearchParams();
@@ -219,11 +219,11 @@ export const Payments = () => {
             setTotalRevenue('0.00');
             setReceivedAmount('0.00');
         } finally {
-            setLoading(false);
+            if (showLoader) setLoading(false);
         }
     }, [startDate, endDate]);
 
-    useEffect(() => { fetchPayments(); }, [fetchPayments]);
+    useEffect(() => { fetchPayments(true); }, [fetchPayments]);
 
     // Real-time updates: Listen for payment-related WebSocket events
     useEffect(() => {
@@ -240,7 +240,7 @@ export const Payments = () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
 
             debounceRef.current = setTimeout(() => {
-                fetchPayments();
+                fetchPayments(false);
             }, 2000);
         }
     }, [response, fetchPayments]);
@@ -248,8 +248,9 @@ export const Payments = () => {
     // GUARANTEED POLLING FALLBACK — 30s refresh
     useEffect(() => {
         const poll = setInterval(() => {
+            if (document.visibilityState !== "visible") return;
             console.log("[PAYMENTS-POLL] Auto-refreshing payments...");
-            fetchPayments();
+            fetchPayments(false);
         }, 30000);
         return () => clearInterval(poll);
     }, [fetchPayments]);
@@ -319,7 +320,7 @@ export const Payments = () => {
                         <button onClick={handleExportCSV} className="h-8 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors">
                             <Download size={14} /> Export
                         </button>
-                        <button onClick={fetchPayments} className="h-8 w-8 flex items-center justify-center border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors">
+                        <button onClick={() => fetchPayments(false)} className="h-8 w-8 flex items-center justify-center border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors">
                             <RefreshCw size={14} />
                         </button>
                     </div>

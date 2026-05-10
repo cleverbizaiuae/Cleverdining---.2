@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
 } from "react";
+import { useLocation } from "react-router";
 import toast from "react-hot-toast";
 import { Member, FoodItem } from "@/types";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
@@ -201,6 +202,17 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const [members, setMembers] = useState<Member[]>([]);
   const [membersSearchQuery, setMembersSearchQuery] = useState("");
   const { response } = useContext(WebSocketContext);
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const isDashboardIndexPath =
+    currentPath === "/restaurant" ||
+    currentPath === "/manageradmindashboard" ||
+    currentPath === "/staff" ||
+    currentPath === "/chef";
+  const isOrdersPath =
+    currentPath.includes("/orders") ||
+    currentPath === "/staffadmindashboard" ||
+    currentPath === "/chefadmindashboard";
 
   // New State for Analytics & Selling Items
   const [analytics, setAnalytics] = useState<any>(null);
@@ -235,92 +247,8 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const setSellingItemDataState = (data: any[]) => setSellingItems(data);
 
 
-  useEffect(() => {
-    if (!isLoading && userRole) {
-      const fetchInitialData = async () => {
-        try {
-          let endpointCategory;
-          let endpointSubCategory;
-          let endpointItems;
-          let endpointOrders;
-
-          if (userRole === "owner" || userRole === "manager") {
-            endpointCategory = "/owners/categories/";
-            endpointSubCategory = "/owners/sub-categories/";
-            endpointItems = "/owners/items/";
-            endpointOrders = "/owners/orders/";
-          } else if (userRole === "staff") {
-            endpointCategory = "/owners/categories/";
-            endpointSubCategory = "/owners/sub-categories/";
-            endpointItems = "/owners/items/";
-            endpointOrders = "/api/staff/orders/";
-          } else if (userRole === "chef") {
-            endpointCategory = "/api/chef/categories/";
-            endpointSubCategory = "/api/chef/sub-categories/";
-            endpointItems = "/api/chef/items/";
-            endpointOrders = "/api/chef/orders/";
-          } else {
-            throw new Error("Invalid user role");
-          }
-
-          // 1. CRITICAL DATA - Wait for this (Layout depends on it)
-          const [catRes, subCatRes, itemRes, orderRes] = await Promise.all([
-            axiosInstance.get(endpointCategory),
-            axiosInstance.get(endpointSubCategory),
-            axiosInstance.get(endpointItems),
-            axiosInstance.get(endpointOrders)
-          ]);
-
-          setCategories(catRes.data);
-          setSubCategories(subCatRes.data);
-
-          // Set Food Items
-          const { results: itemResults, count: itemCount } = itemRes.data;
-          const formattedItems = itemResults.map((item: any) => ({
-            id: item.id,
-            image1: item.image1 ?? "https://source.unsplash.com/80x80/?food",
-            image: item.image1 ?? "https://source.unsplash.com/80x80/?food",
-            item_name: item.item_name,
-            price: parseFloat(item.price),
-            category: item.category_name,
-            category_id: item.category,
-            category_name: item.category_name,
-            availability: item.availability,
-            description: item.description
-          }));
-          setFoodItems(formattedItems);
-          setFoodItemsCount(itemCount || 0);
-
-          // Set Orders
-          const { results: orderResults, count: orderCount } = orderRes.data;
-          if (orderResults?.stats) setOrdersStats(orderResults.stats);
-
-          const ordersData = Array.isArray(orderResults)
-            ? orderResults
-            : orderResults?.orders || [];
-
-          const formattedOrders = ordersData.map((order: any) => ({
-            ...order,
-            tableNo: order.device_name || 'N/A',
-            timeOfOrder: order.created_time
-          }));
-          setOrders(formattedOrders);
-          setOrdersCount(orderCount || 0);
-
-          // 2. SECONDARY DATA - Background Fetch (Don't block UI)
-          if (userRole === 'owner' || userRole === 'manager') {
-            fetchAnalytics();
-            fetchMostSellingItems();
-          }
-
-        } catch (err) {
-          console.error("Failed to load initial dashboard data.", err);
-        }
-      };
-
-      fetchInitialData();
-    }
-  }, [userRole, isLoading, fetchAnalytics, fetchMostSellingItems]);
+  // Keep the provider render-only. Each dashboard segment now loads only the
+  // data it needs, which avoids a six-request waterfall on every route entry.
 
   const fetchCategories = useCallback(async () => {
     if (isLoading || !userRole) return;
@@ -617,7 +545,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     [reservationsCurrentPage, userRole, isLoading]
   );
   useEffect(() => {
-    if (response.type === "reservation_created") {
+    if (response.type === "reservation_created" && currentPath.includes("/reservations")) {
       fetchReservations();
       // } else if (
       //   response.type === "order_created" ||
@@ -629,7 +557,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       //   console.log("WebSocket Order Event Received:", response.type);
       //   fetchOrders();
     }
-  }, [fetchReservations, fetchOrders, response]);
+  }, [fetchReservations, fetchOrders, response, currentPath]);
 
   const fetchReservationStatusReport = useCallback(async () => {
     // Don't fetch if still loading or if userRole is null
@@ -757,12 +685,13 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     [userRole, isLoading, membersSearchQuery]
   );
   useEffect(() => {
+    if (!currentPath.includes("/management")) return;
     if (response.type == "chefstaff_created") {
       fetchMembers();
     } else if (response.type == "chefstaff_deleted") {
       fetchMembers();
     }
-  }, [response, fetchMembers]);
+  }, [response, fetchMembers, currentPath]);
   const createMember = useCallback(
     async (formData: FormData) => {
       if (isLoading || !userRole) {
@@ -1090,6 +1019,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       response.type === "item_created" ||
       response.type === "item_deleted"
     ) {
+      if (!isDashboardIndexPath) return;
       fetchFoodItems(currentPage, searchQuery);
       // } else if (
       //   response.type === "order_created" ||
@@ -1102,18 +1032,24 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       // response.type === "device_updated" ||
       // response.type === "device_deleted"
     ) {
+      if (!currentPath.includes("/reservations")) return;
       // fetchAllDevices(devicesCurrentPage, devicesSearchQuery);
       fetchReservations(reservationsCurrentPage, reservationsSearchQuery);
     } else if (
       response.type === "device_updated" ||
       response.type === "device_deleted"
     ) {
+      if (!currentPath.includes("/devices")) return;
       fetchAllDevices(devicesCurrentPage, devicesSearchQuery);
     } else if (response.type === "paid_order") {
+      if (!isOrdersPath) return;
       fetchOrders(ordersCurrentPage, ordersSearchQuery);
     }
   }, [
     response,
+    currentPath,
+    isDashboardIndexPath,
+    isOrdersPath,
     currentPage,
     searchQuery,
     fetchFoodItems,
