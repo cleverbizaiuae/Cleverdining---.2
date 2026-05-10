@@ -1,4 +1,4 @@
-import { useRef, useState, useContext, Suspense } from 'react';
+import { useEffect, useRef, useState, useContext, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router';
 import { WebSocketContext } from '@/hooks/WebSocketProvider';
 import { useOwner } from '@/context/ownerContext';
@@ -8,20 +8,22 @@ import {
   CalendarDays,
   MessageSquare,
   Users,
+  ContactRound,
   Wallet,
-  Star,
   LogOut,
   Menu,
   X,
-  LayoutGrid,
   ScanQrCode,
   Sparkles,
-  Palette,
+  Paintbrush,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // Assets
 import mobileLogo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
+import iconLogo from "../../assets/mobile_logo.png";
 // import bgAuth from "../../assets/bg-auth.webp"; // Not used here based on specs
 
 type MenuItem = {
@@ -36,15 +38,16 @@ type DashboardRole = "owner" | "manager" | "staff" | "chef" | "admin";
 
 const SEGMENT_PRELOADERS: Record<string, () => Promise<unknown>> = {
   Dashboard: () => import("./screen_restaurant_dashboard"),
-  OrderList: () => import("./screen_restaurant_order_list"),
-  Reservation: () => import("./screen_restaurant_reservations"),
+  Orders: () => import("./screen_restaurant_order_list"),
+  Reservations: () => import("./screen_restaurant_reservations"),
   Messages: () => import("./screen_restaurant_chat"),
   Management: () => import("./screen_restaurant_management"),
   Tables: () => import("./screen_restaurant_devices"),
   Payments: () => import("./Payments"),
-  Reviews: () => import("./screen_restaurant_reviews"),
   "AI Upsell": () => import("./screen_restaurant_upsell"),
   Branding: () => import("../multilocation/screen_multilocation_branding"),
+  Customers: () => import("./screen_restaurant_crm"),
+  Leads: () => import("./screen_restaurant_leads"),
 };
 
 const prefetchedSegments = new Set<string>();
@@ -58,16 +61,16 @@ const prefetchSegment = (label: string) => {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['owner', 'manager', 'staff', 'chef'] },
-  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
-  { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['owner', 'manager'] },
+  { icon: ClipboardList, label: 'Orders', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
+  { icon: CalendarDays, label: 'Reservations', path: '/reservations', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
   { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
   { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
-  { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
+  { icon: Paintbrush, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Sparkles, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
-  { icon: Palette, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: ContactRound, label: 'Customers', path: '/crm', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
 
 const ROLE_ALIASES: Record<string, DashboardRole> = {
@@ -112,6 +115,7 @@ const resolveSidebarRole = (user: any, pathname: string): DashboardRole => {
 
 const RestaurantLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("adminSidebarCollapsed") === "true");
   const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
   const { fetchMembers, fetchAllDevices, fetchDeviceStats } = useOwner();
   const dataPrefetchedRef = useRef<Set<string>>(new Set());
@@ -126,16 +130,24 @@ const RestaurantLayout = () => {
   const username = String(displayUser?.username || user?.username || "Manager");
 
   // Determine Base Path based on current URL
-  const isStaffDashboard = location.pathname.startsWith('/staff');
-  const isChefDashboard = location.pathname.startsWith('/chef');
+  const isStaffAliasDashboard = location.pathname.startsWith('/staffadmindashboard');
+  const isChefAliasDashboard = location.pathname.startsWith('/chefadmindashboard');
+  const isStaffDashboard = isStaffAliasDashboard || location.pathname.startsWith('/staff');
+  const isChefDashboard = isChefAliasDashboard || location.pathname.startsWith('/chef');
   const isManagerDashboard = location.pathname.startsWith('/manageradmindashboard');
   const isLegacyAdminDashboard = location.pathname.startsWith('/admindashboard');
 
   let basePath = '/restaurant';
-  if (isStaffDashboard) basePath = '/staff';
-  if (isChefDashboard) basePath = '/chef';
+  if (isStaffAliasDashboard) basePath = '/staffadmindashboard';
+  else if (isStaffDashboard) basePath = '/staff';
+  if (isChefAliasDashboard) basePath = '/chefadmindashboard';
+  else if (isChefDashboard) basePath = '/chef';
   if (isManagerDashboard) basePath = '/manageradmindashboard';
   if (isLegacyAdminDashboard) basePath = '/admindashboard';
+
+  useEffect(() => {
+    localStorage.setItem("adminSidebarCollapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -151,15 +163,8 @@ const RestaurantLayout = () => {
     if (item.path === '' && location.pathname === basePath) return true;
     if (item.path === '/ai-upsell' && location.pathname.startsWith(legacyUpsellPath)) return true;
 
-    // For Staff/Chef, default route index is Orders (empty string path in Routes, but mapped to OrderList which has /orders path in MENU).
-    // Wait, OrderList path in MENU is '/orders'.
-    // In Routes:
-    // /staffadmindashboard/ -> ScreenRestaurantOrderList (active)
-    // /staffadmindashboard/orders -> ScreenRestaurantOrderList (active?)
-    // If I'm at /staffadmindashboard/ (root), isActive for OrderList should be true.
-    // Logic removed: previously forced OrderList to be active on root for staff/chef, causing double highlight with Dashboard.
-    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath && item.label === 'OrderList') {
-      return false;
+    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath && item.label === 'Orders') {
+      return true;
     }
 
     if (item.matchType === 'exact') {
@@ -180,7 +185,7 @@ const RestaurantLayout = () => {
     if (activeItem) return activeItem.label;
 
     // Fallback for staff/chef index
-    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath) return "OrderList";
+    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath) return "Orders";
 
     return "Dashboard";
   };
@@ -212,13 +217,28 @@ const RestaurantLayout = () => {
       {/* SIDEBAR */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 shadow-xl transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 shadow-xl transition-all duration-300 ease-in-out
+          ${sidebarCollapsed ? "lg:w-20" : "lg:w-64"}
+          w-64
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
+        <button
+          type="button"
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setSidebarCollapsed((value) => !value)}
+          className="absolute -right-3 top-24 z-10 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md transition-colors hover:text-[#0055FE] lg:flex"
+        >
+          {sidebarCollapsed ? <ChevronRight size={15} strokeWidth={1.8} /> : <ChevronLeft size={15} strokeWidth={1.8} />}
+        </button>
+
         {/* Logo Section */}
-        <div className="h-20 flex items-center px-6 border-b border-slate-100">
-          <img src={mobileLogo} alt="CleverBiz" className="h-8 w-auto" />
+        <div className={`h-20 flex items-center border-b border-slate-100 ${sidebarCollapsed ? "justify-center px-3" : "px-6"}`}>
+          <img
+            src={sidebarCollapsed ? iconLogo : mobileLogo}
+            alt="CleverBiz"
+            className={sidebarCollapsed ? "h-10 w-10 rounded-xl object-contain" : "h-8 w-auto"}
+          />
           <button
             onClick={() => setSidebarOpen(false)}
             className="ml-auto lg:hidden text-slate-400 hover:text-slate-600"
@@ -228,12 +248,9 @@ const RestaurantLayout = () => {
         </div>
 
         {/* Navigation */}
-        <div className="p-4 space-y-2 overflow-y-auto h-[calc(100vh-160px)]">
+        <div className={`${sidebarCollapsed ? "px-3" : "p-4"} py-4 space-y-2 overflow-y-auto h-[calc(100vh-160px)]`}>
           {filteredItems.map((item) => {
             const fullPath = item.path === '' ? basePath : `${basePath}${item.path}`;
-            // Special handling for Staff Index (Orders) URL correctness
-            // If item is OrderList and we are Staff, path is /staffadmindashboard/orders OR default /staffadmindashboard
-
             const active = isActive(item);
             return (
               <Link
@@ -252,8 +269,9 @@ const RestaurantLayout = () => {
                   prefetchSegmentData(item.label);
                 }}
                 onClick={() => setSidebarOpen(false)} // Close on mobile click
+                title={sidebarCollapsed ? item.label : undefined}
                 className={`
-                   flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200
+                   relative flex items-center ${sidebarCollapsed ? "gap-3 px-4 lg:justify-center lg:px-0" : "gap-3 px-4"} py-3 rounded-xl text-sm font-medium transition-all duration-200
                    ${active
                     ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
                     : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE] group"
@@ -264,18 +282,21 @@ const RestaurantLayout = () => {
                   size={20}
                   className={`${active ? "text-white" : "text-slate-400 group-hover:text-[#0055FE]"}`}
                 />
-                {item.label}
+                {sidebarCollapsed ? <span className="lg:hidden">{item.label}</span> : item.label}
                 {item.label === "Messages" && unreadCount > 0 && (
-                  <div className="ml-auto flex items-center gap-1">
+                  <div className={`ml-auto flex items-center gap-1 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                     {unreadTableSummary && (
-                      <span className="text-[10px] text-red-500 max-w-[80px] truncate">
+                      <span className={`text-[10px] text-red-500 max-w-[80px] truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                         {unreadTableSummary}
                       </span>
                     )}
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    <span className={`bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   </div>
+                )}
+                {item.label === "Messages" && unreadCount > 0 && sidebarCollapsed && (
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
                 )}
               </Link>
             );
@@ -283,19 +304,20 @@ const RestaurantLayout = () => {
         </div>
 
         {/* Logout Section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white">
+        <div className={`${sidebarCollapsed ? "p-3" : "p-4"} absolute bottom-0 left-0 right-0 border-t border-slate-100 bg-white`}>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors duration-200"
+            title={sidebarCollapsed ? "Log Out" : undefined}
+            className={`flex items-center ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-4"} w-full py-3 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors duration-200`}
           >
             <LogOut size={20} />
-            <span className="text-sm font-medium">Log Out</span>
+            {!sidebarCollapsed && <span className="text-sm font-medium">Log Out</span>}
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT WRAPPER */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64 transition-all duration-300">
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
 
         {/* HEADER */}
         <header className="sticky top-0 z-30 h-20 bg-white border-b border-slate-200 shadow-sm px-4 sm:px-8 flex items-center justify-between">

@@ -40,6 +40,8 @@ const ScreenRestaurantDevices = lazy(() => import("./pages/restaurant/screen_res
 const Payments = lazy(() => import("./pages/restaurant/Payments").then(m => ({ default: m.Payments })));
 const ScreenRestaurantReviews = lazy(() => import("./pages/restaurant/screen_restaurant_reviews"));
 const ScreenRestaurantUpsell = lazy(() => import("./pages/restaurant/screen_restaurant_upsell"));
+const ScreenRestaurantCrm = lazy(() => import("./pages/restaurant/screen_restaurant_crm"));
+const ScreenRestaurantLeads = lazy(() => import("./pages/restaurant/screen_restaurant_leads"));
 
 // Chef pages
 const ScreenChefDashboard = lazy(() => import("./pages/chef/screen_chef_dashboard"));
@@ -198,6 +200,8 @@ function App() {
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="branding" element={<ScreenMultiLocationBranding />} />
+        <Route path="crm" element={<ScreenRestaurantCrm />} />
+        <Route path="leads" element={<ScreenRestaurantLeads />} />
       </Route>
 
       {/* Manager Dashboard (alias workspace path) */}
@@ -217,6 +221,8 @@ function App() {
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="branding" element={<ScreenMultiLocationBranding />} />
+        <Route path="crm" element={<ScreenRestaurantCrm />} />
+        <Route path="leads" element={<ScreenRestaurantLeads />} />
       </Route>
 
       {/* Legacy admin dashboard alias used by older links/docs */}
@@ -236,6 +242,8 @@ function App() {
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="branding" element={<ScreenMultiLocationBranding />} />
+        <Route path="crm" element={<ScreenRestaurantCrm />} />
+        <Route path="leads" element={<ScreenRestaurantLeads />} />
       </Route>
 
       {/* Staff Dashboard */}
