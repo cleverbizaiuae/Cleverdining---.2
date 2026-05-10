@@ -13,6 +13,16 @@ import axiosInstance from "@/lib/axios";
 import { useBrandConfig } from "@/lib/useBrandConfig";
 import logoImg from "@/assets/icon-32.png";
 
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return `rgba(0, 85, 254, ${alpha})`;
+  const value = Number.parseInt(normalized, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 const SuccessPage = () => {
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>("");
@@ -92,6 +102,12 @@ const SuccessPage = () => {
 
   const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
   const primaryColor = brand.primaryColor || "#0055FE";
+  const backgroundGradient =
+    brand.themePreset === "luxury_dark"
+      ? "linear-gradient(160deg, #0f0f0f 0%, #1a1a2e 100%)"
+      : brand.themePreset === "warm_casual"
+        ? "linear-gradient(160deg, #7c2d12 0%, #c2410c 100%)"
+        : `linear-gradient(160deg, ${hexToRgba(primaryColor, 0.87)} 0%, ${primaryColor} 100%)`;
 
   const socialLinks = useMemo(
     () =>
@@ -117,44 +133,58 @@ const SuccessPage = () => {
     window.open(resolvedGoogleReviewUrl, "_blank", "noopener,noreferrer");
   };
 
-  const overlayClass =
-    brand.themePreset === "luxury_dark"
-      ? "bg-gradient-to-b from-black/80 to-black/30"
-      : brand.themePreset === "warm_casual"
-        ? "bg-gradient-to-b from-black/40 via-amber-900/20 to-transparent"
-        : "bg-gradient-to-b from-black/50 to-transparent";
-
   return (
-    <div className="flex flex-col min-h-screen w-full bg-gray-50 items-center justify-center sm:p-4">
+    <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
+      <div className="fixed inset-0" style={{ background: backgroundGradient }} />
+      {brand.coverImageUrl ? (
+        <>
+          <img
+            src={brand.coverImageUrl}
+            alt={`${resolvedRestaurantName} cover`}
+            className="fixed inset-0 h-full w-full scale-110 object-cover blur-[20px]"
+          />
+          <img
+            src={brand.coverImageUrl}
+            alt=""
+            aria-hidden="true"
+            className="fixed inset-0 h-full w-full object-cover opacity-45"
+          />
+        </>
+      ) : null}
+      <div
+        className="fixed inset-0"
+        style={{
+          background:
+            brand.themePreset === "luxury_dark"
+              ? "linear-gradient(to bottom, rgba(0,0,0,0.74) 0%, rgba(0,0,0,0.86) 52%, rgba(0,0,0,0.94) 100%)"
+              : brand.themePreset === "warm_casual"
+                ? "linear-gradient(to bottom, rgba(67,24,8,0.50) 0%, rgba(31,15,8,0.78) 52%, rgba(14,9,6,0.92) 100%)"
+                : "linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.74) 54%, rgba(0,0,0,0.90) 100%)",
+        }}
+      />
+
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.4 }}
-        className="w-full h-full sm:h-auto sm:max-w-md bg-white sm:rounded-3xl sm:shadow-xl sm:border sm:border-slate-100 flex flex-col overflow-y-auto sm:overflow-visible"
+        className="relative z-10 flex min-h-screen w-full flex-col overflow-y-auto px-6 py-8 text-white"
       >
-        {brand.coverImageUrl ? (
-          <div className="relative h-52 w-full overflow-hidden">
-            <img src={brand.coverImageUrl} alt={`${resolvedRestaurantName} cover`} className="h-52 w-full object-cover" />
-            <div className={`absolute inset-0 ${overlayClass}`} />
-          </div>
-        ) : (
-          <div className="h-52 w-full bg-gray-50" />
-        )}
-
-        <div className="flex-1 flex flex-col items-center justify-center min-h-0 px-6 py-8">
+        <div className="flex flex-1 flex-col items-center justify-center min-h-[calc(100vh-112px)] py-8">
           {/* Restaurant branding slot */}
           <div className="mb-6">
             {brand.logoUrl ? (
-              <img src={brand.logoUrl} alt={`${resolvedRestaurantName} logo`} className="h-16 w-auto object-contain mx-auto" />
+              <div className="rounded-3xl border border-white/20 bg-white/12 p-3 shadow-2xl shadow-black/30 backdrop-blur-md">
+                <img src={brand.logoUrl} alt={`${resolvedRestaurantName} logo`} className="h-16 w-auto object-contain mx-auto" />
+              </div>
             ) : (
-              <p className="text-2xl font-bold text-center" style={{ color: primaryColor }}>
+              <p className="text-2xl font-bold text-center text-white">
                 {resolvedRestaurantName}
               </p>
             )}
           </div>
 
           {/* Success Icon */}
-          <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6 shadow-sm">
+          <div className="w-24 h-24 bg-white/15 border border-white/20 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-black/20 backdrop-blur-md">
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -164,29 +194,29 @@ const SuccessPage = () => {
             </motion.div>
           </div>
 
-          <p className="text-[11px] tracking-[0.16em] uppercase text-slate-400 font-semibold mb-2 text-center">
+          <p className="text-[11px] tracking-[0.16em] uppercase text-white/55 font-semibold mb-2 text-center">
             {resolvedRestaurantName}
           </p>
 
           {/* Main Title */}
-          <h1 className="text-2xl font-bold mb-3 text-center" style={{ color: primaryColor }}>
+          <h1 className="text-4xl font-black mb-3 text-center" style={{ color: primaryColor }}>
             Thank You
           </h1>
 
           {/* Supporting Text */}
-          <p className="text-slate-500 text-sm mb-6 text-center leading-relaxed max-w-[90%] italic">
+          <p className="text-white/72 text-sm mb-6 text-center leading-relaxed max-w-sm italic">
             {brand.tagline || "We hope you enjoyed your meal. See you again soon!"}
           </p>
 
           {/* Google Review Section - Only show if URL is configured */}
           {!loading && resolvedGoogleReviewUrl && (
-            <div className="w-full max-w-sm border border-slate-200 rounded-2xl p-4 mb-5" data-testid="google-review-card">
+            <div className="w-full max-w-sm border border-white/15 bg-white/12 rounded-3xl p-4 mb-5 shadow-2xl shadow-black/20 backdrop-blur-md" data-testid="google-review-card">
               <div className="flex items-center justify-center gap-1 mb-3">
                 {Array.from({ length: 5 }).map((_, index) => (
                   <Star key={index} className="w-4 h-4 fill-amber-400 text-amber-400" strokeWidth={1.8} />
                 ))}
               </div>
-              <p className="text-slate-600 text-sm mb-4 text-center leading-relaxed">
+              <p className="text-white/72 text-sm mb-4 text-center leading-relaxed">
                 Please leave a quick Google review and share your experience with others.
               </p>
               <button
@@ -201,14 +231,11 @@ const SuccessPage = () => {
             </div>
           )}
 
-          {/* Fallback message if no Google Review URL configured */}
-          {!loading && !resolvedGoogleReviewUrl && (
-            <p className="text-slate-400 text-sm text-center mt-2 mb-4">Thank you for your visit!</p>
-          )}
-
           {/* Social links */}
           {socialLinks.length > 0 && (
-            <div className="flex items-center justify-center gap-3 mt-1 mb-4">
+            <div className="mt-1 mb-4 text-center">
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Follow Us</p>
+              <div className="flex items-center justify-center gap-3">
               {socialLinks.map(({ key, label, href, Icon }) => (
                 <a
                   key={key}
@@ -216,25 +243,26 @@ const SuccessPage = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="w-10 h-10 rounded-full border border-transparent flex items-center justify-center transition-transform active:scale-95"
-                  style={{ backgroundColor: `${primaryColor}1a`, color: primaryColor }}
+                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center transition-transform active:scale-95 backdrop-blur-md"
+                  style={{ backgroundColor: hexToRgba(primaryColor, 0.18), color: primaryColor }}
                   data-testid={`social-link-${key}`}
                 >
                   <Icon className="w-4 h-4" strokeWidth={1.8} />
                 </a>
               ))}
+              </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-100 px-6 py-4 text-center">
+        <div className="border-t border-white/10 px-2 py-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <span className="text-xs text-gray-400">Powered by</span>
+            <span className="text-xs text-white/45">Powered by</span>
             <img src={logoImg} alt="Cleverbiz AI" className="h-4 w-auto opacity-60" />
-            <span className="text-xs text-gray-400">Cleverbiz AI</span>
+            <span className="text-xs text-white/45">Cleverbiz AI</span>
           </div>
-          <p className="text-xs text-gray-400">Scan QR code to start a new session</p>
+          <p className="text-xs text-white/40">Scan QR code to start a new session</p>
         </div>
       </motion.div>
     </div>

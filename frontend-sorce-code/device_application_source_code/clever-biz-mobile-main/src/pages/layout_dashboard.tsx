@@ -597,7 +597,7 @@ const LayoutDashboard = () => {
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
               {hasBranding ? (
-                <section className="relative min-h-36 w-full overflow-hidden">
+                <section className="relative min-h-48 w-full overflow-visible">
                   <div className="absolute inset-0" style={{ background: splashGradient }} />
                   {brandCoverUrl && !coverImgFailed ? (
                     <img
@@ -626,7 +626,7 @@ const LayoutDashboard = () => {
                     </div>
                   ) : null}
 
-                  <div className="relative z-10 px-4 pt-12 pb-4">
+                  <div className="relative z-10 px-4 pt-12 pb-16">
                     <p
                       className="text-xl font-bold tracking-tight text-white truncate"
                       style={{ fontFamily: brandFontFamily }}
@@ -637,32 +637,64 @@ const LayoutDashboard = () => {
                       <p className="text-sm text-white/75 truncate mt-0.5">{brand.tagline}</p>
                     ) : null}
                   </div>
+
+                  <div className="absolute left-4 bottom-[-34px] z-20 flex items-end gap-3">
+                    <div className="h-[68px] w-[68px] rounded-3xl border border-white/35 bg-white/18 p-2 shadow-2xl shadow-black/25 backdrop-blur-md flex items-center justify-center">
+                      {brandLogoUrl ? (
+                        <img
+                          src={brandLogoUrl}
+                          alt={`${restaurantName} logo`}
+                          className="max-h-14 max-w-14 object-contain"
+                        />
+                      ) : (
+                        <span className="text-3xl font-black text-white" style={{ fontFamily: brandFontFamily }}>
+                          {(restaurantName || "R").charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mb-1 hidden min-w-0 sm:block">
+                      <p className="max-w-[210px] truncate text-sm font-semibold text-white drop-shadow">
+                        {restaurantName}
+                      </p>
+                    </div>
+                  </div>
                 </section>
               ) : null}
 
               {/* Sticky Header */}
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
-              <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-gray-200/70 pb-2 pt-safe-top transition-all duration-300 shadow-md shadow-slate-200/40">
-                <div className="px-4 py-3 flex items-center justify-between">
-                  {/* Logo */}
-                  <div className="block shrink-0">
-                    {hasBranding && brandLogoUrl ? (
-                      <img src={brandLogoUrl} alt="Brand logo" className="h-9 w-auto max-w-[140px] object-contain" />
-                    ) : (
-                      <Logo />
-                    )}
+              <header
+                className={cn(
+                  "sticky top-0 z-40 backdrop-blur-md border-b border-gray-200/70 pb-2 transition-all duration-300 shadow-md shadow-slate-200/40",
+                  hasBranding
+                    ? "-mt-6 rounded-t-[2rem] bg-background/95 pt-9"
+                    : "bg-background/90 pt-safe-top"
+                )}
+              >
+                {hasBranding ? (
+                  <div className="px-4 pt-1 pb-2 flex items-center justify-end min-h-8">
+                    {tableName ? (
+                      <div className="bg-slate-100 rounded-full px-3 py-1 border border-slate-200">
+                        <span className="text-xs font-bold text-slate-700">Table {tableName}</span>
+                      </div>
+                    ) : null}
                   </div>
-
-                  {/* Table Info */}
-                  {tableName ? (
-                    <div className="bg-slate-100 rounded-full px-3 py-1 border border-slate-200">
-                      <span className="text-xs font-bold text-slate-700">Table {tableName}</span>
+                ) : (
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <div className="block shrink-0">
+                      <Logo />
                     </div>
-                  ) : null}
-                </div>
+
+                    {tableName ? (
+                      <div className="bg-slate-100 rounded-full px-3 py-1 border border-slate-200">
+                        <span className="text-xs font-bold text-slate-700">Table {tableName}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {/* Search Bar */}
-                <div className="px-4 mt-1 mb-3">
+                <div className="px-4 mt-0 mb-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
