@@ -769,9 +769,13 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
                      print(f"DEBUG_ORDERS: User is Owner. Found Restaurant ID: {restaurant_id}")
 
         if restaurant_id:
-             qs = Order.objects.filter(restaurant_id=restaurant_id).order_by('-created_time')
-             print(f"DEBUG_ORDERS: Returning {qs.count()} orders for Rest {restaurant_id}")
-             return qs
+             return (
+                Order.objects
+                .filter(restaurant_id=restaurant_id)
+                .select_related('device', 'restaurant', 'guest_session', 'business_day')
+                .prefetch_related('order_items__item', 'payments')
+                .order_by('-created_time')
+             )
         
         print("DEBUG_ORDERS: Could not determine restaurant. Returning empty.")
         return Order.objects.none()

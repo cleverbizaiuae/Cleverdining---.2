@@ -1,6 +1,7 @@
-import { useState, useContext, Suspense } from 'react';
+import { useRef, useState, useContext, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router';
 import { WebSocketContext } from '@/hooks/WebSocketProvider';
+import { useOwner } from '@/context/ownerContext';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -109,6 +110,8 @@ const resolveSidebarRole = (user: any, pathname: string): DashboardRole => {
 const RestaurantLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
+  const { fetchMembers, fetchAllDevices, fetchDeviceStats } = useOwner();
+  const dataPrefetchedRef = useRef<Set<string>>(new Set());
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -179,6 +182,17 @@ const RestaurantLayout = () => {
 
   const filteredItems = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
+  const prefetchSegmentData = (label: string) => {
+    if (dataPrefetchedRef.current.has(label)) return;
+    dataPrefetchedRef.current.add(label);
+    if (label === "Management") {
+      fetchMembers().catch(() => dataPrefetchedRef.current.delete(label));
+    }
+    if (label === "Tables") {
+      Promise.all([fetchDeviceStats(), fetchAllDevices()]).catch(() => dataPrefetchedRef.current.delete(label));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex font-inter">
 
@@ -220,9 +234,18 @@ const RestaurantLayout = () => {
               <Link
                 key={item.label}
                 to={fullPath}
-                onMouseEnter={() => prefetchSegment(item.label)}
-                onFocus={() => prefetchSegment(item.label)}
-                onTouchStart={() => prefetchSegment(item.label)}
+                onMouseEnter={() => {
+                  prefetchSegment(item.label);
+                  prefetchSegmentData(item.label);
+                }}
+                onFocus={() => {
+                  prefetchSegment(item.label);
+                  prefetchSegmentData(item.label);
+                }}
+                onTouchStart={() => {
+                  prefetchSegment(item.label);
+                  prefetchSegmentData(item.label);
+                }}
                 onClick={() => setSidebarOpen(false)} // Close on mobile click
                 className={`
                    flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200

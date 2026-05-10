@@ -266,6 +266,34 @@ def _compute_pairing_intelligence(restaurant: Restaurant, min_frequency: int = 2
     return results
 
 
+def _get_pairing_intelligence_rows(restaurant: Restaurant, min_frequency: int = 2):
+    assoc_rows = (
+        ItemAssociation.objects.filter(restaurant=restaurant, co_order_frequency__gte=min_frequency)
+        .select_related("source_item", "target_item")
+        .order_by("-co_order_frequency", "-association_strength", "-times_accepted")[:50]
+    )
+
+    results = []
+    for row in assoc_rows:
+        shown_count = int(row.times_shown or 0)
+        accepted_count = int(row.times_accepted or 0)
+        results.append(
+            {
+                "source_item_id": row.source_item_id,
+                "source_item_name": row.source_item.item_name,
+                "target_item_id": row.target_item_id,
+                "target_item_name": row.target_item.item_name,
+                "frequency": int(row.co_order_frequency or 0),
+                "association_strength": round(float(row.association_strength or 0), 6),
+                "shown_count": shown_count,
+                "accepted_count": accepted_count,
+                "dismissed_count": int(row.times_dismissed or 0),
+                "accept_rate": round((accepted_count / shown_count * 100.0) if shown_count else 0.0, 2),
+            }
+        )
+    return results
+
+
 class UpsellSettingsAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -1000,7 +1028,7 @@ class UpsellPairingIntelligenceAPIView(APIView):
             min_frequency = max(2, int(min_frequency_raw or 2))
         except (TypeError, ValueError):
             min_frequency = 2
-        results = _compute_pairing_intelligence(restaurant, min_frequency=min_frequency)
+        results = _get_pairing_intelligence_rows(restaurant, min_frequency=min_frequency)
         return Response({"results": results[:50], "count": len(results), "computed_at": timezone.now().isoformat()})
 
     def post(self, request):

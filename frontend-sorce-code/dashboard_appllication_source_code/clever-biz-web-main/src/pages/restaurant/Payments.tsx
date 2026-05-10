@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useWebSocket } from '../../hooks/WebSocketProvider';
+import { useQuery } from '@tanstack/react-query';
 import {
     Search,
     Filter,
@@ -63,27 +64,17 @@ interface PaymentWithOrder extends Payment {
 }
 
 const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onClose: () => void; payment: PaymentWithOrder | null }) => {
-    const [loadingOrder, setLoadingOrder] = useState(false);
-    const [orderDetails, setOrderDetails] = useState<any>(null);
     const currencyCode = getActiveRestaurantCurrency();
-
-    useEffect(() => {
-        if (isOpen && payment?.order_id) {
-            fetchOrderDetails(payment.order_id);
-        }
-    }, [isOpen, payment]);
-
-    const fetchOrderDetails = async (orderId: number) => {
-        setLoadingOrder(true);
-        try {
+    const orderId = payment?.order_id;
+    const { data: orderDetails, isLoading: loadingOrder } = useQuery({
+        queryKey: ["owner-order-detail", orderId],
+        enabled: isOpen && !!orderId,
+        staleTime: 5 * 60 * 1000,
+        queryFn: async () => {
             const res = await axios.get(`/owners/orders/${orderId}/?includeItems=true`);
-            setOrderDetails(res.data);
-        } catch (error) {
-            console.error("Failed to fetch order details", error);
-        } finally {
-            setLoadingOrder(false);
-        }
-    };
+            return res.data;
+        },
+    });
 
     if (!isOpen || !payment) return null;
 

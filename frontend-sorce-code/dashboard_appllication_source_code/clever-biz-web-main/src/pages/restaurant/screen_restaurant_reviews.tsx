@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useContext, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import axiosInstance from "@/lib/axios";
 import { getActiveRestaurantCurrency } from "@/lib/utils";
@@ -151,28 +152,16 @@ const GoogleReviewSettingsCard = () => {
 
 // 3. MODAL
 const ReviewDetailModal = ({ isOpen, onClose, review }: { isOpen: boolean, onClose: () => void, review: any }) => {
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [orderItems, setOrderItems] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (isOpen && review?.order_id) {
-      fetchOrderItems(review.order_id);
-    } else {
-      setOrderItems([]);
-    }
-  }, [isOpen, review]);
-
-  const fetchOrderItems = async (orderId: string) => {
-    setLoadingItems(true);
-    try {
+  const orderId = review?.order_id;
+  const { data: orderItems = [], isLoading: loadingItems } = useQuery({
+    queryKey: ["owner-order-items", orderId],
+    enabled: isOpen && !!orderId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
       const res = await axiosInstance.get(`/owners/orders/${orderId}/?includeItems=true`);
-      setOrderItems(res.data.order_items || []);
-    } catch (error) {
-      console.error("Failed to load items", error);
-    } finally {
-      setLoadingItems(false);
-    }
-  };
+      return res.data.order_items || [];
+    },
+  });
 
   if (!isOpen || !review) return null;
 

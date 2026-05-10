@@ -121,16 +121,10 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_payments(self, obj):
         try:
-            from payment.models import Payment
-            from payment.schema_guard import ensure_payment_schema
-
-            # Keep responses alive on partially-migrated deployments.
-            ensure_payment_schema()
-            qs = (
-                Payment.objects.filter(order_id=obj.id)
-                .only('id', 'provider', 'transaction_id', 'amount', 'status', 'created_at', 'order_id')
-                .order_by('-created_at')
-            )
+            # Views prefetch `payments`; use that cache instead of issuing one
+            # Payment query per order during list serialization.
+            payments_manager = getattr(obj, "payments", None)
+            qs = payments_manager.all() if payments_manager is not None else []
             return PaymentSerializer(qs, many=True).data
         except Exception as exc:
             print(f"[ORDER-SERIALIZER] Failed loading payments for order {obj.id}: {exc}")

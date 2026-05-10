@@ -161,8 +161,8 @@ export function useBrandConfig(restaurantId?: string | number | null) {
       return mapped;
     },
     placeholderData: mapConfig(cached),
-    staleTime: 0,
-    refetchInterval: 4_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 
