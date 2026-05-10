@@ -15,7 +15,8 @@ import {
   X,
   LayoutGrid,
   ScanQrCode,
-  Sparkles
+  Sparkles,
+  Palette,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -43,6 +44,7 @@ const SEGMENT_PRELOADERS: Record<string, () => Promise<unknown>> = {
   Payments: () => import("./Payments"),
   Reviews: () => import("./screen_restaurant_reviews"),
   "AI Upsell": () => import("./screen_restaurant_upsell"),
+  Branding: () => import("../multilocation/screen_multilocation_branding"),
 };
 
 const prefetchedSegments = new Set<string>();
@@ -65,6 +67,7 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Star, label: 'Reviews', path: '/reviews', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
   { icon: Sparkles, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: Palette, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
 
 const ROLE_ALIASES: Record<string, DashboardRole> = {
@@ -126,11 +129,13 @@ const RestaurantLayout = () => {
   const isStaffDashboard = location.pathname.startsWith('/staff');
   const isChefDashboard = location.pathname.startsWith('/chef');
   const isManagerDashboard = location.pathname.startsWith('/manageradmindashboard');
+  const isLegacyAdminDashboard = location.pathname.startsWith('/admindashboard');
 
   let basePath = '/restaurant';
   if (isStaffDashboard) basePath = '/staff';
   if (isChefDashboard) basePath = '/chef';
   if (isManagerDashboard) basePath = '/manageradmindashboard';
+  if (isLegacyAdminDashboard) basePath = '/admindashboard';
 
   const handleLogout = () => {
     localStorage.clear();

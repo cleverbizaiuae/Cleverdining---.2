@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from "react";
 import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 
 import { PrivateRouteGuard } from "./components/route-guard";
+import { FONT_PRESETS, hexToHsl, useBrandConfig } from "./lib/useBrandConfig";
 const CancelPage = lazy(() => import("./pages/CancelPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const LayoutDashboard = lazy(() => import("./pages/layout_dashboard"));
@@ -20,10 +21,68 @@ const RouteLoader = () => (
   <div className="flex items-center justify-center h-screen text-slate-500">Loading...</div>
 );
 
+function resolveStoredRestaurantId() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    return (
+      parsed?.user?.restaurants?.[0]?.id ||
+      parsed?.restaurant_id ||
+      localStorage.getItem("restaurant_id") ||
+      null
+    );
+  } catch {
+    return localStorage.getItem("restaurant_id");
+  }
+}
+
+function BrandWrapper({
+  children,
+  restaurantId,
+}: {
+  children: ReactNode;
+  restaurantId: string | number | null;
+}) {
+  const brand = useBrandConfig(restaurantId);
+  const hasConfiguredContent = Boolean(
+    brand.logoUrl ||
+    brand.coverImageUrl ||
+    (brand.restaurantName && brand.restaurantName !== "My Restaurant")
+  );
+  const hasBranding = brand.brandingEnabled || hasConfiguredContent;
+  const primaryHsl = useMemo(() => hexToHsl(brand.primaryColor || "#0055FE"), [brand.primaryColor]);
+  const fontFamily = useMemo(
+    () => FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family,
+    [brand.fontPreset],
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--primary", primaryHsl);
+    root.style.setProperty("--brand-primary", brand.primaryColor || "#0055FE");
+    if (hasBranding) {
+      root.style.setProperty("font-family", fontFamily);
+    } else {
+      root.style.removeProperty("font-family");
+    }
+
+    return () => {
+      root.style.removeProperty("--primary");
+      root.style.removeProperty("--brand-primary");
+      root.style.removeProperty("font-family");
+    };
+  }, [brand.primaryColor, fontFamily, hasBranding, primaryHsl]);
+
+  return <>{children}</>;
+}
+
 function App() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const restaurantId = useMemo(
+    () => searchParams.get("restaurant_id") || resolveStoredRestaurantId(),
+    [searchParams, location.pathname],
+  );
 
   useEffect(() => {
     // Only run auto-login/redirect logic if we are at the root path
@@ -57,7 +116,8 @@ function App() {
 
   return (
     <Suspense fallback={<RouteLoader />}>
-      <Routes>
+      <BrandWrapper restaurantId={restaurantId}>
+        <Routes>
       <Route path="/" element={<div className="flex items-center justify-center h-screen">Loading...</div>} />
       <Route path="/scan-table" element={<ScreenScanTable />} />
       <Route path="/login" element={<TableLanding />} /> {/* Added for QR Code compatibility */}
@@ -88,7 +148,8 @@ function App() {
       <Route path="/table/:uuid" element={<TableEntry />} />
       <Route path="/thankyou" element={<SuccessPage />} />
       <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+        </Routes>
+      </BrandWrapper>
     </Suspense>
   );
 }

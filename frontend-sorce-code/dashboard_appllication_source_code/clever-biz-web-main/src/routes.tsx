@@ -197,6 +197,7 @@ function App() {
         <Route path="messages" element={<ScreenRestaurantChat />} />
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
+        <Route path="branding" element={<ScreenMultiLocationBranding />} />
       </Route>
 
       {/* Manager Dashboard (alias workspace path) */}
@@ -215,6 +216,26 @@ function App() {
         <Route path="messages" element={<ScreenRestaurantChat />} />
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
+        <Route path="branding" element={<ScreenMultiLocationBranding />} />
+      </Route>
+
+      {/* Legacy admin dashboard alias used by older links/docs */}
+      <Route path="/admindashboard" element={
+        <Suspense fallback={<PageLoader />}>
+          <RestaurantRuntime />
+        </Suspense>
+      }>
+        <Route index={true} element={<ScreenRestaurantDashboard />} />
+        <Route path="orders" element={<ScreenRestaurantOrderList />} />
+        <Route path="reservations" element={<ScreenRestaurantReservations />} />
+        <Route path="management" element={<ScreenRestaurantManagement />} />
+        <Route path="devices" element={<ScreenRestaurantDevices />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="reviews" element={<ScreenRestaurantReviews />} />
+        <Route path="messages" element={<ScreenRestaurantChat />} />
+        <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
+        <Route path="upsell" element={<ScreenRestaurantUpsell />} />
+        <Route path="branding" element={<ScreenMultiLocationBranding />} />
       </Route>
 
       {/* Staff Dashboard */}

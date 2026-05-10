@@ -70,11 +70,16 @@ Current dashboard branding page:
 frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main/src/pages/multilocation/screen_multilocation_branding.tsx
 ```
 
-Current route:
+Current routes:
 
 ```text
 /multilocation/branding
+/restaurant/branding
+/manageradmindashboard/branding
+/admindashboard/branding
 ```
+
+`/restaurant/branding`, `/manageradmindashboard/branding`, and `/admindashboard/branding` render the same editor inside the restaurant dashboard layout. `/multilocation/branding` remains the multi-location workspace route.
 
 The page contains:
 
@@ -117,6 +122,21 @@ Logo and cover image uploads are processed in the browser.
 7. Customer devices receive the same data URL from `GET /api/brand-config/` and render it with normal image tags/backgrounds.
 
 This keeps implementation simple, but it means large logos/covers increase JSON payload size. The 1200px / 82% compression is the safeguard.
+
+## Global Brand CSS Injection
+
+The mobile app wraps its routes with a root `BrandWrapper` in:
+
+```text
+frontend-sorce-code/device_application_source_code/clever-biz-mobile-main/src/routes.tsx
+```
+
+The wrapper reads the current restaurant's brand config and sets these CSS variables on `document.documentElement`:
+
+- `--primary`: HSL value derived from `primaryColor`, used by Tailwind/Radix-style primary utilities.
+- `--brand-primary`: raw hex brand color for inline styles.
+
+When branding is enabled, or when meaningful branding content exists, the wrapper also applies the configured font family to the document root.
 
 ## Customer Mobile App Data Flow
 

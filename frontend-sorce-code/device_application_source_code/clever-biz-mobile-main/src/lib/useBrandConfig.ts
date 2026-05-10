@@ -57,6 +57,41 @@ export const DEFAULT_BRAND: BrandConfig = {
   googleReviewUrl: null,
 };
 
+export const FONT_PRESETS = [
+  { value: "modern" as FontPreset, label: "Modern Clean", family: "'Inter', system-ui, sans-serif" },
+  { value: "elegant" as FontPreset, label: "Elegant Dining", family: "'Playfair Display', Georgia, serif" },
+  { value: "bold" as FontPreset, label: "Bold Casual", family: "'Plus Jakarta Sans', system-ui, sans-serif" },
+];
+
+export function hexToHsl(hex: string): string {
+  const cleaned = (hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return "221 100% 50%";
+  const r = parseInt(cleaned.slice(0, 2), 16) / 255;
+  const g = parseInt(cleaned.slice(2, 4), 16) / 255;
+  const b = parseInt(cleaned.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lum = (max + min) / 2;
+  let hue = 0;
+  let sat = 0;
+  if (max !== min) {
+    const d = max - min;
+    sat = lum > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        hue = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        hue = ((b - r) / d + 2) / 6;
+        break;
+      default:
+        hue = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+  return `${Math.round(hue * 360)} ${Math.round(sat * 100)}% ${Math.round(lum * 100)}%`;
+}
+
 function cleanText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
