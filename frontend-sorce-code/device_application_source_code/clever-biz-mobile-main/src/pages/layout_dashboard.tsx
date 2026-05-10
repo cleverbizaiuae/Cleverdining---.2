@@ -17,7 +17,7 @@ import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
-import { ArrowRight, Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-react";
+import { Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
@@ -172,12 +172,6 @@ const LayoutDashboard = () => {
   const brand = useBrandConfig(restaurantId);
   const splashTimerRef = useRef<number | null>(null);
 
-  const fallbackRestaurantName = useMemo(() => {
-    const restaurant = userInfo?.user?.restaurants?.[0];
-    if (!restaurant) return "";
-    return String(restaurant.resturent_name || restaurant.restaurant_name || "").trim();
-  }, [userInfo]);
-
   const hasConfiguredContent = Boolean(
     brand.logoUrl || brand.coverImageUrl || (brand.restaurantName && brand.restaurantName !== "My Restaurant")
   );
@@ -185,7 +179,7 @@ const LayoutDashboard = () => {
   const restaurantName =
     hasBranding && brand.restaurantName
       ? brand.restaurantName
-      : fallbackRestaurantName || "Welcome";
+      : "Welcome";
   const brandLogoUrl = hasBranding ? brand.logoUrl : null;
   const brandCoverUrl = hasBranding ? brand.coverImageUrl : null;
   const brandFontFamily = getFontFamily(brand.fontPreset);
@@ -212,12 +206,6 @@ const LayoutDashboard = () => {
     }
     return `linear-gradient(160deg, ${hexToRgba(brand.primaryColor, 0.87)} 0%, ${brand.primaryColor} 100%)`;
   }, [brand.primaryColor, brand.themePreset]);
-
-  const heroOverlayStyle = useMemo(() => {
-    if (brand.themePreset === "luxury_dark") return { backgroundColor: "rgba(0, 0, 0, 0.72)" };
-    if (brand.themePreset === "warm_casual") return { backgroundColor: "rgba(100, 30, 5, 0.55)" };
-    return { backgroundColor: "rgba(0, 0, 0, 0.45)" };
-  }, [brand.themePreset]);
 
   const [coverImgFailed, setCoverImgFailed] = useState(false);
   useEffect(() => {
@@ -282,12 +270,6 @@ const LayoutDashboard = () => {
       bootstrapSession();
     }
   }, []);
-
-  useEffect(() => {
-    if (!hasBranding) {
-      setSplashState("done");
-    }
-  }, [hasBranding]);
 
   const dismissBrandSplash = useCallback(() => {
     try {
@@ -509,9 +491,15 @@ const LayoutDashboard = () => {
 
   return (
     <CartProvider>
-      {splashState !== "done" && hasBranding && (
-        <div
+      {splashState !== "done" && (
+        <motion.div
           className="fixed inset-0 z-[120] bg-slate-950"
+          initial={{ opacity: 1 }}
+          animate={
+            splashState === "collapsing"
+              ? { opacity: 0, transition: { duration: 0.48, ease: [0.4, 0, 0.2, 1] } }
+              : { opacity: 1 }
+          }
           onClick={dismissBrandSplash}
           role="button"
           tabIndex={0}
@@ -530,6 +518,7 @@ const LayoutDashboard = () => {
                 src={brandCoverUrl}
                 alt="Brand splash"
                 className="absolute inset-0 h-full w-full object-cover"
+                style={{ objectPosition: "center top" }}
                 initial={{ opacity: 0.45, scale: 1 }}
                 animate={splashState === "collapsing" ? { opacity: 0.35, scale: 1.06 } : { opacity: 0.55, scale: 1 }}
                 transition={{ duration: 0.48, ease: [0.4, 0, 0.2, 1] }}
@@ -540,51 +529,60 @@ const LayoutDashboard = () => {
           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/55 to-black/80" />
 
           <motion.div
-            className="relative h-full flex flex-col items-center justify-center px-6 text-center"
+            className="relative h-full flex flex-col px-8 text-center"
             initial={{ opacity: 1, y: 0 }}
             animate={splashState === "collapsing" ? { opacity: 0, y: -16 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.32, ease: "easeIn" }}
           >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.2 }}
-              className="mb-4 h-24 w-24 rounded-[1.75rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
-            >
-              {brandLogoUrl ? (
-                <img src={brandLogoUrl} alt="Brand logo" className="h-16 w-16 object-contain" />
-              ) : (
-                <span className="text-white text-5xl font-bold leading-none">{(restaurantName || "W").charAt(0).toUpperCase()}</span>
-              )}
-            </motion.div>
-            <motion.p
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.32, duration: 0.28 }}
-              className="text-white font-semibold tracking-tight mb-8"
-              style={{ fontFamily: brandFontFamily, fontSize: "clamp(1.75rem, 6vw, 2.5rem)" }}
-            >
-              {restaurantName}
-            </motion.p>
-            <motion.button
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.28 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                dismissBrandSplash();
-              }}
-              className="w-full max-w-[320px] h-14 rounded-2xl bg-white text-slate-900 font-black text-base px-5 inline-flex items-center justify-between shadow-2xl shadow-black/40"
-              whileTap={{ scale: 0.97 }}
-            >
-              <span>View Menu</span>
-              <ArrowRight className="w-5 h-5" strokeWidth={2.2} />
-            </motion.button>
+            <div className="flex-1 flex flex-col items-center justify-center gap-6">
+              <motion.div
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.55, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+                className="h-24 w-24 rounded-[1.5rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
+              >
+                {brandLogoUrl ? (
+                  <img src={brandLogoUrl} alt={restaurantName} className="h-full w-full object-contain p-1.5" />
+                ) : (
+                  <span className="text-white text-5xl font-bold leading-none" style={{ fontFamily: brandFontFamily }}>
+                    {(restaurantName || "W").charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </motion.div>
+              <motion.h1
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.32 }}
+                className="text-white font-bold leading-tight"
+                style={{
+                  fontFamily: brandFontFamily,
+                  fontSize: "clamp(1.75rem, 6vw, 2.5rem)",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {restaurantName}
+              </motion.h1>
+            </div>
+            <div className="flex flex-col items-center gap-4 pb-16">
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.5 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissBrandSplash();
+                }}
+                className="w-full max-w-xs py-4 rounded-2xl bg-white/95 text-slate-900 font-bold text-base tracking-tight shadow-2xl shadow-black/40 inline-flex items-center justify-center"
+                whileTap={{ scale: 0.97 }}
+              >
+                View Menu
+              </motion.button>
+            </div>
             <p className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/40 text-xs">
               Tap anywhere to skip
             </p>
           </motion.div>
-        </div>
+        </motion.div>
       )}
 
       <div
@@ -597,20 +595,31 @@ const LayoutDashboard = () => {
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
               {hasBranding ? (
-                <section className="relative min-h-48 w-full overflow-visible">
+                <section className="relative min-h-40 w-full overflow-hidden">
                   <div className="absolute inset-0" style={{ background: splashGradient }} />
                   {brandCoverUrl && !coverImgFailed ? (
                     <img
                       src={brandCoverUrl}
                       alt={`${restaurantName} cover`}
                       className="absolute inset-0 h-full w-full object-cover"
+                      style={{ objectPosition: "center top" }}
                       onError={() => setCoverImgFailed(true)}
                     />
                   ) : null}
-                  <div className="absolute inset-0" style={heroOverlayStyle} />
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background:
+                        brand.themePreset === "luxury_dark"
+                          ? "linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.78) 100%)"
+                          : brand.themePreset === "warm_casual"
+                            ? "linear-gradient(to bottom, rgba(100,30,5,0.28) 0%, rgba(100,30,5,0.62) 100%)"
+                            : "linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)",
+                    }}
+                  />
 
                   {socialLinks.length > 0 ? (
-                    <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+                    <div className="absolute top-3 right-4 z-20 flex items-center gap-2.5">
                       {socialLinks.map(({ key, href, Icon, label }) => (
                         <a
                           key={key}
@@ -618,44 +627,60 @@ const LayoutDashboard = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={label}
-                          className="w-7 h-7 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-white/90 hover:text-white inline-flex items-center justify-center"
+                          className="text-white/90 hover:text-white transition-colors"
                         >
-                          <Icon className="w-3.5 h-3.5" strokeWidth={1.8} />
+                          {key === "tiktok" ? (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.95a8.27 8.27 0 0 0 4.83 1.55V7.05a4.84 4.84 0 0 1-1.06-.36z" />
+                            </svg>
+                          ) : (
+                            <Icon className="w-4 h-4" strokeWidth={1.8} />
+                          )}
                         </a>
                       ))}
                     </div>
                   ) : null}
 
-                  <div className="relative z-10 px-4 pt-12 pb-16">
-                    <p
-                      className="text-xl font-bold tracking-tight text-white truncate"
-                      style={{ fontFamily: brandFontFamily }}
-                    >
-                      {restaurantName}
-                    </p>
-                    {brand.tagline ? (
-                      <p className="text-sm text-white/75 truncate mt-0.5">{brand.tagline}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="absolute left-4 bottom-[-34px] z-20 flex items-end gap-3">
-                    <div className="h-[68px] w-[68px] rounded-3xl border border-white/35 bg-white/18 p-2 shadow-2xl shadow-black/25 backdrop-blur-md flex items-center justify-center">
-                      {brandLogoUrl ? (
-                        <img
-                          src={brandLogoUrl}
-                          alt={`${restaurantName} logo`}
-                          className="max-h-14 max-w-14 object-contain"
-                        />
-                      ) : (
-                        <span className="text-3xl font-black text-white" style={{ fontFamily: brandFontFamily }}>
-                          {(restaurantName || "R").charAt(0)}
-                        </span>
-                      )}
+                  <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-4 pb-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div
+                        className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
+                        style={{
+                          background: "rgba(255,255,255,0.14)",
+                          backdropFilter: "blur(8px)",
+                          border: "1px solid rgba(255,255,255,0.22)",
+                        }}
+                      >
+                        {brandLogoUrl ? (
+                          <img
+                            src={brandLogoUrl}
+                            alt={`${restaurantName} logo`}
+                            className="h-full w-full object-contain p-0.5"
+                            onError={(event) => {
+                              (event.currentTarget as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <span className="text-base font-bold text-white" style={{ fontFamily: brandFontFamily }}>
+                            {(restaurantName || "R").charAt(0)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h1
+                          className="truncate text-lg font-bold leading-tight text-white drop-shadow-sm"
+                          style={{ fontFamily: brandFontFamily }}
+                        >
+                          {restaurantName}
+                        </h1>
+                        {brand.tagline ? (
+                          <p className="truncate text-xs leading-snug text-white/70">{brand.tagline}</p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="mb-1 hidden min-w-0 sm:block">
-                      <p className="max-w-[210px] truncate text-sm font-semibold text-white drop-shadow">
-                        {restaurantName}
-                      </p>
+                    <div className="flex shrink-0 flex-col items-end pb-0.5 pl-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/60">Table</span>
+                      <span className="text-base font-bold leading-none text-white">{tableName || "–"}</span>
                     </div>
                   </div>
                 </section>
@@ -667,18 +692,12 @@ const LayoutDashboard = () => {
                 className={cn(
                   "sticky top-0 z-40 backdrop-blur-md border-b border-gray-200/70 pb-2 transition-all duration-300 shadow-md shadow-slate-200/40",
                   hasBranding
-                    ? "-mt-6 rounded-t-[2rem] bg-background/95 pt-9"
+                    ? "bg-background/80 pt-3"
                     : "bg-background/90 pt-safe-top"
                 )}
               >
                 {hasBranding ? (
-                  <div className="px-4 pt-1 pb-2 flex items-center justify-end min-h-8">
-                    {tableName ? (
-                      <div className="bg-slate-100 rounded-full px-3 py-1 border border-slate-200">
-                        <span className="text-xs font-bold text-slate-700">Table {tableName}</span>
-                      </div>
-                    ) : null}
-                  </div>
+                  null
                 ) : (
                   <div className="px-4 py-3 flex items-center justify-between">
                     <div className="block shrink-0">
@@ -695,15 +714,23 @@ const LayoutDashboard = () => {
 
                 {/* Search Bar */}
                 <div className="px-4 mt-0 mb-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Search for food..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full bg-slate-50 ring-1 ring-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
+                  <div className="relative flex items-center gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input
+                        type="text"
+                        placeholder="Search for food..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full bg-slate-50 ring-1 ring-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                    {hasBranding ? (
+                      <div className="flex shrink-0 flex-col items-end">
+                        <span className="text-[9px] font-bold text-primary uppercase tracking-wider">Table</span>
+                        <span className="text-sm font-bold leading-none">{tableName || "–"}</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

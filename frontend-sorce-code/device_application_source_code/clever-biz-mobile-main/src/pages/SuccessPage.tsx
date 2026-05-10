@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2,
   ExternalLink,
   Facebook,
   Instagram,
@@ -10,7 +9,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import axiosInstance from "@/lib/axios";
-import { useBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
 import logoImg from "@/assets/icon-32.png";
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -28,6 +27,7 @@ const SuccessPage = () => {
   const [restaurantName, setRestaurantName] = useState<string>("");
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [coverFailed, setCoverFailed] = useState(false);
   const brand = useBrandConfig(restaurantId);
 
   // Cleanup function - clears ALL session-related state for complete isolation
@@ -102,6 +102,7 @@ const SuccessPage = () => {
 
   const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
   const primaryColor = brand.primaryColor || "#0055FE";
+  const fontFamily = FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family;
   const backgroundGradient =
     brand.themePreset === "luxury_dark"
       ? "linear-gradient(160deg, #0f0f0f 0%, #1a1a2e 100%)"
@@ -120,6 +121,10 @@ const SuccessPage = () => {
     [brand.facebookUrl, brand.instagramUrl, brand.tiktokUrl, brand.twitterUrl]
   );
 
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [brand.coverImageUrl]);
+
   const handleGoogleReview = () => {
     if (!resolvedGoogleReviewUrl) {
       // No URL configured - don't do anything
@@ -136,18 +141,22 @@ const SuccessPage = () => {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
       <div className="fixed inset-0" style={{ background: backgroundGradient }} />
-      {brand.coverImageUrl ? (
+      {brand.coverImageUrl && !coverFailed ? (
         <>
           <img
             src={brand.coverImageUrl}
             alt={`${resolvedRestaurantName} cover`}
-            className="fixed inset-0 h-full w-full scale-110 object-cover blur-[20px]"
+            className="fixed inset-0 h-full w-full scale-[1.12] object-cover blur-[22px]"
+            style={{ objectPosition: "center top" }}
+            onError={() => setCoverFailed(true)}
           />
           <img
             src={brand.coverImageUrl}
             alt=""
             aria-hidden="true"
-            className="fixed inset-0 h-full w-full object-cover opacity-45"
+            className="fixed inset-0 h-full w-full object-cover opacity-55"
+            style={{ objectPosition: "center top" }}
+            onError={() => setCoverFailed(true)}
           />
         </>
       ) : null}
@@ -166,40 +175,37 @@ const SuccessPage = () => {
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.4 }}
+        transition={{ duration: 0.55 }}
         className="relative z-10 flex min-h-screen w-full flex-col overflow-y-auto px-6 py-8 text-white"
       >
         <div className="flex flex-1 flex-col items-center justify-center min-h-[calc(100vh-112px)] py-8">
           {/* Restaurant branding slot */}
-          <div className="mb-6">
+          <div className="mb-5">
             {brand.logoUrl ? (
-              <div className="rounded-3xl border border-white/20 bg-white/12 p-3 shadow-2xl shadow-black/30 backdrop-blur-md">
-                <img src={brand.logoUrl} alt={`${resolvedRestaurantName} logo`} className="h-16 w-auto object-contain mx-auto" />
+              <div className="h-20 w-20 mx-auto rounded-[1.25rem] border border-white/20 bg-white/12 p-1 shadow-2xl shadow-black/40 backdrop-blur-md flex items-center justify-center">
+                <img src={brand.logoUrl} alt={`${resolvedRestaurantName} logo`} className="h-full w-full object-contain" />
               </div>
             ) : (
-              <p className="text-2xl font-bold text-center text-white">
-                {resolvedRestaurantName}
-              </p>
+              <div
+                className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center shadow-2xl shadow-black/40"
+                style={{
+                  background: "rgba(255,255,255,0.14)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255,255,255,0.22)",
+                }}
+              >
+                <span className="text-white font-bold text-3xl" style={{ fontFamily }}>
+                  {(resolvedRestaurantName || "R")[0]}
+                </span>
+              </div>
             )}
           </div>
 
-          {/* Success Icon */}
-          <div className="w-24 h-24 bg-white/15 border border-white/20 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-black/20 backdrop-blur-md">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            >
-              <CheckCircle2 size={48} className="text-green-500" strokeWidth={2.5} />
-            </motion.div>
-          </div>
-
-          <p className="text-[11px] tracking-[0.16em] uppercase text-white/55 font-semibold mb-2 text-center">
-            {resolvedRestaurantName}
-          </p>
-
           {/* Main Title */}
-          <h1 className="text-4xl font-black mb-3 text-center" style={{ color: primaryColor }}>
+          <h1
+            className="text-4xl font-bold mb-3 text-center text-white"
+            style={{ fontFamily, letterSpacing: "-0.02em" }}
+          >
             Thank You
           </h1>
 
@@ -208,8 +214,8 @@ const SuccessPage = () => {
             {brand.tagline || "We hope you enjoyed your meal. See you again soon!"}
           </p>
 
-          {/* Google Review Section - Only show if URL is configured */}
-          {!loading && resolvedGoogleReviewUrl && (
+          {/* Google Review Section */}
+          {!loading && (
             <div className="w-full max-w-sm border border-white/15 bg-white/12 rounded-3xl p-4 mb-5 shadow-2xl shadow-black/20 backdrop-blur-md" data-testid="google-review-card">
               <div className="flex items-center justify-center gap-1 mb-3">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -219,15 +225,17 @@ const SuccessPage = () => {
               <p className="text-white/72 text-sm mb-4 text-center leading-relaxed">
                 Please leave a quick Google review and share your experience with others.
               </p>
-              <button
-                onClick={handleGoogleReview}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md hover:brightness-95 active:scale-[0.98]"
-                style={{ backgroundColor: primaryColor }}
-                data-testid="google-review-button"
-              >
-                <span>Leave a Google Review</span>
-                <ExternalLink className="w-4 h-4" strokeWidth={1.8} />
-              </button>
+              {resolvedGoogleReviewUrl && (
+                <button
+                  onClick={handleGoogleReview}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md hover:brightness-95 active:scale-[0.98]"
+                  style={{ backgroundColor: primaryColor }}
+                  data-testid="google-review-button"
+                >
+                  <span>Leave a Review on Google</span>
+                  <ExternalLink className="w-4 h-4" strokeWidth={1.8} />
+                </button>
+              )}
             </div>
           )}
 
@@ -243,11 +251,11 @@ const SuccessPage = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center transition-transform active:scale-95 backdrop-blur-md"
-                  style={{ backgroundColor: hexToRgba(primaryColor, 0.18), color: primaryColor }}
+                  className="w-11 h-11 rounded-xl border border-white/15 flex items-center justify-center transition-transform active:scale-95 backdrop-blur-md"
+                  style={{ background: "rgba(255,255,255,0.12)", color: "white" }}
                   data-testid={`social-link-${key}`}
                 >
-                  <Icon className="w-4 h-4" strokeWidth={1.8} />
+                  <Icon className="w-5 h-5" strokeWidth={1.8} />
                 </a>
               ))}
               </div>
@@ -260,7 +268,6 @@ const SuccessPage = () => {
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-xs text-white/45">Powered by</span>
             <img src={logoImg} alt="Cleverbiz AI" className="h-4 w-auto opacity-60" />
-            <span className="text-xs text-white/45">Cleverbiz AI</span>
           </div>
           <p className="text-xs text-white/40">Scan QR code to start a new session</p>
         </div>
