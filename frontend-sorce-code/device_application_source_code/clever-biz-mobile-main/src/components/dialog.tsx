@@ -64,6 +64,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [upsellCartMetrics, setUpsellCartMetrics] = useState({ cartValueAtTime: 0, cartItemCount: 0 });
   const upsellActiveRef = useRef(false);
   const upsellSourceItemIdRef = useRef<number | null>(null);
+  const upsellSourceItemIdsRef = useRef<number[]>([]);
   const pendingUpsellActionRef = useRef<null | (() => Promise<void>)>(null);
   const { cart, addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
@@ -132,6 +133,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     const metrics = summarizeCart(nextCart);
     setUpsellCartMetrics(metrics);
     upsellSourceItemIdRef.current = Number(item.id);
+    upsellSourceItemIdsRef.current = nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0);
 
     window.setTimeout(async () => {
       close();
@@ -142,20 +144,22 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         if (upsellActiveRef.current || !canShowUpsellTouchpoint("add_to_cart", 2)) {
           return;
         }
-        const suggestions = await fetchUpsellSuggestions({
-          triggerPoint: "add_to_cart",
-          sourceItemId: Number(item.id),
-          limit: 2,
-          cartItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
-          excludeItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
-        });
-
         const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
         if (settingsSnapshot) setUpsellSettings(settingsSnapshot);
 
         const shouldRender =
           (settingsSnapshot?.enabled ?? upsellSettings?.enabled ?? true) &&
           (settingsSnapshot?.show_after_add_to_cart ?? upsellSettings?.show_after_add_to_cart ?? true);
+
+        if (!shouldRender) return;
+        const suggestionLimit = settingsSnapshot?.aggressiveness === "subtle" ? 1 : 2;
+        const suggestions = await fetchUpsellSuggestions({
+          triggerPoint: "add_to_cart",
+          sourceItemId: Number(item.id),
+          limit: suggestionLimit,
+          cartItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
+          excludeItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
+        });
 
         if (!suggestions.length || !shouldRender) return;
         setUpsellSuggestions(suggestions);
@@ -176,6 +180,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               triggerPoint: "add_to_cart",
               action: "shown",
               sourceItemId: Number(item.id),
+              sourceItemIds: upsellSourceItemIdsRef.current,
               upsellItemId: suggestion.id,
               metadata: { source_category_id: item.category },
             })
@@ -207,7 +212,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           triggerPoint: "add_to_cart",
           action: "accepted",
           sourceItemId: upsellSourceItemIdRef.current || undefined,
+          sourceItemIds: upsellSourceItemIdsRef.current,
           upsellItemId: suggestion.id,
+          upsellPrice: suggestion.price,
         }),
       ]);
     };
@@ -234,6 +241,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           triggerPoint: "add_to_cart",
           action: "dismissed",
           sourceItemId: upsellSourceItemIdRef.current || undefined,
+          sourceItemIds: upsellSourceItemIdsRef.current,
           upsellItemId: suggestion.id,
         }),
       ]);
@@ -266,6 +274,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         triggerPoint: "add_to_cart",
         action: "dismissed",
         sourceItemId: upsellSourceItemIdRef.current || undefined,
+        sourceItemIds: upsellSourceItemIdsRef.current,
         upsellItemId: suggestion.id,
       }),
     ]);
@@ -296,6 +305,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
             triggerPoint: "add_to_cart",
             action: "dismissed",
             sourceItemId: upsellSourceItemIdRef.current || undefined,
+            sourceItemIds: upsellSourceItemIdsRef.current,
             upsellItemId: suggestion.id,
           })
         );

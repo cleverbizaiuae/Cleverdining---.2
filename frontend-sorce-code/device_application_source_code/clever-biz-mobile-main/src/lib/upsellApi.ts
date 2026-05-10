@@ -107,6 +107,7 @@ export async function fetchUpsellSuggestions(params: {
             params: {
               cartItemIds: params.cartItemIds.join(","),
               excludeItemIds: (params.excludeItemIds || []).join(","),
+              triggerPoint: params.triggerPoint,
               stage: params.stage || "",
               limit: params.limit ?? 2,
             },
@@ -227,7 +228,9 @@ export async function logUpsellAssociationStat(params: {
   triggerPoint: UpsellTriggerPoint;
   action: "shown" | "accepted" | "dismissed";
   sourceItemId?: number;
+  sourceItemIds?: number[];
   upsellItemId?: number;
+  upsellPrice?: number | string;
   metadata?: Record<string, unknown>;
 }) {
   try {
@@ -241,7 +244,9 @@ export async function logUpsellAssociationStat(params: {
         trigger_point: params.triggerPoint,
         action: params.action,
         source_item_id: params.sourceItemId || null,
+        source_item_ids: params.sourceItemIds?.length ? params.sourceItemIds : undefined,
         upsell_item_id: params.upsellItemId || null,
+        upsell_price: params.upsellPrice === undefined ? undefined : safeNumber(params.upsellPrice),
         metadata: params.metadata || {},
       },
       {

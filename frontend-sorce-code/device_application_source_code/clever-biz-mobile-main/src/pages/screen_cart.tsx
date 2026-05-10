@@ -161,6 +161,7 @@ const ScreenCart = () => {
     [validCartItems]
   );
   const cartMetrics = useMemo(() => summarizeCart(validCartItems), [validCartItems]);
+  const validCartItemIds = useMemo(() => validCartItems.map((item) => item.id), [validCartItems]);
 
   useEffect(() => {
     const userInfo = localStorage.getItem("userInfo");
@@ -223,6 +224,7 @@ const ScreenCart = () => {
         const shouldRenderCart =
           effectiveSettings.enabled &&
           effectiveSettings.show_in_cart &&
+          effectiveSettings.aggressiveness !== "subtle" &&
           canShowUpsellTouchpoint("cart", 3);
 
         if (!shouldRenderCart) {
@@ -234,8 +236,8 @@ const ScreenCart = () => {
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "cart",
           limit: 2,
-          cartItemIds: validCartItems.map((item) => item.id),
-          excludeItemIds: validCartItems.map((item) => item.id),
+          cartItemIds: validCartItemIds,
+          excludeItemIds: validCartItemIds,
         });
         if (cancelled) return;
 
@@ -257,6 +259,16 @@ const ScreenCart = () => {
               cartValueAtTime: cartMetrics.cartValueAtTime,
               cartItemCount: cartMetrics.cartItemCount,
             }).catch(() => {});
+            await Promise.allSettled(
+              suggestions.map((suggestion) =>
+                logUpsellAssociationStat({
+                  triggerPoint: "cart",
+                  action: "shown",
+                  sourceItemIds: validCartItemIds,
+                  upsellItemId: suggestion.id,
+                })
+              )
+            );
           }
         } else {
           cartShownSignatureRef.current = "";
@@ -278,7 +290,7 @@ const ScreenCart = () => {
     return () => {
       cancelled = true;
     };
-  }, [cartFingerprint, cartMetrics.cartItemCount, cartMetrics.cartValueAtTime, validCartItems]);
+  }, [cartFingerprint, cartMetrics.cartItemCount, cartMetrics.cartValueAtTime, validCartItems, validCartItemIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -319,6 +331,7 @@ const ScreenCart = () => {
         const shouldRender =
           effectiveSettings.enabled &&
           effectiveSettings.show_before_payment &&
+          effectiveSettings.aggressiveness === "aggressive" &&
           canShowUpsellTouchpoint("before_payment", 1);
 
         if (!shouldRender) {
@@ -330,8 +343,8 @@ const ScreenCart = () => {
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "before_payment",
           limit: 1,
-          cartItemIds: validCartItems.map((item) => item.id),
-          excludeItemIds: validCartItems.map((item) => item.id),
+          cartItemIds: validCartItemIds,
+          excludeItemIds: validCartItemIds,
         });
         if (cancelled) return;
 
@@ -352,6 +365,16 @@ const ScreenCart = () => {
               cartValueAtTime: cartMetrics.cartValueAtTime,
               cartItemCount: cartMetrics.cartItemCount,
             }).catch(() => {});
+            await Promise.allSettled(
+              suggestions.map((suggestion) =>
+                logUpsellAssociationStat({
+                  triggerPoint: "before_payment",
+                  action: "shown",
+                  sourceItemIds: validCartItemIds,
+                  upsellItemId: suggestion.id,
+                })
+              )
+            );
           }
         } else {
           beforePaymentShownSignatureRef.current = "";
@@ -379,6 +402,7 @@ const ScreenCart = () => {
     cartMetrics.cartItemCount,
     cartMetrics.cartValueAtTime,
     validCartItems,
+    validCartItemIds,
   ]);
 
   const suggestionToCartItem = (item: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
@@ -415,7 +439,9 @@ const ScreenCart = () => {
       logUpsellAssociationStat({
         triggerPoint,
         action: "accepted",
+        sourceItemIds: validCartItemIds,
         upsellItemId: item.id,
+        upsellPrice: item.price,
       }),
     ]);
   };
@@ -445,6 +471,7 @@ const ScreenCart = () => {
       logUpsellAssociationStat({
         triggerPoint,
         action: "dismissed",
+        sourceItemIds: validCartItemIds,
         upsellItemId: item.id,
       }),
     ]);

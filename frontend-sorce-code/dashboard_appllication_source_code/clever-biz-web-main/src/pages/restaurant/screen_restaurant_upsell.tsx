@@ -1082,7 +1082,7 @@ const ScreenRestaurantUpsell = () => {
             <div>
               <p className="font-semibold">How it works</p>
               <p className="text-slate-600 mt-1">
-                Association strength is derived from co-order frequency in delivered/completed/served orders. Pairs with fewer than 2 co-orders are ignored.
+                Association strength is a normalized lift score from delivered/completed/served orders in the last 60 days. Pairs with fewer than 2 co-orders are ignored as noise.
               </p>
             </div>
           </section>
@@ -1146,7 +1146,7 @@ const ScreenRestaurantUpsell = () => {
                 </table>
               </div>
               <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">
-                {pairingRows.length} associations learned from order history. Strength is normalized association confidence.
+                {pairingRows.length} associations learned from the last 60 days of delivered orders. Strength is normalized lift score.
               </div>
             </section>
           )}

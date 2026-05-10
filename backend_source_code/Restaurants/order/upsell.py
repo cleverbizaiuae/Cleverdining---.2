@@ -56,10 +56,10 @@ CATEGORY_KEYWORDS = {
 }
 
 PAIRING_BY_ROLE = {
-    "main": {"drinks", "starters", "desserts"},
-    "drinks": {"main", "desserts"},
-    "starters": {"main", "drinks"},
-    "desserts": {"drinks", "main"},
+    "main": ("drinks", "starters", "desserts"),
+    "drinks": ("main", "desserts"),
+    "starters": ("main", "drinks"),
+    "desserts": ("drinks", "main"),
 }
 
 HIGH_CART_DESSERT_THRESHOLD_BY_REGION = {
@@ -67,10 +67,53 @@ HIGH_CART_DESSERT_THRESHOLD_BY_REGION = {
     "UK": Decimal("30.00"),
 }
 
+STARTER_CART_CEILING_BY_REGION = {
+    "UAE": Decimal("150.00"),
+    "UK": Decimal("150.00"),
+}
+
 TRIGGER_TO_SETTING_FIELD = {
     "add_to_cart": "show_after_add_to_cart",
     "cart": "show_in_cart",
     "before_payment": "show_before_payment",
+}
+
+FOOD_PROFILE_KEYWORDS: Dict[str, Tuple[str, ...]] = {
+    "burger": ("burger", "cheeseburger", "slider"),
+    "pizza": ("pizza", "margherita", "pepperoni"),
+    "pasta": ("pasta", "spaghetti", "penne", "lasagne", "lasagna", "ravioli", "alfredo"),
+    "sushi": ("sushi", "maki", "nigiri", "sashimi", "dragon roll", "california roll"),
+    "steak": ("steak", "sirloin", "ribeye", "tenderloin", "filet", "fillet"),
+    "chicken": ("chicken", "wings", "tender", "grilled chicken"),
+    "fish": ("fish", "salmon", "cod", "seafood", "prawn", "shrimp"),
+    "biryani": ("biryani", "mandi", "kabsa"),
+    "salad_starter": ("salad", "caesar", "fattoush", "tabbouleh"),
+    "starter": ("starter", "fries", "nachos", "wings", "mozzarella", "side", "appetizer"),
+    "cola": ("cola", "coca", "coke", "pepsi"),
+    "juice": ("juice", "lemonade", "orange", "apple", "fresh"),
+    "shake": ("shake", "milkshake", "smoothie"),
+    "tea": ("tea", "chai", "matcha", "iced tea"),
+    "coffee": ("coffee", "espresso", "latte", "cappuccino", "americano", "mocha"),
+    "cocktail": ("mocktail", "cocktail", "mojito", "spritz", "margarita"),
+    "dessert": ("dessert", "sweet", "pudding"),
+    "cake": ("cake", "cheesecake", "brownie", "tiramisu", "pastry"),
+    "icecream": ("ice cream", "gelato", "sundae", "sorbet"),
+    "shisha": ("shisha", "hookah"),
+}
+
+FOOD_PROFILE_PAIRINGS: Dict[str, Tuple[str, ...]] = {
+    "burger": ("cola", "shake", "starter", "icecream"),
+    "pizza": ("cola", "juice", "salad_starter", "dessert"),
+    "pasta": ("juice", "cocktail", "salad_starter", "cake"),
+    "sushi": ("tea", "juice", "salad_starter", "dessert"),
+    "steak": ("cocktail", "juice", "salad_starter", "cake"),
+    "chicken": ("cola", "juice", "salad_starter", "starter"),
+    "fish": ("juice", "tea", "salad_starter", "dessert"),
+    "biryani": ("cola", "juice", "starter", "dessert"),
+    "shisha": ("cocktail", "juice", "starter", "tea"),
+    "dessert": ("coffee", "tea"),
+    "cake": ("coffee", "tea"),
+    "icecream": ("coffee", "tea", "cola"),
 }
 
 
@@ -96,6 +139,35 @@ def _item_search_blob(item: Item) -> str:
         " ".join(tag_values),
     ]
     return " ".join(_normalize_text(part) for part in parts if part)
+
+
+def _item_profiles(item: Item) -> Set[str]:
+    blob = f" {_item_search_blob(item)} "
+    profiles: Set[str] = set()
+    for profile, keywords in FOOD_PROFILE_KEYWORDS.items():
+        if any(keyword in blob for keyword in keywords):
+            profiles.add(profile)
+    return profiles
+
+
+def _culinary_profile_points(source_item: Item, candidate: Item) -> int:
+    source_profiles = _item_profiles(source_item)
+    candidate_profiles = _item_profiles(candidate)
+    best = 0
+    for source_profile in source_profiles:
+        ranked_targets = FOOD_PROFILE_PAIRINGS.get(source_profile, ())
+        for rank, target_profile in enumerate(ranked_targets):
+            if target_profile not in candidate_profiles:
+                continue
+            if rank == 0:
+                best = max(best, 18)
+            elif rank == 1:
+                best = max(best, 11)
+            elif rank == 2:
+                best = max(best, 6)
+            else:
+                best = max(best, 3)
+    return best
 
 
 def _effective_item_price(item: Item) -> Decimal:
@@ -183,8 +255,15 @@ def _derive_role_categories(restaurant_id: int, setting: UpsellSetting) -> Dict[
     category_type_to_role = {
         "main": "main",
         "drink": "drinks",
+        "drinks": "drinks",
+        "beverage": "drinks",
+        "beverages": "drinks",
         "dessert": "desserts",
+        "desserts": "desserts",
         "starter": "starters",
+        "starters": "starters",
+        "appetizer": "starters",
+        "appetizers": "starters",
     }
 
     override_map = setting.category_role_map or {}
@@ -229,23 +308,34 @@ def _item_roles(item: Item, role_categories: Dict[str, Set[int]]) -> Set[str]:
     return roles
 
 
-def _detect_stage(has_main: bool, has_drink: bool) -> str:
+def _detect_stage(has_main: bool, has_drink: bool, has_starter_or_dessert: bool) -> str:
     if not has_main:
         return "building"
-    if has_main and has_drink:
+    if has_main and has_drink and has_starter_or_dessert:
         return "complete"
     return "balanced"
 
 
-def _gap_priority(stage: str, has_main: bool, has_drink: bool, has_starter: bool, has_dessert: bool, cart_total: Decimal, dessert_threshold: Decimal) -> List[str]:
+def _gap_priority(
+    stage: str,
+    has_main: bool,
+    has_drink: bool,
+    has_starter: bool,
+    has_dessert: bool,
+    cart_total: Decimal,
+    dessert_threshold: Decimal,
+    starter_ceiling: Decimal,
+) -> List[str]:
     if stage == "building":
+        if has_main and not has_drink:
+            return ["drinks", "starters", "desserts"]
         return ["main", "drinks", "starters", "desserts"]
 
     if stage == "balanced":
         gaps: List[str] = []
         if not has_drink:
             gaps.append("drinks")
-        if not has_starter:
+        if not has_starter and cart_total <= starter_ceiling:
             gaps.append("starters")
         if cart_total >= dessert_threshold and not has_dessert:
             gaps.append("desserts")
@@ -257,10 +347,10 @@ def _gap_priority(stage: str, has_main: bool, has_drink: bool, has_starter: bool
     gaps = []
     if cart_total >= dessert_threshold and not has_dessert:
         gaps.append("desserts")
-    if not has_starter:
-        gaps.append("starters")
     if not has_drink:
         gaps.append("drinks")
+    if not has_starter and cart_total <= starter_ceiling:
+        gaps.append("starters")
     return gaps or ["desserts", "drinks", "starters"]
 
 
@@ -317,6 +407,78 @@ def _reason_for_top_factor(reasons: Dict[str, int], setting: UpsellSetting) -> s
         },
     }
     return messages.get(top_reason, messages["default"]).get(tone, messages["default"]["friendly"])
+
+
+def _copy_for_pairing(cart_items: List[Item], candidate: Item, setting: UpsellSetting, stage: str, reasons: Dict[str, int]) -> Tuple[str, str]:
+    tone_aliases = {
+        "professional": "premium",
+        "playful": "luxury_casual",
+    }
+    tone = tone_aliases.get(setting.tone, setting.tone)
+    candidate_profiles = _item_profiles(candidate)
+
+    for source in cart_items:
+        source_profiles = _item_profiles(source)
+        source_name = source.item_name or "your order"
+        if "burger" in source_profiles and "cola" in candidate_profiles:
+            label = "Perfect with your order"
+            reason = f"Burgers and {candidate.item_name} - a timeless combo."
+            break
+        if "steak" in source_profiles and "cocktail" in candidate_profiles:
+            label = "Complete the experience"
+            reason = f"A classic alongside your {source_name}."
+            break
+        if "pasta" in source_profiles and ({"cocktail", "juice"} & candidate_profiles):
+            label = "Restaurant favourite"
+            reason = "Most pasta orders pair beautifully with a cold drink."
+            break
+        if ({"burger", "chicken"} & source_profiles) and ({"dessert", "cake", "icecream"} & candidate_profiles):
+            label = "Save room for this"
+            reason = "A sweet finish customers often add to complete the meal."
+            break
+        if "coffee" in candidate_profiles and ({"dessert", "cake", "icecream"} & source_profiles):
+            label = "Finish on a high"
+            reason = "Coffee is a natural finish after dessert."
+            break
+    else:
+        if stage == "complete" and ({"dessert", "cake", "icecream"} & candidate_profiles):
+            label = "Save room for this"
+            reason = "Complete meals often end with dessert. Don't miss out."
+        elif reasons.get("gap", 0) >= 55:
+            label = "Complete your meal"
+            reason = _reason_for_top_factor(reasons, setting)
+        elif reasons.get("pair", 0) > 0:
+            label = "Perfect pairing"
+            reason = _reason_for_top_factor(reasons, setting)
+        else:
+            label = "You might also like"
+            reason = _reason_for_top_factor(reasons, setting)
+
+    if tone == "premium":
+        label_map = {
+            "Perfect with your order": "Curated for your selection",
+            "Complete your meal": "Complete the experience",
+            "Perfect pairing": "Recommended pairing",
+            "You might also like": "Selected for your table",
+            "Save room for this": "End on a refined note",
+        }
+        label = label_map.get(label, label)
+        if reason.startswith("Your meal"):
+            reason = "Recommended to round out this order."
+    elif tone == "minimal":
+        label = "Recommended"
+        reason = "Smart add-on for this order."
+    elif tone == "luxury_casual":
+        label_map = {
+            "Perfect with your order": "Treat yourself",
+            "Complete your meal": "Add a little extra",
+            "Perfect pairing": "Guest favourite combo",
+            "You might also like": "Worth adding",
+            "Save room for this": "You've earned this",
+        }
+        label = label_map.get(label, label)
+
+    return label, reason
 
 
 def _current_hour_for_restaurant(tz_name: str) -> int:
@@ -519,11 +681,21 @@ def build_cart_upsell_suggestions(
     has_starter = "starters" in cart_role_set
     has_dessert = "desserts" in cart_role_set
 
-    stage = _detect_stage(has_main, has_drink)
+    stage = _detect_stage(has_main, has_drink, has_starter or has_dessert)
     region = normalize_region(getattr(restaurant, "region", None))
     cart_total = _cart_total(cart)
     dessert_threshold = HIGH_CART_DESSERT_THRESHOLD_BY_REGION.get(region, Decimal("45.00"))
-    gaps = _gap_priority(stage, has_main, has_drink, has_starter, has_dessert, cart_total, dessert_threshold)
+    starter_ceiling = STARTER_CART_CEILING_BY_REGION.get(region, Decimal("150.00"))
+    gaps = _gap_priority(
+        stage,
+        has_main,
+        has_drink,
+        has_starter,
+        has_dessert,
+        cart_total,
+        dessert_threshold,
+        starter_ceiling,
+    )
     gap_rank = {role: index for index, role in enumerate(gaps)}
 
     hour = _current_hour_for_restaurant(getattr(restaurant, "timezone", "UTC"))
@@ -581,26 +753,10 @@ def build_cart_upsell_suggestions(
         else:
             score -= 25
 
-        # 2) Culinary pairing (+18|+11|+6|+3 per cart item, capped at +36 total)
+        # 2) Culinary name/profile pairing (+18|+11|+6|+3 per cart item, capped at +36 total)
         culinary_points = 0
         for cart_source in cart_source_items:
-            source_role_set = _item_roles(cart_source, role_categories)
-            if not source_role_set:
-                continue
-            points_for_source = 0
-            for source_role in source_role_set:
-                pair_targets = PAIRING_BY_ROLE.get(source_role, set())
-                if not candidate_roles.intersection(pair_targets):
-                    continue
-                if source_role == "main" and ("drinks" in candidate_roles or "starters" in candidate_roles):
-                    points_for_source = max(points_for_source, 18)
-                elif source_role == "main" and "desserts" in candidate_roles:
-                    points_for_source = max(points_for_source, 11)
-                elif source_role in {"drinks", "desserts"} and "main" in candidate_roles:
-                    points_for_source = max(points_for_source, 6)
-                else:
-                    points_for_source = max(points_for_source, 3)
-            culinary_points += points_for_source
+            culinary_points += _culinary_profile_points(cart_source, candidate)
             if culinary_points >= 36:
                 culinary_points = 36
                 break
@@ -613,50 +769,66 @@ def build_cart_upsell_suggestions(
         # Without trigger item: +10 | +5
         category_pair_points = 0
         if trigger_source_item:
-            if trigger_source_item.sub_category_id and candidate.sub_category_id and trigger_source_item.sub_category_id == candidate.sub_category_id:
-                category_pair_points = 14
-            elif trigger_source_item.category_id and candidate.category_id and trigger_source_item.category_id == candidate.category_id:
-                category_pair_points = 8
-            else:
-                trigger_roles = _item_roles(trigger_source_item, role_categories)
-                trigger_targets = set()
-                for role in trigger_roles:
-                    trigger_targets.update(PAIRING_BY_ROLE.get(role, set()))
-                if candidate_roles.intersection(trigger_targets):
-                    category_pair_points = 4
+            for trigger_role in _item_roles(trigger_source_item, role_categories):
+                ranked_targets = list(PAIRING_BY_ROLE.get(trigger_role, ()))
+                for rank, target_role in enumerate(ranked_targets):
+                    if target_role not in candidate_roles:
+                        continue
+                    if rank == 0:
+                        category_pair_points = max(category_pair_points, 14)
+                    elif rank == 1:
+                        category_pair_points = max(category_pair_points, 8)
+                    else:
+                        category_pair_points = max(category_pair_points, 4)
         else:
-            shares_category = any(source.category_id == candidate.category_id for source in cart_source_items)
-            if shares_category:
-                category_pair_points = 10
-            else:
-                shares_subcategory = any(
-                    source.sub_category_id and candidate.sub_category_id and source.sub_category_id == candidate.sub_category_id
-                    for source in cart_source_items
-                )
-                if shares_subcategory:
-                    category_pair_points = 5
+            for source in cart_source_items:
+                for source_role in _item_roles(source, role_categories):
+                    ranked_targets = list(PAIRING_BY_ROLE.get(source_role, ()))
+                    for rank, target_role in enumerate(ranked_targets):
+                        if target_role not in candidate_roles:
+                            continue
+                        category_pair_points = max(category_pair_points, 10 if rank == 0 else 5)
         if category_pair_points:
             score += category_pair_points
             reasons["pair"] = reasons.get("pair", 0) + category_pair_points
 
         # 4) Time-of-day bonus (+10 | +6 | +3)
         time_points = 0
-        if 5 <= hour <= 11:
+        candidate_profiles = _item_profiles(candidate)
+        if 6 <= hour < 11:
+            if {"coffee", "tea"} & candidate_profiles:
+                time_points = 10
+            elif "drinks" in candidate_roles:
+                time_points = 6
+            elif "main" in candidate_roles:
+                time_points = 3
+        elif 11 <= hour < 15:
             if "drinks" in candidate_roles:
                 time_points = 10
             elif "starters" in candidate_roles:
                 time_points = 6
-            elif "desserts" in candidate_roles:
+            elif "main" in candidate_roles:
                 time_points = 3
-        elif 17 <= hour <= 23:
-            if "desserts" in candidate_roles:
+        elif 15 <= hour < 18:
+            if {"coffee", "tea"} & candidate_profiles:
                 time_points = 10
+            elif "desserts" in candidate_roles:
+                time_points = 6
             elif "drinks" in candidate_roles:
+                time_points = 3
+        elif 18 <= hour < 23:
+            if "drinks" in candidate_roles or "cocktail" in candidate_profiles:
+                time_points = 10
+            elif "desserts" in candidate_roles:
                 time_points = 6
             elif "starters" in candidate_roles:
                 time_points = 3
         else:
-            if "drinks" in candidate_roles or "starters" in candidate_roles:
+            if "cocktail" in candidate_profiles:
+                time_points = 10
+            elif "drinks" in candidate_roles:
+                time_points = 6
+            elif "desserts" in candidate_roles:
                 time_points = 3
         if time_points:
             score += time_points
@@ -726,11 +898,12 @@ def build_cart_upsell_suggestions(
         if score <= 0:
             continue
 
+        label, message = _copy_for_pairing(cart_source_items, candidate, setting, stage, reasons)
         results.append(
             {
                 "item": candidate,
-                "rule": stage,
-                "message": _reason_for_top_factor(reasons, setting),
+                "rule": label,
+                "message": message,
                 "score": int(score),
                 "stage": stage,
                 "historical_max_strength": float(historical.get("max_strength", 0.0)) if historical else 0.0,

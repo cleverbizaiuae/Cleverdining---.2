@@ -149,8 +149,13 @@ def _stage_bonus_for_item(
 
 def _compute_pairing_intelligence(restaurant: Restaurant, min_frequency: int = 2):
     completed_statuses = ["delivered", "completed", "served"]
+    cutoff = timezone.now() - timezone.timedelta(days=60)
     order_item_rows = (
-        OrderItem.objects.filter(order__restaurant=restaurant, order__status__in=completed_statuses)
+        OrderItem.objects.filter(
+            order__restaurant=restaurant,
+            order__status__in=completed_statuses,
+            order__created_time__gte=cutoff,
+        )
         .values("order_id", "item_id")
         .order_by("order_id")
     )
@@ -180,11 +185,16 @@ def _compute_pairing_intelligence(restaurant: Restaurant, min_frequency: int = 2
     rows_to_update = []
     rows_to_create = []
 
+    total_orders = max(len(order_to_item_ids), 1)
+
     for (source_id, target_id), frequency in directed_pair_counts.items():
         if frequency < min_frequency:
             continue
         source_count = max(item_counts.get(source_id, 1), 1)
-        association_strength = Decimal(frequency) / Decimal(source_count)
+        target_count = max(item_counts.get(target_id, 1), 1)
+        lift = (Decimal(frequency) * Decimal(total_orders)) / (Decimal(source_count) * Decimal(target_count))
+        # Normalize lift into 0..1 while keeping lift <= 1 near zero.
+        association_strength = max(Decimal("0"), min(Decimal("1"), (lift - Decimal("1")) / Decimal("4")))
         computed_pairs.add((source_id, target_id))
 
         existing = existing_rows.get((source_id, target_id))
@@ -427,43 +437,55 @@ class UpsellAssociationStatsAPIView(APIView):
         action = str(request.data.get("action") or "").strip().lower()
         trigger_point = str(request.data.get("trigger_point") or "").strip().lower()
         source_item_raw = request.data.get("source_item_id")
+        source_items_raw = request.data.get("source_item_ids")
         target_item_raw = request.data.get("upsell_item_id")
 
         if action not in {"shown", "accepted", "dismissed"}:
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
         if trigger_point not in {"add_to_cart", "cart", "before_payment"}:
             trigger_point = "add_to_cart"
-        if not str(source_item_raw).isdigit() or not str(target_item_raw).isdigit():
+        source_item_ids = _parse_int_list(source_items_raw)
+        if str(source_item_raw).isdigit():
+            source_item_ids.append(int(source_item_raw))
+        source_item_ids = sorted({item_id for item_id in source_item_ids if item_id > 0})
+        if not source_item_ids or not str(target_item_raw).isdigit():
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
 
-        source_item_id = int(source_item_raw)
         target_item_id = int(target_item_raw)
-        if source_item_id == target_item_id:
-            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
-
-        source_item = Item.objects.filter(id=source_item_id, restaurant=restaurant).first()
         target_item = Item.objects.filter(id=target_item_id, restaurant=restaurant).first()
-        if not source_item or not target_item:
+        if not target_item:
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
 
-        association, _ = ItemAssociation.objects.get_or_create(
-            restaurant=restaurant,
-            source_item=source_item,
-            target_item=target_item,
+        source_items = list(
+            Item.objects.filter(
+                id__in=[item_id for item_id in source_item_ids if item_id != target_item_id],
+                restaurant=restaurant,
+            )
         )
-        if action == "shown":
-            association.times_shown = int(association.times_shown or 0) + 1
-        elif action == "accepted":
-            association.times_accepted = int(association.times_accepted or 0) + 1
-            price_raw = request.data.get("upsell_price") or request.data.get("price")
-            try:
-                association.revenue_generated = Decimal(association.revenue_generated or 0) + Decimal(str(price_raw or "0"))
-            except Exception:
-                pass
-        else:
-            association.times_dismissed = int(association.times_dismissed or 0) + 1
-        association.save(update_fields=["times_shown", "times_accepted", "times_dismissed", "revenue_generated", "updated_at"])
-        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+        if not source_items:
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+
+        updated_count = 0
+        for source_item in source_items:
+            association, _ = ItemAssociation.objects.get_or_create(
+                restaurant=restaurant,
+                source_item=source_item,
+                target_item=target_item,
+            )
+            if action == "shown":
+                association.times_shown = int(association.times_shown or 0) + 1
+            elif action == "accepted":
+                association.times_accepted = int(association.times_accepted or 0) + 1
+                price_raw = request.data.get("upsell_price") or request.data.get("price")
+                try:
+                    association.revenue_generated = Decimal(association.revenue_generated or 0) + Decimal(str(price_raw or "0"))
+                except Exception:
+                    pass
+            else:
+                association.times_dismissed = int(association.times_dismissed or 0) + 1
+            association.save(update_fields=["times_shown", "times_accepted", "times_dismissed", "revenue_generated", "updated_at"])
+            updated_count += 1
+        return Response({"status": "ok", "updated": updated_count}, status=status.HTTP_200_OK)
 
 
 class UpsellSmartSuggestionsAPIView(APIView):
@@ -493,10 +515,21 @@ class UpsellSmartSuggestionsAPIView(APIView):
             _parse_int_list(request.query_params.get("excludeItemIds") or request.query_params.get("exclude_item_ids"))
         )
         stage = str(request.query_params.get("stage") or "").strip().lower()
+        trigger_point = str(request.query_params.get("triggerPoint") or request.query_params.get("trigger_point") or "").strip().lower()
         try:
             limit = max(1, min(int(request.query_params.get("limit") or 5), 20))
         except (TypeError, ValueError):
             limit = 5
+
+        active_rules = UpsellRule.objects.filter(restaurant=restaurant, is_active=True)
+        blocked_target_ids = set(
+            active_rules.filter(
+                Q(type="global_block") | Q(type="block", source_item_id__in=cart_item_ids)
+            ).values_list("target_item_id", flat=True)
+        )
+        paired_target_ids = set(
+            active_rules.filter(type="pair", source_item_id__in=cart_item_ids).values_list("target_item_id", flat=True)
+        )
 
         rows = (
             ItemAssociation.objects.filter(
@@ -504,7 +537,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 source_item_id__in=cart_item_ids,
                 co_order_frequency__gte=2,
             )
-            .exclude(target_item_id__in=cart_item_ids.union(exclude_item_ids))
+            .exclude(target_item_id__in=cart_item_ids.union(exclude_item_ids).union(blocked_target_ids))
             .values(
                 "target_item_id",
                 "co_order_frequency",
@@ -600,12 +633,17 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 category_name_hint=category_name,
                 category_type_hint=category_type,
             )
-            historical_score = (
+            historical_score = float(
                 (metrics["sum_strength"] * 100.0)
                 + min(metrics["total_frequency"], 50)
-                + (accept_rate * 25.0)
                 + stage_bonus
             )
+            if shown > 5:
+                historical_score *= 1 + accept_rate
+            if trigger_point == "add_to_cart":
+                historical_score *= 1.2
+            if item_id in paired_target_ids:
+                historical_score += 200
             image_url = ""
             try:
                 if getattr(item, "image1", None):
