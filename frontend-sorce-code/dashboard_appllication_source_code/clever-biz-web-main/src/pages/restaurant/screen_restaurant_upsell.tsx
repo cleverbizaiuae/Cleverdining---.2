@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axiosInstance from "@/lib/axios";
+import { useRestaurantContext } from "@/lib/useRestaurantContext";
 import toast from "react-hot-toast";
 import {
   AlertCircle,
@@ -280,17 +281,7 @@ const ScreenRestaurantUpsell = () => {
   const [hoverHour, setHoverHour] = useState<number | null>(null);
 
   const userRole = useMemo(() => resolveUpsellUserRole(), []);
-
-  const currency = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("userInfo");
-      if (!raw) return "AED";
-      const parsed = JSON.parse(raw);
-      return parsed?.restaurants?.[0]?.currency || parsed?.user?.restaurants?.[0]?.currency || "AED";
-    } catch {
-      return "AED";
-    }
-  }, []);
+  const { fmt } = useRestaurantContext();
 
   const categoryOptions = useMemo(() => {
     const seen = new Map<number, string>();
@@ -702,9 +693,7 @@ const ScreenRestaurantUpsell = () => {
     }
   };
 
-  const formatCurrency = (value: string | number) => {
-    return `${currency} ${Number(value || 0).toFixed(2)}`;
-  };
+  const formatCurrency = (value: string | number) => fmt(value);
 
   if (!["owner", "manager"].includes(userRole)) {
     return (

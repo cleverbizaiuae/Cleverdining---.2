@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Award, Crown, History, Search, ShoppingBag, SlidersHorizontal, Sparkles, Trophy, UserRound, WalletCards } from "lucide-react";
-import { getActiveRestaurantCurrency } from "@/lib/utils";
+import { useRestaurantContext } from "@/lib/useRestaurantContext";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum";
 
@@ -100,7 +100,7 @@ const tierStyles: Record<Tier, string> = {
 };
 
 export default function ScreenRestaurantCrm() {
-  const currency = getActiveRestaurantCurrency();
+  const { fmt, fmt0 } = useRestaurantContext();
   const [query, setQuery] = useState("");
   const [tier, setTier] = useState<Tier | "all">("all");
   const [sortBy, setSortBy] = useState<"points" | "spent" | "orders" | "tier">("points");
@@ -136,7 +136,7 @@ export default function ScreenRestaurantCrm() {
         <div className="grid grid-cols-3 gap-3 text-sm">
           <Stat label="Customers" value={totalCustomers.toString()} icon={UserRound} />
           <Stat label="Points Live" value={totalPoints.toLocaleString()} icon={Sparkles} />
-          <Stat label="Lifetime Spend" value={`${currency} ${totalSpent.toLocaleString()}`} icon={WalletCards} />
+          <Stat label="Lifetime Spend" value={fmt0(totalSpent)} icon={WalletCards} />
         </div>
       </div>
 
@@ -179,7 +179,7 @@ export default function ScreenRestaurantCrm() {
                   <p className="mt-1 text-xs text-slate-500">{customer.phone} · Last visit {customer.lastVisit}</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-500">
                     <span><strong className="text-slate-800">{customer.points.toLocaleString()}</strong> points</span>
-                    <span><strong className="text-slate-800">{currency} {customer.totalSpent.toLocaleString()}</strong> spent</span>
+                    <span><strong className="text-slate-800">{fmt0(customer.totalSpent)}</strong> spent</span>
                     <span><strong className="text-slate-800">{customer.totalOrders}</strong> orders</span>
                   </div>
                 </div>
@@ -230,7 +230,7 @@ export default function ScreenRestaurantCrm() {
                     <p className="font-semibold text-slate-700">{visit.restaurant}</p>
                     <p className="text-slate-400">{visit.date}</p>
                   </div>
-                  <span className="font-bold text-slate-800">{currency} {visit.total}</span>
+                  <span className="font-bold text-slate-800">{fmt(visit.total)}</span>
                 </div>
               ))}
             </div>
