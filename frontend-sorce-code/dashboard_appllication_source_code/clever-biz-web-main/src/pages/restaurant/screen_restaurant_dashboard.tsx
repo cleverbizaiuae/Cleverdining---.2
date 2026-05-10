@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
-import { getActiveRestaurantCurrency } from "@/lib/utils";
+import { useRestaurantContext } from "@/lib/useRestaurantContext";
 
 
 
@@ -76,12 +76,45 @@ const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = tru
   </div>
 );
 
+const toNumber = (value: unknown) => {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatInputDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const normalizeSalesAnalytics = (payload: any) => {
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.sales)
+        ? payload.sales
+        : Array.isArray(payload?.chart)
+          ? payload.chart
+          : [];
+
+  if (Array.isArray(payload?.labels)) {
+    return {
+      labels: payload.labels,
+      revenue: (payload.revenue || payload.values || []).map(toNumber),
+      orders: (payload.orders || payload.orderCounts || payload.order_counts || []).map(toNumber),
+    };
+  }
+
+  return {
+    labels: rows.map((row: any) => row.label || row.date || row.day || row.hour || ""),
+    revenue: rows.map((row: any) => toNumber(row.revenue || row.totalRevenue || row.total_revenue || row.sales || row.amount)),
+    orders: rows.map((row: any) => toNumber(row.orders || row.totalOrders || row.total_orders || row.order_count || row.count)),
+  };
+};
+
 // 2. REVENUE CHART
 // Spec: Gradient #0055FE (8% -> 0%), Line stroke 1.5px, Dashed grid
 
 
 const ScreenRestaurantDashboard = () => {
-  const currencyCode = getActiveRestaurantCurrency();
+  const { fmt } = useRestaurantContext();
   const {
     foodItems,
     currentPage,
@@ -120,6 +153,11 @@ const ScreenRestaurantDashboard = () => {
 
   const [timeRange, setTimeRange] = useState("year");
   const [compareEnabled, setCompareEnabled] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(formatInputDate(new Date()));
+  const [dailyStats, setDailyStats] = useState<any>(null);
+  const [dailyStatsLoading, setDailyStatsLoading] = useState(false);
+  const [salesAnalytics, setSalesAnalytics] = useState<{ labels: string[]; revenue: number[]; orders: number[] } | null>(null);
+  const [salesAnalyticsLoading, setSalesAnalyticsLoading] = useState(false);
 
   const [isEdit, setIsEdit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -150,13 +188,51 @@ const ScreenRestaurantDashboard = () => {
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
+  const fetchDailyStats = useCallback(async () => {
+    if (userRole !== "owner" && userRole !== "manager") return;
+    setDailyStatsLoading(true);
+    try {
+      const response = await axiosInstance.get("/api/daily-stats");
+      setDailyStats(response.data?.data || response.data);
+    } catch (err) {
+      console.error("Failed to load daily stats", err);
+    } finally {
+      setDailyStatsLoading(false);
+    }
+  }, [userRole]);
+
+  const fetchSalesAnalytics = useCallback(async () => {
+    if ((userRole !== "owner" && userRole !== "manager") || !selectedDate) return;
+    setSalesAnalyticsLoading(true);
+    try {
+      const startDate = new Date(`${selectedDate}T00:00:00.000`);
+      const endDate = new Date(`${selectedDate}T23:59:59.999`);
+      const response = await axiosInstance.get("/api/analytics/sales", {
+        params: {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        },
+      });
+      setSalesAnalytics(normalizeSalesAnalytics(response.data?.data || response.data));
+    } catch (err) {
+      console.error("Failed to load sales analytics", err);
+    } finally {
+      setSalesAnalyticsLoading(false);
+    }
+  }, [selectedDate, userRole]);
+
   // Trigger Analytics Fetch when filters change (Context handles the fetch)
   useEffect(() => {
     if (userRole === 'owner' || userRole === 'manager') {
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
+      fetchDailyStats();
     }
-  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, userRole]);
+  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, userRole]);
+
+  useEffect(() => {
+    fetchSalesAnalytics();
+  }, [fetchSalesAnalytics]);
 
   // Real-time Updates
   useEffect(() => {
@@ -176,9 +252,11 @@ const ScreenRestaurantDashboard = () => {
         // Re-fetch analytics on order/payment updates
         fetchAnalytics(timeRange, compareEnabled);
         fetchMostSellingItems();
+        fetchDailyStats();
+        fetchSalesAnalytics();
       }, 2000);
     }
-  }, [response, fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled]);
+  }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchSalesAnalytics, timeRange, compareEnabled]);
 
   // GUARANTEED POLLING FALLBACK — 60s refresh for analytics (heavier queries)
   useEffect(() => {
@@ -187,9 +265,10 @@ const ScreenRestaurantDashboard = () => {
       if (document.visibilityState !== "visible") return;
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
+      fetchDailyStats();
     }, 60000);
     return () => clearInterval(poll);
-  }, [fetchAnalytics, fetchMostSellingItems, timeRange, compareEnabled, userRole]);
+  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, timeRange, compareEnabled, userRole]);
 
   // NOTE: Initial Fetch is now handled by OwnerContext (Background Fetch)
   // We DO NOT fetch here on mount to avoid waterfall.
@@ -239,8 +318,29 @@ const ScreenRestaurantDashboard = () => {
 
 
   // Chart Data Preparation
-  const chartLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const chartValues = analytics?.current_year ? Object.values(analytics.current_year) as number[] : Array(12).fill(0);
+  const statsLoading = dailyStatsLoading || analyticsLoading;
+  const totalRevenue = toNumber(
+    dailyStats?.totalRevenue ||
+    dailyStats?.total_revenue ||
+    dailyStats?.revenue ||
+    analytics?.status?.total_revenue
+  );
+  const totalOrders = toNumber(
+    dailyStats?.totalOrders ||
+    dailyStats?.total_orders ||
+    dailyStats?.orders ||
+    dailyStats?.ordersCount ||
+    analytics?.status?.total_orders
+  );
+  const activeStaff = toNumber(dailyStats?.activeStaff || dailyStats?.active_staff || analytics?.status?.active_staff);
+  const averageOrderValue = toNumber(dailyStats?.averageOrderValue || dailyStats?.average_order_value || dailyStats?.aov);
+  const chartSource = salesAnalytics && salesAnalytics.labels.length > 0
+    ? salesAnalytics
+    : {
+      labels: analytics?.chart?.labels || [],
+      revenue: analytics?.chart?.revenue || [],
+      orders: analytics?.chart?.orders || [],
+    };
 
   const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSelected }: any) => {
     const [mode, setMode] = useState<'upload' | 'ai'>('upload');
@@ -339,24 +439,24 @@ const ScreenRestaurantDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Total Revenue"
-            value={analyticsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : `${currencyCode} ${analytics?.status?.total_revenue || 0}`}
+            value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : fmt(totalRevenue)}
             trend={`${analytics?.status?.weekly_growth || 0}%`}
             isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
-            subtext={analyticsLoading ? "" : "vs last week"}
+            subtext={statsLoading ? "" : averageOrderValue > 0 ? `AOV ${fmt(averageOrderValue)}` : "Live today"}
             icon={TrendingUp}
           />
           <MetricCard
             title="Total Orders"
-            value={analyticsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : (analytics?.status?.total_orders || 0)}
-            subtext={analyticsLoading ? "" : "Processed today"}
+            value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders}
+            subtext={statsLoading ? "" : "Processed today"}
             trend="12%"
             isPositive={true}
             icon={ShoppingBag}
           />
           <MetricCard
             title="Active Staff"
-            value={analyticsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : (analytics?.status?.active_staff || 0)}
-            subtext={analyticsLoading ? "" : "Currently online"}
+            value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeStaff}
+            subtext={statsLoading ? "" : "Currently online"}
             trend="0%"
             isPositive={true}
             icon={Users}
@@ -371,10 +471,20 @@ const ScreenRestaurantDashboard = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h3 className="text-lg font-bold text-slate-900">Revenue Analytics</h3>
-              <p className="text-sm text-slate-500">Track your restaurant performance over time</p>
+              <p className="text-sm text-slate-500">Track sales for the selected date using live analytics</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                <Calendar size={14} strokeWidth={1.8} />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="bg-transparent outline-none"
+                />
+              </label>
+
               {/* Compare Toggle */}
               <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors select-none bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
                 <input
@@ -393,14 +503,18 @@ const ScreenRestaurantDashboard = () => {
           </div>
 
           <div className="h-80 w-full">
-            <RevenueAnalyticsChart
-              labels={analytics?.chart?.labels || []}
-              data={analytics?.chart?.revenue || []}
-              orders={analytics?.chart?.orders || []}
-              comparisonData={analytics?.comparison?.revenue}
-              comparisonOrders={analytics?.comparison?.orders || []}
-              showComparison={compareEnabled}
-            />
+            {salesAnalyticsLoading ? (
+              <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-400">Loading sales analytics...</div>
+            ) : (
+              <RevenueAnalyticsChart
+                labels={chartSource.labels}
+                data={chartSource.revenue}
+                orders={chartSource.orders}
+                comparisonData={analytics?.comparison?.revenue}
+                comparisonOrders={analytics?.comparison?.orders || []}
+                showComparison={compareEnabled}
+              />
+            )}
           </div>
         </div>
       )}
@@ -479,7 +593,7 @@ const ScreenRestaurantDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">{currencyCode} {item.price}</td>
+                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">{fmt(item.price)}</td>
                       <td className="px-5 py-3">
                         <select
                           className={`h-7 pl-2 pr-6 text-[10px] font-medium rounded border appearance-none outline-none cursor-pointer bg-no-repeat bg-[right_0.4rem_center] transition-colors ${item.availability
