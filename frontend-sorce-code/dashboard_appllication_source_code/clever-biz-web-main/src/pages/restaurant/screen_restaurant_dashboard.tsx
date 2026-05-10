@@ -184,7 +184,7 @@ const ScreenRestaurantDashboard = () => {
   useEffect(() => {
     if (userRole !== 'owner' && userRole !== 'manager') return;
     const poll = setInterval(() => {
-      console.log("[ANALYTICS-POLL] Auto-refreshing analytics...");
+      if (document.visibilityState !== "visible") return;
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
     }, 60000);
@@ -225,7 +225,12 @@ const ScreenRestaurantDashboard = () => {
   }, [searchQuery]);
 
   useEffect(() => {
-    fetchFoodItems(currentPage, debouncedSearchQuery);
+    const isInitialMenuFetch = currentPage === 1 && debouncedSearchQuery === "";
+    const timer = window.setTimeout(
+      () => fetchFoodItems(currentPage, debouncedSearchQuery),
+      isInitialMenuFetch ? 900 : 0,
+    );
+    return () => window.clearTimeout(timer);
   }, [currentPage, debouncedSearchQuery, fetchFoodItems]);
 
 

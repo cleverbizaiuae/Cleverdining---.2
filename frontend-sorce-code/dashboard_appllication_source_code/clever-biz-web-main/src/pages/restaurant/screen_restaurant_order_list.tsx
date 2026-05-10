@@ -111,17 +111,14 @@ const ScreenRestaurantOrderList = () => {
     }
   }, [response, fetchOrders, ordersCurrentPage, ordersSearchQuery]);
 
-  // GUARANTEED POLLING FALLBACK — 5s refresh regardless of WS status
+  // WebSocket events handle fast updates; this is only a low-frequency safety net.
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState !== "visible") return;
       fetchOrders(ordersCurrentPage, ordersSearchQuery);
     };
 
-    const poll = setInterval(() => {
-      console.log("[ORDERS-POLL] Auto-refreshing orders...");
-      tick();
-    }, 5000);
+    const poll = setInterval(tick, 30000);
 
     const onVisible = () => {
       if (document.visibilityState === "visible") {

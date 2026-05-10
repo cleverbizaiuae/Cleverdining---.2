@@ -8,6 +8,7 @@ from .models import Restaurant, BrandConfig
 from device.models import Device
 from category.models import Category
 from item.models import Item
+from django.core.cache import cache
 from django.db.models import Prefetch
 from django.db import IntegrityError
 from accounts.models import User, ChefStaff
@@ -17,6 +18,12 @@ from .schema_guard import ensure_brand_config_schema
 
 # jwt
 from rest_framework.permissions import AllowAny
+
+BRAND_CONFIG_CACHE_SECONDS = 60
+
+
+def _brand_config_cache_key(restaurant_id):
+    return f"brand-config:v2:{restaurant_id}"
 
 
 def _brand_default_payload():
@@ -101,6 +108,12 @@ class BrandConfigAPIView(APIView):
 
     def get(self, request):
         try:
+            restaurant_id = request.query_params.get("restaurant_id")
+            if restaurant_id:
+                cached_payload = cache.get(_brand_config_cache_key(restaurant_id))
+                if cached_payload is not None:
+                    return Response(cached_payload, status=status.HTTP_200_OK)
+
             ensure_brand_config_schema()
             restaurant = _get_restaurant_for_brand_request(request, for_write=False)
             if not restaurant:
@@ -112,9 +125,15 @@ class BrandConfigAPIView(APIView):
                     "restaurant_name": restaurant.resturent_name or "My Restaurant",
                 },
             )
-            payload = BrandConfigSerializer(config).data
+            payload = dict(BrandConfigSerializer(config).data)
             if not payload.get("googleReviewUrl"):
                 payload["googleReviewUrl"] = restaurant.google_review_url
+            if restaurant_id:
+                cache.set(
+                    _brand_config_cache_key(restaurant_id),
+                    payload,
+                    BRAND_CONFIG_CACHE_SECONDS,
+                )
             return Response(payload, status=status.HTTP_200_OK)
         except Exception as exc:
             print(f"[BRAND-CONFIG] GET fallback due to schema/data error: {exc}")
@@ -146,8 +165,9 @@ class BrandConfigAPIView(APIView):
                 restaurant.google_review_url = google_review_url or None
                 restaurant.save(update_fields=["google_review_url"])
 
-            payload = BrandConfigSerializer(updated).data
+            payload = dict(BrandConfigSerializer(updated).data)
             payload["googleReviewUrl"] = restaurant.google_review_url
+            cache.delete(_brand_config_cache_key(restaurant.pk))
             return Response(payload, status=status.HTTP_200_OK)
         except serializers.ValidationError:
             raise

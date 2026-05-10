@@ -34,6 +34,7 @@ type BrandingSnapshot = {
 
 const BRAND_CACHE_KEY = "cb_brand_config_cache";
 const BRAND_BRIDGE_KEY = "customer_branding";
+const BRAND_REMOTE_REFRESH_MS = 60_000;
 
 export const DEFAULT_BRAND: BrandConfig = {
   restaurantName: "My Restaurant",
@@ -187,20 +188,34 @@ export function useBrandConfig(restaurantId?: string | number | null) {
     };
 
     fetchRemote();
-    const intervalId = window.setInterval(fetchRemote, 4_000);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchRemote();
+      }
+    }, BRAND_REMOTE_REFRESH_MS);
 
-    const handleStorageRefresh = () => {
+    const refreshFromLocalAndRemote = () => {
       syncFromCache();
       fetchRemote();
     };
 
-    window.addEventListener("storage", handleStorageRefresh);
-    window.addEventListener("branding-updated", handleStorageRefresh as EventListener);
+    const handleVisibilityRefresh = () => {
+      if (document.visibilityState === "visible") {
+        refreshFromLocalAndRemote();
+      }
+    };
+
+    window.addEventListener("storage", refreshFromLocalAndRemote);
+    window.addEventListener("branding-updated", refreshFromLocalAndRemote as EventListener);
+    window.addEventListener("focus", refreshFromLocalAndRemote);
+    document.addEventListener("visibilitychange", handleVisibilityRefresh);
     return () => {
       isMounted = false;
       window.clearInterval(intervalId);
-      window.removeEventListener("storage", handleStorageRefresh);
-      window.removeEventListener("branding-updated", handleStorageRefresh as EventListener);
+      window.removeEventListener("storage", refreshFromLocalAndRemote);
+      window.removeEventListener("branding-updated", refreshFromLocalAndRemote as EventListener);
+      window.removeEventListener("focus", refreshFromLocalAndRemote);
+      document.removeEventListener("visibilitychange", handleVisibilityRefresh);
     };
   }, [normalizedRestaurantId, syncFromCache]);
 
