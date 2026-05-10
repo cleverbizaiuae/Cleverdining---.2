@@ -90,3 +90,7 @@ src/
 Deployed on Netlify with automatic deployments from the main branch.
 
 Backend API is proxied through Netlify to avoid CORS issues (see `netlify.toml`).
+
+## Branding System
+
+See [`docs/BRANDING_SYSTEM.md`](../../../docs/BRANDING_SYSTEM.md) for the current end-to-end branding data flow across the Django backend, dashboard, and mobile customer app.
