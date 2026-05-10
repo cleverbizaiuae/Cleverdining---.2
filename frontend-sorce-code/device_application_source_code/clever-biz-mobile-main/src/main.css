@@ -1,6 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
 @import "tailwindcss";
 
+:root {
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --brand-primary: #0055FE;
+}
+
 /* Force Input Color Visibility */
 input,
 textarea,
@@ -11,10 +17,10 @@ select {
 
 
 @theme {
-  --color-primary: hsl(221 83% 53%);
+  --color-primary: hsl(var(--primary));
   --color-accent: hsl(221 83% 53%);
   --color-sidebar: #fdfdff;
-  --color-primary-text: #ffffff;
+  --color-primary-text: hsl(var(--primary-foreground));
   --color-background: hsl(210 20% 98%);
   --color-foreground: hsl(222 47% 11%);
   --color-secondary: hsl(210 40% 96.1%);

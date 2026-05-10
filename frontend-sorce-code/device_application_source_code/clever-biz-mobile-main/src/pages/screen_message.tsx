@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion } from "motion/react";
+import { useBrandConfig } from "@/lib/useBrandConfig";
 
 type Message = {
   id: number;
@@ -36,6 +37,8 @@ function MessagingUI() {
   const userInfoContent = userInfo ? JSON.parse(userInfo) : null;
   const device_id = userInfoContent?.user?.restaurants?.[0]?.device_id || null;
   const restaurant_id = userInfoContent?.user?.restaurants?.[0]?.id || null;
+  const brand = useBrandConfig(restaurant_id);
+  const hasWifiDetails = Boolean(brand.wifiName || brand.wifiPassword);
 
   // Removed local WebSocket event listener because Context handles it now.
 
@@ -178,6 +181,31 @@ function MessagingUI() {
       {/* 2. Message Area (Flex Grow) */}
       <div className="flex-1 overflow-y-auto w-full mx-auto bg-gray-50 px-4 scroll-smooth">
         <div className="flex flex-col space-y-4 max-w-3xl mx-auto py-4">
+          {hasWifiDetails && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-2 flex items-center gap-2">
+                <Wifi className="h-4 w-4 text-slate-400" strokeWidth={1.8} />
+                <span className="text-sm font-semibold text-slate-900">Guest WiFi</span>
+              </div>
+              {brand.wifiName && (
+                <div className="flex items-center justify-between gap-3 py-1">
+                  <span className="text-xs text-slate-500">Network</span>
+                  <span className="truncate text-xs font-semibold font-mono text-slate-800">
+                    {brand.wifiName}
+                  </span>
+                </div>
+              )}
+              {brand.wifiPassword && (
+                <div className="flex items-center justify-between gap-3 py-1">
+                  <span className="text-xs text-slate-500">Password</span>
+                  <span className="truncate text-xs font-semibold font-mono text-slate-800">
+                    {brand.wifiPassword}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center opacity-50 mt-10">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -232,16 +260,19 @@ function MessagingUI() {
                       {/* Action Cards (Only for Assistant messages with hasActions) */}
                       {!message.is_from_device && message.hasActions && (
                         <div className="flex flex-col gap-2 w-full">
-                          {/* WiFi Card */}
-                          <div className="bg-blue-50 rounded-xl p-2 flex items-center gap-2 border border-blue-100">
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600 shadow-sm shrink-0">
-                              <Wifi size={16} />
+                          {hasWifiDetails && (
+                            <div className="bg-blue-50 rounded-xl p-2 flex items-center gap-2 border border-blue-100">
+                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                                <Wifi size={16} />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-blue-600 font-medium text-xs">WiFi</span>
+                                <div className="font-mono font-bold text-gray-800 text-xs truncate">
+                                  {[brand.wifiName, brand.wifiPassword].filter(Boolean).join(" / ")}
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-blue-600 font-medium text-xs">WiFi:</span>
-                              <span className="font-mono font-bold text-gray-800 text-sm">Guest123</span>
-                            </div>
-                          </div>
+                          )}
 
                           {/* Social & Rating Buttons */}
                           <div className="flex gap-2 w-full">
