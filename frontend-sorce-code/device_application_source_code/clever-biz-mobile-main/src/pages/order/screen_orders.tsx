@@ -22,6 +22,11 @@ import { useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
 import { getSessionCurrencyCode } from "@/utils/regionSession";
 import { AnimatePresence, motion } from "motion/react";
+import {
+  getTableIdentity,
+  removeLocalStorageSynced,
+  setLocalStorageSynced,
+} from "@/lib/tableIdentity";
 
 type BackendOrderItem = {
   id?: number;
@@ -84,32 +89,6 @@ const CHWAZI_COLOR_NAMES: Record<string, string> = {
 
 const SECTION_LABEL_CLASS = "text-[11px] font-bold text-slate-400 uppercase tracking-widest";
 
-const getTableInfo = (): { tableNumber: string; tableLabel: string; deviceId: string | null } => {
-  try {
-    const raw = localStorage.getItem("userInfo");
-    if (!raw) return { tableNumber: "default", tableLabel: "Table", deviceId: null };
-
-    const parsed = JSON.parse(raw);
-    const restaurant = parsed?.user?.restaurants?.[0] || {};
-
-    const tableName = String(restaurant?.table_name || parsed?.table_name || "").trim();
-    const deviceId = String(
-      restaurant?.device_id || parsed?.table_id || parsed?.device_id || parsed?.user?.device_id || "",
-    ).trim();
-
-    const tableNumber = tableName || deviceId || "default";
-    const tableLabel = tableName || (deviceId ? `Table ${deviceId}` : "Table");
-
-    return {
-      tableNumber,
-      tableLabel,
-      deviceId: deviceId || null,
-    };
-  } catch {
-    return { tableNumber: "default", tableLabel: "Table", deviceId: null };
-  }
-};
-
 const toNumber = (value: unknown): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value === "string") {
@@ -146,18 +125,21 @@ const mapBackendOrder = (backendOrder: BackendOrder): Order => {
     price: toNumber(item.price),
   }));
 
+  const backendStatus = String(backendOrder.status || "pending").toLowerCase();
+
   return {
     id: `local-${backendOrder.id}`,
     backendId: String(backendOrder.id),
     items,
     total: toNumber(backendOrder.total_price),
     total_price: toNumber(backendOrder.total_price),
-    status: mapBackendStatus(String(backendOrder.status || "pending")),
+    status: mapBackendStatus(backendStatus),
     paymentStatus: String(backendOrder.payment_status || "unpaid").toLowerCase() === "paid" ? "Paid" : "Unpaid",
     payment_status: backendOrder.payment_status || "unpaid",
     timestamp: backendOrder.created_time || new Date().toISOString(),
     created_time: backendOrder.created_time,
     device_name: backendOrder.device_name,
+    shouldRemove: backendStatus === "cancelled" || backendStatus === "delivered" || backendStatus === "completed",
   };
 };
 
@@ -198,9 +180,10 @@ const ScreenOrders = () => {
   const { clearCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
 
-  const tableInfo = useMemo(() => getTableInfo(), []);
-  const ordersStorageKey = useMemo(() => `cleverbiz_orders_table_${tableInfo.tableNumber}`, [tableInfo.tableNumber]);
-  const treatKey = useMemo(() => `cb_treat_table_${tableInfo.tableNumber}`, [tableInfo.tableNumber]);
+  const tableInfo = useMemo(() => getTableIdentity(), []);
+  const ordersStorageKey = tableInfo.ordersStorageKey;
+  const treatKey = tableInfo.treatStorageKey;
+  const chatStorageKey = tableInfo.chatStorageKey;
 
   const [orders, setOrders] = useState<Order[]>(() => readStoredOrders(ordersStorageKey));
   const [loading, setLoading] = useState(orders.length === 0);
@@ -225,6 +208,7 @@ const ScreenOrders = () => {
   const [chosenPointerId, setChosenPointerId] = useState<number | null>(null);
   const hasActiveBackendOrdersRef = useRef(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const sessionClearedRef = useRef(false);
   const [highlightedOrderIds, setHighlightedOrderIds] = useState<Set<string>>(new Set());
 
   const chwaziPointersRef = useRef<Map<number, ChwaziPointer>>(new Map());
@@ -248,16 +232,16 @@ const ScreenOrders = () => {
   );
 
   const clearTreat = useCallback(() => {
-    localStorage.removeItem(treatKey);
+    removeLocalStorageSynced(treatKey);
     setTreat(null);
   }, [treatKey]);
 
   const setTreater = useCallback(
     (name: string) => {
       const value = { name, ts: Date.now() };
-      localStorage.setItem(treatKey, JSON.stringify(value));
+      setLocalStorageSynced(treatKey, JSON.stringify(value));
       setTreat(value);
-      toast.success(`${name} pays for everyone 🎉`);
+      toast.success(`${name} pays for everyone`);
     },
     [treatKey],
   );
@@ -267,8 +251,8 @@ const ScreenOrders = () => {
       if (event.key === treatKey) {
         setTreat(readStoredTreat(treatKey));
       }
-      if (event.key === ordersStorageKey && event.newValue) {
-        setOrders(readStoredOrders(ordersStorageKey));
+      if (event.key === ordersStorageKey) {
+        setOrders(event.newValue ? readStoredOrders(ordersStorageKey) : []);
       }
     };
 
@@ -277,6 +261,11 @@ const ScreenOrders = () => {
   }, [ordersStorageKey, treatKey]);
 
   useEffect(() => {
+    if (sessionClearedRef.current && orders.length === 0) {
+      localStorage.removeItem(ordersStorageKey);
+      sessionClearedRef.current = false;
+      return;
+    }
     localStorage.setItem(ordersStorageKey, JSON.stringify(orders));
   }, [orders, ordersStorageKey]);
 
@@ -340,7 +329,7 @@ const ScreenOrders = () => {
           payment_status: backendOrder.payment_status,
           timestamp: backendOrder.timestamp,
           created_time: backendOrder.created_time,
-          shouldRemove: false,
+          shouldRemove: backendOrder.shouldRemove,
         };
       });
 
@@ -624,12 +613,14 @@ const ScreenOrders = () => {
   };
 
   const clearSession = useCallback(async () => {
-    localStorage.removeItem(ordersStorageKey);
-    localStorage.removeItem("pending_order_id");
-    localStorage.removeItem("bulk_checkout");
+    removeLocalStorageSynced(ordersStorageKey);
+    removeLocalStorageSynced(chatStorageKey);
+    removeLocalStorageSynced("pending_order_id");
+    removeLocalStorageSynced("bulk_checkout");
+    sessionClearedRef.current = true;
     setOrders([]);
     await clearCart();
-  }, [clearCart, ordersStorageKey]);
+  }, [chatStorageKey, clearCart, ordersStorageKey]);
 
   const buildTipPayload = () => {
     if (tipAmount <= 0) return {};

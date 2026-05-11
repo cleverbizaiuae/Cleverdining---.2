@@ -25,6 +25,7 @@ import {
   markUpsellItemDismissed,
   trackUpsellCategoryDecline,
 } from "../lib/upsellSession";
+import { getTableIdentity, setLocalStorageSynced } from "../lib/tableIdentity";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -84,6 +85,7 @@ const ScreenCart = () => {
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const cartShownSignatureRef = useRef("");
   const beforePaymentShownSignatureRef = useRef("");
+  const tableInfo = useMemo(() => getTableIdentity(), []);
   const toSafeNumber = (value: unknown): number => {
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
     if (typeof value === "string") {
@@ -514,10 +516,10 @@ const ScreenCart = () => {
           return safeName ? `[TIMING:${safeName}=${timingValue}]` : "";
         })
         .filter(Boolean)
-        .join("");
+        .join(" ");
 
       const paymentTag = `[PAYMENT:${paymentMethod}]`;
-      const mergedNotes = `${specialRequest.trim()}${timingNotes}${paymentTag}`.trim();
+      const mergedNotes = [specialRequest.trim(), timingNotes, paymentTag].filter(Boolean).join(" ");
 
       const orderData: Record<string, unknown> = {
         restaurant,
@@ -584,6 +586,23 @@ const ScreenCart = () => {
       }));
 
       toast.success("Order placed successfully!");
+
+      try {
+        const { getPlayerSession } = await import("../lib/playerSession");
+        const player = getPlayerSession();
+        if (player?.phone && player?.name && player.name !== "Guest") {
+          const points = Math.max(1, Math.floor(totalCost));
+          await axiosInstance.post("/api/loyalty/earn", {
+            phone: player.phone,
+            name: player.name,
+            points,
+            description: `Order ${currencyCode} ${totalCost.toFixed(0)} - ${points} pts earned`,
+          });
+        }
+      } catch {
+        // Loyalty is non-blocking. Order placement must never fail because points failed.
+      }
+
       await clearCart();
       setItemTimings({});
       setSpecialRequest("");
@@ -597,10 +616,7 @@ const ScreenCart = () => {
       // Navigate to checkout with the new Order ID
       if (response.data && response.data.id) {
         // Prime local orders storage so Orders page updates instantly after navigation.
-        const tableName = String(userData?.user?.restaurants?.[0]?.table_name || userData?.table_name || "").trim();
-        const deviceId = String(userData?.user?.restaurants?.[0]?.device_id || userData?.table_id || userData?.device_id || "").trim();
-        const tableStorageId = tableName || deviceId || "default";
-        const ordersStorageKey = `cleverbiz_orders_table_${tableStorageId}`;
+        const ordersStorageKey = tableInfo.ordersStorageKey;
         const orderId = String(response.data.id);
         const pendingOrder = {
           id: `local-${orderId}`,
@@ -620,17 +636,17 @@ const ScreenCart = () => {
           if (Array.isArray(existingOrders)) {
             const alreadyExists = existingOrders.some((order: any) => String(order?.backendId || "") === orderId);
             if (!alreadyExists) {
-              localStorage.setItem(ordersStorageKey, JSON.stringify([pendingOrder, ...existingOrders]));
+              setLocalStorageSynced(ordersStorageKey, JSON.stringify([pendingOrder, ...existingOrders]));
             }
           } else {
-            localStorage.setItem(ordersStorageKey, JSON.stringify([pendingOrder]));
+            setLocalStorageSynced(ordersStorageKey, JSON.stringify([pendingOrder]));
           }
         } catch {
-          localStorage.setItem(ordersStorageKey, JSON.stringify([pendingOrder]));
+          setLocalStorageSynced(ordersStorageKey, JSON.stringify([pendingOrder]));
         }
 
         // Robust Persistence
-        localStorage.setItem("pending_order_id", String(response.data.id));
+        setLocalStorageSynced("pending_order_id", String(response.data.id));
         // Navigate to Orders Page (User requests this flow)
         navigate(`/dashboard/orders`);
       } else {

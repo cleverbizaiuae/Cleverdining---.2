@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from "react";
 import { captureWebSocketFailure } from "../monitoring/sentry";
+import { getTableIdentity, removeLocalStorageSynced, setLocalStorageSynced } from "../lib/tableIdentity";
 
 type WebSocketContextType = {
   ws: WebSocket | null;
@@ -29,6 +30,8 @@ interface WebSocketProviderProps {
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children,
 }) => {
+  const tableIdentity = React.useMemo(() => getTableIdentity(), []);
+  const chatStorageKey = tableIdentity.chatStorageKey;
   // We use a Ref for the active socket to avoid stale closure issues in callbacks (like connect/handleVisibilityChange)
   const wsRef = React.useRef<WebSocket | null>(null);
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -52,7 +55,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   // Initialize from LocalStorage
   const [messages, setMessages] = useState<any[]>(() => {
     try {
-      const saved = localStorage.getItem("chat_messages_cache");
+      const saved = localStorage.getItem(chatStorageKey) || localStorage.getItem("chat_messages_cache");
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -62,11 +65,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   // Persist on Change
   useEffect(() => {
     try {
-      localStorage.setItem("chat_messages_cache", JSON.stringify(messages));
+      setLocalStorageSynced(chatStorageKey, JSON.stringify(messages));
     } catch (e) {
       console.warn("Failed to persist chat messages", e);
     }
-  }, [messages]);
+  }, [chatStorageKey, messages]);
 
   const connect = React.useCallback(() => {
     const accessToken = localStorage.getItem("accessToken");
@@ -186,7 +189,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           localStorage.removeItem("guest_session_token");
           localStorage.removeItem("accessToken");
           localStorage.removeItem("pending_order_id");
-          localStorage.removeItem("chat_messages_cache"); // Clear Chat on Session End
+          removeLocalStorageSynced(chatStorageKey);
+          localStorage.removeItem("chat_messages_cache");
           window.location.href = "/login";
           return;
         }
@@ -196,6 +200,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           if (String(data.device_id) === String(device_id)) {
             console.log("Chat cleared by remote admin");
             setMessages([]);
+            removeLocalStorageSynced(chatStorageKey);
             localStorage.removeItem("chat_messages_cache");
             return;
           }

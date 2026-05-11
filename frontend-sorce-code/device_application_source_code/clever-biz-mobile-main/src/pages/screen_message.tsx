@@ -1,4 +1,4 @@
-import { FormEvent, useState, useEffect, useRef } from "react";
+import { FormEvent, useState, useEffect, useMemo, useRef } from "react";
 import { Bot, Send, Wifi, Instagram, Star, ChevronLeft, User, Phone } from "lucide-react";
 import { Footer } from "../components/Footer";
 import axiosInstance from "../lib/axios";
@@ -9,6 +9,7 @@ import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion } from "motion/react";
 import { useBrandConfig } from "@/lib/useBrandConfig";
+import { getTableIdentity } from "@/lib/tableIdentity";
 
 type Message = {
   id: number;
@@ -39,6 +40,7 @@ function MessagingUI() {
   const restaurant_id = userInfoContent?.user?.restaurants?.[0]?.id || null;
   const brand = useBrandConfig(restaurant_id);
   const hasWifiDetails = Boolean(brand.wifiName || brand.wifiPassword);
+  const tableIdentity = useMemo(() => getTableIdentity(), []);
 
   // Removed local WebSocket event listener because Context handles it now.
 
@@ -100,26 +102,44 @@ function MessagingUI() {
     }
   }, [messages]); // Scrolls whenever global messages update
 
-  const handleSubmit = (e: FormEvent<HTMLElement>) => {
-    e.preventDefault();
-    if (!inputValue.trim()) return;
+  const persistTableMessage = (text: string, type: "chat" | "assistance") => {
+    axiosInstance.post("/api/table-messages", {
+      tableNumber: tableIdentity.tableNumber,
+      tableName: tableIdentity.tableName,
+      type,
+      message: text,
+      status: "pending",
+    }).catch(() => {
+      // WebSocket already queued the message. Do not block or roll back the customer bubble.
+    });
+  };
 
+  const handleSend = (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+    const type = /assist|waiter|call/i.test(cleanText) ? "assistance" : "chat";
     try {
-      sendMessage(inputValue);
+      sendMessage(cleanText, type);
       // Optimistically add message to Global State
       setMessages((prev) => [
         ...prev,
         {
-          id: prev.length + 1,
+          id: Date.now(),
           is_from_device: true,
-          text: inputValue,
+          text: cleanText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         },
       ]);
       setInputValue("");
+      persistTableMessage(cleanText, type);
     } catch {
       toast.error("Failed to send message");
     }
+  };
+
+  const handleSubmit = (e: FormEvent<HTMLElement>) => {
+    e.preventDefault();
+    handleSend(inputValue);
   };
 
   const presetMessages = [
@@ -130,7 +150,7 @@ function MessagingUI() {
   ];
 
   const handlePresetClick = (msg: string) => {
-    setInputValue(msg);
+    handleSend(msg);
   };
 
   return (
@@ -332,10 +352,10 @@ function MessagingUI() {
 
               <button
                 type="submit"
-                disabled={!inputValue.trim() || ws?.readyState !== WebSocket.OPEN}
+                disabled={!inputValue.trim()}
                 className={cn(
                   "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200",
-                  inputValue.trim() && ws?.readyState === WebSocket.OPEN
+                  inputValue.trim()
                     ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
                     : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 )}
