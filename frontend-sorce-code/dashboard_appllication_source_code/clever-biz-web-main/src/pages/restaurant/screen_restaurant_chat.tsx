@@ -24,13 +24,31 @@ interface ChatRoomItem {
   unread_count?: number;
   active_guest_session_id?: string | number;
   last_message_time?: string;
+  has_alert?: boolean;
+  source?: "device" | "table-message";
 }
 
 interface Message {
+  id?: string | number;
   message: string;
   sender: string;
   timestamp: string | number;
   is_from_device: boolean;
+  status?: string;
+  type?: string;
+}
+
+interface TableMessage {
+  id: string | number;
+  tableNumber?: number;
+  table_number?: number;
+  tableName?: string;
+  table_name?: string;
+  type?: string;
+  message?: string;
+  status?: string;
+  createdAt?: string;
+  created_at?: string;
 }
 
 // Utility for formatting time in Gulf Standard Time (GMT+4)
@@ -54,6 +72,103 @@ const ScreenRestaurantChat = () => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showClearChatModal, setShowClearChatModal] = useState(false);
+
+  const mergeTableMessages = (rows: TableMessage[]) => {
+    const grouped = new Map<string, { chat: ChatRoomItem; messages: Message[] }>();
+
+    rows.forEach((row) => {
+      const tableNumber = Number(row.tableNumber ?? row.table_number ?? 0);
+      const tableName = String(row.tableName || row.table_name || (tableNumber ? `Table ${tableNumber}` : "Table"));
+      const key = tableNumber ? `table-${tableNumber}` : `table-${tableName}`;
+      const createdAt = row.createdAt || row.created_at || new Date().toISOString();
+      const status = String(row.status || "").toLowerCase();
+      const type = String(row.type || "chat").toLowerCase();
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          chat: {
+            id: key,
+            table_name: tableName,
+            user_id: "",
+            restaurant_id: "",
+            unread_count: 0,
+            last_message_time: createdAt,
+            has_alert: false,
+            source: "table-message",
+          },
+          messages: [],
+        });
+      }
+
+      const entry = grouped.get(key)!;
+      entry.messages.push({
+        id: row.id,
+        message: String(row.message || ""),
+        sender: "customer",
+        timestamp: createdAt,
+        is_from_device: true,
+        status,
+        type,
+      });
+
+      if (status === "pending" || status === "unread") {
+        entry.chat.unread_count = Number(entry.chat.unread_count || 0) + 1;
+      }
+      if (type === "assistance" || type === "call_waiter") {
+        entry.chat.has_alert = true;
+      }
+      if (new Date(createdAt).getTime() > new Date(entry.chat.last_message_time || 0).getTime()) {
+        entry.chat.last_message_time = createdAt;
+      }
+    });
+
+    setMessageCache((prev) => {
+      const next = { ...prev };
+      grouped.forEach((entry, key) => {
+        next[key] = entry.messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      });
+      return next;
+    });
+
+    setChatList((prev) => {
+      const nonTableChats = prev.filter((chat) => chat.source !== "table-message" && !String(chat.id).startsWith("table-"));
+      const tableChats = Array.from(grouped.values()).map((entry) => entry.chat);
+      return [...tableChats, ...nonTableChats].sort((a, b) => {
+        if (a.has_alert && !b.has_alert) return -1;
+        if (!a.has_alert && b.has_alert) return 1;
+        return Number(b.unread_count || 0) - Number(a.unread_count || 0);
+      });
+    });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchTableMessages = async () => {
+      try {
+        const { data } = await axiosInstance.get("/api/table-messages");
+        if (cancelled) return;
+        const rows: TableMessage[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.messages)
+            ? data.messages
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+        mergeTableMessages(rows);
+      } catch {
+        // Existing WebSocket chat remains primary if this compatibility endpoint is unavailable.
+      }
+    };
+
+    fetchTableMessages();
+    const interval = window.setInterval(fetchTableMessages, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   // 1. Fetch Chat List (Tables)
   useEffect(() => {
@@ -302,6 +417,10 @@ const ScreenRestaurantChat = () => {
       setMessages([]); // Clear if no cache to prevent showing wrong chat
     }
 
+    if (selectedChat.source === "table-message") {
+      return;
+    }
+
     const fetchHistory = async () => {
       try {
         const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
@@ -335,7 +454,26 @@ const ScreenRestaurantChat = () => {
   }, [messages]);
 
   const handleSend = () => {
-    if (!inputText.trim() || !socket || socket.readyState !== WebSocket.OPEN || !selectedChat) return;
+    if (!inputText.trim() || !selectedChat) return;
+
+    if (selectedChat.source === "table-message") {
+      const staffMessage: Message = {
+        id: `staff-${Date.now()}`,
+        message: inputText,
+        sender: "me",
+        timestamp: Date.now(),
+        is_from_device: false,
+      };
+      setMessages(prev => [...prev, staffMessage]);
+      setMessageCache(prev => ({
+        ...prev,
+        [selectedChat.id]: [...(prev[selectedChat.id] || []), staffMessage],
+      }));
+      setInputText("");
+      return;
+    }
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
     const payload = {
       type: "message",
@@ -531,7 +669,8 @@ const ScreenRestaurantChat = () => {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
-                        <span className={cn("text-xs font-bold truncate", isActive && !isSelectionMode ? "text-[#0055FE]" : "text-slate-900")}>
+                        <span className={cn("text-xs font-bold truncate flex items-center gap-1.5", isActive && !isSelectionMode ? "text-[#0055FE]" : "text-slate-900")}>
+                          {chat.has_alert && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
                           {chat.table_name}
                         </span>
                         {/* Unread Badge */}

@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../lib/axios";
 import { resetUpsellSession, trackUpsellCategoryRemoved } from "../lib/upsellSession";
+import { TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
+
+export { TABLE_NAME, TABLE_NUMBER };
 
 export type CartItem = {
   id: number;
