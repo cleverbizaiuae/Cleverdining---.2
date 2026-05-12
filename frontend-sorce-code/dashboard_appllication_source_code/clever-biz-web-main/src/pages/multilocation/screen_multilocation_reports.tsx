@@ -12,6 +12,7 @@ import {
   EyeTooltip,
   GroupedBars,
   HorizontalRevenueChart,
+  SummaryCard,
   formatCurrency,
   formatPercent,
 } from "./components";
@@ -67,6 +68,16 @@ export default function ScreenMultiLocationReports() {
             Export CSV
           </button>
         </div>
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <SummaryCard title="Total Revenue" value={formatCurrency(summary.total_revenue)} featured />
+        <SummaryCard title="Total Orders" value={summary.total_orders.toLocaleString("en-US")} />
+        <SummaryCard
+          title="Average Order Value"
+          value={formatCurrency(summary.total_orders ? summary.total_revenue / summary.total_orders : 0)}
+        />
+        <SummaryCard title="Total Staff" value={`${summary.total_staff}`} />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">

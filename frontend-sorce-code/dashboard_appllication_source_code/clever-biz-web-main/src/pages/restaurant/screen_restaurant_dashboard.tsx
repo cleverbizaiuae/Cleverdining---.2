@@ -55,8 +55,8 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
 
 // 1. METRIC CARDS
 // Spec: Left: Title (slate-500), Value (slate-900), Change (green/red). Right: Icon (Royal Blue) in container (bg-[#0055FE]/10)
-const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = true }: any) => (
-  <div className="bg-white p-5 rounded-lg border border-slate-200 flex justify-between items-start">
+const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = true, featured = false }: any) => (
+  <div className={`bg-white ${featured ? "p-7 min-h-[132px]" : "p-5"} rounded-lg border border-slate-200 flex justify-between items-start`}>
     <div>
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{title}</p>
       <h3 className="text-2xl font-semibold text-slate-900 mb-1">{value}</h3>
@@ -444,6 +444,7 @@ const ScreenRestaurantDashboard = () => {
             isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
             subtext={statsLoading ? "" : averageOrderValue > 0 ? `AOV ${fmt(averageOrderValue)}` : "Live today"}
             icon={TrendingUp}
+            featured
           />
           <MetricCard
             title="Total Orders"

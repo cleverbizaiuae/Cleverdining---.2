@@ -165,7 +165,7 @@ const SuperAdminLayout = () => {
                             </div>
                             <div className="relative p-0.5 rounded-full bg-gradient-to-tr from-[#0055FE] to-cyan-400">
                                 <div className="bg-white rounded-full p-0.5">
-                                    <UserCircle className="w-8 h-8 text-slate-300" />
+                                    <UserCircle className="w-8 h-8 text-slate-300" strokeWidth={1.8} />
                                 </div>
                             </div>
                         </div>

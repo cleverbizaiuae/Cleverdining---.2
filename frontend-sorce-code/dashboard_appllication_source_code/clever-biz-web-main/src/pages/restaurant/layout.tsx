@@ -14,7 +14,7 @@ import {
   Menu,
   X,
   ScanQrCode,
-  Sparkles,
+  BrainCircuit,
   Paintbrush,
   ChevronLeft,
   ChevronRight,
@@ -69,7 +69,7 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: ScanQrCode, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Paintbrush, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
-  { icon: Sparkles, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: BrainCircuit, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: ContactRound, label: 'Customers', path: '/crm', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
 

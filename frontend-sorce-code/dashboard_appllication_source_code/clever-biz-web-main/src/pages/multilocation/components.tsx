@@ -53,7 +53,7 @@ export function SummaryCard({
   featured?: boolean;
 }) {
   return (
-    <div className={`bg-white border border-slate-200 rounded-2xl ${featured ? "p-7 md:p-8" : "p-5"}`}>
+    <div className={`bg-white border border-slate-200 rounded-2xl ${featured ? "p-8 md:p-10 min-h-[156px]" : "p-5"}`}>
       <p className="text-xs text-slate-500 uppercase tracking-wider">{title}</p>
       <p className={`${featured ? "text-4xl md:text-5xl mt-4" : "text-3xl mt-3"} font-bold text-slate-900`}>{value}</p>
     </div>
