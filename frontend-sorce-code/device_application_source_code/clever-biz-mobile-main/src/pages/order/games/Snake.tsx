@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import axiosInstance from "../../../lib/axios";
+import { getPlayerSession } from "../../../lib/playerSession";
+import { getTableIdentity } from "../../../lib/tableIdentity";
 
 const GRID_SIZE = 20;
 const CELL_SIZE = 15;
@@ -15,6 +18,7 @@ export const Snake = ({ onBack }: { onBack: () => void }) => {
     const [score, setScore] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
+    const submittedScoreRef = useRef(false);
 
     const generateFood = () => {
         const x = Math.floor(Math.random() * GRID_SIZE);
@@ -29,6 +33,7 @@ export const Snake = ({ onBack }: { onBack: () => void }) => {
         setGameOver(false);
         setScore(0);
         setIsPlaying(true);
+        submittedScoreRef.current = false;
     };
 
     useEffect(() => {
@@ -41,6 +46,23 @@ export const Snake = ({ onBack }: { onBack: () => void }) => {
             if (gameLoopRef.current) clearInterval(gameLoopRef.current);
         };
     }, [isPlaying, gameOver, snake, direction]);
+
+    useEffect(() => {
+        if (!gameOver || submittedScoreRef.current) return;
+        submittedScoreRef.current = true;
+
+        const player = getPlayerSession();
+        const table = getTableIdentity();
+        void axiosInstance.post("/api/game/score", {
+            playerName: player?.name || "Guest",
+            ...(player?.phone ? { phone: player.phone } : {}),
+            score,
+            gameType: "snake",
+            ...(table.restaurantId ? { restaurantId: table.restaurantId } : {}),
+        }).catch(() => {
+            // Scoring must not interrupt the game-over flow.
+        });
+    }, [gameOver, score]);
 
     const moveSnake = () => {
         const newHead = [

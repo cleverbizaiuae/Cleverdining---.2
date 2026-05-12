@@ -596,6 +596,9 @@ const ScreenCart = () => {
             phone: player.phone,
             name: player.name,
             points,
+            orderId: response?.data?.id,
+            restaurantId: tableInfo.restaurantId,
+            amount: totalCost,
             description: `Order ${currencyCode} ${totalCost.toFixed(0)} - ${points} pts earned`,
           });
         }

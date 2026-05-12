@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, RefreshCw, Trophy } from 'lucide-react';
 import { motion } from 'motion/react';
+import axiosInstance from '../../../lib/axios';
+import { getPlayerSession } from '../../../lib/playerSession';
+import { getTableIdentity } from '../../../lib/tableIdentity';
 
 interface FlappyBirdProps {
     onBack: () => void;
@@ -11,6 +14,7 @@ export const FlappyBird: React.FC<FlappyBirdProps> = ({ onBack }) => {
     const [gameState, setGameState] = useState<'start' | 'playing' | 'gameover'>('start');
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(0);
+    const submittedScoreRef = useRef(false);
 
     // Game constants
     // Adjusted Game constants for better playability
@@ -31,6 +35,23 @@ export const FlappyBird: React.FC<FlappyBirdProps> = ({ onBack }) => {
             localStorage.setItem('flappy_highscore', score.toString());
         }
     }, [score]);
+
+    useEffect(() => {
+        if (gameState !== 'gameover' || submittedScoreRef.current) return;
+        submittedScoreRef.current = true;
+
+        const player = getPlayerSession();
+        const table = getTableIdentity();
+        void axiosInstance.post('/api/game/score', {
+            playerName: player?.name || 'Guest',
+            ...(player?.phone ? { phone: player.phone } : {}),
+            score,
+            gameType: 'flappybird',
+            ...(table.restaurantId ? { restaurantId: table.restaurantId } : {}),
+        }).catch(() => {
+            // Score persistence is additive; gameplay remains usable if CRM fails.
+        });
+    }, [gameState, score]);
 
     useEffect(() => {
         if (gameState !== 'playing') return;
@@ -189,6 +210,7 @@ export const FlappyBird: React.FC<FlappyBirdProps> = ({ onBack }) => {
     const startGame = () => {
         setScore(0);
         setGameState('playing');
+        submittedScoreRef.current = false;
     };
 
     return (

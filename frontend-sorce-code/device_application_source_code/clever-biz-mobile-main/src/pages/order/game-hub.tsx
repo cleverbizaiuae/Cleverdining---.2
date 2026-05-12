@@ -6,6 +6,7 @@ import { Connect4 } from "./games/Connect4";
 import { TicTacToe } from "./games/TicTacToe";
 import { FlappyBird } from "./games/FlappyBird";
 import Chwazi from "./games/Chwazi";
+import { getPlayerSession, setPlayerSession } from "../../lib/playerSession";
 
 type GameId = "chwazi" | "snake" | "connect4" | "tictactoe" | "flappybird";
 
@@ -16,6 +17,10 @@ interface GameHubProps {
 
 export const GameHub = ({ onBack, onChosenTreater }: GameHubProps) => {
   const [activeGame, setActiveGame] = useState<GameId | null>(null);
+  const currentPlayer = getPlayerSession();
+  const [playerName, setPlayerName] = useState(currentPlayer?.name || "");
+  const [playerPhone, setPlayerPhone] = useState(currentPlayer?.phone || "");
+  const [profileSaved, setProfileSaved] = useState(Boolean(currentPlayer?.name));
 
   const games: Array<{ id: GameId; name: string; description: string; color: string }> = [
     {
@@ -69,6 +74,16 @@ export const GameHub = ({ onBack, onChosenTreater }: GameHubProps) => {
     return null;
   };
 
+  const savePlayerProfile = () => {
+    const name = playerName.trim();
+    if (!name) return;
+    setPlayerSession({
+      name,
+      ...(playerPhone.trim() ? { phone: playerPhone.trim() } : {}),
+    });
+    setProfileSaved(true);
+  };
+
   if (activeGame) {
     return <div className="flex-1 min-h-0">{renderGame()}</div>;
   }
@@ -93,6 +108,40 @@ export const GameHub = ({ onBack, onChosenTreater }: GameHubProps) => {
       <div className="p-4 overflow-y-auto">
         <h3 className="text-lg font-semibold mb-1">Game Hub</h3>
         <p className="text-xs text-slate-400 mb-4">Play while your order is being prepared.</p>
+
+        <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div className="mb-3">
+            <p className="text-sm font-semibold text-white">Player profile</p>
+            <p className="text-xs text-slate-400">Save a name and optional phone number to link scores and loyalty points to your customer profile.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+            <input
+              value={playerName}
+              onChange={(event) => {
+                setPlayerName(event.target.value);
+                setProfileSaved(false);
+              }}
+              placeholder="Your name"
+              className="h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-400"
+            />
+            <input
+              value={playerPhone}
+              onChange={(event) => {
+                setPlayerPhone(event.target.value);
+                setProfileSaved(false);
+              }}
+              placeholder="Phone number"
+              className="h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-400"
+            />
+            <button
+              onClick={savePlayerProfile}
+              disabled={!playerName.trim()}
+              className="h-11 rounded-xl bg-indigo-500 px-4 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {profileSaved ? "Saved" : "Save"}
+            </button>
+          </div>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           {games.map((game) => (
