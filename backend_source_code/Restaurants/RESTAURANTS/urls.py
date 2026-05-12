@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/health/', health_check),
     path('api/brand-config', BrandConfigAPIView.as_view()),
     path('api/brand-config/', BrandConfigAPIView.as_view()),
+    path('api/', include('customer.intelligence_urls')),
     path('', include('accounts.urls')),
     path('adminapi/', include('adminapi.urls')),
     path('owners/', include('owners.urls')), # Main Restaurant Owner API
