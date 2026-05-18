@@ -140,12 +140,8 @@ export default function CheckoutButton({
         disabled={disabled || loading}
         className={`w-full px-4 py-3 rounded-lg font-bold text-lg shadow-md transition-all duration-300 transform active:scale-95
     ${disabled || loading
-            ? "bg-gray-400 cursor-not-allowed"
-            : provider === 'cash'
-              ? "bg-yellow-500 hover:bg-yellow-600 text-black border border-yellow-600"
-              : provider === 'payme'
-                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-              : "bg-green-600 hover:bg-green-700 text-white"
+            ? "bg-gray-400 cursor-not-allowed text-white"
+            : "bg-primary hover:bg-primary/90 text-white shadow-primary/20"
           }
   `}
       >

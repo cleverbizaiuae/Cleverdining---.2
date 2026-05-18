@@ -925,7 +925,7 @@ const ScreenCart = () => {
                       <p className="text-[11px] text-[#9B8D7B] leading-tight line-clamp-2">
                         {suggestion.upsell_message || "A starter to keep things going before the main arrives."}
                       </p>
-                      <p className="text-base font-bold text-[#4B2800] mt-1">
+                      <p className="text-base font-bold text-primary mt-1">
                         {currencyCode} {toSafeNumber(suggestion.price).toFixed(2)}
                       </p>
                     </div>
@@ -938,7 +938,7 @@ const ScreenCart = () => {
                       </button>
                       <button
                         onClick={() => addSuggestedItem(suggestion, "cart")}
-                        className="rounded-full bg-[#4B2800] text-white px-3.5 py-1.5 text-sm font-bold hover:bg-[#3F2200] transition-colors"
+                        className="rounded-full bg-primary text-white px-3.5 py-1.5 text-sm font-bold hover:bg-primary/90 transition-colors"
                       >
                         + Add
                       </button>
@@ -962,14 +962,14 @@ const ScreenCart = () => {
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#9B8D7B]">Total Cost</p>
-                <p className="text-[38px] leading-[1.02] font-black text-[#4B2800]">
+                <p className="text-[38px] leading-[1.02] font-black text-primary">
                   {currencyCode} {totalCost.toFixed(2)}
                 </p>
               </div>
             </div>
             <button
               onClick={() => setShowReviewModal(true)}
-              className="w-full bg-[#4B2800] text-white font-bold py-3 px-5 rounded-2xl shadow-lg shadow-[#4B2800]/30 hover:bg-[#3F2200] active:scale-95 transition-all flex items-center justify-between group"
+              className="w-full bg-primary text-white font-bold py-3 px-5 rounded-2xl shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-between group"
             >
               <span>Place Order</span>
               <span className="bg-white/20 px-3 py-1 rounded-lg group-hover:bg-white/30 transition-colors">
@@ -1145,7 +1145,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={handleOrderNow}
                 disabled={isSubmittingOrder}
-                className="w-full h-12 rounded-xl text-base font-bold shadow-lg shadow-primary/20 bg-[#4B2800] hover:bg-[#3e2100] text-white disabled:opacity-70 transition-colors"
+                className="w-full h-12 rounded-xl text-base font-bold shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white disabled:opacity-70 transition-colors"
               >
                 {isSubmittingOrder
                   ? "Placing Order..."

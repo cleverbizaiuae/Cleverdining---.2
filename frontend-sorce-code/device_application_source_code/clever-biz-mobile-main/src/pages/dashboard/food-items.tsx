@@ -101,7 +101,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
             </p>
 
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-blue-600 font-bold text-base">
+              <span className="text-primary font-bold text-base">
                 {currencyCode} {discountedPrice.toFixed(2)}
               </span>
               {discount > 0 && (
@@ -115,7 +115,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
           {/* Right Side: Add Button */}
           <div className="flex flex-col justify-center items-center h-full pl-2">
             <button
-              className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-colors shadow-sm"
+              className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 showFood(item.id);

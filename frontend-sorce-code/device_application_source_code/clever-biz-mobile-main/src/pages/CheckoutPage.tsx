@@ -400,8 +400,8 @@ export default function CheckoutPage() {
                   onClick={() => setSplitType(mode.key as SplitType)}
                   className={`rounded-lg px-2 py-2 text-xs font-semibold border transition-colors ${
                     splitType === mode.key
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-600 border-gray-200"
+                      ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-primary/40"
                   }`}
                 >
                   {mode.label}
@@ -481,7 +481,7 @@ export default function CheckoutPage() {
 
         {/* TIP SECTION */}
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 transition-all duration-300">
-          <h2 className="text-base font-semibold mb-2 text-blue-600 flex items-center gap-2">
+          <h2 className="text-base font-semibold mb-2 text-primary flex items-center gap-2">
             Add a Tip for the Staff 💛 <span className="text-xs text-gray-400 font-normal">(Optional)</span>
           </h2>
           {!tipApplicable && !isBulkCheckout && (
@@ -498,8 +498,8 @@ export default function CheckoutPage() {
                 disabled={!tipApplicable && !isBulkCheckout}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                           ${tipType === 'percentage' && tipValue === pct
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 transform scale-105'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
                   } ${(tipApplicable || isBulkCheckout) ? "" : "opacity-50 cursor-not-allowed"}`}
               >
                 {pct}%
@@ -510,8 +510,8 @@ export default function CheckoutPage() {
               disabled={!tipApplicable && !isBulkCheckout}
               className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                       ${(tipType === 'custom_amount' || tipType === 'custom_percentage')
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                  ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
                 } ${(tipApplicable || isBulkCheckout) ? "" : "opacity-50 cursor-not-allowed"}`}
             >
               Custom
@@ -526,7 +526,7 @@ export default function CheckoutPage() {
                 value={customInput}
                 onChange={(e) => handleCustomInput(e.target.value)}
                 placeholder={`${currencyCode} 0.00`}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 font-semibold text-gray-800"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-primary font-semibold text-gray-800"
               />
               {(customInput && tipAmount === 0 && customInput !== '') && (
                 <p className="text-xs text-red-500 mt-1">Invalid amount (Max 50% of subtotal)</p>
@@ -535,9 +535,9 @@ export default function CheckoutPage() {
           )}
 
           {effectiveTipAmount > 0 && (
-            <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
-              <span className="text-sm font-medium text-blue-800">Tip Added</span>
-              <span className="text-lg font-bold text-blue-900">{currencyCode} {effectiveTipAmount.toFixed(2)}</span>
+            <div className="flex justify-between items-center bg-primary/5 p-3 rounded-lg border border-primary/20">
+              <span className="text-sm font-medium text-primary">Tip Added</span>
+              <span className="text-lg font-bold text-primary">{currencyCode} {effectiveTipAmount.toFixed(2)}</span>
             </div>
           )}
         </div>
@@ -549,7 +549,7 @@ export default function CheckoutPage() {
           <div className="space-y-2">
             <label
               className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-              ${paymentMethod === 'card' ? 'border-green-500 bg-green-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+              ${paymentMethod === 'card' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
             `}
             >
               <input
@@ -558,7 +558,7 @@ export default function CheckoutPage() {
                 value="card"
                 checked={paymentMethod === 'card'}
                 onChange={() => setPaymentMethod('card')}
-                className="mr-3 h-5 w-5 text-green-600 focus:ring-green-500"
+                className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
               />
               <div className="flex-1">
                 <span className="font-semibold block text-gray-800">Pay by Card</span>
@@ -570,7 +570,7 @@ export default function CheckoutPage() {
             {isUkRestaurant && (
               <label
                 className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-                ${paymentMethod === 'payme' ? 'border-indigo-500 bg-indigo-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+                ${paymentMethod === 'payme' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
               `}
               >
                 <input
@@ -579,7 +579,7 @@ export default function CheckoutPage() {
                   value="payme"
                   checked={paymentMethod === 'payme'}
                   onChange={() => setPaymentMethod('payme')}
-                  className="mr-3 h-5 w-5 text-indigo-600 focus:ring-indigo-500"
+                  className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
                 />
                 <div className="flex-1">
                   <span className="font-semibold block text-gray-800">Pay by Bank</span>
@@ -597,7 +597,7 @@ export default function CheckoutPage() {
                   {walletAvailability.apple_pay_available && (
                     <label
                       className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-                      ${paymentMethod === 'apple_pay' ? 'border-black bg-gray-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+                      ${paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
                     `}
                     >
                       <input
@@ -606,7 +606,7 @@ export default function CheckoutPage() {
                         value="apple_pay"
                         checked={paymentMethod === 'apple_pay'}
                         onChange={() => setPaymentMethod('apple_pay')}
-                        className="mr-3 h-5 w-5 text-black focus:ring-gray-500"
+                        className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
                       />
                       <div className="flex-1">
                         <span className="font-semibold block text-gray-800">Apple Pay</span>
@@ -618,7 +618,7 @@ export default function CheckoutPage() {
                   {walletAvailability.google_pay_available && (
                     <label
                       className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-                      ${paymentMethod === 'google_pay' ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+                      ${paymentMethod === 'google_pay' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
                     `}
                     >
                       <input
@@ -627,7 +627,7 @@ export default function CheckoutPage() {
                         value="google_pay"
                         checked={paymentMethod === 'google_pay'}
                         onChange={() => setPaymentMethod('google_pay')}
-                        className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500"
+                        className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
                       />
                       <div className="flex-1">
                         <span className="font-semibold block text-gray-800">Google Pay</span>
@@ -642,7 +642,7 @@ export default function CheckoutPage() {
 
             <label
               className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-              ${paymentMethod === 'cash' ? 'border-yellow-500 bg-yellow-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}
+              ${paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
               ${(!isBulkCheckout && splitType !== 'full_bill') ? 'opacity-50 cursor-not-allowed' : ''}
             `}
             >
@@ -653,7 +653,7 @@ export default function CheckoutPage() {
                 checked={paymentMethod === 'cash'}
                 disabled={!isBulkCheckout && splitType !== 'full_bill'}
                 onChange={() => setPaymentMethod('cash')}
-                className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
+                className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
               />
               <div className="flex-1">
                 <span className="font-semibold block text-gray-800">Pay by Cash</span>

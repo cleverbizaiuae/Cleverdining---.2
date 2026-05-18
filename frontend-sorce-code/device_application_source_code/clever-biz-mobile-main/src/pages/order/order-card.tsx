@@ -126,12 +126,12 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
                   <span
                     className={cn(
                       "w-2 h-2 rounded-full transition-all",
-                      reached ? "bg-[#0055FE]" : "bg-slate-200",
+                      reached ? "bg-primary" : "bg-slate-200",
                       isCurrent ? "ring-2 ring-primary/20 animate-pulse" : "",
                     )}
                   />
                   {idx < steps.length - 1 && (
-                    <span className={cn("w-5 h-[2px] mx-1", idx < currentStepIndex ? "bg-[#0055FE]" : "bg-slate-200")} />
+                    <span className={cn("w-5 h-[2px] mx-1", idx < currentStepIndex ? "bg-primary" : "bg-slate-200")} />
                   )}
                 </div>
               );

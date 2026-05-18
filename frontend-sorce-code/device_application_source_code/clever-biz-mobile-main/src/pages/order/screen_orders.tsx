@@ -615,7 +615,6 @@ const ScreenOrders = () => {
   const clearSession = useCallback(async () => {
     removeLocalStorageSynced(ordersStorageKey);
     removeLocalStorageSynced(chatStorageKey);
-    removeLocalStorageSynced("pending_order_id");
     removeLocalStorageSynced("bulk_checkout");
     sessionClearedRef.current = true;
     setOrders([]);
@@ -648,6 +647,9 @@ const ScreenOrders = () => {
     const url: string | undefined = data?.url;
 
     if (url && paymentMethod !== "cash") {
+      if (tableInfo.restaurantId) {
+        setLocalStorageSynced("last_paid_restaurant_id", tableInfo.restaurantId);
+      }
       window.location.href = url;
       return;
     }
@@ -655,6 +657,9 @@ const ScreenOrders = () => {
     if (isPayingAll) {
       setIsPaymentSuccess(true);
       window.setTimeout(async () => {
+        if (tableInfo.restaurantId) {
+          setLocalStorageSynced("last_paid_restaurant_id", tableInfo.restaurantId);
+        }
         await clearSession();
         clearTreat();
         setIsCheckoutOpen(false);
@@ -880,7 +885,7 @@ const ScreenOrders = () => {
         <div className="bg-white border-t border-gray-100 px-4 pt-3 pb-3 shrink-0">
           <button
             onClick={openCheckoutDialog}
-            className="w-full h-[52px] rounded-2xl text-base font-bold shadow-lg shadow-primary/20 flex items-center justify-between px-5 py-4 bg-[#0055FE] text-white"
+            className="w-full h-[52px] rounded-2xl text-base font-bold shadow-lg shadow-primary/25 flex items-center justify-between px-5 py-4 bg-primary text-white transition-colors hover:bg-primary/90"
           >
             <span>Pay Now</span>
             <span>{fmt(fullSubtotal)}</span>
@@ -1134,7 +1139,7 @@ const ScreenOrders = () => {
                               onClick={() => setPaymentMethod(method.id as PaymentMethod)}
                               className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
                                 isActive
-                                  ? "border-slate-900 text-slate-900 bg-white"
+                                  ? "border-primary text-primary bg-primary/5 shadow-sm shadow-primary/15"
                                   : "border-slate-200 bg-white text-slate-400"
                               }`}
                             >
@@ -1162,7 +1167,7 @@ const ScreenOrders = () => {
                     <button
                       onClick={() => void processCheckout()}
                       disabled={isProcessingPayment || !canPay}
-                      className="w-full h-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20 bg-[#0055FE] text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full h-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/25 bg-primary text-white transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                     >
                       {isProcessingPayment
                         ? "Processing..."

@@ -12,6 +12,36 @@ import axiosInstance from "@/lib/axios";
 import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
 import logoImg from "@/assets/icon-32.png";
 
+const firstNonEmpty = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return null;
+};
+
+const resolveStoredRestaurantId = (): string | null => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    return firstNonEmpty(
+      parsed?.user?.restaurants?.[0]?.id,
+      parsed?.restaurants?.[0]?.id,
+      parsed?.restaurant?.id,
+      parsed?.restaurant_id,
+      parsed?.restaurantId,
+      localStorage.getItem("last_paid_restaurant_id"),
+      localStorage.getItem("restaurant_id"),
+      localStorage.getItem("restaurantId"),
+    );
+  } catch {
+    return firstNonEmpty(
+      localStorage.getItem("last_paid_restaurant_id"),
+      localStorage.getItem("restaurant_id"),
+      localStorage.getItem("restaurantId"),
+    );
+  }
+};
+
 const hexToRgba = (hex: string, alpha: number) => {
   const normalized = hex.replace("#", "");
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return `rgba(0, 85, 254, ${alpha})`;
@@ -25,9 +55,10 @@ const hexToRgba = (hex: string, alpha: number) => {
 const SuccessPage = () => {
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>("");
-  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [restaurantId, setRestaurantId] = useState<string | null>(() => resolveStoredRestaurantId());
   const [loading, setLoading] = useState(true);
   const [coverFailed, setCoverFailed] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const brand = useBrandConfig(restaurantId);
 
   // Cleanup function - clears ALL session-related state for complete isolation
@@ -37,6 +68,7 @@ const SuccessPage = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("pending_order_id");
     localStorage.removeItem("bulk_checkout");
+    localStorage.removeItem("last_paid_restaurant_id");
     // Clear chat/messages state for session isolation
     localStorage.removeItem("chat_messages_cache");
     localStorage.removeItem("newMessage");
@@ -125,6 +157,10 @@ const SuccessPage = () => {
     setCoverFailed(false);
   }, [brand.coverImageUrl]);
 
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [brand.logoUrl]);
+
   const handleGoogleReview = () => {
     if (!resolvedGoogleReviewUrl) {
       // No URL configured - don't do anything
@@ -181,13 +217,18 @@ const SuccessPage = () => {
         <div className="flex flex-1 flex-col items-center justify-center min-h-[calc(100vh-112px)] py-8">
           {/* Restaurant branding slot */}
           <div className="mb-5">
-            {brand.logoUrl ? (
-              <div className="h-20 w-20 mx-auto rounded-[1.25rem] border border-white/20 bg-white/12 p-1 shadow-2xl shadow-black/40 backdrop-blur-md flex items-center justify-center">
-                <img src={brand.logoUrl} alt={`${resolvedRestaurantName} logo`} className="h-full w-full object-contain" />
+            {brand.logoUrl && !logoFailed ? (
+              <div className="h-20 w-20 mx-auto rounded-full border border-white/20 bg-white/12 p-1 shadow-2xl shadow-black/40 backdrop-blur-md flex items-center justify-center">
+                <img
+                  src={brand.logoUrl}
+                  alt={`${resolvedRestaurantName} logo`}
+                  className="h-full w-full rounded-full object-contain"
+                  onError={() => setLogoFailed(true)}
+                />
               </div>
             ) : (
               <div
-                className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center shadow-2xl shadow-black/40"
+                className="h-20 w-20 mx-auto rounded-full flex items-center justify-center shadow-2xl shadow-black/40"
                 style={{
                   background: "rgba(255,255,255,0.14)",
                   backdropFilter: "blur(12px)",

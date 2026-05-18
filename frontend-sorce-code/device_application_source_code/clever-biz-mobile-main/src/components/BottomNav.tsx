@@ -47,7 +47,7 @@ export const BottomNav = () => {
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-bubble"
-                                    className="absolute inset-0 bg-blue-50 rounded-xl -z-10"
+                                    className="absolute inset-0 bg-primary/10 rounded-xl -z-10"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}

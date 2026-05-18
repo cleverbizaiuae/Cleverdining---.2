@@ -130,14 +130,14 @@ export default function UpsellBottomSheet({
                       </div>
 
                       <p className="mt-2 truncate text-sm font-semibold text-slate-900">{item.item_name}</p>
-                      <p className="mt-0.5 text-sm font-bold text-[#4B2800]">
+                      <p className="mt-0.5 text-sm font-bold text-primary">
                         {currencyCode} {toSafePrice(item.price).toFixed(2)}
                       </p>
 
                       <button
                         type="button"
                         onClick={() => onAccept(item)}
-                        className="mt-2 h-9 w-full rounded-xl bg-[#4B2800] text-sm font-semibold text-white hover:bg-[#3E2100]"
+                        className="mt-2 h-9 w-full rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary/90"
                       >
                         Add
                       </button>
@@ -172,7 +172,7 @@ export default function UpsellBottomSheet({
                       {primaryItem.upsell_message || "A smart add-on for this order."}
                     </p>
                     <p className="line-clamp-1 text-xs text-slate-400">{primaryItem.description || "Popular with this meal."}</p>
-                    <p className="mt-1 text-lg font-black text-[#4B2800]">
+                    <p className="mt-1 text-lg font-black text-primary">
                       {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
                     </p>
                   </div>
@@ -189,7 +189,7 @@ export default function UpsellBottomSheet({
                   <button
                     type="button"
                     onClick={() => onAccept(primaryItem)}
-                    className="h-10 flex-[1.9] rounded-xl bg-[#4B2800] px-4 text-sm font-semibold text-white hover:bg-[#3E2100]"
+                    className="h-10 flex-[1.9] rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
                   >
                     Add · {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
                   </button>

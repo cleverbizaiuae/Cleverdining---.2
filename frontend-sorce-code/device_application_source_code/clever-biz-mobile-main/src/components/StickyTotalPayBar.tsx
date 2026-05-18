@@ -67,8 +67,8 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
                 className="bg-white p-4 shadow-xl rounded-2xl border border-gray-100"
             >
                 <div className="flex justify-between items-center mb-4">
-                    <span className="text-gray-600 text-sm">Total Orders: <span className="font-bold text-blue-600">{unpaidOrders.length}</span></span>
-                    <span className="text-gray-600 text-sm">Total Cost: <span className="font-bold text-blue-600">{currencyCode} {totalAmount.toFixed(2)}</span></span>
+                    <span className="text-gray-600 text-sm">Total Orders: <span className="font-bold text-primary">{unpaidOrders.length}</span></span>
+                    <span className="text-gray-600 text-sm">Total Cost: <span className="font-bold text-primary">{currencyCode} {totalAmount.toFixed(2)}</span></span>
                 </div>
 
                 {allAwaitingCash ? (
@@ -80,7 +80,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
                 ) : (
                     <button
                         onClick={handlePayAll}
-                        className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-between group"
+                        className="w-full bg-primary text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-between group"
                     >
                         <span className="flex items-center gap-2">
                             Pay All
