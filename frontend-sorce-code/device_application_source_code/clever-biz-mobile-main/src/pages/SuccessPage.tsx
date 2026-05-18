@@ -190,8 +190,8 @@ const SuccessPage = () => {
             src={brand.coverImageUrl}
             alt=""
             aria-hidden="true"
-            className="fixed inset-0 h-full w-full object-cover opacity-55"
-            style={{ objectPosition: "center top" }}
+            className="fixed inset-0 h-full w-full object-cover"
+            style={{ objectPosition: "center top", opacity: 0.55 }}
             onError={() => setCoverFailed(true)}
           />
         </>
@@ -218,19 +218,26 @@ const SuccessPage = () => {
           {/* Restaurant branding slot */}
           <div className="mb-5">
             {brand.logoUrl && !logoFailed ? (
-              <div className="h-20 w-20 mx-auto rounded-full border border-white/20 bg-white/12 p-1 shadow-2xl shadow-black/40 backdrop-blur-md flex items-center justify-center">
+              <div
+                className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center p-1 shadow-2xl shadow-black/40"
+                style={{
+                  background: "rgba(255,255,255,0.12)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255,255,255,0.22)",
+                }}
+              >
                 <img
                   src={brand.logoUrl}
                   alt={`${resolvedRestaurantName} logo`}
-                  className="h-full w-full rounded-full object-contain"
+                  className="h-full w-full rounded-2xl object-contain"
                   onError={() => setLogoFailed(true)}
                 />
               </div>
             ) : (
               <div
-                className="h-20 w-20 mx-auto rounded-full flex items-center justify-center shadow-2xl shadow-black/40"
+                className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center shadow-2xl shadow-black/40"
                 style={{
-                  background: "rgba(255,255,255,0.14)",
+                  background: "rgba(255,255,255,0.12)",
                   backdropFilter: "blur(12px)",
                   border: "1px solid rgba(255,255,255,0.22)",
                 }}
