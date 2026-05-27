@@ -29,6 +29,23 @@ const MetricCard = ({ title, value, subtext }: any) => (
   </div>
 );
 
+const deriveTableNumber = (name: string) => {
+  const trimmed = name.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return (digits || trimmed).slice(0, 20);
+};
+
+const getApiErrorMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+  if (!data) return error?.message || fallback;
+  if (typeof data === "string") return data;
+  if (typeof data.detail === "string") return data.detail;
+  if (typeof data.error === "string") return data.error;
+  if (Array.isArray(data.table_name) && data.table_name[0]) return data.table_name[0];
+  if (typeof data.message === "string") return data.message;
+  return fallback;
+};
+
 const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-md" }: any) => {
   if (!isOpen) return null;
   return (
@@ -68,6 +85,7 @@ export const ScreenRestaurantDevices = () => {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [isEndSessionModalOpen, setIsEndSessionModalOpen] = useState(false);
   const [sessionToClose, setSessionToClose] = useState<number | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -114,6 +132,7 @@ export const ScreenRestaurantDevices = () => {
   const openEditModal = (device: any) => {
     setSelectedDevice(device);
     setFormData({ name: device.table_name || device.name || "", area: device.region || device.area || "Primary" });
+    setFormError(null);
     setIsEditModalOpen(true);
   };
 
@@ -129,6 +148,15 @@ export const ScreenRestaurantDevices = () => {
       toast.error("Table limit reached");
       return;
     }
+    const tableName = formData.name.trim();
+    const area = formData.area.trim() || "Primary";
+    if (!tableName) {
+      const message = "Please enter a table name.";
+      setFormError(message);
+      toast.error(message);
+      return;
+    }
+    setFormError(null);
     setLoading(true);
     try {
       const endpoint = "/owners/devices/"; // Device creation is centralized for owners/staff usually
@@ -136,13 +164,15 @@ export const ScreenRestaurantDevices = () => {
       // const endpoint = (userRole === "owner" || userRole === "staff") ? "/owners/devices/" : "/chef/devices/";
 
       await axiosInstance.post(endpoint, {
-        table_name: formData.name,
-        region: formData.area
+        table_name: tableName,
+        table_number: deriveTableNumber(tableName),
+        region: area
       });
       toast.success("Table created successfully");
       setIsAddModalOpen(false);
-      fetchAllDevices();
-      fetchDeviceStats();
+      setFormError(null);
+      setFormData({ name: "", area: "Primary" });
+      await Promise.all([fetchAllDevices(1, devicesSearchQuery), fetchDeviceStats()]);
     } catch (error: any) {
       console.error("Create failed", error);
       if (error.response?.status === 401) {
@@ -152,8 +182,7 @@ export const ScreenRestaurantDevices = () => {
         }, 1000);
         return;
       }
-      const errorMessage = error.response?.data?.detail || error.response?.data?.error || error.response?.data?.table_name?.[0] || "Failed to create table";
-      toast.error(errorMessage);
+      toast.error(getApiErrorMessage(error, "Failed to create table"));
     } finally {
       setLoading(false);
     }
@@ -161,15 +190,26 @@ export const ScreenRestaurantDevices = () => {
 
   const handleEditSubmit = async () => {
     if (!selectedDevice) return;
+    const tableName = formData.name.trim();
+    const area = formData.area.trim() || "Primary";
+    if (!tableName) {
+      const message = "Please enter a table name.";
+      setFormError(message);
+      toast.error(message);
+      return;
+    }
+    setFormError(null);
     setLoading(true);
     try {
       await axiosInstance.patch(`/owners/devices/${selectedDevice.id}/`, {
-        table_name: formData.name,
-        region: formData.area
+        table_name: tableName,
+        table_number: deriveTableNumber(tableName),
+        region: area
       });
       toast.success("Table updated successfully");
       setIsEditModalOpen(false);
-      fetchAllDevices();
+      setFormError(null);
+      await Promise.all([fetchAllDevices(devicesCurrentPage, devicesSearchQuery), fetchDeviceStats()]);
     } catch (error: any) {
       console.error("Update failed", error);
       if (error.response?.status === 401) {
@@ -177,8 +217,7 @@ export const ScreenRestaurantDevices = () => {
         setTimeout(() => { window.location.href = '/login'; }, 1000);
         return;
       }
-      const errorMessage = error.response?.data?.detail || error.response?.data?.table_name?.[0] || "Failed to update table";
-      toast.error(errorMessage);
+      toast.error(getApiErrorMessage(error, "Failed to update table"));
     } finally {
       setLoading(false);
     }
@@ -191,8 +230,7 @@ export const ScreenRestaurantDevices = () => {
       await axiosInstance.delete(`/owners/devices/${selectedDevice.id}/`);
       toast.success("Table deleted successfully");
       setIsDeleteModalOpen(false);
-      fetchAllDevices();
-      fetchDeviceStats();
+      await Promise.all([fetchAllDevices(devicesCurrentPage, devicesSearchQuery), fetchDeviceStats()]);
     } catch (error: any) {
       console.error("Delete failed", error);
       if (error.response?.status === 401) {
@@ -260,6 +298,7 @@ export const ScreenRestaurantDevices = () => {
                   return;
                 }
                 setFormData({ name: "", area: "Primary" });
+                setFormError(null);
                 setIsAddModalOpen(true);
               }}
               disabled={tableLimitReached}
@@ -287,8 +326,59 @@ export const ScreenRestaurantDevices = () => {
           </div>
         </div>
 
-        {/* Table View */}
-        <div className="overflow-x-auto">
+        {/* Mobile card view */}
+        <div className="divide-y divide-slate-100 sm:hidden">
+          {allDevices.length > 0 ? (
+            allDevices.map((device: any) => (
+              <div key={device.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{device.name || device.table_name}</p>
+                    <p className="text-xs text-slate-500">{device.region || "Primary"} area</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => openEditModal(device)} className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                      <Pencil size={16} />
+                    </button>
+                    <button onClick={() => openDeleteModal(device)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 border border-slate-100 p-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Link size={14} className="text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-500 truncate">{device.table_url}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => copyToClipboard(device.table_url, device.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#0055FE] text-[#0055FE] text-xs font-bold hover:bg-[#0055FE]/5 transition-colors"
+                  >
+                    {copiedId === device.id ? <Check size={14} /> : <Copy size={14} />}
+                    Copy Link
+                  </button>
+                  {device.active_session_id && (
+                    <button
+                      onClick={() => handleCloseSessionClick(device.active_session_id)}
+                      className="inline-flex items-center px-3 py-2 bg-blue-50 hover:bg-blue-100 text-[#0055FE] text-xs font-bold uppercase rounded-lg border border-blue-200 transition-colors"
+                    >
+                      End Session
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="px-6 py-12 text-center text-slate-400">No tables found</div>
+          )}
+        </div>
+
+        {/* Desktop table view */}
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-semibold tracking-wider border-b border-slate-200">
               <tr>
@@ -303,7 +393,7 @@ export const ScreenRestaurantDevices = () => {
                 allDevices.map((device: any) => (
                   <tr key={device.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-slate-900">{device.name || device.table_name}</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">Primary</td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">{device.region || "Primary"}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <span className="text-xs text-slate-400 truncate max-w-[200px]">
@@ -366,29 +456,57 @@ export const ScreenRestaurantDevices = () => {
       {/* Add/Edit Modal */}
       <Modal
         isOpen={isAddModalOpen || isEditModalOpen}
-        onClose={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); }}
+        onClose={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); setFormError(null); }}
         title={isEditModalOpen ? "Edit Table" : "Add Table"}
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Table Name</label>
-            <input
-              type="text"
-              placeholder="e.g. Table 1"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
+	          <div>
+	            <label className="block text-xs font-medium text-slate-700 mb-1">Table Name</label>
+	            <input
+	              type="text"
+	              placeholder="e.g. Table 1"
+	              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+	              value={formData.name}
+	              onChange={e => {
+	                setFormData({ ...formData, name: e.target.value });
+	                if (formError) setFormError(null);
+	              }}
+	              onKeyDown={e => {
+	                if (e.key === "Enter") {
+	                  e.preventDefault();
+	                  if (isEditModalOpen) {
+	                    handleEditSubmit();
+	                  } else {
+	                    handleCreateSubmit();
+	                  }
+	                }
+	              }}
+	            />
+	            {formError && (
+	              <p className="mt-1.5 text-xs font-medium text-red-600" role="alert">
+	                {formError}
+	              </p>
+	            )}
+	          </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Area</label>
-            <input
-              type="text"
-              placeholder="e.g. Main Hall"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
-              value={formData.area}
-              onChange={e => setFormData({ ...formData, area: e.target.value })}
-            />
+	            <input
+	              type="text"
+	              placeholder="e.g. Main Hall"
+	              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+	              value={formData.area}
+	              onChange={e => setFormData({ ...formData, area: e.target.value })}
+	              onKeyDown={e => {
+	                if (e.key === "Enter") {
+	                  e.preventDefault();
+	                  if (isEditModalOpen) {
+	                    handleEditSubmit();
+	                  } else {
+	                    handleCreateSubmit();
+	                  }
+	                }
+	              }}
+	            />
           </div>
           {isEditModalOpen && (
             <div>
@@ -419,10 +537,10 @@ export const ScreenRestaurantDevices = () => {
         </div>
       </Modal>
 
-      {/* Delete Modal */}
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Table" maxWidth="max-w-sm">
-        <div className="space-y-6">
-          <p className="text-slate-600">Are you sure you want to delete <span className="font-bold text-slate-900">{selectedDevice?.name}</span>? This action cannot be undone.</p>
+	      {/* Delete Modal */}
+	      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Table" maxWidth="max-w-sm">
+	        <div className="space-y-6">
+	          <p className="text-slate-600">Are you sure you want to delete <span className="font-bold text-slate-900">{selectedDevice?.table_name || selectedDevice?.name}</span>? This action cannot be undone.</p>
           <div className="flex gap-3">
             <button
               onClick={() => setIsDeleteModalOpen(false)}

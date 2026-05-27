@@ -1338,14 +1338,40 @@ export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
   const { fetchAllDevices, fetchDeviceStats, devicesSearchQuery, devicesCurrentPage } =
     useOwner();
 
+  const deriveTableNumber = (name: string) => {
+    const trimmed = name.trim();
+    const digits = trimmed.replace(/\D/g, "");
+    return (digits || trimmed).slice(0, 20);
+  };
+
+  const getErrorMessage = (error: any) => {
+    const data = error?.response?.data;
+    if (!data) return error?.message || "Failed to add table.";
+    if (typeof data === "string") return data;
+    if (typeof data.detail === "string") return data.detail;
+    if (typeof data.error === "string") return data.error;
+    if (Array.isArray(data.table_name) && data.table_name[0]) return data.table_name[0];
+    if (typeof data.message === "string") return data.message;
+    return "Failed to add table.";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedTableName = tableName.trim();
+    const normalizedRegion = region.trim() || "Primary";
+
+    if (!normalizedTableName) {
+      toast.error("Please enter a table name.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await axiosInstance.post("/owners/devices/", {
-        table_name: tableName,
-        region: region || "Primary", // Default to "Primary" if empty
+        table_name: normalizedTableName,
+        table_number: deriveTableNumber(normalizedTableName),
+        region: normalizedRegion,
       });
 
       console.log("Response:", response.data);
@@ -1364,7 +1390,7 @@ export const EditDeviceModal: React.FC<ModalProps> = ({ isOpen, close }) => {
       close();
     } catch (error) {
       console.error("Error adding table:", error);
-      toast.error("Failed to add table.");
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -1982,5 +2008,3 @@ export const NewAssistantModal: React.FC<TAssistantModalProps> = ({
     </Dialog>
   );
 };
-
-

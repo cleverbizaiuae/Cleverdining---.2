@@ -7,7 +7,6 @@ import {
   Star,
   Twitter,
 } from "lucide-react";
-import { motion } from "motion/react";
 import axiosInstance from "@/lib/axios";
 import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
 import logoImg from "@/assets/icon-32.png";
@@ -52,14 +51,59 @@ const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const useDecodedImage = (src: string | null) => {
+  const [state, setState] = useState({
+    readySrc: null as string | null,
+    failedSrc: null as string | null,
+  });
+
+  useEffect(() => {
+    if (!src) {
+      setState({ readySrc: null, failedSrc: null });
+      return;
+    }
+
+    let cancelled = false;
+    setState({ readySrc: null, failedSrc: null });
+
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = async () => {
+      try {
+        await image.decode?.();
+      } catch {
+        // Some browsers throw if decode is called after load; onload is enough.
+      }
+      if (!cancelled) {
+        setState({ readySrc: src, failedSrc: null });
+      }
+    };
+    image.onerror = () => {
+      if (!cancelled) {
+        setState({ readySrc: null, failedSrc: src });
+      }
+    };
+    image.src = src;
+
+    if (image.complete && image.naturalWidth > 0) {
+      image.onload?.(new Event("load"));
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return state;
+};
+
 const SuccessPage = () => {
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>("");
   const [restaurantId, setRestaurantId] = useState<string | null>(() => resolveStoredRestaurantId());
-  const [loading, setLoading] = useState(true);
-  const [coverFailed, setCoverFailed] = useState(false);
-  const [logoFailed, setLogoFailed] = useState(false);
   const brand = useBrandConfig(restaurantId);
+  const coverImage = useDecodedImage(brand.coverImageUrl);
+  const logoImage = useDecodedImage(brand.logoUrl);
 
   // Cleanup function - clears ALL session-related state for complete isolation
   const cleanupSession = () => {
@@ -111,8 +155,6 @@ const SuccessPage = () => {
         }
       } catch (error) {
         console.error("Failed to fetch restaurant info:", error);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -153,14 +195,6 @@ const SuccessPage = () => {
     [brand.facebookUrl, brand.instagramUrl, brand.tiktokUrl, brand.twitterUrl]
   );
 
-  useEffect(() => {
-    setCoverFailed(false);
-  }, [brand.coverImageUrl]);
-
-  useEffect(() => {
-    setLogoFailed(false);
-  }, [brand.logoUrl]);
-
   const handleGoogleReview = () => {
     if (!resolvedGoogleReviewUrl) {
       // No URL configured - don't do anything
@@ -177,22 +211,28 @@ const SuccessPage = () => {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
       <div className="fixed inset-0" style={{ background: backgroundGradient }} />
-      {brand.coverImageUrl && !coverFailed ? (
+      {coverImage.readySrc ? (
         <>
-          <img
-            src={brand.coverImageUrl}
-            alt={`${resolvedRestaurantName} cover`}
-            className="fixed inset-0 h-full w-full scale-[1.12] object-cover blur-[22px]"
+          <div
+            className="fixed inset-0 scale-[1.08] bg-cover bg-center opacity-80 blur-[14px] transition-opacity duration-500 sm:blur-[18px]"
             style={{ objectPosition: "center top" }}
-            onError={() => setCoverFailed(true)}
-          />
-          <img
-            src={brand.coverImageUrl}
-            alt=""
             aria-hidden="true"
-            className="fixed inset-0 h-full w-full object-cover"
+          >
+            <div
+              className="h-full w-full bg-cover bg-center"
+              style={{
+                backgroundImage: `url(${coverImage.readySrc})`,
+                backgroundPosition: "center top",
+              }}
+            />
+          </div>
+          <img
+            src={coverImage.readySrc}
+            alt={`${resolvedRestaurantName} cover`}
+            decoding="async"
+            fetchPriority="high"
+            className="fixed inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500"
             style={{ objectPosition: "center top", opacity: 0.55 }}
-            onError={() => setCoverFailed(true)}
           />
         </>
       ) : null}
@@ -208,16 +248,11 @@ const SuccessPage = () => {
         }}
       />
 
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.55 }}
-        className="relative z-10 flex min-h-screen w-full flex-col overflow-y-auto px-6 py-8 text-white"
-      >
+      <div className="relative z-10 flex min-h-screen w-full flex-col overflow-y-auto px-6 py-8 text-white">
         <div className="flex flex-1 flex-col items-center justify-center min-h-[calc(100vh-112px)] py-8">
           {/* Restaurant branding slot */}
           <div className="mb-5">
-            {brand.logoUrl && !logoFailed ? (
+            {logoImage.readySrc ? (
               <div
                 className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center p-1 shadow-2xl shadow-black/40"
                 style={{
@@ -227,10 +262,10 @@ const SuccessPage = () => {
                 }}
               >
                 <img
-                  src={brand.logoUrl}
+                  src={logoImage.readySrc}
                   alt={`${resolvedRestaurantName} logo`}
+                  decoding="async"
                   className="h-full w-full rounded-2xl object-contain"
-                  onError={() => setLogoFailed(true)}
                 />
               </div>
             ) : (
@@ -263,29 +298,27 @@ const SuccessPage = () => {
           </p>
 
           {/* Google Review Section */}
-          {!loading && (
-            <div className="w-full max-w-sm border border-white/15 bg-white/12 rounded-3xl p-4 mb-5 shadow-2xl shadow-black/20 backdrop-blur-md" data-testid="google-review-card">
-              <div className="flex items-center justify-center gap-1 mb-3">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <Star key={index} className="w-4 h-4 fill-amber-400 text-amber-400" strokeWidth={1.8} />
-                ))}
-              </div>
-              <p className="text-white/72 text-sm mb-4 text-center leading-relaxed">
-                Please leave a quick Google review and share your experience with others.
-              </p>
-              {resolvedGoogleReviewUrl && (
-                <button
-                  onClick={handleGoogleReview}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md hover:brightness-95 active:scale-[0.98]"
-                  style={{ backgroundColor: primaryColor }}
-                  data-testid="google-review-button"
-                >
-                  <span>Leave a Review on Google</span>
-                  <ExternalLink className="w-4 h-4" strokeWidth={1.8} />
-                </button>
-              )}
+          <div className="w-full max-w-sm border border-white/15 bg-white/12 rounded-3xl p-4 mb-5 shadow-2xl shadow-black/20 backdrop-blur-md" data-testid="google-review-card">
+            <div className="flex items-center justify-center gap-1 mb-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Star key={index} className="w-4 h-4 fill-amber-400 text-amber-400" strokeWidth={1.8} />
+              ))}
             </div>
-          )}
+            <p className="text-white/72 text-sm mb-4 text-center leading-relaxed">
+              Please leave a quick Google review and share your experience with others.
+            </p>
+            {resolvedGoogleReviewUrl && (
+              <button
+                onClick={handleGoogleReview}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md hover:brightness-95 active:scale-[0.98]"
+                style={{ backgroundColor: primaryColor }}
+                data-testid="google-review-button"
+              >
+                <span>Leave a Review on Google</span>
+                <ExternalLink className="w-4 h-4" strokeWidth={1.8} />
+              </button>
+            )}
+          </div>
 
           {/* Social links */}
           {socialLinks.length > 0 && (
@@ -319,7 +352,7 @@ const SuccessPage = () => {
           </div>
           <p className="text-xs text-white/40">Scan QR code to start a new session</p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

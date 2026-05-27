@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&family=David+Libre:wght@400;500;700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
 @import url("https://fonts.cdnfonts.com/css/sf-pro-display");
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -25,17 +24,22 @@
   --color-input: #202c4e;
   --color-footer: #e1e8ff;
   --color-checkmark: #7732ff;
-  --font-sans: "Roboto", system-ui, sans-serif;
-  --font-poppins: "Poppins", system-ui, sans-serif;
-  --font-david: "David Libre", system-ui, sans-serif;
-  --font-inter: "Inter", "Poppins", system-ui, sans-serif;
-  --font-sf-pro: "SF Pro Display", "Poppins", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-poppins: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-david: "Playfair Display", Georgia, serif;
+  --font-inter: "Inter", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sf-pro: "SF Pro Display", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --content-x-offset: calc(var(--spacing) * 8);
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     background-color: #242424;
     color: var(--color-primary-text);
   }
@@ -217,6 +221,238 @@
   &::before {
     @apply content-[''] absolute top-0 left-0 w-full h-[1025px] z-[48] bg-gradient-to-br from-container-start to-container-end;
   }
+}
+
+/* Admin typography system.
+   Applied by the admin shells so restaurant, multi-location, and super-admin
+   pages share the same size/weight scale without touching customer pages. */
+.admin-typography {
+  font-family: var(--font-inter);
+  font-size: 14px;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.admin-typography :where(h1),
+.admin-page-title {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+@media (min-width: 640px) {
+  .admin-typography :where(h1),
+  .admin-page-title {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+}
+
+.admin-typography :where(h2, h3),
+.admin-section-title {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.admin-dialog-title {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+}
+
+.admin-drawer-title {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+}
+
+.admin-kpi-number {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.admin-kpi-number-strong {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 640px) {
+  .admin-kpi-number,
+  .admin-kpi-number-strong {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+}
+
+.admin-metric-number {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+@media (min-width: 640px) {
+  .admin-metric-number {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+}
+
+.admin-metric-label {
+  font-size: 11px;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-metric-subtext,
+.admin-description,
+.admin-table-secondary,
+.admin-chart-legend,
+.admin-tooltip-text,
+.admin-empty-state {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+}
+
+.admin-helper-text,
+.admin-tooltip-micro {
+  font-size: 10px;
+  line-height: 0.875rem;
+  font-weight: 400;
+}
+
+.admin-timestamp,
+.admin-chart-axis {
+  font-size: 11px;
+  line-height: 1rem;
+  font-weight: 400;
+}
+
+.admin-chart-axis-micro {
+  font-size: 9px;
+  line-height: 0.75rem;
+  font-weight: 400;
+}
+
+.admin-typography :where(th),
+.admin-table-header {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-typography :where(td),
+.admin-table-cell {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.admin-reference-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1rem;
+  font-weight: 500;
+}
+
+.admin-typography :where(button),
+.admin-button {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.admin-button-compact {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+}
+
+.admin-badge {
+  font-size: 10px;
+  line-height: 0.875rem;
+  font-weight: 500;
+}
+
+.admin-badge-strong {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+}
+
+.admin-tier-badge {
+  font-size: 11px;
+  line-height: 1rem;
+  font-weight: 600;
+}
+
+.admin-typography :where(label),
+.admin-input-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.admin-typography :where(input, textarea, select),
+.admin-input {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+
+.admin-sidebar-item {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.admin-tab-trigger {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+.admin-filter-pill {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+}
+
+.admin-uppercase-label {
+  font-size: 10px;
+  line-height: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+@media (min-width: 640px) {
+  .admin-uppercase-label {
+    font-size: 11px;
+    line-height: 1rem;
+  }
+}
+
+/* Normalize imported Tailwind weight utilities inside every admin shell.
+   Several newer pages used font-black/font-bold heavily, which made one
+   screen look visually louder than the rest of the dashboard. */
+.admin-typography :where(.font-black, .font-extrabold) {
+  font-weight: 700;
+}
+
+.admin-typography :where(.font-bold) {
+  font-weight: 600;
 }
 
 /* Custom date picker ==================>>>>>>> */

@@ -87,6 +87,10 @@ const CHWAZI_COLOR_NAMES: Record<string, string> = {
   "#eab308": "Yellow",
 };
 
+const preloadThankYouPage = () => {
+  void import("../SuccessPage");
+};
+
 const SECTION_LABEL_CLASS = "text-[11px] font-bold text-slate-400 uppercase tracking-widest";
 
 const toNumber = (value: unknown): number => {
@@ -608,6 +612,7 @@ const ScreenOrders = () => {
       toast.error("No unpaid orders available.");
       return;
     }
+    preloadThankYouPage();
     setIsCheckoutOpen(true);
     setIsPaymentSuccess(false);
   };
@@ -655,6 +660,7 @@ const ScreenOrders = () => {
     }
 
     if (isPayingAll) {
+      preloadThankYouPage();
       setIsPaymentSuccess(true);
       window.setTimeout(async () => {
         if (tableInfo.restaurantId) {
