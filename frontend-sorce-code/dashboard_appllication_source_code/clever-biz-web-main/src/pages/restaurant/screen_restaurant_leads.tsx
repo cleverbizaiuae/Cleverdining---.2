@@ -169,7 +169,7 @@ export default function ScreenRestaurantLeads() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0055FE]">Lead pipeline</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">Leads</h1>
+          <h1 className="mt-1 text-base font-semibold text-slate-900">Leads</h1>
           <p className="text-sm text-slate-500">Manage WhatsApp, reservation, walk-in, and other captured contacts.</p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-sm">
@@ -296,7 +296,7 @@ function Stat({ label, value, icon: Icon }: { label: string; value: string; icon
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <Icon className="mb-2 h-4 w-4 text-[#0055FE]" strokeWidth={1.8} />
-      <p className="text-lg font-bold text-slate-900">{value}</p>
+      <p className="text-xl font-semibold text-slate-900">{value}</p>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
     </div>
   );
@@ -317,7 +317,7 @@ function Detail({ icon: Icon, label, value }: { icon: typeof Phone; label: strin
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-lg font-bold text-slate-900">{value}</p>
+      <p className="text-xl font-semibold text-slate-900">{value}</p>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
     </div>
   );

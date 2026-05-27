@@ -85,7 +85,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scaleIn flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-6 border-b border-slate-100">
                     <div>
-                        <h3 className="text-xl font-bold text-slate-900">Order #{payment.order_id}</h3>
+                        <h3 className="text-lg font-semibold text-slate-900">Order #{payment.order_id}</h3>
                         <p className="text-sm text-slate-500">Payment Details</p>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50 transition-colors">
@@ -294,7 +294,7 @@ export const Payments = () => {
                 {/* TOOLBAR */}
                 <div className="p-5 border-b border-slate-200 flex flex-col xl:flex-row justify-between xl:items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-bold text-slate-900">Transactions</h3>
+                        <h3 className="text-base font-semibold text-slate-900">Transactions</h3>
                         <div className="h-6 w-px bg-slate-200 mx-2"></div>
                         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
                             <DatePicker selected={startDate} onChange={setStartDate} placeholderText="Start Date" className="w-24 bg-transparent text-xs outline-none text-center" />
@@ -317,8 +317,46 @@ export const Payments = () => {
                     </div>
                 </div>
 
-                {/* TABLE */}
-                <div className="overflow-x-auto">
+                {/* Mobile cards */}
+                <div className="divide-y divide-slate-100 sm:hidden">
+                    {filteredPayments.length > 0 ? filteredPayments.map(p => (
+                        <div key={p.id} className="p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900">Order #{p.order_id}</p>
+                                    <p className="text-xs text-slate-500">{p.table_name || "N/A"}</p>
+                                </div>
+                                <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getStatusColor(p.status)}`}>{p.status}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                    <p className="text-slate-400 uppercase tracking-wide">Provider</p>
+                                    <div className="mt-1 flex items-center gap-2 font-medium text-slate-700 capitalize">
+                                        {p.provider === 'card' ? <CreditCard size={14} className="text-[#0055FE]" /> : p.provider === 'cash' ? <Banknote size={14} className="text-emerald-500" /> : <Smartphone size={14} className="text-purple-500" />}
+                                        {p.provider.replace('_', ' ')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-slate-400 uppercase tracking-wide">Date</p>
+                                    <p className="mt-1 font-medium text-slate-600">{new Date(p.created_at).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-base font-bold text-slate-900">{currencyCode} {p.amount}</p>
+                                <button onClick={() => { setViewPayment(p); setIsViewOpen(true); }} className="text-[#0055FE] hover:bg-[#0055FE]/10 p-2 rounded-lg transition-colors" aria-label={`View payment ${p.id}`}>
+                                    <Eye size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="px-5 py-12 text-center text-xs text-slate-400">No transactions found</div>
+                    )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-left">
                         <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
                             <tr>

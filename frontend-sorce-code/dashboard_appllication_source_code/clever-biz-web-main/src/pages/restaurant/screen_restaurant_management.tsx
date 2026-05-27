@@ -27,7 +27,7 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-md" }: any)
     >
       <div className={`bg-white rounded-xl w-full ${maxWidth} p-6 shadow-2xl scale-100 animate-scaleIn my-auto max-h-[90vh] overflow-y-auto`}>
         <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2">
-          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
@@ -203,7 +203,7 @@ const ScreenRestaurantManagement = () => {
       {/* Header */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="text-[#0055FE]" size={24} />
             Team Management
           </h2>

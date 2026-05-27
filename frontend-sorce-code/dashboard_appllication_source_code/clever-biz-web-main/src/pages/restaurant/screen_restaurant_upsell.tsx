@@ -716,7 +716,7 @@ const ScreenRestaurantUpsell = () => {
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-slate-400" strokeWidth={1.8} />
               AI Upsell Engine
             </h2>
@@ -744,14 +744,14 @@ const ScreenRestaurantUpsell = () => {
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-1 overflow-x-auto">
-          <div className="flex min-w-max gap-1">
+        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-1">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-4">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={classNames(
-                  "rounded-lg border px-4 py-3 text-left transition min-w-[220px] sm:min-w-[230px]",
+                  "rounded-lg border px-4 py-3 text-left transition",
                   activeTab === tab.key
                     ? "border-[#0055FE] bg-[#0055FE] text-white shadow"
                     : "border-transparent bg-white text-slate-700 hover:bg-slate-50",
@@ -816,10 +816,10 @@ const ScreenRestaurantUpsell = () => {
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white border border-slate-200 rounded-2xl p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{kpi.label}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{kpi.label}</p>
                   <kpi.icon className={classNames("h-4 w-4 shrink-0", kpi.iconClass)} strokeWidth={1.8} />
                 </div>
-                <p className="text-3xl font-bold text-slate-900 mt-3">{kpi.value}</p>
+                <p className="text-2xl font-semibold text-slate-900 mt-3">{kpi.value}</p>
                 {kpi.sub ? <p className="text-xs text-slate-500 mt-1">{kpi.sub}</p> : null}
               </div>
             ))}
@@ -828,7 +828,7 @@ const ScreenRestaurantUpsell = () => {
           {analytics.total_shown === 0 ? (
             <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-10 text-center">
               <BarChart3 className="w-10 h-10 text-slate-300 mx-auto" />
-              <p className="text-lg font-semibold text-slate-700 mt-3">No data yet</p>
+              <p className="text-base font-semibold text-slate-700 mt-3">No data yet</p>
               <p className="text-sm text-slate-500 mt-1">
                 Analytics will appear here once customers start interacting with upsell suggestions. Make sure AI Upsell is enabled.
               </p>
@@ -889,14 +889,14 @@ const ScreenRestaurantUpsell = () => {
                           <ShoppingCart className="h-3.5 w-3.5" strokeWidth={1.8} />
                           Add to Cart
                         </div>
-                        <p className="text-2xl font-bold text-[#0055FE] mt-1">{acceptedVsRejected.accepted.toLocaleString()}</p>
+                        <p className="text-xl font-semibold text-[#0055FE] mt-1">{acceptedVsRejected.accepted.toLocaleString()}</p>
                       </div>
                       <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
                         <div className="flex items-center gap-1.5 text-slate-600 text-xs font-semibold">
                           <XCircle className="h-3.5 w-3.5" strokeWidth={1.8} />
                           No Thanks
                         </div>
-                        <p className="text-2xl font-bold text-slate-700 mt-1">{acceptedVsRejected.rejected.toLocaleString()}</p>
+                        <p className="text-xl font-semibold text-slate-700 mt-1">{acceptedVsRejected.rejected.toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="h-4 w-full rounded-full overflow-hidden bg-slate-200 flex">
@@ -1075,7 +1075,7 @@ const ScreenRestaurantUpsell = () => {
         <div className="space-y-4">
           <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <GitFork className="h-4 w-4 text-slate-400" strokeWidth={1.8} />
                 Top Pairing Intelligence
               </h3>
@@ -1173,7 +1173,7 @@ const ScreenRestaurantUpsell = () => {
         <div className="space-y-4">
           <section className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">All Items</h3>
+              <h3 className="text-base font-semibold text-slate-900">All Items</h3>
               <p className="text-sm text-slate-500 mt-1">Toggle items on/off for suggestions. Off means never shown to customers.</p>
             </div>
             <div className="flex w-full md:w-auto items-center gap-3">
@@ -1252,7 +1252,7 @@ const ScreenRestaurantUpsell = () => {
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4 gap-2">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Upsell Strategy</h3>
+                <h3 className="text-base font-semibold text-slate-900">Upsell Strategy</h3>
                 <p className="text-sm text-slate-500 mt-1">How the engine prioritizes which items to recommend.</p>
               </div>
               {savingSettings ? <Loader2 className="h-4 w-4 animate-spin text-[#0055FE]" /> : null}
@@ -1335,7 +1335,7 @@ const ScreenRestaurantUpsell = () => {
           </section>
 
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold text-slate-900">Trigger Points</h3>
+            <h3 className="text-base font-semibold text-slate-900">Trigger Points</h3>
             <p className="text-sm text-slate-500 mt-1 mb-4">Choose where upsell suggestions appear in the customer journey.</p>
             <div className="space-y-2">
               {[
@@ -1411,7 +1411,7 @@ const ScreenRestaurantUpsell = () => {
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
             <div className="flex items-center justify-between gap-2 mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Manual Pairings & Blocks</h3>
+                <h3 className="text-base font-semibold text-slate-900">Manual Pairings & Blocks</h3>
                 <p className="text-sm text-slate-500 mt-1">Define item combinations to always pair or never suggest together.</p>
               </div>
               <button

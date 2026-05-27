@@ -40,7 +40,7 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
     >
       <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl animate-scaleIn my-auto max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2 border-b border-transparent">
-          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
@@ -471,7 +471,7 @@ const ScreenRestaurantDashboard = () => {
         <div className="bg-white p-6 rounded-lg border border-slate-200">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Revenue Analytics</h3>
+              <h3 className="text-base font-semibold text-slate-900">Revenue Analytics</h3>
               <p className="text-sm text-slate-500">Track sales for the selected date using live analytics</p>
             </div>
 
@@ -528,31 +528,31 @@ const ScreenRestaurantDashboard = () => {
         {/* FOOD ITEMS TABLE (Left, 2 cols) */}
         <div className="xl:col-span-2 bg-white rounded-lg border border-slate-200 overflow-hidden">
           {/* Header Bar */}
-          <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center">
+          <div className="px-4 sm:px-5 py-4 border-b border-slate-200 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
             <h3 className="text-sm font-semibold text-slate-900">Food Items</h3>
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-auto">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg outline-none focus:border-[#0055FE] w-32 sm:w-48"
+                  className="h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg outline-none focus:border-[#0055FE] w-full sm:w-48"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
               {(userRole === 'owner' || userRole === 'manager') && (
-                <>
-                  <button data-testid="add-category-btn" className="h-8 px-3 ml-2 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddCategory(true)}>
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-3 sm:flex sm:items-center gap-2">
+                  <button data-testid="add-category-btn" className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddCategory(true)}>
                     <FolderPlus size={14} /> Add Category
                   </button>
-                  <button data-testid="add-sub-category-btn" className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddSubCategory(true)}>
+                  <button data-testid="add-sub-category-btn" className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddSubCategory(true)}>
                     <Layers size={14} /> Add Sub-Category
                   </button>
-                  <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors" onClick={() => setShowAddItem(true)}>
+                  <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddItem(true)}>
                     <Plus size={14} /> Add Item
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>

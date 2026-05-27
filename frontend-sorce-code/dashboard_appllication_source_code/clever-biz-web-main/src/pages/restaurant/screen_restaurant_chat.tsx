@@ -418,6 +418,18 @@ const ScreenRestaurantChat = () => {
     }
 
     if (selectedChat.source === "table-message") {
+      const messageIds = (messageCache[selectedChat.id] || [])
+        .filter((message) => message.status === "pending" || message.status === "unread")
+        .map((message) => message.id)
+        .filter((id) => id !== undefined);
+      if (messageIds.length > 0) {
+        axiosInstance.patch("/api/table-messages", {
+          ids: messageIds,
+          status: "acknowledged",
+        }).catch((err) => {
+          console.warn("table-message acknowledge failed (non-blocking):", err);
+        });
+      }
       return;
     }
 
@@ -524,6 +536,19 @@ const ScreenRestaurantChat = () => {
 
     // API Calls
     for (const id of ids) {
+      const chat = chatList.find((item) => item.id === id);
+      if (chat?.source === "table-message" || String(id).startsWith("table-")) {
+        const messageIds = (messageCache[id] || [])
+          .map((message) => message.id)
+          .filter((messageId) => messageId !== undefined);
+        if (messageIds.length > 0) {
+          axiosInstance.patch("/api/table-messages", {
+            ids: messageIds,
+            status: "acknowledged",
+          }).catch(console.error);
+        }
+        continue;
+      }
       axiosInstance.post(`/message/chat/mark-all-read/?device_id=${id}`).catch(console.error);
     }
   };
@@ -556,6 +581,18 @@ const ScreenRestaurantChat = () => {
 
     // API Calls to clear chats on backend
     for (const id of ids) {
+      const chat = chatList.find((item) => item.id === id);
+      if (chat?.source === "table-message" || String(id).startsWith("table-")) {
+        const messageIds = (messageCache[id] || [])
+          .map((message) => message.id)
+          .filter((messageId) => messageId !== undefined);
+        if (messageIds.length > 0) {
+          await axiosInstance.delete("/api/table-messages", {
+            data: { ids: messageIds },
+          }).catch(console.error);
+        }
+        continue;
+      }
       await axiosInstance.post('/message/chat/clear-chat/', { device_id: id }).catch(console.error);
     }
   };
@@ -566,7 +603,7 @@ const ScreenRestaurantChat = () => {
 
   return (
     <>
-      <div className="flex flex-col gap-6 h-[calc(100vh-6rem)]">
+      <div className="flex flex-col gap-6 h-[calc(100dvh-7rem)] min-h-[420px]">
 
         {/* CHAT INTERFACE */}
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex overflow-hidden relative">
@@ -745,7 +782,7 @@ const ScreenRestaurantChat = () => {
                     return (
                       <div key={idx} className={cn("flex w-full", isCustomer ? "justify-start" : "justify-end")}>
                         <div className={cn(
-                          "max-w-[70%] rounded-2xl p-4 text-sm relative shadow-sm",
+                          "max-w-[85%] sm:max-w-[70%] rounded-2xl p-4 text-sm relative shadow-sm",
                           isCustomer
                             ? "bg-white text-slate-800 rounded-tl-none border border-slate-100"
                             : "bg-[#0055FE] text-white rounded-tr-none"

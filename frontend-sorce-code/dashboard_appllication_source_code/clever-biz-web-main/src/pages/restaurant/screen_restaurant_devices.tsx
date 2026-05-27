@@ -21,7 +21,7 @@ const MetricCard = ({ title, value, subtext }: any) => (
   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between">
     <div>
       <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
+      <h3 className="text-2xl font-semibold text-slate-900">{value}</h3>
     </div>
     <div className="w-10 h-10 rounded-lg bg-[#0055FE]/10 flex items-center justify-center text-[#0055FE]">
       <LayoutGrid size={20} />
@@ -52,7 +52,7 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-md" }: any)
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 py-8 backdrop-blur-sm animate-fadeIn overflow-y-auto">
       <div className={`bg-white rounded-xl w-full ${maxWidth} p-6 shadow-2xl scale-100 animate-scaleIn my-auto max-h-[90vh] overflow-y-auto`}>
         <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2">
-          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
@@ -288,7 +288,7 @@ export const ScreenRestaurantDevices = () => {
       {/* Header */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <h2 className="text-lg font-bold text-slate-900">Registered Table List</h2>
+          <h2 className="text-base font-semibold text-slate-900">Registered Table List</h2>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <button

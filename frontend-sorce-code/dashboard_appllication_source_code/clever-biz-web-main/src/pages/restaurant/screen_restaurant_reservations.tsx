@@ -80,7 +80,7 @@ const ScreenRestaurantReservations = () => {
     <div className="font-inter">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+        <h1 className="text-base font-semibold text-slate-900">
           {selectedDate ? selectedDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : "Reservations"}
         </h1>
       </div>
@@ -106,7 +106,7 @@ const ScreenRestaurantReservations = () => {
 
       {/* List Header */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
-        <h2 className="text-lg font-semibold text-slate-900">List of items</h2>
+        <h2 className="text-base font-semibold text-slate-900">List of items</h2>
 
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Date Picker */}

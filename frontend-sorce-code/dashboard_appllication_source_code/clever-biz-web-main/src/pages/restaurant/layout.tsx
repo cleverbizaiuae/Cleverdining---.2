@@ -204,7 +204,7 @@ const RestaurantLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-inter">
+    <div className="admin-typography min-h-screen bg-slate-50 flex font-inter overflow-x-hidden">
 
       {/* MOBILE OVERLAY */}
       {sidebarOpen && (
@@ -271,7 +271,7 @@ const RestaurantLayout = () => {
                 onClick={() => setSidebarOpen(false)} // Close on mobile click
                 title={sidebarCollapsed ? item.label : undefined}
                 className={`
-                   relative flex items-center ${sidebarCollapsed ? "gap-3 px-4 lg:justify-center lg:px-0" : "gap-3 px-4"} py-3 rounded-xl text-sm font-medium transition-all duration-200
+                   admin-sidebar-item relative flex items-center ${sidebarCollapsed ? "gap-3 px-4 lg:justify-center lg:px-0" : "gap-3 px-4"} py-3 rounded-xl transition-all duration-200
                    ${active
                     ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
                     : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE] group"
@@ -317,13 +317,13 @@ const RestaurantLayout = () => {
       </aside>
 
       {/* MAIN CONTENT WRAPPER */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
+      <div className={`min-w-0 flex-1 flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
 
         {/* HEADER */}
         <header className="sticky top-0 z-30 h-20 bg-white border-b border-slate-200 shadow-sm px-4 sm:px-8 flex items-center justify-between">
 
           {/* Left: Title & Hamburger */}
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden text-slate-500 hover:text-[#0055FE] transition-colors"
@@ -331,8 +331,8 @@ const RestaurantLayout = () => {
               <Menu size={24} />
             </button>
 
-            <div>
-              <h1 className="text-xl lg:text-2xl font-bold text-slate-900">{getPageTitle()}</h1>
+            <div className="min-w-0">
+              <h1 className="admin-page-title truncate text-slate-900">{getPageTitle()}</h1>
               <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
                 {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </p>

@@ -235,25 +235,25 @@
 
 .admin-typography :where(h1),
 .admin-page-title {
-  font-size: 1.125rem;
-  line-height: 1.75rem;
-  font-weight: 600;
+  font-size: 1.125rem !important;
+  line-height: 1.75rem !important;
+  font-weight: 600 !important;
   letter-spacing: -0.015em;
 }
 
 @media (min-width: 640px) {
   .admin-typography :where(h1),
   .admin-page-title {
-    font-size: 1.25rem;
-    line-height: 1.75rem;
+    font-size: 1.25rem !important;
+    line-height: 1.75rem !important;
   }
 }
 
 .admin-typography :where(h2, h3),
 .admin-section-title {
-  font-size: 1rem;
-  line-height: 1.5rem;
-  font-weight: 600;
+  font-size: 1rem !important;
+  line-height: 1.5rem !important;
+  font-weight: 600 !important;
 }
 
 .admin-dialog-title {
@@ -448,11 +448,21 @@
    Several newer pages used font-black/font-bold heavily, which made one
    screen look visually louder than the rest of the dashboard. */
 .admin-typography :where(.font-black, .font-extrabold) {
-  font-weight: 700;
+  font-weight: 600 !important;
 }
 
 .admin-typography :where(.font-bold) {
-  font-weight: 600;
+  font-weight: 600 !important;
+}
+
+.admin-typography :where(h1.text-3xl, h1.text-2xl) {
+  font-size: 1rem !important;
+  line-height: 1.5rem !important;
+}
+
+.admin-typography :where(.text-3xl.font-black, .text-3xl.font-bold) {
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
 }
 
 /* Custom date picker ==================>>>>>>> */

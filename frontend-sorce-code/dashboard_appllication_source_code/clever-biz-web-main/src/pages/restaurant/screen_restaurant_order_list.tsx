@@ -567,8 +567,66 @@ const ScreenRestaurantOrderList = () => {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Mobile cards */}
+        <div className="divide-y divide-slate-100 md:hidden">
+          {activeOrders.length > 0 ? (
+            activeOrders.map((order: any) => (
+              <div key={order.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">Order #{order.id}</p>
+                    <p className="text-xs text-slate-500">Table {order.tableNo || "N/A"}</p>
+                  </div>
+                  <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
+                    ? 'bg-green-50 text-green-700'
+                    : 'bg-red-50 text-red-700'
+                    }`}>
+                    {order.payment_status || "Unpaid"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-slate-400 uppercase tracking-wide">Amount</p>
+                    <p className="font-semibold text-slate-900">{currencyCode} {order.total_price}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 uppercase tracking-wide">Placed</p>
+                    <p className="font-medium text-slate-600">
+                      {new Date(order.timeOfOrder || order.created_time || order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <select
+                    value={order.status.toLowerCase()}
+                    onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                    className={`min-w-0 flex-1 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold uppercase outline-none ${getStatusColor(order.status)}`}
+                  >
+                    <option value="pending" className="text-yellow-600">Pending</option>
+                    <option value="preparing" className="text-orange-600">Preparing</option>
+                    <option value="served" className="text-green-600">Ready (Served)</option>
+                    <option value="delivered" className="text-green-700">Delivered</option>
+                    <option value="cancelled" className="text-red-600">Cancelled</option>
+                  </select>
+                  <button
+                    onClick={() => handleViewOrder(order)}
+                    className="shrink-0 text-[#0055FE] hover:bg-[#0055FE]/10 p-2 rounded-lg transition-colors"
+                    aria-label={`View order ${order.id}`}
+                  >
+                    <Eye size={16} />
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="px-5 py-12 text-center text-xs text-slate-400">No active orders found</div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -715,7 +773,7 @@ const ScreenRestaurantOrderList = () => {
             {/* Modal Header */}
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Order #{selectedOrder.id}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Order #{selectedOrder.id}</h3>
                 <p className="text-xs text-slate-500">{selectedOrder.device_table_name || selectedOrder.tableNo || "Table N/A"}</p>
               </div>
               <button onClick={() => setViewModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-full">
@@ -859,7 +917,7 @@ const ScreenRestaurantOrderList = () => {
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <p className="text-xs text-slate-400">Total Amount</p>
-                <p className="text-xl font-bold">{currencyCode} {selectedOrder.total_price}</p>
+                <p className="text-lg font-semibold">{currencyCode} {selectedOrder.total_price}</p>
               </div>
               <button onClick={() => setViewModalOpen(false)} className="bg-[#0055FE] hover:bg-[#0047D1] px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                 Close
