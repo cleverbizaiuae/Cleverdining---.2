@@ -764,7 +764,12 @@ export function saveBrandingSettings(payload: Partial<BrandingSettings>): Brandi
   return next;
 }
 
-export async function compressImageFile(file: File, maxDim = 1200, quality = 0.82): Promise<string> {
+export async function compressImageFile(
+  file: File,
+  maxDim = 1200,
+  quality = 0.82,
+  options: { preserveTransparency?: boolean } = {},
+): Promise<string> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
@@ -792,7 +797,21 @@ export async function compressImageFile(file: File, maxDim = 1200, quality = 0.8
     throw new Error("Failed to initialize image compression canvas.");
   }
 
+  const shouldPreserveTransparency =
+    options.preserveTransparency ||
+    file.type === "image/png" ||
+    file.type === "image/webp";
+
+  if (!shouldPreserveTransparency) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  if (shouldPreserveTransparency) {
+    return canvas.toDataURL("image/png");
+  }
+
   return canvas.toDataURL("image/jpeg", quality);
 }
 

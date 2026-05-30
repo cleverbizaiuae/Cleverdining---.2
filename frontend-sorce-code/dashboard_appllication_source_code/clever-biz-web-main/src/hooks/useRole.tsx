@@ -155,7 +155,7 @@ export const useRole = () => {
             setUserRole(profile?.role || null);
           }
         } catch (error) {
-          console.error("Failed to load profile information:", error);
+          console.warn("Failed to load profile information:", error);
         }
       }
 

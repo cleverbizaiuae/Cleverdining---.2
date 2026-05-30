@@ -195,7 +195,7 @@ const ScreenRestaurantDashboard = () => {
       const response = await axiosInstance.get("/api/daily-stats");
       setDailyStats(response.data?.data || response.data);
     } catch (err) {
-      console.error("Failed to load daily stats", err);
+      console.warn("Failed to load daily stats", err);
     } finally {
       setDailyStatsLoading(false);
     }
@@ -215,7 +215,7 @@ const ScreenRestaurantDashboard = () => {
       });
       setSalesAnalytics(normalizeSalesAnalytics(response.data?.data || response.data));
     } catch (err) {
-      console.error("Failed to load sales analytics", err);
+      console.warn("Failed to load sales analytics", err);
     } finally {
       setSalesAnalyticsLoading(false);
     }

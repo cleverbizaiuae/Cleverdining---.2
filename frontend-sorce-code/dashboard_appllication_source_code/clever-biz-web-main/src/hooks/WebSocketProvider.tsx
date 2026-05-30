@@ -8,6 +8,18 @@ export const WebSocketContext = createContext(null);
 // Cross-tab sync channel
 const BROADCAST_CHANNEL_NAME = 'cleverdining-unread-sync';
 
+const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
+const resolveHttpBaseUrl = () => {
+  const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const isLocalBrowser =
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+
+  if (isLocalBrowser) return "http://127.0.0.1:8000";
+  if (envApiUrl && envApiUrl !== "/api") return normalizeBaseUrl(envApiUrl);
+  return "https://cleverdining-2.onrender.com";
+};
+
 type UnreadTable = {
   deviceId: string;
   tableName: string;
@@ -187,10 +199,7 @@ const WebSocketProvider = ({ children }) => {
     const timeoutId = window.setTimeout(() => {
     const fetchUnreadCount = async () => {
       try {
-        const envApiUrl = import.meta.env.VITE_API_URL;
-        const baseUrl = envApiUrl && envApiUrl !== "/api"
-          ? envApiUrl
-          : "https://cleverdining-2.onrender.com";
+        const baseUrl = resolveHttpBaseUrl();
 
         const res = await fetch(
           `${baseUrl}/message/chat/unread-count/`,
@@ -229,10 +238,7 @@ const WebSocketProvider = ({ children }) => {
         if (role === "staff") endpoint = "/api/staff/devicesall/";
         if (role === "chef") endpoint = "/api/chef/devicesall/";
 
-        const envApiUrl = import.meta.env.VITE_API_URL;
-        const baseUrl = envApiUrl && envApiUrl !== "/api"
-          ? envApiUrl
-          : "https://cleverdining-2.onrender.com";
+        const baseUrl = resolveHttpBaseUrl();
 
         const res = await fetch(`${baseUrl}${endpoint}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -403,7 +409,7 @@ const WebSocketProvider = ({ children }) => {
       };
 
       socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
+        console.warn("WebSocket error:", error);
         captureWebSocketFailure("WebSocket socket error", {
           endpoint: wsUrl,
           feature: "websocket",

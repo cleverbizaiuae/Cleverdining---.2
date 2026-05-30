@@ -265,7 +265,7 @@ const SuccessPage = () => {
                   src={logoImage.readySrc}
                   alt={`${resolvedRestaurantName} logo`}
                   decoding="async"
-                  className="h-full w-full rounded-2xl object-contain"
+                  className="h-full w-full rounded-2xl object-contain bg-transparent"
                 />
               </div>
             ) : (

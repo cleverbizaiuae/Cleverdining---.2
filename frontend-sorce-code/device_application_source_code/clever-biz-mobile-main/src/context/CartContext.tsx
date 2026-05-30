@@ -110,7 +110,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
           }));
           setCart(sanitizeCartItems(backendItems));
         } catch (error) {
-          console.error("Failed to fetch cart from server", error);
+          console.warn("Failed to fetch cart from server", error);
           // Fallback to namespaced local storage
           const stored = localStorage.getItem(`cb:cart:${sessionToken}`);
           if (stored) {

@@ -227,7 +227,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       const res = await axiosInstance.get(`/owners/orders/analytics/?time_range=${timeRange}&compare=${compare}`);
       setAnalytics(res.data);
     } catch (err) {
-      console.error("Failed to load analytics", err);
+      console.warn("Failed to load analytics", err);
     } finally {
       setIsAnalyticsLoading(false);
     }
@@ -239,7 +239,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       const res = await axiosInstance.get("/owners/most-selling-items/");
       setSellingItemDataState(res.data); // Use local state setter wrapper if needed, or direct setSellingItems
     } catch (err) {
-      console.error("Failed to load selling items", err);
+      console.warn("Failed to load selling items", err);
     }
   }, [userRole]);
 
@@ -455,7 +455,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       setOrdersCount(count || 0);
       setOrdersCurrentPage(page || 1);
     } catch (error: any) {
-      console.error("Failed to load orders", error);
+      console.warn("Failed to load orders", error);
       // Only show toast for non-auth errors since interceptor handles auth
     }
   }, [userRole, isLoading]);
@@ -635,7 +635,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         setDevicesCount(response.data?.count || 0);
         setDevicesCurrentPage(page);
       } catch (error) {
-        console.error("Failed to load devices", error);
+        console.warn("Failed to load devices", error);
         toast.error("Failed to load devices.");
       }
     },
@@ -661,7 +661,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       const response = await axiosInstance.get(endpoint);
       setDeviceStats(response.data);
     } catch (error) {
-      console.error("Failed to load device stats", error);
+      console.warn("Failed to load device stats", error);
       toast.error("Failed to load device stats.");
     }
   }, [userRole, isLoading]);

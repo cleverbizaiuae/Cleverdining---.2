@@ -23,6 +23,10 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(
   undefined
 );
 
+const isLocalHost = () =>
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+
 interface WebSocketProviderProps {
   children: ReactNode;
 }
@@ -115,6 +119,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     // Check against the Ref, which is always current
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return; // Already connecting or connected
+    }
+
+    if (isLocalHost() && !import.meta.env.VITE_WS_URL) {
+      setConnectionStatus("disconnected");
+      captureWebSocketFailure("WebSocket skipped locally: VITE_WS_URL is not configured", {
+        feature: "websocket",
+      });
+      return;
     }
 
     const toWsBase = (input: string): string => {
@@ -265,7 +277,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
 
     socket.onerror = (err) => {
-      console.error("WebSocket error:", err);
+      console.warn("WebSocket error:", err);
       captureWebSocketFailure("WebSocket socket error", {
         endpoint: wsUrl,
         feature: "websocket",

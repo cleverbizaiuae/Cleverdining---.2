@@ -2,16 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
 
 type SplashState = "splash" | "collapsing" | "done";
 
 const BRAND_SPLASH_SESSION_KEY = "cb_splash_seen";
 
 function getFontFamily(fontPreset: string): string {
-  if (fontPreset === "elegant") return "'Playfair Display', Georgia, serif";
-  if (fontPreset === "bold") return "'Plus Jakarta Sans', system-ui, sans-serif";
-  return "'Inter', system-ui, sans-serif";
+  return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -183,7 +181,7 @@ export default function ScreenSplash() {
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.55, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
-            className="h-24 w-24 rounded-[1.5rem] shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
+            className="h-24 w-24 rounded-full shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
             style={{
               background: "rgba(255,255,255,0.12)",
               backdropFilter: "blur(12px)",
@@ -194,7 +192,7 @@ export default function ScreenSplash() {
               <img
                 src={brandLogoUrl}
                 alt={restaurantName}
-                className="h-24 w-24 rounded-[1.5rem] object-contain p-1.5"
+                className="h-24 w-24 rounded-full object-contain bg-transparent p-1.5"
               />
             ) : (
               <span className="text-white font-bold text-5xl" style={{ fontFamily: brandFontFamily }}>
@@ -216,6 +214,16 @@ export default function ScreenSplash() {
           >
             {restaurantName}
           </motion.h1>
+          {hasBranding && brand.tagline ? (
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.42 }}
+              className="mt-3 max-w-xs text-sm leading-relaxed text-white/72"
+            >
+              {brand.tagline}
+            </motion.p>
+          ) : null}
         </div>
 
         <div className="flex flex-col items-center pb-16 px-8">

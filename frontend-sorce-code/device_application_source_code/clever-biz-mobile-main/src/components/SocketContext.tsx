@@ -18,6 +18,10 @@ interface WebSocketContextType {
 // Create a WebSocket context
 export const SocketContext = createContext<WebSocketContextType | null>(null);
 
+const isLocalHost = () =>
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+
 interface SocketProviderProps {
   children: ReactNode;
 }
@@ -50,6 +54,13 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connectWebSocket = () => {
+    if (isLocalHost() && !import.meta.env.VITE_WS_URL) {
+      captureWebSocketFailure("WebSocket skipped locally: VITE_WS_URL is not configured", {
+        feature: "websocket",
+      });
+      return;
+    }
+
     if (!id || !tokenToUse) {
       console.warn("WebSocket skipped: Missing ID or Token", { id, hasToken: !!tokenToUse });
       captureWebSocketFailure("WebSocket skipped: missing restaurant id or auth token", {
@@ -89,7 +100,7 @@ const SocketProvider = ({ children }: SocketProviderProps) => {
     };
 
     socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      console.warn("WebSocket error:", error);
       captureWebSocketFailure("WebSocket socket error", {
         endpoint: wsUrl,
         feature: "websocket",

@@ -21,7 +21,7 @@ import { Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-reac
 import { Logo } from "@/components/icons/logo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
-import { useBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
 
 function hexToRgba(hex: string, alpha: number): string {
   const cleaned = (hex || "").replace("#", "");
@@ -64,9 +64,7 @@ function hexToHsl(hex: string): string {
 }
 
 function getFontFamily(fontPreset: string): string {
-  if (fontPreset === "elegant") return "'Playfair Display', Georgia, serif";
-  if (fontPreset === "bold") return "'Plus Jakarta Sans', system-ui, sans-serif";
-  return "'Inter', system-ui, sans-serif";
+  return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
 }
 
 const LayoutDashboard = () => {
@@ -327,7 +325,7 @@ const LayoutDashboard = () => {
       const data = response.data;
       setCategories(Array.isArray(data) ? data : data?.results || []);
     } catch (error) {
-      console.error("Failed to fetch categories", error);
+      console.warn("Failed to fetch categories", error);
     }
   };
   useEffect(() => {
@@ -363,7 +361,7 @@ const LayoutDashboard = () => {
       const response = await axiosInstance.get(url);
       setItems(response.data.results || []);
     } catch (error) {
-      console.error("Failed to fetch items", error);
+      console.warn("Failed to fetch items", error);
     }
   };
   useEffect(() => {
@@ -539,10 +537,10 @@ const LayoutDashboard = () => {
                 initial={{ scale: 0.85, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.55, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
-                className="h-24 w-24 rounded-[1.5rem] border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
+                className="h-24 w-24 rounded-full border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
               >
                 {brandLogoUrl ? (
-                  <img src={brandLogoUrl} alt={restaurantName} className="h-full w-full object-contain p-1.5" />
+                  <img src={brandLogoUrl} alt={restaurantName} className="h-full w-full rounded-full object-contain bg-transparent p-1.5" />
                 ) : (
                   <span className="text-white text-5xl font-bold leading-none" style={{ fontFamily: brandFontFamily }}>
                     {(restaurantName || "W").charAt(0).toUpperCase()}
@@ -562,6 +560,16 @@ const LayoutDashboard = () => {
               >
                 {restaurantName}
               </motion.h1>
+              {brand.tagline ? (
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.55, delay: 0.42 }}
+                  className="-mt-3 max-w-xs text-sm leading-relaxed text-white/72"
+                >
+                  {brand.tagline}
+                </motion.p>
+              ) : null}
             </div>
             <div className="flex flex-col items-center gap-4 pb-16">
               <motion.button
@@ -644,7 +652,7 @@ const LayoutDashboard = () => {
                   <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-4 pb-3">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <div
-                        className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
+                        className="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
                         style={{
                           background: "rgba(255,255,255,0.14)",
                           backdropFilter: "blur(8px)",
@@ -655,7 +663,7 @@ const LayoutDashboard = () => {
                           <img
                             src={brandLogoUrl}
                             alt={`${restaurantName} logo`}
-                            className="h-full w-full object-contain p-0.5"
+                            className="h-full w-full object-contain bg-transparent p-0.5"
                             onError={(event) => {
                               (event.currentTarget as HTMLImageElement).style.display = "none";
                             }}
@@ -801,6 +809,31 @@ const LayoutDashboard = () => {
                     ))}
                   </AnimatePresence>
                 )}
+                {socialLinks.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+                    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Follow Us</p>
+                    <div className="flex items-center justify-center gap-3">
+                      {socialLinks.map(({ key, href, Icon, label }) => (
+                        <a
+                          key={key}
+                          href={href || undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={label}
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:text-primary"
+                        >
+                          {key === "tiktok" ? (
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.95a8.27 8.27 0 0 0 4.83 1.55V7.05a4.84 4.84 0 0 1-1.06-.36z" />
+                            </svg>
+                          ) : (
+                            <Icon className="h-4 w-4" strokeWidth={1.8} />
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <Footer />
               </main>
             </div>

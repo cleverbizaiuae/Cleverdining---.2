@@ -168,7 +168,7 @@ const ScreenRestaurantOrderList = () => {
       const { data } = await axiosInstance.get("/owners/payment-gateways/");
       setConnectedGateways(Array.isArray(data) ? data : data.results || []);
     } catch (e) {
-      console.error("Failed to fetch gateways", e);
+      console.warn("Failed to fetch gateways", e);
     }
   };
 

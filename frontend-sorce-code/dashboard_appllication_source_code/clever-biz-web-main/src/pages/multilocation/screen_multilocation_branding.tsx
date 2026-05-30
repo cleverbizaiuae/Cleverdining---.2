@@ -68,16 +68,31 @@ function uid(prefix: string): string {
 
 function resolveRestaurantId(): string | null {
   try {
+    const storedRestaurantId = localStorage.getItem("restaurantId") || localStorage.getItem("selectedRestaurantId");
+    if (storedRestaurantId) return storedRestaurantId;
+
     const raw = localStorage.getItem("userInfo");
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.user?.restaurants?.[0]?.id ? String(parsed.user.restaurants[0].id) : null;
+    const id =
+      parsed?.user?.restaurants?.[0]?.id ??
+      parsed?.restaurants?.[0]?.id ??
+      parsed?.restaurant?.id ??
+      parsed?.restaurant_id ??
+      parsed?.restaurantId ??
+      null;
+    return id ? String(id) : null;
   } catch {
     return null;
   }
 }
 
-function compressImage(file: File, maxDim = 1200, quality = 0.82): Promise<string> {
+function compressImage(
+  file: File,
+  maxDim = 1200,
+  quality = 0.82,
+  options: { preserveTransparency?: boolean } = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -99,7 +114,26 @@ function compressImage(file: File, maxDim = 1200, quality = 0.82): Promise<strin
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext("2d")?.drawImage(img, 0, 0, width, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Failed to initialize image canvas"));
+        return;
+      }
+
+      // Logos need alpha preserved. Exporting a transparent PNG as JPEG
+      // flattens transparent pixels and browsers commonly render them black.
+      if (!options.preserveTransparency) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      if (options.preserveTransparency) {
+        resolve(canvas.toDataURL("image/png"));
+        return;
+      }
+
       resolve(canvas.toDataURL("image/jpeg", quality));
     };
 
@@ -674,7 +708,7 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
 
               <div className="relative h-full flex flex-col items-center justify-center px-4 text-center">
                 <div
-                  className="h-16 w-16 rounded-2xl overflow-hidden flex items-center justify-center mb-3"
+                  className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center mb-3"
                   style={{
                     background: "rgba(255,255,255,0.12)",
                     backdropFilter: "blur(16px)",
@@ -683,13 +717,18 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
                   }}
                 >
                   {previewBrand.logoUrl ? (
-                    <img src={previewBrand.logoUrl} alt="Brand logo" className="w-10 h-10 object-contain" />
+                    <img src={previewBrand.logoUrl} alt="Brand logo" className="w-10 h-10 object-contain bg-transparent" />
                   ) : (
                     <span className="text-2xl font-bold text-white">{restaurantName.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
 
-                <p className="text-white font-bold leading-tight text-[14px] mb-6">{restaurantName}</p>
+                <p className="text-white font-bold leading-tight text-[14px]">{restaurantName}</p>
+                {previewBrand.tagline ? (
+                  <p className="mt-1.5 mb-5 text-[9px] leading-snug text-white/70">{previewBrand.tagline}</p>
+                ) : (
+                  <div className="mb-6" />
+                )}
 
                 <div className="w-full py-2.5 rounded-xl text-[10px] font-bold text-slate-900 bg-white/95">
                   View Menu
@@ -719,9 +758,9 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
                 <div className="absolute inset-0" style={{ backgroundColor: heroOverlay(previewBrand.themePreset) }} />
 
                 <div className="relative z-10 h-full px-3 py-2 flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg overflow-hidden flex items-center justify-center" style={previewBrand.logoUrl ? { backgroundColor: "rgba(255,255,255,0.2)", padding: "2px" } : { backgroundColor: `${primaryColor}50` }}>
+                  <div className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center" style={previewBrand.logoUrl ? { backgroundColor: "rgba(255,255,255,0.2)", padding: "2px" } : { backgroundColor: `${primaryColor}50` }}>
                     {previewBrand.logoUrl ? (
-                      <img src={previewBrand.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                      <img src={previewBrand.logoUrl} alt="Logo" className="w-full h-full object-contain bg-transparent" />
                     ) : (
                       <span className="text-white text-xs font-bold">{restaurantName.charAt(0).toUpperCase()}</span>
                     )}
@@ -1005,7 +1044,9 @@ export default function ScreenMultiLocationBranding() {
 
     setProcessing(true);
     try {
-      const compressed = await compressImage(file);
+      const compressed = await compressImage(file, 1200, 0.82, {
+        preserveTransparency: target === "logo",
+      });
       if (target === "logo") {
         setField("logoUrl", compressed);
       } else {
@@ -1139,7 +1180,7 @@ export default function ScreenMultiLocationBranding() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <ImageUploadField
                 label="Logo"
-                hint="Recommended: PNG with transparent background. Shows in the menu hero."
+                hint="Recommended: PNG with transparent background. Transparency is preserved in previews and customer screens."
                 value={form.logoUrl}
                 uploading={isProcessing}
                 onChange={(next) => setField("logoUrl", next)}
