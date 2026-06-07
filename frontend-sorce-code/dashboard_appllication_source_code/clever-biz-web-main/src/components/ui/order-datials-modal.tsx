@@ -1,5 +1,6 @@
 import { Calendar, CreditCard, Package, X } from "lucide-react";
 import { getActiveRestaurantCurrency } from "@/lib/utils";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface OrderItem {
   item_id: number;
@@ -116,14 +117,12 @@ export default function OrderDetailsModal({
                     {/* Image */}
                     <div className="w-14 h-14 rounded-lg overflow-hidden bg-white/10 flex-shrink-0">
                       {item.image ? (
-                        <img
+                        <OptimizedImage
                           src={item.image}
                           alt={item.item_name}
+                          width={56}
+                          height={56}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src =
-                              "https://via.placeholder.com/56?text=No+Image";
-                          }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">

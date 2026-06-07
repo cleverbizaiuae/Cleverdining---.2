@@ -12,6 +12,7 @@ import {
 import React, { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/store";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 
 export interface TSubscriber {
   id: number;
@@ -91,7 +92,7 @@ const ScreenAdminManagement = () => {
   });
   useEffect(() => {
     const fetchDatas = async () => {
-      const res = await axiosInstance.get("/adminapi/restaurants/summary/");
+      const res = await cachedGet("/adminapi/restaurants/summary/", {}, { ttlMs: 60_000 });
       const data = await res?.data;
       setStats(data);
     };
@@ -113,9 +114,9 @@ const ScreenAdminManagement = () => {
         };
         if (search.trim()) params.restaurant_name = search.trim();
 
-        const response = await axiosInstance.get("/adminapi/restaurants/", {
+        const response = await cachedGet("/adminapi/restaurants/", {
           params,
-        });
+        }, { ttlMs: 60_000 });
 
         // DRF style: { count, results, next, previous }
         const { count = 0, results = [] } = response.data ?? {};
@@ -240,9 +241,7 @@ export const TableSubscriberList: React.FC<TableSubscriberListProps> = ({
 
   const refreshSummary = useCallback(async () => {
     try {
-      const { data } = await axiosInstance.get(
-        "/adminapi/restaurants/summary/"
-      );
+      const { data } = await cachedGet("/adminapi/restaurants/summary/", {}, { ttlMs: 60_000 });
       setStats(data);
     } catch (e) {
       console.error("Failed to refresh summary:", e);
@@ -288,6 +287,7 @@ export const TableSubscriberList: React.FC<TableSubscriberListProps> = ({
           )
         );
       }
+      invalidateApiCache("adminapi/restaurants");
       await refreshSummary();
     } catch (e) {
       setRows((list) =>

@@ -1,4 +1,4 @@
-import { Logo } from "@/components/icons/logo";
+import { Logo } from "@/components/icons/brandLogo";
 import { SearchBox } from "@/components/input";
 import { OutletSheet } from "./outlet-sheet";
 

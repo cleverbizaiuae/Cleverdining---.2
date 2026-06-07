@@ -8,11 +8,14 @@ from .views import (
     LoyaltyEarnAPIView,
     LoyaltyHistoryAPIView,
     LoyaltyRedeemAPIView,
+    SuperCrmCustomerListAPIView,
 )
 
 urlpatterns = [
     path("crm/customers", CrmCustomerListAPIView.as_view(), name="crm-customers"),
     path("crm/customers/", CrmCustomerListAPIView.as_view(), name="crm-customers-slash"),
+    path("super/crm/customers", SuperCrmCustomerListAPIView.as_view(), name="super-crm-customers"),
+    path("super/crm/customers/", SuperCrmCustomerListAPIView.as_view(), name="super-crm-customers-slash"),
     path("crm/customers/<uuid:customer_id>", CrmCustomerDetailAPIView.as_view(), name="crm-customer-detail"),
     path("crm/customers/<uuid:customer_id>/", CrmCustomerDetailAPIView.as_view(), name="crm-customer-detail-slash"),
     path("loyalty/earn", LoyaltyEarnAPIView.as_view(), name="loyalty-earn"),

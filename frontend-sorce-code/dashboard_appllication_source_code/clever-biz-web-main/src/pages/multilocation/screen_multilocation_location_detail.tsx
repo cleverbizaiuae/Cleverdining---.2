@@ -12,6 +12,7 @@ import {
   updateLocation,
 } from "./store";
 import { RoleBadge, StatusBadge, formatCurrency, formatPercent } from "./components";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type EditDraft = {
   name: string;
@@ -170,7 +171,7 @@ export default function ScreenMultiLocationLocationDetail() {
       <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
         <div className="relative h-64 bg-slate-100">
           {location.image_url ? (
-            <img src={location.image_url} alt={location.name} className="w-full h-full object-cover" />
+            <OptimizedImage src={location.image_url} alt={location.name} width={960} height={256} className="w-full h-full object-cover" eager />
           ) : (
             <div className="h-full flex items-center justify-center text-slate-400">No location image</div>
           )}

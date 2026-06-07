@@ -110,7 +110,31 @@ export default function ScreenMultiLocationDashboard() {
             Sort by Revenue
           </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-slate-100 sm:hidden">
+          {rankingRows.map((row) => (
+            <button
+              key={row.location_id}
+              className="w-full p-4 text-left space-y-3 hover:bg-slate-50"
+              onClick={() => navigate(`/multilocation/locations/${row.location_id}`)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900 truncate">{row.location_name}</p>
+                  <p className="text-xs text-slate-500">{row.orders} orders</p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold text-slate-900">{formatCurrency(row.revenue)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-slate-900 rounded-full" style={{ width: `${Math.max(5, row.revenue_share_pct)}%` }} />
+                </div>
+                <span className="text-slate-600 text-xs">{formatPercent(row.revenue_share_pct)}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>

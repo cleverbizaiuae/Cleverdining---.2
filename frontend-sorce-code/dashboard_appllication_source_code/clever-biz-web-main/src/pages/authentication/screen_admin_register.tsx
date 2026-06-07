@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router";
 import { Store, MapPin, Upload, Phone as PhoneIcon, Lock, Loader2, User, Eye, EyeOff, CheckCircle } from "lucide-react";
 import logo from "../../assets/cleverbiz_full_logo.png";
-import registerBg from "../../assets/register-bg.jpg";
+import registerBg from "../../assets/register-bg.webp";
 import toast from "react-hot-toast";
 import axiosInstance from "../../lib/axios";
 import { getRegionConfig } from "../../config/regionConfig";

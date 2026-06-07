@@ -7,8 +7,8 @@ import {
   Star,
   Twitter,
 } from "lucide-react";
-import axiosInstance from "@/lib/axios";
 import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
+import { cachedGet } from "@/lib/requestCache";
 import logoImg from "@/assets/icon-32.png";
 
 const firstNonEmpty = (...values: unknown[]) => {
@@ -134,9 +134,9 @@ const SuccessPage = () => {
 
         if (orderId && guestToken) {
           // Fetch order to get restaurant info
-          const res = await axiosInstance.get(`/api/customer/uncomplete/orders/${orderId}/`, {
+          const res = await cachedGet(`/api/customer/uncomplete/orders/${orderId}/`, {
             headers: { "X-Guest-Session-Token": guestToken },
-          });
+          }, { ttlMs: 2_000 });
 
           if (res.data) {
             setRestaurantName(res.data.restaurant_name || "");

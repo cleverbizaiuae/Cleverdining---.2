@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { API_BASE_URL } from "./axios";
+import { cachedGet } from "./requestCache";
 
 export type ThemePreset = "classic_clean" | "luxury_dark" | "warm_casual";
 export type FontPreset = "modern" | "elegant" | "bold";
@@ -34,7 +34,8 @@ type BrandingSnapshot = {
 
 const BRAND_CACHE_KEY = "cb_brand_config_cache";
 const BRAND_BRIDGE_KEY = "customer_branding";
-const BRAND_REMOTE_REFRESH_MS = 60_000;
+const BRAND_REMOTE_REFRESH_MS = 4_000;
+const preloadedBrandImages = new Set<string>();
 
 export const DEFAULT_BRAND: BrandConfig = {
   restaurantName: "My Restaurant",
@@ -167,6 +168,16 @@ function writeCachedConfig(config: BrandConfig): void {
   }
 }
 
+function preloadBrandImage(url: string | null | undefined): void {
+  if (typeof window === "undefined") return;
+  const src = String(url || "").trim();
+  if (!src || preloadedBrandImages.has(src)) return;
+  preloadedBrandImages.add(src);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = src;
+}
+
 function getLocalFallback(): Partial<BrandConfig> {
   const bridge = readBridgeSnapshot();
   return {
@@ -199,6 +210,11 @@ export function useBrandConfig(restaurantId?: string | number | null) {
   }, []);
 
   useEffect(() => {
+    preloadBrandImage(brand.logoUrl);
+    preloadBrandImage(brand.coverImageUrl);
+  }, [brand.coverImageUrl, brand.logoUrl]);
+
+  useEffect(() => {
     if (!normalizedRestaurantId) {
       syncFromCache();
       return;
@@ -208,15 +224,17 @@ export function useBrandConfig(restaurantId?: string | number | null) {
 
     const fetchRemote = async () => {
       try {
-        const response = await fetch(
-          `${API_BASE_URL}api/brand-config/?restaurant_id=${encodeURIComponent(normalizedRestaurantId)}`,
-          { headers: { "Content-Type": "application/json" } }
+        const response = await cachedGet(
+          `/api/brand-config/?restaurant_id=${encodeURIComponent(normalizedRestaurantId)}`,
+          { headers: { "Content-Type": "application/json" } },
+          { ttlMs: 3_500 },
         );
-        if (!response.ok) return;
-        const mapped = mapBrandConfig(await response.json());
+        const mapped = mapBrandConfig(response.data);
         if (!isMounted) return;
         setBrand(mapped);
         writeCachedConfig(mapped);
+        preloadBrandImage(mapped.logoUrl);
+        preloadBrandImage(mapped.coverImageUrl);
       } catch {
         // Silent fallback.
       }

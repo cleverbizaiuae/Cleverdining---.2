@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
 import { AlertCircle, Loader2, MessageCircle, Phone, Search, Tag, UserCheck, UserRoundCheck, UsersRound } from "lucide-react";
 
@@ -114,7 +115,7 @@ export default function ScreenRestaurantLeads() {
       setLoading(true);
       setError("");
       try {
-        const response = await axiosInstance.get(`/api/leads/${restaurantId || "default"}`);
+        const response = await cachedGet(`/api/leads/${restaurantId || "default"}`, {}, { ttlMs: 30_000 });
         const rows = toArray<Record<string, unknown>>(response.data, ["leads"])
           .map(normalizeLead)
           .filter((lead) => lead.id);
@@ -152,6 +153,7 @@ export default function ScreenRestaurantLeads() {
     setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, status: nextStatus, lastSeen: today() } : lead));
     try {
       const response = await axiosInstance.patch(`/api/leads/${leadId}`, { status: nextStatus });
+      invalidateApiCache("api/leads");
       const updated = normalizeLead((response.data?.lead || response.data?.data || response.data) as Record<string, unknown>);
       if (updated.id) {
         setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, ...updated } : lead));

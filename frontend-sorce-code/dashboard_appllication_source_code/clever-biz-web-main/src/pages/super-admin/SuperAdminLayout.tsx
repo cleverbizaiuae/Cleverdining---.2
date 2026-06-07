@@ -6,6 +6,8 @@ import { Toaster } from "react-hot-toast";
 import {
     LayoutDashboard,
     Users,
+    ContactRound,
+    Network,
     LogOut,
     Menu,
     X,
@@ -57,11 +59,13 @@ const SuperAdminLayout = () => {
     const navItems = [
         { label: "Dashboard", path: "/superadmin", icon: <LayoutDashboard size={20} /> },
         { label: "Management", path: "/superadmin/management", icon: <Users size={20} /> },
+        { label: "CRM", path: "/superadmin/crm", icon: <ContactRound size={20} /> },
+        { label: "Multi-Location", path: "/superadmin/multi-location", icon: <Network size={20} /> },
     ];
 
     return (
         <QueryClientProvider client={queryClient}>
-            <div className="flex min-h-screen bg-slate-50">
+            <div className="admin-typography flex min-h-screen bg-slate-50 font-inter">
                 {/* --- Mobile Sidebar Overlay --- */}
                 {sidebarOpen && (
                     <div
@@ -74,7 +78,7 @@ const SuperAdminLayout = () => {
                 <aside className={`
                 fixed top-0 left-0 h-full bg-white border-r border-slate-200 shadow-xl z-50 transition-all duration-300
                 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-                ${isCollapsed ? "w-20" : "w-64"}
+                w-64 ${isCollapsed ? "lg:w-20" : "lg:w-64"}
             `}>
                     <div className="flex flex-col h-full relative">
                         {/* Collapse Toggle Button - Desktop Only */}
@@ -88,9 +92,12 @@ const SuperAdminLayout = () => {
                         {/* Sidebar Header */}
                         <div className="h-16 flex items-center justify-center px-4 border-b border-slate-100">
                             {isCollapsed ? (
-                                <div className="w-10 h-10 bg-gradient-to-br from-[#0055FE] to-cyan-400 rounded-xl flex items-center justify-center text-white font-bold text-xl">
-                                    C
-                                </div>
+                                <>
+                                    <div className="hidden w-10 h-10 bg-gradient-to-br from-[#0055FE] to-cyan-400 rounded-xl lg:flex items-center justify-center text-white font-bold text-xl">
+                                        C
+                                    </div>
+                                    <img src={logo} alt="CleverBiz AI" className="h-8 w-auto max-w-[160px] lg:hidden" />
+                                </>
                             ) : (
                                 <img src={logo} alt="CleverBiz AI" className="h-8 w-auto" />
                             )}
@@ -109,8 +116,8 @@ const SuperAdminLayout = () => {
                                         to={item.path}
                                         title={isCollapsed ? item.label : undefined}
                                         className={`
-                                        flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
-                                        ${isCollapsed ? "justify-center" : ""}
+                                        admin-sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+                                        ${isCollapsed ? "lg:justify-center" : ""}
                                         ${isActive
                                                 ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
                                                 : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE]"
@@ -118,7 +125,7 @@ const SuperAdminLayout = () => {
                                     `}
                                     >
                                         {item.icon}
-                                        {!isCollapsed && item.label}
+                                        {isCollapsed ? <span className="lg:hidden">{item.label}</span> : item.label}
                                     </Link>
                                 );
                             })}
@@ -131,11 +138,11 @@ const SuperAdminLayout = () => {
                                 title={isCollapsed ? "Logout" : undefined}
                                 className={`
                                 flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all
-                                ${isCollapsed ? "justify-center" : ""}
+                                ${isCollapsed ? "lg:justify-center" : ""}
                             `}
                             >
                                 <LogOut size={20} />
-                                {!isCollapsed && "Logout"}
+                                {isCollapsed ? <span className="lg:hidden">Logout</span> : "Logout"}
                             </button>
                         </div>
                     </div>
@@ -145,15 +152,15 @@ const SuperAdminLayout = () => {
                 <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
                     {/* Header */}
                     <header className="sticky top-0 z-30 h-16 sm:h-20 bg-white border-b border-slate-200 shadow-sm px-4 sm:px-8 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                        <div className="flex min-w-0 items-center gap-4">
                             <button
                                 onClick={() => setSidebarOpen(true)}
                                 className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
                             >
                                 <Menu size={24} />
                             </button>
-                            <div>
-                                <h1 className="text-lg sm:text-xl font-bold text-slate-900">Dashboard</h1>
+                            <div className="min-w-0">
+                                <h1 className="admin-page-title truncate text-slate-900">Dashboard</h1>
                                 <p className="hidden sm:block text-xs text-slate-400">{formattedDate}</p>
                             </div>
                         </div>

@@ -34,7 +34,13 @@ const BASE_URL = process.env.WEB_BASE_URL || `http://127.0.0.1:${PORT}`;
 const API_BASE_URL =
   process.env.API_BASE_URL ||
   process.env.VITE_API_URL ||
-  "https://cleverdining-2.onrender.com";
+  "http://127.0.0.1:8000";
+if (/cleverdining-2\.onrender\.com/i.test(API_BASE_URL) && process.env.ALLOW_REMOTE_E2E !== "true") {
+  throw new Error(
+    "Refusing to run E2E against the deployed API because the seed helpers mutate data. " +
+      "Use a disposable API_BASE_URL or set ALLOW_REMOTE_E2E=true explicitly."
+  );
+}
 const WS_BASE_URL =
   process.env.VITE_WS_URL ||
   API_BASE_URL.replace(/^http/i, "ws");

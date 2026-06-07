@@ -1,5 +1,7 @@
 import random
+import re
 import string
+import threading
 from rest_framework import viewsets, permissions,filters
 from rest_framework.response import Response
 from rest_framework import status
@@ -18,9 +20,11 @@ from rest_framework.permissions import AllowAny
 from accounts.models import ChefStaff
 from restaurant.region_config import resolve_region_defaults
 from rest_framework.exceptions import PermissionDenied
-from django.utils.dateparse import parse_date
-from django_filters.rest_framework import DjangoFilterBackend
-from datetime import timedelta
+from django.utils.dateparse import parse_date, parse_datetime
+from core.filter_backends import SchemaSafeDjangoFilterBackend as DjangoFilterBackend
+from datetime import datetime, time, timedelta
+from django.db.models import Q
+from django.utils import timezone as django_timezone
 from django.utils.timezone import now
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -270,7 +274,9 @@ class CloseTableSessionView(APIView):
 
 def generate_username(restaurant_name):
     number = random.randint(1000, 9999)
-    return f"{restaurant_name.replace(' ', '').lower()}{number}"
+    safe_name = re.sub(r"[^a-zA-Z0-9_]+", "", str(restaurant_name or "restaurant").lower())
+    safe_name = safe_name[:120] or "restaurant"
+    return f"{safe_name}{number}"
 
 def generate_password(length=10):
     characters = string.ascii_letters + string.digits
@@ -291,6 +297,55 @@ def _enforce_table_limit(restaurant):
             "table_limit": table_limit,
             "current_tables": current_tables,
         })
+
+
+def _normalize_table_value(value, default=""):
+    return str(value if value is not None else default).strip()
+
+
+def _derive_table_number(table_name):
+    table_name = _normalize_table_value(table_name)
+    digits = "".join(ch for ch in table_name if ch.isdigit())
+    return digits or table_name[:20]
+
+
+def _device_response(device, username=None):
+    return {
+        "id": device.id,
+        "table_name": device.table_name or "",
+        "table_number": device.table_number or "",
+        "region": device.region or "Primary",
+        "restaurant": device.restaurant.id if device.restaurant else None,
+        "restaurant_id": device.restaurant.id if device.restaurant else None,
+        "restaurant_name": device.restaurant.resturent_name if device.restaurant else "",
+        "action": device.action or "active",
+        "username": username or (device.user.username if device.user else ""),
+        "user_id": device.user.id if device.user else None,
+        "qr_code_image": None,
+        "table_url": getattr(device, "table_url", None),
+        "active_session_id": None,
+        "unread_count": 0,
+        "last_message_time": None,
+    }
+
+
+def _send_device_credentials_email_async(owner_email, username, password):
+    if not owner_email:
+        return
+
+    def _send():
+        try:
+            send_mail(
+                subject="New Device User Created",
+                message=f"Username: {username}\nPassword: {password}",
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=[owner_email],
+                fail_silently=True,
+            )
+        except Exception as e:
+            print(f"WARNING: Failed to send device credentials email: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 
@@ -402,6 +457,20 @@ class DeviceViewSet(viewsets.ModelViewSet):
             restaurant = Restaurant.objects.select_for_update().get(pk=restaurant.pk)
             _enforce_table_limit(restaurant)
 
+            table_name = _normalize_table_value(serializer.validated_data.get("table_name"))
+            if not table_name:
+                raise serializers.ValidationError({"table_name": "Table name is required."})
+
+            region = _normalize_table_value(serializer.validated_data.get("region"), "Primary") or "Primary"
+            table_number = _normalize_table_value(serializer.validated_data.get("table_number")) or _derive_table_number(table_name)
+
+            duplicate = Device.objects.filter(
+                restaurant=restaurant,
+                table_name__iexact=table_name,
+            ).exists()
+            if duplicate:
+                raise serializers.ValidationError({"table_name": "A table with this name already exists."})
+
             # Generate unique username
             username = None
             password = generate_password()
@@ -426,7 +495,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
             )
 
             try:
-                device = serializer.save(user=device_user, restaurant=restaurant)
+                device = serializer.save(
+                    user=device_user,
+                    restaurant=restaurant,
+                    table_name=table_name,
+                    table_number=table_number,
+                    region=region,
+                )
             except Exception as e:
                 print(f"CRITICAL: Device creation failed (likely QR code/Storage): {e}")
                 raise serializers.ValidationError(f"Failed to create table/QR code. Error: {str(e)}")
@@ -439,16 +514,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         else:
              owner_email = "admin@cleverbiz.ai"
 
-        try:
-            send_mail(
-                subject="New Device User Created",
-                message=f"Username: {username}\nPassword: {password}",
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[owner_email],
-                fail_silently=False
-            )
-        except Exception as e:
-            print(f"WARNING: Failed to send email: {e}")
+        _send_device_credentials_email_async(owner_email, username, password)
 
         data = DeviceSerializer(device).data
         try:
@@ -528,13 +594,20 @@ class DeviceViewSet(viewsets.ModelViewSet):
                     "can_create_table": False,
                 })
 
-            all_devices = Device.objects.filter(restaurant=restaurant)
-            table_limit, current_tables = _table_capacity_info(restaurant)
+            from django.db.models import Count, Q
+
+            device_counts = Device.objects.filter(restaurant=restaurant).aggregate(
+                total=Count('id'),
+                active=Count('id', filter=Q(action='active')),
+                hold=Count('id', filter=Q(action='hold')),
+            )
+            table_limit = int(getattr(restaurant, "table_count", 0) or 0)
+            current_tables = device_counts["total"] or 0
             return Response({
                 "restaurant": restaurant.resturent_name,
                 "total_devices": current_tables,
-                "active_devices": all_devices.filter(action='active').count(),
-                "hold_devices": all_devices.filter(action='hold').count(),
+                "active_devices": device_counts["active"] or 0,
+                "hold_devices": device_counts["hold"] or 0,
                 "table_limit": table_limit,
                 "can_create_table": not (table_limit > 0 and current_tables >= table_limit),
             })
@@ -591,25 +664,108 @@ class ReservationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
     pagination_class = ReservationPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    search_fields = ['id']
+    search_fields = ['id', 'customer_name', 'cell_number', 'email', 'device__table_name']
+    terminal_statuses = ['cancel', 'cancelled', 'no_show', 'finished']
+
+    def _user_restaurants(self):
+        user = self.request.user
+        if getattr(user, 'role', None) == 'owner':
+            return list(user.restaurants.all())
+        if getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
+            chef_staff = ChefStaff.objects.filter(user=user)
+            restaurants = [cs.restaurant for cs in chef_staff if cs.restaurant_id]
+            if restaurants:
+                return restaurants
+            from staff.models import Staff
+            legacy_staff = Staff.objects.filter(user=user).first()
+            if legacy_staff and legacy_staff.restaurant:
+                return [legacy_staff.restaurant]
+        return []
+
+    def _assert_reservation_access(self, reservation):
+        user = self.request.user
+        if getattr(user, 'role', None) == 'owner' and reservation.restaurant and reservation.restaurant.owner == user:
+            return
+        if getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
+            if ChefStaff.objects.filter(user=user, restaurant=reservation.restaurant, action='accepted').exists():
+                return
+            from staff.models import Staff
+            if Staff.objects.filter(user=user, restaurant=reservation.restaurant).exists():
+                return
+        raise PermissionDenied("You are not authorized to update this reservation.")
+
+    def _parse_slot_datetime(self, start_value=None, date_value=None, time_value=None):
+        if start_value:
+            parsed = parse_datetime(str(start_value))
+            if parsed:
+                if django_timezone.is_naive(parsed):
+                    parsed = django_timezone.make_aware(parsed, django_timezone.get_current_timezone())
+                return parsed
+
+        if date_value and time_value:
+            parsed_date = parse_date(str(date_value))
+            if not parsed_date:
+                return None
+            parts = str(time_value).split(":")
+            try:
+                parsed_time = time(hour=int(parts[0]), minute=int(parts[1]) if len(parts) > 1 else 0)
+            except (ValueError, IndexError):
+                return None
+            combined = datetime.combine(parsed_date, parsed_time)
+            return django_timezone.make_aware(combined, django_timezone.get_current_timezone()) if django_timezone.is_naive(combined) else combined
+        return None
+
+    def _reservation_end(self, reservation):
+        if reservation.end_time:
+            return reservation.end_time
+        minutes = int(reservation.duration_minutes or 90) + int(reservation.buffer_minutes or 10)
+        return reservation.reservation_time + timedelta(minutes=minutes)
+
+    def _conflicting_reservation(self, device_id, start_time, end_time, exclude_id=None):
+        qs = Reservation.objects.filter(device_id=device_id).exclude(status__in=self.terminal_statuses)
+        if exclude_id:
+            qs = qs.exclude(id=exclude_id)
+        for reservation in qs.only('id', 'reservation_time', 'end_time', 'duration_minutes', 'buffer_minutes', 'status'):
+            existing_end = self._reservation_end(reservation)
+            if reservation.reservation_time < end_time and existing_end > start_time:
+                return reservation
+        return None
+
+    def _broadcast_reservation(self, reservation, event_type="reservation_updated"):
+        try:
+            data = ReservationSerializer(reservation).data
+            async_to_sync(channel_layer.group_send)(
+                f"restaurant_{reservation.restaurant.id}",
+                {"type": event_type, "reservation": data}
+            )
+        except Exception as e:
+            print(f"Reservation WS error (non-fatal): {e}")
+
+    def _update_reservation_action(self, reservation, values, event_type="reservation_updated"):
+        self._assert_reservation_access(reservation)
+        for key, value in values.items():
+            setattr(reservation, key, value)
+        reservation.save()
+        self._broadcast_reservation(reservation, event_type=event_type)
+        return Response(ReservationSerializer(reservation).data)
 
     def get_queryset(self):
         user = self.request.user
         queryset = Reservation.objects.none()
 
         if getattr(user, 'role', None) == 'owner':
-            queryset = Reservation.objects.filter(restaurant__owner=user)
+            queryset = Reservation.objects.select_related('device', 'restaurant').filter(restaurant__owner=user)
         elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
              # Consolidated Staff/Chef lookup with Fallback
             chef_staff = ChefStaff.objects.filter(user=user).first()
             if chef_staff:
-                queryset = Reservation.objects.filter(restaurant=chef_staff.restaurant)
+                queryset = Reservation.objects.select_related('device', 'restaurant').filter(restaurant=chef_staff.restaurant)
             else:
                 # Legacy Staff Fallback
                 from staff.models import Staff
                 legacy_staff = Staff.objects.filter(user=user).first()
                 if legacy_staff and legacy_staff.restaurant:
-                     queryset = Reservation.objects.filter(restaurant=legacy_staff.restaurant)
+                     queryset = Reservation.objects.select_related('device', 'restaurant').filter(restaurant=legacy_staff.restaurant)
 
         date_str = self.request.query_params.get('date')
         if date_str:
@@ -617,39 +773,225 @@ class ReservationViewSet(viewsets.ModelViewSet):
             if parsed_date:
                 queryset = queryset.filter(reservation_time__date=parsed_date)
 
-        return queryset
+        return queryset.order_by('-reservation_time')
 
     def get_serializer_class(self):
         if self.action in ['partial_update', 'update']:
             return ReservationStatusUpdateSerializer
         return ReservationSerializer  
 
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        field_aliases = {
+            'customerName': 'customer_name',
+            'phone': 'cell_number',
+            'guestCount': 'guest_no',
+            'reservationTime': 'reservation_time',
+            'endTime': 'end_time',
+            'durationMinutes': 'duration_minutes',
+            'bufferMinutes': 'buffer_minutes',
+            'customRequest': 'custom_request',
+            'tableName': 'table_name',
+            'tableCapacity': 'table_capacity',
+            'actualSeatedTime': 'actual_seated_time',
+            'whatsappPhoneNumberId': 'whatsapp_phone_number_id',
+            'whatsappChatId': 'whatsapp_chat_id',
+            'whatsappMessageId': 'whatsapp_message_id',
+            'rawCustomerText': 'raw_customer_text',
+            'aiConfidence': 'ai_confidence',
+            'missingFields': 'missing_fields',
+        }
+        for source_key, target_key in field_aliases.items():
+            if data.get(source_key) not in [None, ""] and not data.get(target_key):
+                data[target_key] = data.get(source_key)
+
+        device_id = data.get('device') or data.get('tableId') or data.get('table_id')
+        if not device_id:
+            return Response({"device": ["A table is required."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            device = Device.objects.select_related('restaurant').get(id=device_id)
+        except (ValueError, TypeError, Device.DoesNotExist):
+            return Response({"device": ["Table not found."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if device.restaurant not in self._user_restaurants():
+            raise PermissionDenied("You are not assigned to this restaurant.")
+
+        data['device'] = device.id
+        data['restaurant'] = device.restaurant.id
+        data.setdefault('table_name', device.table_name)
+        data.setdefault('status', 'confirmed')
+        data.setdefault('source', 'dashboard')
+        data.setdefault('duration_minutes', 90)
+        data.setdefault('buffer_minutes', 10)
+
+        start_time = self._parse_slot_datetime(data.get('reservation_time') or data.get('reservationTime'))
+        if not start_time:
+            return Response({"reservation_time": ["A valid reservation time is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        duration = int(data.get('duration_minutes') or data.get('durationMinutes') or 90)
+        buffer = int(data.get('buffer_minutes') or data.get('bufferMinutes') or 10)
+        end_time = self._parse_slot_datetime(data.get('end_time') or data.get('endTime')) or start_time + timedelta(minutes=duration + buffer)
+        data['reservation_time'] = start_time
+        data['end_time'] = end_time
+        data['duration_minutes'] = duration
+        data['buffer_minutes'] = buffer
+
+        force = str(request.query_params.get('force', '')).lower() == 'true'
+        conflict = self._conflicting_reservation(device.id, start_time, end_time)
+        if conflict and not force:
+            return Response({
+                "error": "Reservation conflicts with an existing booking.",
+                "conflict": True,
+                "reservationId": conflict.id,
+            }, status=status.HTTP_409_CONFLICT)
+
+        serializer = ReservationSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        reservation = serializer.save()
+        self._broadcast_reservation(reservation, event_type="reservation_created")
+        payload = ReservationSerializer(reservation).data
+        if conflict and force:
+            payload["warning"] = "Created with force override despite a table conflict."
+        return Response(payload, status=status.HTTP_201_CREATED)
+
     def partial_update(self, request, *args, **kwargs):
         reservation = self.get_object()
-        user = request.user
-
-        if getattr(user, 'role', None) == 'owner' and reservation.restaurant.owner == user:
-            pass
-        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
-            is_authorized = ChefStaff.objects.filter(user=user, restaurant=reservation.restaurant, action='accepted').exists()
-            if not is_authorized:
-                raise PermissionDenied("You're not assigned to this restaurant.")
-        else:
-            raise PermissionDenied("You are not authorized to update this reservation.")
+        self._assert_reservation_access(reservation)
 
         serializer = self.get_serializer(reservation, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         reservation = serializer.save()
-
-        try:
-            data = ReservationSerializer(reservation).data
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{reservation.restaurant.id}",
-                {"type": "reservation_updated", "reservation": data}
-            )
-        except Exception as e:
-            print(f"ReservationViewSet.partial_update WS error (non-fatal): {e}")
+        self._broadcast_reservation(reservation)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='check-conflict')
+    def check_conflict(self, request):
+        device_id = request.query_params.get('tableId') or request.query_params.get('table_id') or request.query_params.get('device')
+        start_time = self._parse_slot_datetime(request.query_params.get('startTime') or request.query_params.get('start_time'))
+        end_time = self._parse_slot_datetime(request.query_params.get('endTime') or request.query_params.get('end_time'))
+        exclude_id = request.query_params.get('excludeId') or request.query_params.get('exclude_id')
+        if not device_id or not start_time or not end_time:
+            return Response({"error": "tableId, startTime, and endTime are required."}, status=status.HTTP_400_BAD_REQUEST)
+        conflict = self._conflicting_reservation(device_id, start_time, end_time, exclude_id=exclude_id)
+        return Response({"conflict": bool(conflict), "reservationId": conflict.id if conflict else None})
+
+    @action(detail=False, methods=['get'], url_path='availability')
+    def availability(self, request):
+        date_value = request.query_params.get('date')
+        time_value = request.query_params.get('time')
+        duration = int(request.query_params.get('duration') or request.query_params.get('durationMinutes') or 90)
+        party_size = int(request.query_params.get('partySize') or request.query_params.get('party_size') or 1)
+        start_time = self._parse_slot_datetime(date_value=date_value, time_value=time_value)
+        if not start_time:
+            return Response({"error": "date and time are required."}, status=status.HTTP_400_BAD_REQUEST)
+        end_time = start_time + timedelta(minutes=duration + 10)
+        restaurants = self._user_restaurants()
+        tables = Device.objects.filter(restaurant__in=restaurants, action='active').select_related('restaurant').order_by('region', 'table_name')
+        available_tables = []
+        for table in tables:
+            capacity = int(getattr(table, 'capacity', 0) or party_size)
+            if capacity < party_size:
+                continue
+            if not self._conflicting_reservation(table.id, start_time, end_time):
+                available_tables.append(DeviceSerializer(table, context={'request': request}).data)
+        return Response({
+            "available": len(available_tables) > 0,
+            "tableCount": len(available_tables),
+            "tables": available_tables,
+        })
+
+    @action(detail=True, methods=['post'], url_path='confirm')
+    def confirm(self, request, pk=None):
+        return self._update_reservation_action(self.get_object(), {
+            "status": "confirmed",
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('notes') or request.data.get('reason') or "",
+        })
+
+    @action(detail=True, methods=['post'], url_path='mark-seated')
+    def mark_seated(self, request, pk=None):
+        return self._update_reservation_action(self.get_object(), {
+            "status": "seated",
+            "actual_seated_time": now(),
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('notes') or "",
+        })
+
+    @action(detail=True, methods=['post'], url_path='extend')
+    def extend(self, request, pk=None):
+        reservation = self.get_object()
+        minutes = int(request.data.get('minutes') or request.data.get('extensionMinutes') or 30)
+        base_end = self._reservation_end(reservation)
+        return self._update_reservation_action(reservation, {
+            "status": "extended",
+            "end_time": base_end + timedelta(minutes=minutes),
+            "extension_minutes": int(reservation.extension_minutes or 0) + minutes,
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('notes') or f"Extended by {minutes} minutes",
+        })
+
+    @action(detail=True, methods=['post'], url_path='free-table')
+    def free_table(self, request, pk=None):
+        current = now()
+        return self._update_reservation_action(self.get_object(), {
+            "status": "finished",
+            "actual_end_time": current,
+            "end_time": current,
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('notes') or "Table released",
+        })
+
+    @action(detail=True, methods=['post'], url_path='move-table')
+    def move_table(self, request, pk=None):
+        reservation = self.get_object()
+        table_id = request.data.get('tableId') or request.data.get('table_id') or request.data.get('device')
+        try:
+            table = Device.objects.get(id=table_id, restaurant=reservation.restaurant)
+        except (TypeError, ValueError, Device.DoesNotExist):
+            return Response({"tableId": ["Target table not found."]}, status=status.HTTP_400_BAD_REQUEST)
+        conflict = self._conflicting_reservation(table.id, reservation.reservation_time, self._reservation_end(reservation), exclude_id=reservation.id)
+        force = bool(request.data.get('force'))
+        if conflict and not force:
+            return Response({"conflict": True, "reservationId": conflict.id}, status=status.HTTP_409_CONFLICT)
+        return self._update_reservation_action(reservation, {
+            "device": table,
+            "table_name": table.table_name,
+            "status_reason": request.data.get('notes') or request.data.get('reason') or f"Moved to {table.table_name}",
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+        })
+
+    @action(detail=True, methods=['post'], url_path='cancel')
+    def cancel(self, request, pk=None):
+        current = now()
+        return self._update_reservation_action(self.get_object(), {
+            "status": "cancelled",
+            "actual_end_time": current,
+            "end_time": current,
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('reason') or request.data.get('notes') or "Cancelled",
+        })
+
+    @action(detail=True, methods=['post'], url_path='no-show')
+    def no_show(self, request, pk=None):
+        current = now()
+        return self._update_reservation_action(self.get_object(), {
+            "status": "no_show",
+            "actual_end_time": current,
+            "end_time": current,
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('reason') or request.data.get('notes') or "No-show",
+        })
+
+    @action(detail=True, methods=['post'], url_path='mark-left-early')
+    def mark_left_early(self, request, pk=None):
+        current = now()
+        return self._update_reservation_action(self.get_object(), {
+            "status": "finished",
+            "actual_end_time": current,
+            "end_time": current,
+            "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
+            "status_reason": request.data.get('reason') or request.data.get('notes') or "Left early",
+        })
     
     @action(detail=False, methods=['get'], url_path='report-reservation-status')
     def report_reservation_status(self, request):
@@ -682,7 +1024,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # Prepare response data
         total_active = Reservation.objects.filter(
             restaurant__in=restaurants,
-            status='accepted'  # or use whatever value indicates "active"
+            status__in=['accept', 'confirmed', 'seated', 'extended']
         ).count()
 
         last_month_count = Reservation.objects.filter(
@@ -716,8 +1058,28 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        try:
+            from django.db.models import Count, Q, Prefetch, Max
+            from .models import GuestSession
+
+            base_qs = Device.objects.select_related(
+                'restaurant', 'user'
+            ).prefetch_related(
+                Prefetch(
+                    'guest_sessions',
+                    queryset=GuestSession.objects.filter(is_active=True),
+                    to_attr='active_sessions_cache'
+                )
+            ).annotate(
+                unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True)),
+                last_message_time=Max('messages__timestamp')
+            )
+        except Exception as e:
+            print(f"DeviceViewSetall optimization failed, falling back. Error: {e}")
+            base_qs = Device.objects.select_related('restaurant', 'user')
+
         if getattr(user, 'role', None) == 'owner':
-            return Device.objects.filter(restaurant__owner=user)
+            return base_qs.filter(restaurant__owner=user)
         elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
             # Relaxed check
             restaurant_ids = list(ChefStaff.objects.filter(user=user).values_list('restaurant_id', flat=True))
@@ -729,7 +1091,7 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
                 if legacy_staff and legacy_staff.restaurant:
                     restaurant_ids = [legacy_staff.restaurant.id]
             
-            return Device.objects.filter(restaurant_id__in=restaurant_ids)
+            return base_qs.filter(restaurant_id__in=restaurant_ids)
 
         return Device.objects.none()
 
@@ -741,13 +1103,13 @@ class PublicDeviceListView(APIView):
         if not restaurant_id:
             return Response({"error": "restaurant_id is required"}, status=400)
         
-        devices = Device.objects.filter(restaurant_id=restaurant_id)
+        devices = Device.objects.filter(restaurant_id=restaurant_id).values('id', 'table_name', 'restaurant_id')
         data = []
         for device in devices:
             data.append({
-                "id": device.id,
-                "table_name": device.table_name,
-                "restaurant_id": device.restaurant.id
+                "id": device["id"],
+                "table_name": device["table_name"],
+                "restaurant_id": device["restaurant_id"]
             })
         return Response(data)
 
@@ -756,7 +1118,7 @@ class PublicDeviceByUUIDView(APIView):
 
     def get(self, request, uuid):
         try:
-            device = Device.objects.get(uuid=uuid)
+            device = Device.objects.select_related('restaurant').get(uuid=uuid)
             return Response({
                 "id": device.id,
                 "uuid": str(device.uuid),
@@ -937,13 +1299,13 @@ class SimpleDeviceListView(APIView):
             if not restaurant:
                 return Response({"error": "No restaurant found for this user"}, status=400)
             
-            # Get device data from request
-            table_name = request.data.get('table_name', '')
-            table_number = request.data.get('table_number', '')
-            region = request.data.get('region', '')
-            
+            # Get and normalize device data from request
+            table_name = _normalize_table_value(request.data.get('table_name'))
+            table_number = _normalize_table_value(request.data.get('table_number')) or _derive_table_number(table_name)
+            region = _normalize_table_value(request.data.get('region'), "Primary") or "Primary"
+
             if not table_name:
-                return Response({"error": "table_name is required"}, status=400)
+                return Response({"table_name": ["Table name is required."]}, status=400)
 
             with transaction.atomic():
                 # Lock restaurant row to avoid race conditions across concurrent creates.
@@ -953,6 +1315,9 @@ class SimpleDeviceListView(APIView):
                 except serializers.ValidationError as exc:
                     detail = exc.detail if hasattr(exc, "detail") else {"detail": "Table limit reached"}
                     return Response(detail, status=400)
+
+                if Device.objects.filter(restaurant=restaurant, table_name__iexact=table_name).exists():
+                    return Response({"table_name": ["A table with this name already exists."]}, status=400)
                 
                 # Generate unique device user
                 username = None
@@ -987,18 +1352,8 @@ class SimpleDeviceListView(APIView):
                     action='active'
                 )
             
-            # Try to send email notification (non-blocking)
-            try:
-                owner_email = user.email if role == 'owner' else (restaurant.owner.email if restaurant.owner else "admin@cleverbiz.ai")
-                send_mail(
-                    subject="New Device User Created",
-                    message=f"Username: {username}\nPassword: {password}",
-                    from_email=settings.EMAIL_HOST_USER,
-                    recipient_list=[owner_email],
-                    fail_silently=True
-                )
-            except Exception as email_err:
-                print(f"Email notification failed (non-blocking): {email_err}")
+            owner_email = user.email if role == 'owner' else (restaurant.owner.email if restaurant.owner else "admin@cleverbiz.ai")
+            _send_device_credentials_email_async(owner_email, username, password)
             
             # Try to broadcast WebSocket event (non-blocking)
             try:
@@ -1022,18 +1377,9 @@ class SimpleDeviceListView(APIView):
             except Exception as ws_err:
                 print(f"WebSocket notification failed (non-blocking): {ws_err}")
             
-            # Return success response
-            return Response({
-                "id": device.id,
-                "table_name": device.table_name,
-                "table_number": device.table_number,
-                "region": device.region,
-                "restaurant": restaurant.id,
-                "restaurant_name": restaurant.resturent_name,
-                "action": device.action,
-                "username": username,
-                "message": "Device created successfully"
-            }, status=201)
+            data = _device_response(device, username=username)
+            data["message"] = "Device created successfully"
+            return Response(data, status=201)
             
         except Exception as e:
             print(f"SimpleDeviceListView POST Error: {e}")

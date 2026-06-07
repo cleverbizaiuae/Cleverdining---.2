@@ -3,6 +3,7 @@ import { useContext, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { getActiveRestaurantCurrency } from "@/lib/utils";
 import { ReviewItem } from "@/types";
 import toast from "react-hot-toast";
@@ -48,7 +49,7 @@ const GoogleReviewSettingsCard = () => {
 
   const fetchSettings = async () => {
     try {
-      const res = await axiosInstance.get("/owners/restaurant-settings/");
+      const res = await cachedGet("/owners/restaurant-settings/", {}, { ttlMs: 60_000 });
       const url = res.data.google_review_url || "";
       setGoogleReviewUrl(url);
       setOriginalUrl(url);
@@ -65,6 +66,7 @@ const GoogleReviewSettingsCard = () => {
       await axiosInstance.patch("/owners/restaurant-settings/", {
         google_review_url: googleReviewUrl.trim() || null
       });
+      invalidateApiCache("restaurant-settings");
       setOriginalUrl(googleReviewUrl);
       toast.success("Google review link saved successfully");
     } catch (error: any) {
@@ -158,7 +160,7 @@ const ReviewDetailModal = ({ isOpen, onClose, review }: { isOpen: boolean, onClo
     enabled: isOpen && !!orderId,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await axiosInstance.get(`/owners/orders/${orderId}/?includeItems=true`);
+      const res = await cachedGet(`/owners/orders/${orderId}/?includeItems=true`, {}, { ttlMs: 60_000 });
       return res.data.order_items || [];
     },
   });
@@ -265,12 +267,12 @@ const ScreenRestaurantReviews = () => {
   const [selectedReview, setSelectedReview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchReviews = async () => {
+  const fetchReviews = async (force = false) => {
     setLoading(true);
     try {
       const dateStr = searchDate ? searchDate.toISOString().split('T')[0] : "";
       const endpoint = `/owners/reviews/?page=${page}&date=${dateStr}`;
-      const res = await axiosInstance.get(endpoint);
+      const res = await cachedGet(endpoint, {}, { ttlMs: 20_000, force });
       const { results, status } = res.data;
 
       setReviews(Array.isArray(results) ? results : []);
@@ -288,7 +290,7 @@ const ScreenRestaurantReviews = () => {
 
   useEffect(() => { fetchReviews(); }, [page, searchDate]);
   useEffect(() => {
-    if (response && response.type === "review_created") fetchReviews();
+    if (response && response.type === "review_created") fetchReviews(true);
   }, [response]);
 
   return (

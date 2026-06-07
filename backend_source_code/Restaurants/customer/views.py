@@ -210,6 +210,7 @@ def earn_points(
 
 class CrmCustomerListAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         ensure_customer_intelligence_schema()
@@ -220,8 +221,31 @@ class CrmCustomerListAPIView(APIView):
         return Response([_customer_payload(customer) for customer in queryset], status=status.HTTP_200_OK)
 
 
+class SuperCrmCustomerListAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        ensure_customer_intelligence_schema()
+        customers = Customer.objects.select_related("restaurant").order_by("-created_at")
+        links = CustomerRestaurantLink.objects.select_related("restaurant").filter(
+            customer_id__in=[customer.id for customer in customers]
+        ).order_by("-last_visit")
+        links_by_customer: dict[str, list[dict]] = {}
+        for link in links:
+            links_by_customer.setdefault(str(link.customer_id), []).append(_restaurant_link_payload(link))
+
+        payload = []
+        for customer in customers:
+            row = _customer_payload(customer)
+            row["restaurantLinks"] = links_by_customer.get(str(customer.id), [])
+            payload.append(row)
+        return Response(payload, status=status.HTTP_200_OK)
+
+
 class CrmCustomerDetailAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request, customer_id):
         ensure_customer_intelligence_schema()
@@ -255,6 +279,7 @@ class CrmCustomerDetailAPIView(APIView):
 
 class LoyaltyEarnAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         ensure_customer_intelligence_schema()
@@ -295,6 +320,7 @@ class LoyaltyEarnAPIView(APIView):
 
 class LoyaltyRedeemAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         ensure_customer_intelligence_schema()
@@ -337,6 +363,7 @@ class LoyaltyRedeemAPIView(APIView):
 
 class LoyaltyHistoryAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request, customer_id):
         ensure_customer_intelligence_schema()
@@ -347,6 +374,7 @@ class LoyaltyHistoryAPIView(APIView):
 
 class GameScoreAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         ensure_customer_intelligence_schema()
@@ -382,6 +410,7 @@ class GameScoreAPIView(APIView):
 
 class GameLeaderboardAPIView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         ensure_customer_intelligence_schema()

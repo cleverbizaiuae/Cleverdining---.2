@@ -3,13 +3,19 @@ import axios from "axios";
 import { captureApiFailure } from "../monitoring/sentry";
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
+const isLocalBrowser =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
 // FIX: Use direct backend URL to bypass Netlify proxy issues
-// If VITE_API_URL is "/api" or not set, use direct backend URL
+// If VITE_API_URL is "/api" or not set, use local backend in local previews
+// and direct backend URL in deployed builds.
 // This ensures requests go directly to Render, avoiding Netlify proxy 500 errors
 const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const API_BASE_URL = normalizeBaseUrl(
-  envApiUrl && envApiUrl !== "/api"
+  isLocalBrowser
+    ? "http://127.0.0.1:8000"
+    : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
     : "https://cleverdining-2.onrender.com"
 );

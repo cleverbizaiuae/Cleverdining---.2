@@ -32,6 +32,7 @@ import { useRole } from "@/hooks/useRole";
 import CallerModal from "@/pages/model/CallerModal";
 import { FoodItem } from "@/types";
 import { getActiveRestaurantLocale, getActiveRestaurantTimezone } from "@/lib/utils";
+import { OptimizedImage } from "@/components/OptimizedImage";
 /* Logo Component */
 type LogoProps = {
   className?: string; // Optional className for styling wrapper div
@@ -894,23 +895,12 @@ export const TableFoodList: React.FC<TableFoodListProps> = ({ data, allowItemAct
               <tr key={index} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-5 py-3">
                   <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden shrink-0">
-                    <img
-                      src={(() => {
-                        if (!item.image1) return "https://placehold.co/100x100?text=No+Image";
-                        let url = item.image1;
-                        if (url.startsWith("http://")) {
-                          url = url.replace("http://", "https://");
-                        }
-                        if (url.startsWith("/")) {
-                          url = `https://cleverdining-2.onrender.com${url}`;
-                        }
-                        return url;
-                      })()}
+                    <OptimizedImage
+                      src={item.image1}
                       alt="Food Item"
+                      width={40}
+                      height={40}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://placehold.co/100x100?text=No+Image";
-                      }}
                     />
                   </div>
                 </td>

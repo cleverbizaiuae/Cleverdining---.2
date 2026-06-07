@@ -17,11 +17,12 @@ import {
     Wallet,
     AlertCircle
 } from 'lucide-react';
-import axios from '../../lib/axios';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import toast from 'react-hot-toast';
 import { getActiveRestaurantCurrency } from '@/lib/utils';
+import { cachedGet } from '@/lib/requestCache';
+import { OptimizedImage } from '@/components/OptimizedImage';
 
 // --- COMPONENTS ---
 
@@ -71,7 +72,9 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
         enabled: isOpen && !!orderId,
         staleTime: 5 * 60 * 1000,
         queryFn: async () => {
-            const res = await axios.get(`/owners/orders/${orderId}/?includeItems=true`);
+            const res = await cachedGet(`/owners/orders/${orderId}/`, {
+                params: { includeItems: true },
+            }, { ttlMs: 60_000 });
             return res.data;
         },
     });
@@ -132,7 +135,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                                 <div key={idx} className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">
                                         {item.image ? (
-                                            <img src={item.image} alt="" className="w-full h-full object-cover" />
+                                            <OptimizedImage src={item.image} alt="" width={40} height={40} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-300">
                                                 <ShoppingBag size={16} />
@@ -187,7 +190,7 @@ export const Payments = () => {
             if (startDate) params.append('created_at__gte', startDate.toISOString().split('T')[0]);
             if (endDate) params.append('created_at__lte', endDate.toISOString().split('T')[0]);
             if (params.toString()) url += `?${params.toString()}`;
-            const res = await axios.get(url);
+            const res = await cachedGet(url, {}, { ttlMs: 5_000 });
             const data = res.data;
             if (data && Array.isArray(data.results)) {
                 setPayments(data.results);

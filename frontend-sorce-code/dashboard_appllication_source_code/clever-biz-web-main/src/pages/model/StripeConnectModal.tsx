@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
@@ -39,7 +40,7 @@ export default function StripeConnectModal({
 
     const fetchStripeData = async () => {
       try {
-        const { data } = await axiosInstance.get("/owners/stripe/");
+        const { data } = await cachedGet("/owners/stripe/", {}, { ttlMs: 30_000 });
         const rec = data?.id ? data : data?.results?.[0];
         console.log(rec.stripe_secret_key);
         if (rec) {
@@ -96,6 +97,7 @@ export default function StripeConnectModal({
         }
       }
 
+      invalidateApiCache("owners/stripe");
       onSuccess?.(resp.data);
       onClose();
     } catch (err: any) {

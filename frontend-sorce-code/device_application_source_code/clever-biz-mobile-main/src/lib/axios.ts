@@ -10,8 +10,13 @@ const TOKENS = {
 // Use env when provided, but ignore "/api" shorthand in production
 // because Netlify has no API proxy configured for this app.
 const envApiUrl = import.meta.env.VITE_API_URL?.trim();
+const isLocalBrowser =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 const rawApiBase =
-  envApiUrl && envApiUrl !== "/api"
+  isLocalBrowser
+    ? "http://127.0.0.1:8000"
+    : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
     : "https://cleverdining-2.onrender.com";
 export const API_BASE_URL = `${rawApiBase.replace(/\/+$/, "")}/`;

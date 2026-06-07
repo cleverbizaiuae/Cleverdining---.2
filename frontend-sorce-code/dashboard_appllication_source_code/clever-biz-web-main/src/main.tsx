@@ -16,7 +16,9 @@ const InstallPrompt = lazy(() =>
 );
 
 const updateSW = registerSW({
-  immediate: true,
+  // Let the first render and initial route data win the network race.
+  // The SW still registers after window load and keeps auto-updating.
+  immediate: false,
   onNeedRefresh() {
     updateSW(true);
   },

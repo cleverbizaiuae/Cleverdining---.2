@@ -23,44 +23,89 @@
   force = true
 
 # --- Cache Control Headers ---
-# HTML: never cache aggressively (prevents stale index.html loading old JS)
+# HTML: browsers revalidate, while Netlify edge keeps the SPA shell warm.
+# This keeps deploys safe because Vite asset filenames are content-hashed.
 [[headers]]
   for = "/"
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
-    Pragma = "no-cache"
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
 
 [[headers]]
   for = "/index.html"
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
-    Pragma = "no-cache"
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/scan-table"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/login"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/splash"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/dashboard/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/dashboard"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/thankyou"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
 
 # Service Worker: never cache
 [[headers]]
   for = "/sw.js"
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # Manifest: short cache
 [[headers]]
   for = "/manifest.json"
   [headers.values]
-    Cache-Control = "no-cache"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # Static assets (JS, CSS): long-lived immutable cache (hash in filename)
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+    Netlify-CDN-Cache-Control = "public, max-age=31536000, immutable, durable"
 
 # Images: long cache
 [[headers]]
   for = "/*.png"
   [headers.values]
-    Cache-Control = "public, max-age=2592000"
+    Cache-Control = "public, max-age=31536000, immutable"
+    Netlify-CDN-Cache-Control = "public, max-age=31536000, durable"
 
 [[headers]]
   for = "/*.ico"
   [headers.values]
-    Cache-Control = "public, max-age=2592000"
+    Cache-Control = "public, max-age=31536000, immutable"
+    Netlify-CDN-Cache-Control = "public, max-age=31536000, durable"

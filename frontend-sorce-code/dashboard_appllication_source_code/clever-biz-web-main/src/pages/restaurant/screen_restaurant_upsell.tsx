@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import toast from "react-hot-toast";
 import {
   AlertCircle,
@@ -438,10 +440,10 @@ const ScreenRestaurantUpsell = () => {
       const shouldFetchItems = scope === "items" || scope === "settings" || scope === "all";
 
       const [settingsRes, analyticsRes, rulesRes, itemsRes] = await Promise.allSettled([
-        axiosInstance.get("/api/upsell/settings"),
-        axiosInstance.get("/api/upsell/analytics"),
-        shouldFetchRules ? axiosInstance.get("/api/upsell/rules") : Promise.resolve(null),
-        shouldFetchItems ? axiosInstance.get("/api/upsell/items") : Promise.resolve(null),
+        cachedGet("/api/upsell/settings", {}, { ttlMs: 20_000 }),
+        cachedGet("/api/upsell/analytics", {}, { ttlMs: 20_000 }),
+        shouldFetchRules ? cachedGet("/api/upsell/rules", {}, { ttlMs: 20_000 }) : Promise.resolve(null),
+        shouldFetchItems ? cachedGet("/api/upsell/items", {}, { ttlMs: 20_000 }) : Promise.resolve(null),
       ]);
 
       const settingsData =
@@ -455,8 +457,7 @@ const ScreenRestaurantUpsell = () => {
         itemRows = itemsRes.value.data.results;
       } else if (shouldFetchItems) {
         usedItemsFallback = true;
-        const ownerItemsFallback = await axiosInstance
-          .get("/owners/items/")
+        const ownerItemsFallback = await cachedGet("/owners/items/", {}, { ttlMs: 20_000 })
           .then((response) => (Array.isArray(response.data?.results) ? response.data.results : []))
           .catch(() => []);
         itemRows = ownerItemsFallback.map((row: any) => ({
@@ -524,11 +525,12 @@ const ScreenRestaurantUpsell = () => {
       if (run) setRunningIntelligence(true);
       const response = run
         ? await axiosInstance.post("/api/upsell/compute-associations?restaurantId=default", {})
-        : await axiosInstance.get("/api/upsell/association-analytics?restaurantId=default");
+        : await cachedGet("/api/upsell/association-analytics?restaurantId=default", {}, { ttlMs: 30_000 });
       const rows = Array.isArray(response.data?.results) ? response.data.results : [];
       setPairingRows(rows);
       setPairingLoaded(true);
       if (run) {
+        invalidateApiCache("association-analytics");
         toast.success("Pairing intelligence updated.");
       }
     } catch {
@@ -568,6 +570,7 @@ const ScreenRestaurantUpsell = () => {
     };
 
     const response = await axiosInstance.put("/api/upsell/settings", payload);
+    invalidateApiCache("upsell");
     const normalized = normalizeSettings(response.data || payload);
     setSettings(normalized);
     if (!options?.suppressToast && options?.successMessage) {
@@ -608,6 +611,7 @@ const ScreenRestaurantUpsell = () => {
     try {
       setMasterToggleSaving(true);
       const response = await axiosInstance.put("/api/upsell/settings", { enabled: nextEnabled });
+      invalidateApiCache("upsell");
       setSettings((prev) => normalizeSettings({ ...prev, ...(response.data || {}) }));
       toast.success(nextEnabled ? "AI Upsell enabled." : "AI Upsell disabled.");
     } catch {
@@ -653,6 +657,7 @@ const ScreenRestaurantUpsell = () => {
         source_item: newRule.source_item,
         target_item: newRule.target_item,
       });
+      invalidateApiCache("upsell");
       setRules((prev) => [response.data, ...prev]);
       setNewRule({ type: newRule.type });
       setAddingRule(false);
@@ -665,6 +670,7 @@ const ScreenRestaurantUpsell = () => {
   const deleteRule = async (id: number) => {
     try {
       await axiosInstance.delete(`/api/upsell/rules/${id}`);
+      invalidateApiCache("upsell");
       setRules((prev) => prev.filter((rule) => rule.id !== id));
       toast.success("Rule deleted.");
     } catch {
@@ -676,6 +682,7 @@ const ScreenRestaurantUpsell = () => {
     try {
       setUpdatingItemId(itemId);
       await axiosInstance.patch("/api/upsell/items", { item_id: itemId, enabled });
+      invalidateApiCache("upsell");
       setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, enabled } : item)));
     } catch {
       toast.error("Failed to update item suggestion status.");
@@ -996,7 +1003,7 @@ const ScreenRestaurantUpsell = () => {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <div className="h-8 w-8 rounded-md border border-slate-200 overflow-hidden bg-slate-50 shrink-0 flex items-center justify-center">
                                     {imageUrl ? (
-                                      <img src={imageUrl} alt={row.item_name} className="h-full w-full object-cover" />
+                                      <OptimizedImage src={imageUrl} alt={row.item_name} width={32} height={32} className="h-full w-full object-cover" />
                                     ) : (
                                       <UtensilsCrossed className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} />
                                     )}
@@ -1202,7 +1209,7 @@ const ScreenRestaurantUpsell = () => {
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                         {item.image_url ? (
-                          <img src={item.image_url} alt={item.item_name} className="h-full w-full object-cover" />
+                          <OptimizedImage src={item.image_url} alt={item.item_name} width={40} height={40} className="h-full w-full object-cover" />
                         ) : (
                           <UtensilsCrossed className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} />
                         )}

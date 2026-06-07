@@ -25,6 +25,20 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
 
+        // Keep the first install lean. Page chunks and media are runtime-cached
+        // after use, so new QR scans are not delayed by downloading every route.
+        globPatterns: [
+          "index.html",
+          "assets/index-*.js",
+          "assets/index-*.css",
+          "assets/vendor-core-*.js",
+          "assets/vendor-ui-*.js",
+          "assets/vendor-utils-*.js",
+          "assets/vendor-monitoring-*.js",
+          "assets/regionConfig-*.js",
+          "assets/regionSession-*.js"
+        ],
+
         // NEVER cache index.html aggressively
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
@@ -44,19 +58,44 @@ export default defineConfig({
               networkTimeoutSeconds: 5,
             },
           },
+          // Backend media is stable and expensive on mobile; cache it before API rules.
+          {
+            urlPattern: /^https:\/\/cleverdining-2\.onrender\.com\/media\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "backend-media-cache",
+              expiration: {
+                maxEntries: 160,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/storage\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gcs-media-cache",
+              expiration: {
+                maxEntries: 160,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           // NetworkOnly for API calls (NEVER cache API responses)
           {
-            urlPattern: /^https:\/\/cleverdining-2\.onrender\.com\/.*/i,
+            urlPattern: /^https:\/\/cleverdining-2\.onrender\.com\/(?:api|owners|message|token|adminapi|profile)\/.*/i,
             handler: "NetworkOnly",
           },
           {
-            urlPattern: /\/api\/.*/i,
+            urlPattern: /\/(?:api|owners|message|token|adminapi|profile)\//i,
             handler: "NetworkOnly",
           },
-          // StaleWhileRevalidate for static assets (JS, CSS, images)
+          // Hashed static assets are immutable; serve cached files immediately.
           {
-            urlPattern: /\.(?:js|css|woff2?|ttf|eot)$/i,
-            handler: "StaleWhileRevalidate",
+            urlPattern: /\.(?:js|css)$/i,
+            handler: "CacheFirst",
             options: {
               cacheName: "static-assets",
               expiration: {

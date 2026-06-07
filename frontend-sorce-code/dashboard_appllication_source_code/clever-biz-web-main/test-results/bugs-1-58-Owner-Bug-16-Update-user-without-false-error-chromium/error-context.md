@@ -1,0 +1,232 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "Collapse sidebar" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+    - img "CleverBiz" [ref=e9]
+    - generic [ref=e10]:
+      - link "Dashboard" [ref=e11] [cursor=pointer]:
+        - /url: /restaurant
+        - img [ref=e12]
+        - text: Dashboard
+      - link "Orders" [ref=e17] [cursor=pointer]:
+        - /url: /restaurant/orders
+        - img [ref=e18]
+        - text: Orders
+      - link "Reservations" [ref=e21] [cursor=pointer]:
+        - /url: /restaurant/reservations
+        - img [ref=e22]
+        - text: Reservations
+      - link "Messages" [ref=e24] [cursor=pointer]:
+        - /url: /restaurant/messages
+        - img [ref=e25]
+        - text: Messages
+      - link "Management" [ref=e27] [cursor=pointer]:
+        - /url: /restaurant/management
+        - img [ref=e28]
+        - text: Management
+      - link "Tables" [ref=e33] [cursor=pointer]:
+        - /url: /restaurant/devices
+        - img [ref=e34]
+        - text: Tables
+      - link "Payments" [ref=e41] [cursor=pointer]:
+        - /url: /restaurant/payments
+        - img [ref=e42]
+        - text: Payments
+      - link "Branding" [ref=e45] [cursor=pointer]:
+        - /url: /restaurant/branding
+        - img [ref=e46]
+        - text: Branding
+      - link "AI Upsell" [ref=e50] [cursor=pointer]:
+        - /url: /restaurant/ai-upsell
+        - img [ref=e51]
+        - text: AI Upsell
+      - link "Customers" [ref=e63] [cursor=pointer]:
+        - /url: /restaurant/crm
+        - img [ref=e64]
+        - text: Customers
+    - button "Log Out" [ref=e69] [cursor=pointer]:
+      - img [ref=e70]
+      - generic [ref=e73]: Log Out
+  - generic [ref=e74]:
+    - banner [ref=e75]:
+      - generic [ref=e77]:
+        - heading "Management" [level=1] [ref=e78]
+        - paragraph [ref=e79]: Thursday, 4 June 2026
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - paragraph [ref=e82]: Welcome, E2E Owner
+          - paragraph [ref=e83]: owner
+        - generic [ref=e86]: E
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - heading "Team Management" [level=2] [ref=e91]:
+              - img [ref=e92]
+              - text: Team Management
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - img [ref=e97]
+                - textbox "Search by name or username" [ref=e100]
+              - button "Add Member" [ref=e101] [cursor=pointer]:
+                - img [ref=e102]
+                - text: Add Member
+          - table [ref=e104]:
+            - rowgroup [ref=e105]:
+              - row "Name Username Role Actions" [ref=e106]:
+                - columnheader "Name" [ref=e107]
+                - columnheader "Username" [ref=e108]
+                - columnheader "Role" [ref=e109]
+                - columnheader "Actions" [ref=e110]
+            - rowgroup [ref=e111]:
+              - row "staff.ok.1774685255495@test.com staff" [ref=e112]:
+                - cell [ref=e113]:
+                  - img [ref=e116]
+                - cell "staff.ok.1774685255495@test.com" [ref=e119]
+                - cell "staff" [ref=e120]
+                - cell [ref=e121]:
+                  - generic [ref=e122]:
+                    - button "Edit" [ref=e123] [cursor=pointer]:
+                      - img [ref=e124]
+                    - button "Change Password" [ref=e127] [cursor=pointer]:
+                      - img [ref=e128]
+                    - button "Delete" [ref=e132] [cursor=pointer]:
+                      - img [ref=e133]
+              - row "chef.ok.1774685260817@test.com chef" [ref=e136]:
+                - cell [ref=e137]:
+                  - img [ref=e140]
+                - cell "chef.ok.1774685260817@test.com" [ref=e143]
+                - cell "chef" [ref=e144]
+                - cell [ref=e145]:
+                  - generic [ref=e146]:
+                    - button "Edit" [ref=e147] [cursor=pointer]:
+                      - img [ref=e148]
+                    - button "Change Password" [ref=e151] [cursor=pointer]:
+                      - img [ref=e152]
+                    - button "Delete" [ref=e156] [cursor=pointer]:
+                      - img [ref=e157]
+              - row "manager.ok.1774685265822@test.com manager" [ref=e160]:
+                - cell [ref=e161]:
+                  - img [ref=e164]
+                - cell "manager.ok.1774685265822@test.com" [ref=e167]
+                - cell "manager" [ref=e168]
+                - cell [ref=e169]:
+                  - generic [ref=e170]:
+                    - button "Edit" [ref=e171] [cursor=pointer]:
+                      - img [ref=e172]
+                    - button "Change Password" [ref=e175] [cursor=pointer]:
+                      - img [ref=e176]
+                    - button "Delete" [ref=e180] [cursor=pointer]:
+                      - img [ref=e181]
+              - row "staff.1774685806830@test.com staff" [ref=e184]:
+                - cell [ref=e185]:
+                  - img [ref=e188]
+                - cell "staff.1774685806830@test.com" [ref=e191]
+                - cell "staff" [ref=e192]
+                - cell [ref=e193]:
+                  - generic [ref=e194]:
+                    - button "Edit" [ref=e195] [cursor=pointer]:
+                      - img [ref=e196]
+                    - button "Change Password" [ref=e199] [cursor=pointer]:
+                      - img [ref=e200]
+                    - button "Delete" [ref=e204] [cursor=pointer]:
+                      - img [ref=e205]
+              - row "staff.ok.1774685812096@test.com staff" [ref=e208]:
+                - cell [ref=e209]:
+                  - img [ref=e212]
+                - cell "staff.ok.1774685812096@test.com" [ref=e215]
+                - cell "staff" [ref=e216]
+                - cell [ref=e217]:
+                  - generic [ref=e218]:
+                    - button "Edit" [ref=e219] [cursor=pointer]:
+                      - img [ref=e220]
+                    - button "Change Password" [ref=e223] [cursor=pointer]:
+                      - img [ref=e224]
+                    - button "Delete" [ref=e228] [cursor=pointer]:
+                      - img [ref=e229]
+              - row "chef.ok.1774685817216@test.com chef" [ref=e232]:
+                - cell [ref=e233]:
+                  - img [ref=e236]
+                - cell "chef.ok.1774685817216@test.com" [ref=e239]
+                - cell "chef" [ref=e240]
+                - cell [ref=e241]:
+                  - generic [ref=e242]:
+                    - button "Edit" [ref=e243] [cursor=pointer]:
+                      - img [ref=e244]
+                    - button "Change Password" [ref=e247] [cursor=pointer]:
+                      - img [ref=e248]
+                    - button "Delete" [ref=e252] [cursor=pointer]:
+                      - img [ref=e253]
+              - row "manager.ok.1774685822463@test.com manager" [ref=e256]:
+                - cell [ref=e257]:
+                  - img [ref=e260]
+                - cell "manager.ok.1774685822463@test.com" [ref=e263]
+                - cell "manager" [ref=e264]
+                - cell [ref=e265]:
+                  - generic [ref=e266]:
+                    - button "Edit" [ref=e267] [cursor=pointer]:
+                      - img [ref=e268]
+                    - button "Change Password" [ref=e271] [cursor=pointer]:
+                      - img [ref=e272]
+                    - button "Delete" [ref=e276] [cursor=pointer]:
+                      - img [ref=e277]
+              - row "staff.1774696531404@test.com staff" [ref=e280]:
+                - cell [ref=e281]:
+                  - img [ref=e284]
+                - cell "staff.1774696531404@test.com" [ref=e287]
+                - cell "staff" [ref=e288]
+                - cell [ref=e289]:
+                  - generic [ref=e290]:
+                    - button "Edit" [ref=e291] [cursor=pointer]:
+                      - img [ref=e292]
+                    - button "Change Password" [ref=e295] [cursor=pointer]:
+                      - img [ref=e296]
+                    - button "Delete" [ref=e300] [cursor=pointer]:
+                      - img [ref=e301]
+              - row "staff.ok.1774696537385@test.com staff" [ref=e304]:
+                - cell [ref=e305]:
+                  - img [ref=e308]
+                - cell "staff.ok.1774696537385@test.com" [ref=e311]
+                - cell "staff" [ref=e312]
+                - cell [ref=e313]:
+                  - generic [ref=e314]:
+                    - button "Edit" [ref=e315] [cursor=pointer]:
+                      - img [ref=e316]
+                    - button "Change Password" [ref=e319] [cursor=pointer]:
+                      - img [ref=e320]
+                    - button "Delete" [ref=e324] [cursor=pointer]:
+                      - img [ref=e325]
+              - row "chef.ok.1774696542246@test.com chef" [ref=e328]:
+                - cell [ref=e329]:
+                  - img [ref=e332]
+                - cell "chef.ok.1774696542246@test.com" [ref=e335]
+                - cell "chef" [ref=e336]
+                - cell [ref=e337]:
+                  - generic [ref=e338]:
+                    - button "Edit" [ref=e339] [cursor=pointer]:
+                      - img [ref=e340]
+                    - button "Change Password" [ref=e343] [cursor=pointer]:
+                      - img [ref=e344]
+                    - button "Delete" [ref=e348] [cursor=pointer]:
+                      - img [ref=e349]
+        - dialog [ref=e352]:
+          - generic [ref=e353]:
+            - generic [ref=e354]:
+              - heading "Edit Member" [level=3] [ref=e355]
+              - button [ref=e356] [cursor=pointer]:
+                - img [ref=e357]
+            - generic [ref=e360]:
+              - generic [ref=e361]:
+                - generic [ref=e362]: Name
+                - textbox [ref=e363]
+              - generic [ref=e364]:
+                - generic [ref=e365]: Role
+                - combobox [ref=e366]:
+                  - option "Staff" [selected]
+                  - option "Chef"
+                  - option "Manager"
+              - button "Save Changes" [ref=e367] [cursor=pointer]
+```

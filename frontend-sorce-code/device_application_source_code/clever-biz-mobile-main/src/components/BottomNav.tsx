@@ -5,6 +5,23 @@ import { cn } from "clsx-for-tailwind";
 import { useCart } from "../context/CartContext";
 import { useWebSocket } from "./WebSocketContext";
 
+const ROUTE_PRELOADERS: Record<string, () => Promise<unknown>> = {
+    home: () => import("../pages/screen_home"),
+    message: () => import("../pages/screen_message"),
+    cart: () => import("../pages/screen_cart"),
+    orders: () => import("../pages/order/screen_orders"),
+};
+
+const prefetchedRoutes = new Set<string>();
+
+const prefetchRoute = (id: string) => {
+    if (prefetchedRoutes.has(id)) return;
+    const preloader = ROUTE_PRELOADERS[id];
+    if (!preloader) return;
+    prefetchedRoutes.add(id);
+    preloader().catch(() => prefetchedRoutes.delete(id));
+};
+
 export const BottomNav = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -42,6 +59,8 @@ export const BottomNav = () => {
                         <button
                             key={tab.id}
                             onClick={() => handleTabClick(tab)}
+                            onPointerDown={() => prefetchRoute(tab.id)}
+                            onFocus={() => prefetchRoute(tab.id)}
                             className="group relative flex flex-col items-center justify-center w-16 py-1"
                         >
                             {isActive && (

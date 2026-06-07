@@ -77,6 +77,10 @@ export const OrderRow = ({ order }: { order: Order }) => {
                 <img
                   src={veg}
                   alt="Food"
+                  width={112}
+                  height={80}
+                  loading="lazy"
+                  decoding="async"
                   className="w-20 h-20 sm:w-28 sm:h-16 md:w-16 md:h-16 object-cover rounded-lg shadow-sm"
                 />
               </div>

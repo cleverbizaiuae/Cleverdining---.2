@@ -7,7 +7,7 @@ import axiosInstance from "../../lib/axios";
 import logo from "../../assets/cleverbiz_full_logo.png"; // Updated Logo
 
 // Image imports
-import heroImage from "../../assets/restaurant_login_bg.jpg"; // Using new user uploaded asset
+import heroImage from "../../assets/restaurant_login_bg.webp"; // Optimized restaurant hero asset
 import mobileLogo from "../../assets/mobile_logo.png";   // Using existing asset
 
 type PortalRole = "manager" | "staff" | "chef";
@@ -242,6 +242,11 @@ const ScreenAdminLogin = () => {
                 <img
                     src={heroImage}
                     alt="Restaurant Interior"
+                    width={1024}
+                    height={1024}
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
                     className="absolute inset-0 w-full h-full object-cover opacity-60"
                 />
 

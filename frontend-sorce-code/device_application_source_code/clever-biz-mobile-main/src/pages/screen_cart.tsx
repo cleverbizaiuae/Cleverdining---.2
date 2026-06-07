@@ -26,6 +26,7 @@ import {
   trackUpsellCategoryDecline,
 } from "../lib/upsellSession";
 import { getTableIdentity, setLocalStorageSynced } from "../lib/tableIdentity";
+import { OptimizedImage } from "../components/OptimizedImage";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -119,15 +120,6 @@ const ScreenCart = () => {
       ),
     [cart]
   );
-
-  const resolveImageUrl = (url?: string) => {
-    const fallback = "https://placehold.co/200x200?text=No+Image";
-    if (!url) return fallback;
-    if (url.startsWith("http://")) return url.replace("http://", "https://");
-    if (url.startsWith("https://")) return url;
-    if (url.startsWith("/")) return `${API_BASE_URL}${url.replace(/^\/+/, "")}`;
-    return fallback;
-  };
 
   const resolveVideoUrl = (url?: string) => {
     if (!url) return "";
@@ -758,13 +750,12 @@ const ScreenCart = () => {
                               autoPlay
                             />
                           ) : (
-                            <img
-                              src={resolveImageUrl(item.image1)}
+                            <OptimizedImage
+                              src={item.image1}
                               alt={item.item_name}
+                              width={80}
+                              height={80}
                               className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                              }}
                             />
                           )}
                         </div>
@@ -906,13 +897,12 @@ const ScreenCart = () => {
                     className="flex items-center gap-3 py-2 first:pt-0 last:pb-0 border-b border-[#F3ECE2] last:border-0"
                   >
                     <div className="w-14 h-14 rounded-xl overflow-hidden border border-[#F3ECE2] bg-[#F9F6F1] shrink-0">
-                      <img
-                        src={resolveImageUrl(suggestion.image1)}
+                      <OptimizedImage
+                        src={suggestion.image1}
                         alt={suggestion.item_name}
+                        width={56}
+                        height={56}
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                        }}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1020,13 +1010,12 @@ const ScreenCart = () => {
                 {validCartItems.map((item) => (
                   <div key={`review-${item.id}`} className="flex items-center gap-3 bg-slate-50 rounded-xl p-2.5 border border-slate-100">
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                      <img
-                        src={resolveImageUrl(item.image1)}
+                      <OptimizedImage
+                        src={item.image1}
                         alt={item.item_name}
+                        width={40}
+                        height={40}
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                        }}
                       />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1107,13 +1096,12 @@ const ScreenCart = () => {
                     beforePaymentSuggestions.map((suggestion) => (
                       <div key={`before-pay-${suggestion.id}`} className="flex items-center gap-2.5">
                         <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white shrink-0">
-                          <img
-                            src={resolveImageUrl(suggestion.image1)}
+                          <OptimizedImage
+                            src={suggestion.image1}
                             alt={suggestion.item_name}
+                            width={40}
+                            height={40}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                            }}
                           />
                         </div>
                         <div className="min-w-0 flex-1">

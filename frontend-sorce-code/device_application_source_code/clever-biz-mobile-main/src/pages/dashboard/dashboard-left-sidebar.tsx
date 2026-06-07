@@ -10,7 +10,7 @@ import {
 
   IconMessage,
   IconOrders,
-} from "../../components/icons/logo";
+} from "../../components/icons/navIcons";
 
 type Props = {
   confirmToCall: (receiver_id: any) => void;

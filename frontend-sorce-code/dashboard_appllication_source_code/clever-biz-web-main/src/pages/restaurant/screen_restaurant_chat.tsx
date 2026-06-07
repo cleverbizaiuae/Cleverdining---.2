@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useContext } from "react";
 import { useRole } from "@/hooks/useRole";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import {
   Search,
@@ -146,7 +147,7 @@ const ScreenRestaurantChat = () => {
 
     const fetchTableMessages = async () => {
       try {
-        const { data } = await axiosInstance.get("/api/table-messages");
+        const { data } = await cachedGet("/api/table-messages", {}, { ttlMs: 1_500 });
         if (cancelled) return;
         const rows: TableMessage[] = Array.isArray(data)
           ? data
@@ -187,7 +188,7 @@ const ScreenRestaurantChat = () => {
           endpoint = "/owners/devicesall/"; // Fallback
         }
 
-        const { data } = await axiosInstance.get(endpoint);
+        const { data } = await cachedGet(endpoint, {}, { ttlMs: 20_000 });
         setChatList(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to load chat list", error);
@@ -436,7 +437,7 @@ const ScreenRestaurantChat = () => {
     const fetchHistory = async () => {
       try {
         const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
-        const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
+        const { data } = await cachedGet(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`, {}, { ttlMs: 1_500 });
         const fetchedMessages = Array.isArray(data) ? data : [];
 
         setMessages(fetchedMessages);

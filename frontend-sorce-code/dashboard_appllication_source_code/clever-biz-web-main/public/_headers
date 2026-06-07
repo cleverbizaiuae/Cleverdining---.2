@@ -1,0 +1,62 @@
+# Static Vite assets are fingerprinted. Cache them for a year.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  Netlify-CDN-Cache-Control: public, max-age=31536000, immutable, durable
+
+# Image/icon assets copied from public.
+/*.png
+  Cache-Control: public, max-age=31536000, immutable
+  Netlify-CDN-Cache-Control: public, max-age=31536000, durable
+/*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+  Netlify-CDN-Cache-Control: public, max-age=31536000, durable
+/*.svg
+  Cache-Control: public, max-age=31536000, immutable
+  Netlify-CDN-Cache-Control: public, max-age=31536000, durable
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+  Netlify-CDN-Cache-Control: public, max-age=31536000, durable
+
+# SPA shell: browser revalidates, Netlify edge can stay warm for route refreshes.
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/login
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/restaurant
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/restaurant/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/staff
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/staff/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/chef
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/chef/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/superadmin
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/superadmin/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/multilocation
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+/multilocation/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Netlify-CDN-Cache-Control: public, max-age=300, stale-while-revalidate=3600, durable
+
+# App update files must revalidate so PWA updates are safe.
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+/manifest.webmanifest
+  Cache-Control: public, max-age=0, must-revalidate

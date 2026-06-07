@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import {
   createContext,
   useContext,
@@ -56,12 +57,26 @@ interface ReservationItem {
   reservationId: string;
   customerName: string;
   tableNo: string;
+  tableName?: string;
+  tableCapacity?: number | null;
+  deviceName?: string;
   guestNo: number;
   cellNumber: string;
   email: string;
   reservationTime: string;
+  endTime?: string | null;
+  durationMinutes?: number;
+  bufferMinutes?: number;
   customRequest: string;
   status?: string;
+  source?: string;
+  actualSeatedTime?: string | null;
+  actualEndTime?: string | null;
+  extensionMinutes?: number;
+  statusReason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  restaurant?: number;
 }
 
 // Define reservation status report type
@@ -161,14 +176,19 @@ interface OwnerContextType {
   analytics: any;
   sellingItems: any[];
   isAnalyticsLoading: boolean;
-  fetchAnalytics: (timeRange?: string, compare?: boolean) => Promise<void>;
-  fetchMostSellingItems: () => Promise<void>;
+  fetchAnalytics: (timeRange?: string, compare?: boolean, force?: boolean) => Promise<void>;
+  fetchMostSellingItems: (force?: boolean) => Promise<void>;
 }
 
 // Create the context
 export const OwnerContext = createContext<OwnerContextType | undefined>(
   undefined
 );
+
+const LIVE_CACHE_TTL_MS = 1_500;
+const SUMMARY_CACHE_TTL_MS = 10_000;
+const LIST_CACHE_TTL_MS = 20_000;
+const REFERENCE_CACHE_TTL_MS = 120_000;
 
 // Create the provider
 export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
@@ -214,17 +234,18 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     currentPath === "/staffadmindashboard" ||
     currentPath === "/chefadmindashboard";
 
+
   // New State for Analytics & Selling Items
   const [analytics, setAnalytics] = useState<any>(null);
   const [sellingItems, setSellingItems] = useState<any[]>([]);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
 
   // Define fetchAnalytics functions (hoisted for usage in effect)
-  const fetchAnalytics = useCallback(async (timeRange = "year", compare = true) => {
+  const fetchAnalytics = useCallback(async (timeRange = "year", compare = true, force = false) => {
     if (!userRole) return;
     try {
       setIsAnalyticsLoading(true);
-      const res = await axiosInstance.get(`/owners/orders/analytics/?time_range=${timeRange}&compare=${compare}`);
+      const res = await cachedGet("/owners/orders/analytics/", { params: { time_range: timeRange, compare } }, { ttlMs: 30_000, force });
       setAnalytics(res.data);
     } catch (err) {
       console.warn("Failed to load analytics", err);
@@ -233,10 +254,10 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [userRole]);
 
-  const fetchMostSellingItems = useCallback(async () => {
+  const fetchMostSellingItems = useCallback(async (force = false) => {
     if (!userRole) return;
     try {
-      const res = await axiosInstance.get("/owners/most-selling-items/");
+      const res = await cachedGet("/owners/most-selling-items/", {}, { ttlMs: 30_000, force });
       setSellingItemDataState(res.data); // Use local state setter wrapper if needed, or direct setSellingItems
     } catch (err) {
       console.warn("Failed to load selling items", err);
@@ -255,7 +276,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       // Assuming generic endpoint pattern or specific one
       const endpoint = (userRole === "owner" || userRole === "manager" || userRole === "staff") ? "/owners/categories/" : "/api/chef/categories/";
-      const res = await axiosInstance.get(endpoint);
+      const res = await cachedGet(endpoint, {}, { ttlMs: REFERENCE_CACHE_TTL_MS });
       setCategories(res.data);
     } catch (err: any) {
       console.error("Failed to load categories.", err);
@@ -267,7 +288,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     if (isLoading || !userRole) return;
     try {
       const endpoint = (userRole === "owner" || userRole === "manager" || userRole === "staff") ? "/owners/sub-categories/" : "/api/chef/sub-categories/";
-      const res = await axiosInstance.get(endpoint);
+      const res = await cachedGet(endpoint, {}, { ttlMs: REFERENCE_CACHE_TTL_MS });
       setSubCategories(res.data);
     } catch (err) {
       console.error("Failed to load sub-categories.");
@@ -279,6 +300,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? "/owners/categories/" : "/api/staff/categories/";
       await axiosInstance.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      invalidateApiCache("categories");
       toast.success("Category created successfully");
       fetchCategories();
     } catch (err) {
@@ -292,6 +314,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/categories/${id}/` : `/api/staff/categories/${id}/`;
       await axiosInstance.patch(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      invalidateApiCache("categories");
       toast.success("Category updated successfully");
       fetchCategories();
     } catch (err) {
@@ -305,6 +328,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/categories/${id}/` : `/api/staff/categories/${id}/`;
       await axiosInstance.delete(endpoint);
+      invalidateApiCache("categories");
       toast.success("Category deleted successfully");
       fetchCategories();
       fetchSubCategories(); // Cascade
@@ -320,6 +344,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? "/owners/sub-categories/" : "/api/staff/sub-categories/";
       const response = await axiosInstance.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      invalidateApiCache("categories");
       toast.success("Sub-Category created successfully");
       const createdSubCategory = response?.data;
       if (createdSubCategory?.id) {
@@ -340,6 +365,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/sub-categories/${id}/` : `/api/staff/sub-categories/${id}/`;
       const response = await axiosInstance.patch(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      invalidateApiCache("categories");
       toast.success("Sub-Category updated successfully");
       const updatedSubCategory = response?.data;
       if (updatedSubCategory?.id) {
@@ -360,6 +386,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const endpoint = (userRole === "owner" || userRole === "manager") ? `/owners/sub-categories/${id}/` : `/api/staff/sub-categories/${id}/`;
       await axiosInstance.delete(endpoint);
+      invalidateApiCache("categories");
       toast.success("Sub-Category deleted successfully");
       setSubCategories((prev) => prev.filter((c: any) => c.id !== id));
       setCategories((prev) => prev.filter((c: any) => c.id !== id));
@@ -389,7 +416,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           throw new Error("Invalid user role");
         }
 
-        const response = await axiosInstance.get(endpoint);
+        const response = await cachedGet(endpoint, {}, { ttlMs: LIST_CACHE_TTL_MS });
         const { results, count } = response.data;
         const formattedItems = results.map((item: any) => ({
           id: item.id,
@@ -433,9 +460,9 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         endpoint = "/owners/orders/";
       }
 
-      const response = await axiosInstance.get(endpoint, {
-        params: { page: page, search: search },
-      });
+      const response = await cachedGet(endpoint, {
+        params: { page: page || 1, search: search || "" },
+      }, { ttlMs: LIVE_CACHE_TTL_MS });
       const { results, count } = response.data;
 
       setOrdersStats(results.stats);
@@ -519,19 +546,34 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           endpoint += `&date=${date}`;
         }
 
-        const response = await axiosInstance.get(endpoint);
+        const response = await cachedGet(endpoint, {}, { ttlMs: LIVE_CACHE_TTL_MS });
 
         const { results, count } = response.data;
         const formattedReservations = results?.map((item: any) => ({
           id: item.id,
+          reservationId: String(item.id),
           customerName: item.customer_name,
           tableNo: item.device,
+          tableName: item.table_name || item.tableName,
+          tableCapacity: item.table_capacity,
+          deviceName: item.device_name,
           guestNo: item.guest_no,
           cellNumber: item.cell_number,
           email: item.email,
           reservationTime: item.reservation_time,
-          customRequest: item.special_request || "", // Correct mapping
+          endTime: item.end_time || item.endTime,
+          durationMinutes: item.duration_minutes || item.durationMinutes,
+          bufferMinutes: item.buffer_minutes || item.bufferMinutes,
+          customRequest: item.custom_request || item.customRequest || item.special_request || "",
           status: item.status || "confirmed", // Correct mapping
+          source: item.source || "dashboard",
+          actualSeatedTime: item.actual_seated_time || item.actualSeatedTime,
+          actualEndTime: item.actual_end_time || item.actualEndTime,
+          extensionMinutes: item.extension_minutes || item.extensionMinutes,
+          statusReason: item.status_reason,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          restaurant: item.restaurant,
         }));
 
         setReservations(formattedReservations);
@@ -576,7 +618,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         endpoint = "/api/staff/reservations/report-reservation-status/";
       }
 
-      const response = await axiosInstance.get(endpoint);
+      const response = await cachedGet(endpoint, {}, { ttlMs: SUMMARY_CACHE_TTL_MS });
       setReservationStatusReport(response.data);
     } catch (error) {
       console.error("Failed to load reservation status report", error);
@@ -598,7 +640,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         endpoint = "/api/staff/orders/";
       }
 
-      const response = await axiosInstance.get(endpoint);
+      const response = await cachedGet(endpoint, {}, { ttlMs: SUMMARY_CACHE_TTL_MS });
       setReservationStatusReport(response.data);
     } catch (error) {
       console.error("Failed to load reservation status report", error);
@@ -626,8 +668,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           endpoint = `/owners/devices/?page=${page}&search=${encodeURIComponent(searchParam || "")}`;
         }
 
-        const response = await axiosInstance.get(endpoint);
-        console.log(response, "response");
+        const response = await cachedGet(endpoint, {}, { ttlMs: LIST_CACHE_TTL_MS });
         const devices = Array.isArray(response.data?.results)
           ? response.data?.results
           : [];
@@ -658,7 +699,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         endpoint = "/owners/devices/stats/";
       }
 
-      const response = await axiosInstance.get(endpoint);
+      const response = await cachedGet(endpoint, {}, { ttlMs: SUMMARY_CACHE_TTL_MS });
       setDeviceStats(response.data);
     } catch (error) {
       console.warn("Failed to load device stats", error);
@@ -675,7 +716,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const searchParam = search || membersSearchQuery;
         const endpoint = `/owners/chef-staff/?search=${searchParam}`;
-        const response = await axiosInstance.get(endpoint);
+        const response = await cachedGet(endpoint, {}, { ttlMs: LIST_CACHE_TTL_MS });
         setMembers(response.data.results || []);
       } catch (error) {
         console.error("Failed to load members", error);
@@ -705,6 +746,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         console.log(res);
         toast.success("Member created successfully!");
         // Refresh the members list
+        invalidateApiCache("chef-staff");
         await fetchMembers();
       } catch (error: any) {
         console.error("Failed to create member", error);
@@ -752,6 +794,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         await axiosInstance.patch(`/owners/chef-staff/${id}/`, {
           action: action.toLowerCase(),
         });
+        invalidateApiCache("chef-staff");
         toast.success("Member status updated successfully!");
         // Update local state immediately for instant feedback
         setMembers((prevMembers) =>
@@ -792,6 +835,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         await axiosInstance.patch(endpoint, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        invalidateApiCache("items");
         toast.success("Food item updated successfully!");
         // Refresh the current page to show updated data
         await fetchFoodItems(currentPage, searchQuery);
@@ -818,6 +862,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         await axiosInstance.post(endpoint, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        invalidateApiCache("items");
         toast.success("Food item created successfully!");
         // Refresh the current page to show new data
         await fetchFoodItems(currentPage, searchQuery);
@@ -851,6 +896,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         }
 
         await axiosInstance.delete(endpoint);
+        invalidateApiCache("items");
         toast.success("Food item deleted successfully!");
         // Refresh the current page to show updated data
         await fetchFoodItems(currentPage, searchQuery);
@@ -885,6 +931,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         await axiosInstance.patch(endpoint, {
           availability: available.toString(),
         });
+        invalidateApiCache("items");
         toast.success("Food item availability updated successfully!");
         // Refresh the current page to show updated data
         await fetchFoodItems(currentPage, searchQuery);
@@ -915,6 +962,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         const response = await axiosInstance.patch(endpoint, {
           status: status.toLowerCase(),
         });
+        invalidateApiCache("orders");
         if (showToast) {
           toast.success("Order status updated successfully!");
         }
@@ -954,6 +1002,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         const response = await axiosInstance.patch(endpoint, {
           status: status.toLowerCase(),
         });
+        invalidateApiCache("reservations");
 
         toast.success("Reservation status updated successfully!");
 
@@ -961,7 +1010,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         setReservations((prevReservations) =>
           prevReservations.map((reservation) =>
             reservation.id === id
-              ? { ...reservation, customRequest: status as any }
+              ? { ...reservation, status: status.toLowerCase() }
               : reservation
           )
         );
@@ -991,6 +1040,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
             : `/api/staff/devices/${id}/`;
 
         await axiosInstance.patch(endpoint, { action });
+        invalidateApiCache("devices");
         toast.success("Device status updated successfully!");
         // Refresh both device list and stats
         await Promise.all([

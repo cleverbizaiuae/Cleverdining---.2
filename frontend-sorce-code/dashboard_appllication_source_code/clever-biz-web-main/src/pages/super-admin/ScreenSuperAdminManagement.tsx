@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { getRegionConfig } from "../../config/regionConfig";
@@ -135,9 +136,9 @@ const ScreenSuperAdminManagement = () => {
     const { data: restaurants = [], isLoading } = useQuery<RegisteredRestaurant[]>({
         queryKey: ['registered-restaurants', regionFilter],
         queryFn: async () => {
-            const response = await axiosInstance.get('/owners/registered-restaurants/', {
+            const response = await cachedGet('/owners/registered-restaurants/', {
                 params: regionFilter === "all" ? undefined : { region: regionFilter },
-            });
+            }, { ttlMs: 60_000 });
             const payload = Array.isArray(response.data) ? response.data : [];
             return payload.map(normalizeRestaurant);
         },
@@ -170,6 +171,7 @@ const ScreenSuperAdminManagement = () => {
             return { previousRestaurants };
         },
         onSuccess: () => {
+            invalidateApiCache("registered-restaurants");
             toast.success("Status updated");
         },
         onError: (_err, _vars, context) => {
@@ -223,6 +225,7 @@ const ScreenSuperAdminManagement = () => {
             return { previousRestaurants };
         },
         onSuccess: () => {
+            invalidateApiCache("registered-restaurants");
             toast.success("Restaurant updated");
             setIsEditing(false);
         },
@@ -276,6 +279,7 @@ const ScreenSuperAdminManagement = () => {
         },
         onSuccess: (data) => {
             // Data contains { message, credentials, ... }
+            invalidateApiCache("registered-restaurants");
             queryClient.invalidateQueries({ queryKey: ['registered-restaurants'] });
 
             // Show Credentials Modal
@@ -322,6 +326,7 @@ const ScreenSuperAdminManagement = () => {
             return { previousRestaurants };
         },
         onSuccess: () => {
+            invalidateApiCache("registered-restaurants");
             toast.success("Restaurant deleted");
             setIsDeleteOpen(false);
             setRestaurantToDelete(null);

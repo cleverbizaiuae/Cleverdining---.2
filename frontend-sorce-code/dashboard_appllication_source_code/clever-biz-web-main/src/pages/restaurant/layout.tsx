@@ -192,6 +192,24 @@ const RestaurantLayout = () => {
 
   const filteredItems = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
+  useEffect(() => {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+
+    if (connection?.saveData || /2g/i.test(connection?.effectiveType || "")) {
+      return;
+    }
+
+    // Warm route chunks after the active page has had time to render. This
+    // keeps the initial request path lean while making later sidebar clicks fast.
+    const timer = window.setTimeout(() => {
+      filteredItems.forEach((item) => prefetchSegment(item.label));
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [currentRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const prefetchSegmentData = (label: string) => {
     if (dataPrefetchedRef.current.has(label)) return;
     dataPrefetchedRef.current.add(label);

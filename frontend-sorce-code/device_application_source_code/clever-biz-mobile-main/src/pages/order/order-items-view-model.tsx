@@ -1,4 +1,5 @@
 import { DollarSign, Hash, Package, ShoppingCart, X } from "lucide-react";
+import { OptimizedImage } from "../../components/OptimizedImage";
 
 export interface TOrderItem {
   item_id: number;
@@ -65,14 +66,12 @@ export default function OrderItemModal({
             {/* Image Section */}
             <div className="mb-6">
               <div className="relative rounded-2xl overflow-hidden bg-gray-100 aspect-video group">
-                <img
+                <OptimizedImage
                   src={item.image}
                   alt={item.item_name}
+                  width={600}
+                  height={400}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      "https://via.placeholder.com/600x400?text=No+Image";
-                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>

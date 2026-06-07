@@ -8,7 +8,7 @@ import {
 } from "./screen_admin_management";
 import { MonthlyChart, YearlyChart } from "@/components/charts";
 import { useEffect, useState } from "react";
-import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import { ClockFading } from "lucide-react";
 
 const ScreenAdminDashboard = () => {
@@ -71,9 +71,9 @@ const ScreenAdminDashboard = () => {
         if (search.trim()) params.restaurant_name = search.trim();
         if (regionFilter !== "all") params.region = regionFilter;
 
-        const response = await axiosInstance.get("/adminapi/restaurants/", {
+        const response = await cachedGet("/adminapi/restaurants/", {
           params,
-        });
+        }, { ttlMs: 60_000 });
 
 
         const { count = 0, results = [] } = response.data ?? {};
@@ -97,9 +97,10 @@ const ScreenAdminDashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await axiosInstance.get(
+      const res = await cachedGet(
         "/adminapi/restaurants/more_summary/",
-        { params: regionFilter === "all" ? undefined : { region: regionFilter } }
+        { params: regionFilter === "all" ? undefined : { region: regionFilter } },
+        { ttlMs: 60_000 }
       );
       const data = await res.data;
       setState(data);
@@ -109,9 +110,10 @@ const ScreenAdminDashboard = () => {
   }, [regionFilter]);
   useEffect(() => {
     const fetchData = async () => {
-      const res = await axiosInstance.get(
+      const res = await cachedGet(
         "/adminapi/restaurants/yearly_sells_report/",
-        { params: regionFilter === "all" ? undefined : { region: regionFilter } }
+        { params: regionFilter === "all" ? undefined : { region: regionFilter } },
+        { ttlMs: 60_000 }
       );
       const data = await res.data;
 
@@ -121,9 +123,10 @@ const ScreenAdminDashboard = () => {
   }, [regionFilter]);
   useEffect(() => {
     const fetchData = async () => {
-      const res = await axiosInstance.get(
+      const res = await cachedGet(
         "/adminapi/restaurants/last_yearly_sells_report/",
-        { params: regionFilter === "all" ? undefined : { region: regionFilter } }
+        { params: regionFilter === "all" ? undefined : { region: regionFilter } },
+        { ttlMs: 60_000 }
       );
       const data = await res.data;
       setLastSalesData(data);

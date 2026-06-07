@@ -31,9 +31,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-change-in-production-12345')
+SECRET_KEY = env('SECRET_KEY', default='cleverbiz-local-fallback-7f3c1a9b2d6e4f8091a3c5e7b9d2f4a6c8e0b1d3')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = env.bool('DEBUG', default=False)
 
 ALLOWED_HOSTS = ["*"]
 
@@ -49,12 +50,18 @@ CSRF_TRUSTED_ORIGINS = [
     "https://officialcleverdining.netlify.app",
     "https://cleverdining-2.onrender.com",
     "https://cleverdining-backend.onrender.com",
+    "http://localhost:4173",
     "http://localhost:4174",
+    "http://localhost:4175",
+    "http://localhost:4176",
     "http://localhost:5175",
     "http://localhost:5176",
     "http://localhost:5177",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173",
     "http://127.0.0.1:4174",
+    "http://127.0.0.1:4175",
+    "http://127.0.0.1:4176",
     "http://127.0.0.1:5174",
     "http://127.0.0.1:5175",
     "http://127.0.0.1:5176",
@@ -68,9 +75,13 @@ if RENDER_EXTERNAL_HOSTNAME:
 
 # Security Settings for Render (SSL Termination)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False) # Set to True in prod via Env
-SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
-CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
+_SECURE_DEPLOYMENT_DEFAULT = bool(RENDER_EXTERNAL_HOSTNAME and not DEBUG)
+SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=_SECURE_DEPLOYMENT_DEFAULT)
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=_SECURE_DEPLOYMENT_DEFAULT)
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=_SECURE_DEPLOYMENT_DEFAULT)
+SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000 if _SECURE_DEPLOYMENT_DEFAULT else 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=_SECURE_DEPLOYMENT_DEFAULT)
+SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=_SECURE_DEPLOYMENT_DEFAULT)
 
 CORS_ALLOW_ALL_ORIGINS = False  # Use explicit allowlist below
 CORS_ALLOWED_ORIGINS = [
@@ -79,14 +90,20 @@ CORS_ALLOWED_ORIGINS = [
     "https://clever-biz2.netlify.app",
     "https://officialcleverdining.netlify.app",
     "https://officialcleverdiningcustomer.netlify.app",
+    "http://localhost:4173",
     "http://localhost:4174",
+    "http://localhost:4175",
+    "http://localhost:4176",
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
     "http://localhost:5176",
     "http://localhost:5177",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173",
     "http://127.0.0.1:4174",
+    "http://127.0.0.1:4175",
+    "http://127.0.0.1:4176",
     "http://127.0.0.1:5174",
     "http://127.0.0.1:5175",
     "http://127.0.0.1:5176",
@@ -296,8 +313,9 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],  
     "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend"
+        "core.filter_backends.SchemaSafeDjangoFilterBackend"
     ],
+    "DEFAULT_SCHEMA_CLASS": "core.schema.UniqueOperationIdAutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
     'DEFAULT_PERMISSION_CLASSES': [
@@ -427,8 +445,6 @@ STRIPE_WEBHOOK_SECRET=env('STRIPE_WEBHOOK_SECRET', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
 # Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
 USE_SQLITE = env.bool('USE_SQLITE', default=False)
-# --- DEBUG MODE ---
-DEBUG = env.bool('DEBUG', default=False)
 
 if USE_SQLITE:
     DATABASES = {

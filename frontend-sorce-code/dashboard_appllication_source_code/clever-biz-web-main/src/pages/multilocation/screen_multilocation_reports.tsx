@@ -99,7 +99,40 @@ export default function ScreenMultiLocationReports() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-slate-100 sm:hidden">
+          {summary.locations.map((location) => (
+            <div key={location.location_id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900 truncate">{location.location_name}</p>
+                  <p className="text-xs text-slate-500">{location.orders} orders · {location.staff_count} staff</p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold text-slate-900">{formatCurrency(location.revenue)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-slate-400 uppercase tracking-wide">AOV</p>
+                  <p className="font-medium text-slate-700">{formatCurrency(location.avg_order_value)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 uppercase tracking-wide">Share</p>
+                  <p className="font-medium text-slate-700">{formatPercent(location.revenue_share_pct)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="p-4 bg-slate-50">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-slate-900">Total</p>
+              <p className="font-semibold text-slate-900">{formatCurrency(summary.total_revenue)}</p>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {summary.total_orders} orders · {summary.total_staff} staff · 100.0% share
+            </p>
+          </div>
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>

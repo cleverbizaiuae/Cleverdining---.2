@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../lib/axios';
+import { cachedGet } from '../lib/requestCache';
 
 interface WalletPaymentProps {
     amount: number;
@@ -50,7 +51,7 @@ export const useWalletAvailability = (restaurantId: string | number | null) => {
             return;
         }
 
-        axiosInstance.get(`/api/customer/wallet-availability/?restaurant_id=${restaurantId}`)
+        cachedGet(`/api/customer/wallet-availability/?restaurant_id=${restaurantId}`, {}, { ttlMs: 60_000 })
             .then(res => {
                 setAvailability(res.data);
             })

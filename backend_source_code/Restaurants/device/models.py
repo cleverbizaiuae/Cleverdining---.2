@@ -1,12 +1,13 @@
 from django.db import models
 import uuid as uuid_lib
-from .constants import ACTION_CHOICES,STATUS_CHOICES
+from .constants import ACTION_CHOICES,STATUS_CHOICES,SOURCE_CHOICES
 from accounts.models import User
 from restaurant.models import Restaurant
 import qrcode
 from io import BytesIO
 from django.core.files.base import ContentFile
 import urllib.parse
+from datetime import timedelta
 
 # Create your models here.
 
@@ -71,6 +72,13 @@ class Device(models.Model):
     def __str__(self):
         return f"{self.table_name}"
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['restaurant', 'action'], name='device_rest_action_idx'),
+            models.Index(fields=['restaurant', 'table_name'], name='device_rest_table_name_idx'),
+            models.Index(fields=['restaurant', 'table_number'], name='device_rest_table_no_idx'),
+        ]
+
 class GuestSession(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='guest_sessions')
     session_token = models.CharField(max_length=255, unique=True)
@@ -88,19 +96,57 @@ class GuestSession(models.Model):
 
 class Reservation(models.Model):
     customer_name = models.CharField(max_length=255)
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='reservations')
+    device = models.ForeignKey(Device, on_delete=models.SET_NULL, related_name='reservations', null=True, blank=True)
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='reservations',null=True, blank=True)
+    table_name = models.CharField(max_length=80, blank=True, default='')
+    table_capacity = models.PositiveIntegerField(null=True, blank=True)
     guest_no = models.PositiveIntegerField()
     cell_number = models.CharField(max_length=15)
     email = models.EmailField(null=True, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='dashboard')
     reservation_time = models.DateTimeField()
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='hold')
+    end_time = models.DateTimeField(null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(default=90)
+    buffer_minutes = models.PositiveIntegerField(default=10)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='hold')
+    custom_request = models.TextField(blank=True, default='')
+    actual_seated_time = models.DateTimeField(null=True, blank=True)
+    actual_end_time = models.DateTimeField(null=True, blank=True)
+    extension_minutes = models.PositiveIntegerField(default=0)
+    updated_by_staff_id = models.CharField(max_length=64, null=True, blank=True)
+    status_reason = models.TextField(null=True, blank=True)
+    whatsapp_phone_number_id = models.CharField(max_length=128, null=True, blank=True)
+    whatsapp_chat_id = models.CharField(max_length=128, null=True, blank=True)
+    whatsapp_message_id = models.CharField(max_length=128, null=True, blank=True)
+    raw_customer_text = models.TextField(null=True, blank=True)
+    ai_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    missing_fields = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        if self.device_id:
+            if not self.restaurant_id:
+                self.restaurant = self.device.restaurant
+            if not self.table_name:
+                self.table_name = self.device.table_name or ''
+            if self.table_capacity is None and hasattr(self.device, 'capacity'):
+                self.table_capacity = getattr(self.device, 'capacity', None)
+        if self.reservation_time and not self.end_time:
+            block_minutes = int(self.duration_minutes or 90) + int(self.buffer_minutes or 0)
+            self.end_time = self.reservation_time + timedelta(minutes=block_minutes)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.customer_name} - {self.device.table_name} - {self.guest_no} - {self.reservation_time.strftime('%H:%M')} - {self.status} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+        table_name = self.table_name or (self.device.table_name if self.device_id else "Deleted table")
+        return f"{self.customer_name} - {table_name} - {self.guest_no} - {self.reservation_time.strftime('%H:%M')} - {self.status} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['restaurant', 'reservation_time'], name='reservation_rest_time_idx'),
+            models.Index(fields=['restaurant', 'status'], name='reservation_rest_status_idx'),
+            models.Index(fields=['restaurant', 'source'], name='reservation_rest_source_idx'),
+            models.Index(fields=['device', 'reservation_time'], name='reservation_device_time_idx'),
+            models.Index(fields=['cell_number'], name='reservation_cell_idx'),
+        ]
     
-
-
-

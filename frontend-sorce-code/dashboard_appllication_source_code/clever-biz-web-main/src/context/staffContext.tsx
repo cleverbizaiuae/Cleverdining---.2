@@ -2,6 +2,7 @@
 import { useRole } from "@/hooks/useRole";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import {
   createContext,
   useContext,
@@ -184,7 +185,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
     try {
-      const res = await axiosInstance.get(endpoint);
+      const res = await cachedGet(endpoint, {}, { ttlMs: 5_000 });
       setStatusSummary(normalizeStatusSummary(res.data));
       console.log(res.data, "summary");
     } catch (error: any) {
@@ -207,7 +208,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
       try {
-        const res = await axiosInstance.get(endpoint);
+        const res = await cachedGet(endpoint, {}, { ttlMs: 10_000 });
         console.log(res, "response from fetch food items");
         const payload = res.data;
         const results = Array.isArray(payload) ? payload : payload?.results || [];
@@ -250,9 +251,9 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
-      const res = await axiosInstance.get(endpoint, {
+      const res = await cachedGet(endpoint, {
         params: { page: page, search: search },
-      });
+      }, { ttlMs: 1_500 });
       console.log(res, "response from fetch orders");
       const payload = res.data || {};
       const results = payload.results;
@@ -293,6 +294,7 @@ export const StaffProvider: React.FC<{ children: ReactNode }> = ({
         if (showToast) {
           toast.success("Order status updated successfully!");
         }
+        invalidateApiCache("orders");
 
         // Update local orders state immediately for instant feedback
         setOrders((prevOrders) => {

@@ -10,6 +10,7 @@ import { cn } from "clsx-for-tailwind";
 import { motion } from "motion/react";
 import { useBrandConfig } from "@/lib/useBrandConfig";
 import { getTableIdentity } from "@/lib/tableIdentity";
+import { cachedGet } from "@/lib/requestCache";
 
 type Message = {
   id: number;
@@ -65,9 +66,10 @@ function MessagingUI() {
           headers["X-Guest-Session-Token"] = guestToken;
         }
 
-        const response = await axiosInstance.get(
+        const response = await cachedGet(
           `/message/chat/?device_id=${device_id}&restaurant_id=${restaurant_id}`,
-          { headers }
+          { headers },
+          { ttlMs: 2_000 },
         );
 
         type ApiMessage = {
@@ -320,8 +322,8 @@ function MessagingUI() {
       <div className="shrink-0 w-full bg-white border-t border-gray-200 z-40">
         <div className="max-w-3xl mx-auto w-full flex flex-col">
           {/* Preset Messages */}
-          <div className="w-full overflow-x-auto no-scrollbar py-3 px-4 border-b border-gray-50">
-            <div className="flex gap-2 min-w-max">
+          <div className="w-full py-3 px-4 border-b border-gray-50">
+            <div className="flex flex-wrap gap-2">
               {presetMessages.map((msg, idx) => (
                 <button
                   key={idx}

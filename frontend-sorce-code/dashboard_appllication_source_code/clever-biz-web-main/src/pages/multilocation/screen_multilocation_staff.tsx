@@ -108,7 +108,38 @@ export default function ScreenMultiLocationStaff() {
       </section>
 
       <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-slate-100 sm:hidden">
+          {rows.map((row) => (
+            <div key={row.id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900 truncate">{row.full_name}</p>
+                  <p className="text-xs text-slate-500 truncate">{locationMap.get(row.location_id) || "-"}</p>
+                </div>
+                <RoleBadge role={row.role} />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-slate-600 capitalize">{row.status.replace("_", " ")}</span>
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    onClick={() => openEdit(row)}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 text-red-500 hover:bg-red-50"
+                    onClick={() => remove(row.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>

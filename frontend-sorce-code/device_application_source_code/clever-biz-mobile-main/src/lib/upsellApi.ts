@@ -1,4 +1,5 @@
 import axiosInstance from "./axios";
+import { cachedGet } from "./requestCache";
 import {
   isUpsellItemAccepted,
   getUpsellSessionId,
@@ -92,18 +93,17 @@ export async function fetchUpsellSuggestions(params: {
 }) {
   const signalParams = getUpsellSignalsQueryParams();
   const sessionToken = localStorage.getItem("guest_session_token");
-  const primaryPromise = axiosInstance.get("/api/customer/cart/upsell_suggestions/", {
+  const primaryPromise = cachedGet("/api/customer/cart/upsell_suggestions/", {
     params: {
       trigger_point: params.triggerPoint,
       limit: params.limit ?? 2,
       source_item_id: params.sourceItemId,
       ...signalParams,
     },
-  });
+  }, { ttlMs: 2_000 });
   const historicalPromise =
     params.cartItemIds && params.cartItemIds.length > 0
-      ? axiosInstance
-          .get("/api/upsell/smart-suggestions", {
+      ? cachedGet("/api/upsell/smart-suggestions", {
             params: {
               cartItemIds: params.cartItemIds.join(","),
               excludeItemIds: (params.excludeItemIds || []).join(","),
@@ -112,7 +112,7 @@ export async function fetchUpsellSuggestions(params: {
               limit: params.limit ?? 2,
             },
             headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
-          })
+          }, { ttlMs: 2_000 })
           .then((response) => (Array.isArray(response.data?.results) ? response.data.results : []))
           .catch(() => [] as UpsellSuggestion[])
       : Promise.resolve([] as UpsellSuggestion[]);
@@ -150,10 +150,10 @@ export async function fetchUpsellSuggestions(params: {
 
 export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
   const sessionToken = localStorage.getItem("guest_session_token");
-  const response = await axiosInstance.get("/api/upsell/settings", {
+  const response = await cachedGet("/api/upsell/settings", {
     params: sessionToken ? { guest_session_token: sessionToken } : undefined,
     headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
-  });
+  }, { ttlMs: 20_000 });
   return {
     enabled: Boolean(response.data?.enabled ?? true),
     show_after_add_to_cart: Boolean(response.data?.show_after_add_to_cart ?? true),

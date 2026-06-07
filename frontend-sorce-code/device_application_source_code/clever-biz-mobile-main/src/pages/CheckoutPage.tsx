@@ -2,9 +2,9 @@
 import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import CheckoutButton from "./CheckoutButton";
-import axiosInstance from "../lib/axios";
 import { ApplePayButton, GooglePayButton, useWalletAvailability } from "../components/WalletPayment";
 import { getRegionConfig } from "../config/regionConfig";
+import { cachedGet } from "../lib/requestCache";
 // import CheckoutButton from "../components/CheckoutButton";
 
 type SplitType = "full_bill" | "evenly" | "my_items";
@@ -138,9 +138,9 @@ export default function CheckoutPage() {
 
     if (isBulkCheckout && guestToken) {
       // Fetch all unpaid orders for this guest session using correct endpoint
-      axiosInstance.get(`/api/customer/uncomplete/orders/`, {
+      cachedGet(`/api/customer/uncomplete/orders/`, {
         headers: { "X-Guest-Session-Token": guestToken }
-      })
+      }, { ttlMs: 1_000 })
         .then(res => {
           const orders = res.data.results || res.data || [];
           // Filter unpaid orders (backend already filters, but double-check)
@@ -157,9 +157,9 @@ export default function CheckoutPage() {
         .catch(err => console.error("Failed to fetch orders", err));
     } else if (orderId) {
       const guestToken = localStorage.getItem("guest_session_token");
-      axiosInstance.get(`/api/customer/uncomplete/orders/${orderId}/`, {
+      cachedGet(`/api/customer/uncomplete/orders/${orderId}/`, {
         headers: guestToken ? { "X-Guest-Session-Token": guestToken } : {}
-      })
+      }, { ttlMs: 1_000 })
         .then(res => {
           setOrderData(res.data);
         })
@@ -176,12 +176,11 @@ export default function CheckoutPage() {
       return;
     }
 
-    axiosInstance
-      .get(`/api/customer/payment/bill-summary/${orderId}/?guest_token=${guestToken}`, {
+    cachedGet(`/api/customer/payment/bill-summary/${orderId}/?guest_token=${guestToken}`, {
         headers: {
           "X-Guest-Session-Token": guestToken,
         },
-      })
+      }, { ttlMs: 1_000 })
       .then((res) => {
         const payload = res.data as BillSummary;
         setBillSummary(payload);

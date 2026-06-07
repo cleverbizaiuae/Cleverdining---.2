@@ -65,11 +65,38 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 
 class ReservationSerializer(serializers.ModelSerializer):
-    device_name = serializers.CharField(source='device.table_name', read_only=True)
+    device_name = serializers.SerializerMethodField()
+    tableName = serializers.CharField(source='table_name', read_only=True)
+    tableId = serializers.IntegerField(source='device_id', read_only=True)
+    guestCount = serializers.IntegerField(source='guest_no', read_only=True)
+    customerName = serializers.CharField(source='customer_name', read_only=True)
+    phone = serializers.CharField(source='cell_number', read_only=True)
+    reservationTime = serializers.DateTimeField(source='reservation_time', read_only=True)
+    endTime = serializers.DateTimeField(source='end_time', read_only=True)
+    durationMinutes = serializers.IntegerField(source='duration_minutes', read_only=True)
+    bufferMinutes = serializers.IntegerField(source='buffer_minutes', read_only=True)
+    customRequest = serializers.CharField(source='custom_request', read_only=True)
+    actualSeatedTime = serializers.DateTimeField(source='actual_seated_time', read_only=True)
+    actualEndTime = serializers.DateTimeField(source='actual_end_time', read_only=True)
+    extensionMinutes = serializers.IntegerField(source='extension_minutes', read_only=True)
+
+    def get_device_name(self, obj):
+        if getattr(obj, 'device', None):
+            return obj.device.table_name
+        return obj.table_name or None
 
     class Meta:
         model = Reservation
-        fields = ['id','email','customer_name','guest_no','cell_number','reservation_time','status','created_at','updated_at','device','device_name',  'restaurant',]
+        fields = [
+            'id','email','customer_name','customerName','guest_no','guestCount','cell_number','phone',
+            'reservation_time','reservationTime','end_time','endTime','duration_minutes','durationMinutes',
+            'buffer_minutes','bufferMinutes','status','source','custom_request','customRequest',
+            'table_name','tableName','table_capacity','actual_seated_time','actualSeatedTime',
+            'actual_end_time','actualEndTime','extension_minutes','extensionMinutes','updated_by_staff_id',
+            'status_reason','whatsapp_phone_number_id','whatsapp_chat_id','whatsapp_message_id',
+            'raw_customer_text','ai_confidence','missing_fields','created_at','updated_at','device',
+            'device_name','tableId','restaurant',
+        ]
 
 
 
@@ -77,4 +104,4 @@ class ReservationSerializer(serializers.ModelSerializer):
 class ReservationStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
-        fields = ['status']
+        fields = ['status', 'status_reason']

@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from restaurant.serializers import OwnerRegisterSerializer, RestaurantSerializer, BrandConfigSerializer
+from restaurant.serializers import BusinessDaySerializer, OwnerRegisterSerializer, RestaurantSerializer, BrandConfigSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
@@ -610,7 +610,7 @@ from accounts.permissions import IsOwnerChefOrStaff
 class BusinessDayViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
     queryset = BusinessDay.objects.all()
-    serializer_class = None # Not really needed unless we list days
+    serializer_class = BusinessDaySerializer
     
     # Custom Serializer just for Response if needed, or stick to logic
     

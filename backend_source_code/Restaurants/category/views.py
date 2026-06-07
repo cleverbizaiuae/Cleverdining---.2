@@ -21,7 +21,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_serializer_class(self):
-        if self.request.query_params.get('hierarchy') == 'true':
+        request = getattr(self, "request", None)
+        if request and request.query_params.get('hierarchy') == 'true':
             return HierarchicalCategorySerializer
         return CategorySerializer
 

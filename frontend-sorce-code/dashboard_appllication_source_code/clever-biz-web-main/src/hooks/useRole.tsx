@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import type { NavigateFunction } from "react-router";
 
 export type UserRole =
@@ -146,7 +146,10 @@ export const useRole = () => {
 
       if (hasToken && !profileSynced && user) {
         try {
-          const response = await axiosInstance.get<UserInfo>("/profile/");
+          const response = await cachedGet<UserInfo>("/profile/", {}, {
+            ttlMs: 60_000,
+            cacheKey: "GET:/profile/",
+          });
           if (isMounted && response?.data) {
             const profile = response.data;
             localStorage.setItem("userInfo", JSON.stringify(profile));

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Users, TrendingUp, Filter, Database, BarChart3 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval } from "date-fns";
 
@@ -65,9 +65,9 @@ const ScreenSuperAdminDashboard = () => {
         queryKey: ['registered-restaurants', regionFilter],
         queryFn: async () => {
             try {
-                const response = await axiosInstance.get('/owners/registered-restaurants/', {
+                const response = await cachedGet('/owners/registered-restaurants/', {
                     params: regionFilter === "all" ? undefined : { region: regionFilter },
-                });
+                }, { ttlMs: 60_000 });
                 const payload = Array.isArray(response.data) ? response.data : [];
                 return payload.map(normalizeRestaurant);
             } catch {

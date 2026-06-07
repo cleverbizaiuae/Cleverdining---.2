@@ -27,6 +27,7 @@ import {
   removeLocalStorageSynced,
   setLocalStorageSynced,
 } from "@/lib/tableIdentity";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 
 type BackendOrderItem = {
   id?: number;
@@ -344,10 +345,14 @@ const ScreenOrders = () => {
 
   const fetchBackendOrders = useCallback(async () => {
     const guestToken = localStorage.getItem("guest_session_token");
-    const response = await axiosInstance.get(`/api/customer/uncomplete/orders/`, {
-      headers: guestToken ? { "X-Guest-Session-Token": guestToken } : {},
-      params: tableInfo.deviceId ? { device_id: tableInfo.deviceId } : {},
-    });
+    const response = await cachedGet(
+      `/api/customer/uncomplete/orders/`,
+      {
+        headers: guestToken ? { "X-Guest-Session-Token": guestToken } : {},
+        params: tableInfo.deviceId ? { device_id: tableInfo.deviceId } : {},
+      },
+      { ttlMs: 1_000 },
+    );
 
     const payload = response?.data;
     const backendOrders: BackendOrder[] = Array.isArray(payload)
@@ -712,6 +717,7 @@ const ScreenOrders = () => {
           },
         );
 
+        invalidateApiCache("customer/uncomplete/orders");
         await handleCheckoutResponse(response.data, true);
         return;
       }
@@ -729,6 +735,7 @@ const ScreenOrders = () => {
           },
         );
 
+        invalidateApiCache("customer/uncomplete/orders");
         await handleCheckoutResponse(response.data, true);
         return;
       }
@@ -788,6 +795,7 @@ const ScreenOrders = () => {
         },
       );
 
+      invalidateApiCache("customer/uncomplete/orders");
       await handleCheckoutResponse(response.data, false);
     } catch (error) {
       toast.error(getErrorMessage(error));

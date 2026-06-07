@@ -1,7 +1,7 @@
 import { cn } from "clsx-for-tailwind";
-import { useRef } from "react";
-import { useWebSocket } from "@/components/WebSocketContext";
 import { getSessionCurrencyCode } from "../../utils/regionSession";
+import { OptimizedImage } from "../../components/OptimizedImage";
+import { resolveMediaUrl } from "../../lib/media";
 
 export type FoodItemTypes = {
   id: number;
@@ -25,7 +25,7 @@ type Props = {
   showFood: (id: number) => void;
 };
 
-import { Plus, Tag } from "lucide-react"; // Added Tag icon
+import { Plus } from "lucide-react";
 
 export const FoodItems = ({ item, showFood }: Props) => {
   const price = parseFloat(item.price);
@@ -54,12 +54,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
           <div className="w-[100px] h-[100px] flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center relative">
             {(!item.image1 && item.video) ? (
               <video
-                src={(() => {
-                  let url = item.video;
-                  if (url.startsWith("http://")) url = url.replace("http://", "https://");
-                  if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-                  return url + "#t=0.5"; // seek to 0.5s for thumbnail
-                })()}
+                src={`${resolveMediaUrl(item.video, "")}#t=0.5`}
                 muted
                 playsInline
                 preload="metadata"
@@ -67,19 +62,12 @@ export const FoodItems = ({ item, showFood }: Props) => {
                 about="Video Thumbnail"
               />
             ) : (
-              <img
-                src={(() => {
-                  if (!item.image1) return "https://placehold.co/200x200?text=No+Image";
-                  let url = item.image1;
-                  if (url.startsWith("http://")) url = url.replace("http://", "https://");
-                  if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-                  return url;
-                })()}
+              <OptimizedImage
+                src={item.image1}
                 alt={item.item_name}
+                width={100}
+                height={100}
                 className="object-cover w-full h-full"
-                onError={(e) => {
-                  e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                }}
               />
             )}
 

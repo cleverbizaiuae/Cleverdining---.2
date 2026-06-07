@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
 import {
   ArrowDownRight,
@@ -236,7 +236,7 @@ export default function ScreenRestaurantCrm() {
   } = useQuery<Customer[]>({
     queryKey: ["crm-customers"],
     queryFn: async () => {
-      const res = await axiosInstance.get("/api/crm/customers");
+      const res = await cachedGet("/api/crm/customers", {}, { ttlMs: 55_000 });
       return toArray<Record<string, unknown>>(res.data, ["customers"]).map(normalizeCustomer);
     },
     refetchInterval: 60_000,
@@ -461,7 +461,7 @@ function LeaderboardTab() {
     queryFn: async () => {
       const params = new URLSearchParams({ limit: "50" });
       if (gameFilter) params.set("gameType", gameFilter);
-      const res = await axiosInstance.get(`/api/game/leaderboard?${params.toString()}`);
+      const res = await cachedGet(`/api/game/leaderboard?${params.toString()}`, {}, { ttlMs: 25_000 });
       return toArray<Record<string, unknown>>(res.data, ["scores", "leaderboard"]).map(normalizeGameScore);
     },
     refetchInterval: 30_000,
@@ -539,7 +539,7 @@ function CustomerDrawer({ customer, fmt, onClose }: { customer: Customer; fmt: (
   const { data: detail = customer, isLoading: detailLoading } = useQuery<Customer>({
     queryKey: ["crm-customer-detail", customer.id],
     queryFn: async () => {
-      const res = await axiosInstance.get(`/api/crm/customers/${customer.id}`);
+      const res = await cachedGet(`/api/crm/customers/${customer.id}`, {}, { ttlMs: 120_000 });
       return normalizeCustomer(res.data?.customer || res.data?.data || res.data);
     },
   });
@@ -547,7 +547,7 @@ function CustomerDrawer({ customer, fmt, onClose }: { customer: Customer; fmt: (
   const { data: scores = [] } = useQuery<GameScore[]>({
     queryKey: ["crm-customer-scores", customer.phone],
     queryFn: async () => {
-      const res = await axiosInstance.get("/api/game/leaderboard?limit=50");
+      const res = await cachedGet("/api/game/leaderboard?limit=50", {}, { ttlMs: 25_000 });
       return toArray<Record<string, unknown>>(res.data, ["scores", "leaderboard"])
         .map(normalizeGameScore)
         .filter((score) => score.phone && score.phone === customer.phone);

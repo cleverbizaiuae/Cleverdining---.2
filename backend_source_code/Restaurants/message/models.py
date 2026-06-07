@@ -67,3 +67,36 @@ class CallSession(models.Model):
         self.is_active = False
         self.ended_at = timezone.now()
         self.save()
+
+
+class TableMessage(models.Model):
+    TYPE_CHOICES = [
+        ("chat", "Chat"),
+        ("assistance", "Assistance"),
+        ("call_waiter", "Call Waiter"),
+    ]
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("acknowledged", "Acknowledged"),
+        ("read", "Read"),
+    ]
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.SET_NULL, null=True, blank=True, related_name="table_messages")
+    device = models.ForeignKey(Device, on_delete=models.SET_NULL, null=True, blank=True, related_name="table_messages")
+    table_number = models.IntegerField(null=True, blank=True, db_index=True)
+    table_name = models.CharField(max_length=80, blank=True, default="")
+    type = models.CharField(max_length=30, choices=TYPE_CHOICES, default="chat")
+    message = models.TextField()
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="pending", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["restaurant", "status", "created_at"]),
+            models.Index(fields=["table_number", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.table_name or self.table_number}: {self.type}"

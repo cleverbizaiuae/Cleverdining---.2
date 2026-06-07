@@ -86,8 +86,20 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        // Cache app shell only — NOT API data
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Cache only the startup shell up front. Route chunks are cached on demand
+        // below, avoiding a multi-MB service-worker install competing with page data.
+        globPatterns: [
+          "index.html",
+          "offline.html",
+          "assets/index-*.js",
+          "assets/index-*.css",
+          "assets/vendor-core-*.js",
+          "assets/vendor-ui-*.js",
+          "assets/vendor-utils-*.js",
+          "assets/vendor-monitoring-*.js",
+          "assets/requestCache-*.js",
+          "assets/regionConfig-*.js"
+        ],
 
         // Handle SPA navigation (serve index.html for all routes)
         navigateFallback: "/index.html",
@@ -130,6 +142,26 @@ export default defineConfig({
             options: {
               cacheName: "gcs-images-cache",
               expiration: { maxEntries: 100, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          // Local JS/CSS route chunks: cache after first use, not during install.
+          {
+            urlPattern: /\.(?:js|css)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "dashboard-static-assets",
+              expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          // Local images/icons: cache after first use without precaching every asset.
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|webp|svg|ico)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "dashboard-image-assets",
+              expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
           }

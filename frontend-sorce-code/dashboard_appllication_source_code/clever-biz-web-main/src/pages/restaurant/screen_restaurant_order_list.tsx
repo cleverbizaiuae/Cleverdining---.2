@@ -5,6 +5,7 @@ import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import StripeConnectModal from "../model/StripeConnectModal";
 import PaymentGatewayModal from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import {
   Search,
   Bell,
@@ -19,6 +20,7 @@ import {
 import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency, getActiveRestaurantRegion } from "@/lib/utils";
 import { getRegionConfig } from "@/config/regionConfig";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 // --- COMPONENTS ---
 
@@ -165,7 +167,7 @@ const ScreenRestaurantOrderList = () => {
 
   const fetchGateways = async () => {
     try {
-      const { data } = await axiosInstance.get("/owners/payment-gateways/");
+      const { data } = await cachedGet("/owners/payment-gateways/", {}, { ttlMs: 60_000 });
       setConnectedGateways(Array.isArray(data) ? data : data.results || []);
     } catch (e) {
       console.warn("Failed to fetch gateways", e);
@@ -291,6 +293,7 @@ const ScreenRestaurantOrderList = () => {
       for (const orderId of orderIds) {
         await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
       }
+      invalidateApiCache("orders");
       toast.success("Cash Received! All orders for this table completed.");
       // Refresh list
       fetchOrders(ordersCurrentPage, debouncedSearchQuery);
@@ -304,6 +307,7 @@ const ScreenRestaurantOrderList = () => {
   const handleConfirmCash = async (orderId: number) => {
     try {
       await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
+      invalidateApiCache("orders");
       toast.success("Cash Received! Session Completed.");
       // Refresh list
       fetchOrders(ordersCurrentPage, debouncedSearchQuery);
@@ -832,7 +836,13 @@ const ScreenRestaurantOrderList = () => {
                       <div className="w-12 h-12 bg-slate-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
                         {/* Check multiple possible image field locations */}
                         {(item.image || item.image1 || item.item?.image) ? (
-                          <img src={item.image || item.image1 || item.item?.image} alt={item.item_name} className="w-full h-full object-cover" />
+                          <OptimizedImage
+                            src={item.image || item.image1 || item.item?.image}
+                            alt={item.item_name}
+                            width={48}
+                            height={48}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <span className="text-[10px] text-slate-400">No img</span>
                         )}

@@ -20,11 +20,22 @@ from django.conf import settings
 from django.conf.urls.static import static
 from .health_views import health_check
 from restaurant.views import BrandConfigAPIView
+from customer.compat_views import DailyStatsAPIView, LeadsAPIView, SalesAnalyticsAPIView, TableMessagesAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', health_check),
     path('api/health/', health_check),
+    path('api/daily-stats', DailyStatsAPIView.as_view()),
+    path('api/daily-stats/', DailyStatsAPIView.as_view()),
+    path('api/analytics/sales', SalesAnalyticsAPIView.as_view()),
+    path('api/analytics/sales/', SalesAnalyticsAPIView.as_view()),
+    path('api/leads/<str:identifier>', LeadsAPIView.as_view()),
+    path('api/leads/<str:identifier>/', LeadsAPIView.as_view()),
+    path('api/table-messages', TableMessagesAPIView.as_view()),
+    path('api/table-messages/', TableMessagesAPIView.as_view()),
+    path('api/table-messages/<str:identifier>', TableMessagesAPIView.as_view()),
+    path('api/table-messages/<str:identifier>/', TableMessagesAPIView.as_view()),
     path('api/brand-config', BrandConfigAPIView.as_view()),
     path('api/brand-config/', BrandConfigAPIView.as_view()),
     path('api/', include('customer.intelligence_urls')),
@@ -44,10 +55,10 @@ urlpatterns = [
 
 
 from django.urls import re_path
-from django.views.static import serve
+from core.media_views import cached_media_serve
 
 urlpatterns += [
-    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^media/(?P<path>.*)$', cached_media_serve, {'document_root': settings.MEDIA_ROOT}),
 ]
 
 if settings.DEBUG:

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
@@ -103,7 +104,7 @@ export default function PaymentGatewayModal({
         const fetchGatewayData = async () => {
             try {
                 // Filter by provider on client side since backend returns all
-                const { data } = await axiosInstance.get("/owners/payment-gateways/");
+                const { data } = await cachedGet("/owners/payment-gateways/", {}, { ttlMs: 30_000 });
                 const gateways = Array.isArray(data) ? data : data.results;
                 const rec = gateways.find((g: any) => g.provider === provider);
 
@@ -174,6 +175,7 @@ export default function PaymentGatewayModal({
                 }
             }
 
+            invalidateApiCache("owners/payment-gateways");
             onSuccess?.(resp.data);
             onClose();
         } catch (err: any) {

@@ -51,7 +51,7 @@ export default function MultiLocationLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-inter">
+    <div className="admin-typography min-h-screen bg-slate-50 flex font-inter">
       {mobileOpen && (
         <button
           aria-label="Close menu overlay"
@@ -116,7 +116,7 @@ export default function MultiLocationLayout() {
                 >
                   <Icon size={18} />
                 </span>
-                {!collapsed && <span className="ml-3 text-sm font-medium">{entry.label}</span>}
+                {!collapsed && <span className="admin-sidebar-item ml-3">{entry.label}</span>}
               </Link>
             );
           })}
@@ -133,7 +133,7 @@ export default function MultiLocationLayout() {
               <Menu size={18} />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">{titleFromPath(location.pathname)}</h1>
+              <h1 className="admin-page-title text-slate-900">{titleFromPath(location.pathname)}</h1>
               <p className="text-xs text-slate-500">{new Date().toLocaleDateString("en-GB", {
                 weekday: "long",
                 day: "numeric",

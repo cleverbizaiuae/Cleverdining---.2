@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import {
   Search,
@@ -69,7 +70,7 @@ const ScreenChefChat = () => {
           endpoint = "/owners/devicesall/"; // Fallback
         }
 
-        const { data } = await axiosInstance.get(endpoint);
+        const { data } = await cachedGet(endpoint, {}, { ttlMs: 20_000 });
         setChatList(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to load chat list", error);
@@ -120,7 +121,9 @@ const ScreenChefChat = () => {
         // Endpoint pattern from utilities.tsx: /message/chat/?device_id=...&restaurant_id=...
         // Use selectedChat.restaurant_id which is available for all roles (Owner/Staff/Chef)
         const restaurantId = selectedChat.restaurant_id;
-        const { data } = await axiosInstance.get(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`);
+        const { data } = await cachedGet("/message/chat/", {
+          params: { device_id: selectedChat.id, restaurant_id: restaurantId },
+        }, { ttlMs: 1_500 });
         setMessages(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to fetch history", error);

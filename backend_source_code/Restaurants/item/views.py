@@ -5,7 +5,7 @@ from .serializers import ItemSerializer
 from accounts.permissions import IsOwnerRole,IsStaffRole,IsChefRole,IsCustomerRole,IsOwnerChefOrStaff
 from .pagination import ItemPagination
 from .filters import ItemFilter
-from django_filters.rest_framework import DjangoFilterBackend
+from core.filter_backends import SchemaSafeDjangoFilterBackend as DjangoFilterBackend
 from rest_framework import filters
 from restaurant.models import Restaurant
 from accounts.models import ChefStaff

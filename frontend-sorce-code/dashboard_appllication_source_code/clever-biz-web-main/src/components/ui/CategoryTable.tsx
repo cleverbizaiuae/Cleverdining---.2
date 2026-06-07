@@ -11,6 +11,7 @@ import { ImSpinner6 } from "react-icons/im";
 import axiosInstance from "@/lib/axios";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import { EditCategoryModal } from "../modals";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const CategoriesTable = ({ categories, setCategories }) => {
   const { response } = useContext(WebSocketContext);
@@ -61,29 +62,12 @@ const CategoriesTable = ({ categories, setCategories }) => {
                   className="border-b border-gray-700 hover:bg-[#2a3a4a] transition duration-300"
                 >
                   <td className="p-2 flex items-center gap-2">
-                    <img
-                      src={(() => {
-                        if (!category.image)
-                          return "https://placehold.co/100x100?text=No+Image";
-                        let url = category.image;
-                        // Fix double media path
-                        // url = url.replace("/media/media/", "/media/");
-                        // Force HTTPS
-                        if (url.startsWith("http://")) {
-                          url = url.replace("http://", "https://");
-                        }
-                        // Handle relative paths
-                        if (url.startsWith("/")) {
-                          url = `https://cleverdining-2.onrender.com${url}`;
-                        }
-                        return url;
-                      })()}
+                    <OptimizedImage
+                      src={category.image}
                       alt={category.Category_name}
+                      width={40}
+                      height={40}
                       className="w-10 h-10 rounded-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src =
-                          "https://placehold.co/100x100?text=No+Image";
-                      }}
                     />
                     {category.Category_name}
                   </td>

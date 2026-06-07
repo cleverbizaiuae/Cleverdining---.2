@@ -31,6 +31,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { set, SubmitHandler, useForm, Controller } from "react-hook-form";
 import toast from "react-hot-toast";
 import axiosInstance from "@/lib/axios";
+import { resolveMediaUrl } from "@/lib/media";
 import { ImSpinner6 } from "react-icons/im";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
@@ -198,32 +199,10 @@ export const EditFoodItemModal: React.FC<ModalProps> = ({
           });
           // Set existing media files
           if (item.image1) {
-            let url = item.image1;
-            // Fix double media path
-            // url = url.replace("/media/media/", "/media/");
-            // Force HTTPS
-            if (url.startsWith("http://")) {
-              url = url.replace("http://", "https://");
-            }
-            // Handle relative paths
-            if (url.startsWith("/")) {
-              url = `https://cleverdining-2.onrender.com${url}`;
-            }
-            setExistingImage(url);
+            setExistingImage(resolveMediaUrl(item.image1));
           }
           if (item.video) {
-            let url = item.video;
-            // Fix double media path
-            // url = url.replace("/media/media/", "/media/");
-            // Force HTTPS
-            if (url.startsWith("http://")) {
-              url = url.replace("http://", "https://");
-            }
-            // Handle relative paths
-            if (url.startsWith("/")) {
-              url = `https://cleverdining-2.onrender.com${url}`;
-            }
-            setExistingVideo(url);
+            setExistingVideo(resolveMediaUrl(item.video));
           }
         } catch (err) {
           console.error("Failed to load item for edit", err);
@@ -1104,10 +1083,7 @@ export const EditCategoryModal: React.FC<ModalProps> = ({
           setValue("name", cat.Category_name);
 
           if (cat.image) {
-            let url = cat.image;
-            if (url.startsWith("http://")) url = url.replace("http://", "https://");
-            if (url.startsWith("/")) url = `https://cleverdining-2.onrender.com${url}`;
-            setExistingImage(url);
+            setExistingImage(resolveMediaUrl(cat.image));
           }
         } catch (e) {
           console.error(e);

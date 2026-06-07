@@ -155,6 +155,9 @@ export default function ScreenSplash() {
             alt={`${restaurantName} cover`}
             className="absolute inset-0 h-full w-full object-cover"
             style={{ objectPosition: "center top" }}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
             initial={{ opacity: 0.45, scale: 1 }}
             animate={splashState === "collapsing" ? { opacity: 0.55, scale: 1.06 } : { opacity: 0.55, scale: 1 }}
             transition={{ duration: 0.48, ease: [0.4, 0, 0.2, 1] }}
@@ -193,6 +196,11 @@ export default function ScreenSplash() {
                 src={brandLogoUrl}
                 alt={restaurantName}
                 className="h-24 w-24 rounded-full object-contain bg-transparent p-1.5"
+                width={96}
+                height={96}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
               />
             ) : (
               <span className="text-white font-bold text-5xl" style={{ fontFamily: brandFontFamily }}>

@@ -1,7 +1,7 @@
 # serializers.py
 from rest_framework import serializers
 from accounts.models import User
-from restaurant.models import Restaurant, BrandConfig
+from restaurant.models import BusinessDay, Restaurant, BrandConfig
 from restaurant.region_config import resolve_region_defaults, normalize_region, get_region_config
 
 class RestaurantSerializer(serializers.ModelSerializer):
@@ -59,6 +59,25 @@ class BrandConfigSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'updated_at']
+
+
+class BusinessDaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessDay
+        fields = [
+            'id',
+            'restaurant',
+            'opened_at',
+            'closed_at',
+            'is_active',
+            'closed_by',
+            'total_revenue',
+            'total_orders',
+            'total_cash_payment',
+            'total_card_payment',
+            'total_tips',
+        ]
+        read_only_fields = fields
 
 class OwnerRegisterSerializer(serializers.ModelSerializer):
     # Restaurant inputs

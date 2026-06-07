@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useContext, useRef } from "react";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
+import { cachedGet } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import {
@@ -26,6 +27,7 @@ import {
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 
 
@@ -188,11 +190,11 @@ const ScreenRestaurantDashboard = () => {
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchDailyStats = useCallback(async () => {
+  const fetchDailyStats = useCallback(async (force = false) => {
     if (userRole !== "owner" && userRole !== "manager") return;
     setDailyStatsLoading(true);
     try {
-      const response = await axiosInstance.get("/api/daily-stats");
+      const response = await cachedGet("/api/daily-stats", {}, { ttlMs: 10_000, force });
       setDailyStats(response.data?.data || response.data);
     } catch (err) {
       console.warn("Failed to load daily stats", err);
@@ -201,18 +203,18 @@ const ScreenRestaurantDashboard = () => {
     }
   }, [userRole]);
 
-  const fetchSalesAnalytics = useCallback(async () => {
+  const fetchSalesAnalytics = useCallback(async (force = false) => {
     if ((userRole !== "owner" && userRole !== "manager") || !selectedDate) return;
     setSalesAnalyticsLoading(true);
     try {
       const startDate = new Date(`${selectedDate}T00:00:00.000`);
       const endDate = new Date(`${selectedDate}T23:59:59.999`);
-      const response = await axiosInstance.get("/api/analytics/sales", {
+      const response = await cachedGet("/api/analytics/sales", {
         params: {
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
         },
-      });
+      }, { ttlMs: 10_000, force });
       setSalesAnalytics(normalizeSalesAnalytics(response.data?.data || response.data));
     } catch (err) {
       console.warn("Failed to load sales analytics", err);
@@ -250,10 +252,10 @@ const ScreenRestaurantDashboard = () => {
 
       debounceRef.current = setTimeout(() => {
         // Re-fetch analytics on order/payment updates
-        fetchAnalytics(timeRange, compareEnabled);
-        fetchMostSellingItems();
-        fetchDailyStats();
-        fetchSalesAnalytics();
+        fetchAnalytics(timeRange, compareEnabled, true);
+        fetchMostSellingItems(true);
+        fetchDailyStats(true);
+        fetchSalesAnalytics(true);
       }, 2000);
     }
   }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchSalesAnalytics, timeRange, compareEnabled]);
@@ -576,9 +578,11 @@ const ScreenRestaurantDashboard = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden shrink-0">
                             {item.image ? (
-                              <img
+                              <OptimizedImage
                                 src={item.image}
                                 alt=""
+                                width={32}
+                                height={32}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   e.currentTarget.style.display = "none";
@@ -742,7 +746,7 @@ const ScreenRestaurantDashboard = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                             {cat.image ? (
-                              <img src={cat.image} alt="" className="w-full h-full object-cover" />
+                              <OptimizedImage src={cat.image} alt="" width={32} height={32} className="w-full h-full object-cover" />
                             ) : (
                               <span className="text-[10px] text-slate-400">No Image</span>
                             )}

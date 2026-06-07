@@ -1,13 +1,14 @@
 import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
 import { useEffect, useRef, useState } from "react";
-import axiosInstance from "../lib/axios";
 import { type CartItem, useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
-import { API_BASE_URL } from "../lib/axios";
+import { cachedGet } from "../lib/requestCache";
+import { resolveMediaUrl } from "../lib/media";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import UpsellBottomSheet from "./UpsellBottomSheet";
+import { OptimizedImage } from "./OptimizedImage";
 import { ChevronLeft, CheckCircle2, Minus, Plus } from "lucide-react";
 import {
   fetchUpsellSettings,
@@ -38,15 +39,6 @@ interface ModalFoodDetailProps extends ModalProps {
   onAddToCart?: () => void;
 }
 
-const getImageUrl = (url: string | undefined) => {
-  const fallback = "https://placehold.co/600x400?text=No+Image";
-  if (!url) return fallback;
-  if (url.startsWith("http://")) return url.replace("http://", "https://");
-  if (url.startsWith("https://")) return url;
-  if (url.startsWith("/")) return `${API_BASE_URL}${url.replace(/^\/+/, "")}`;
-  return fallback;
-};
-
 export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   isOpen,
   close,
@@ -74,7 +66,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   useEffect(() => {
     if (isOpen && itemId) {
       setIsImageLoading(true);
-      axiosInstance.get(`/api/customer/items/${itemId}/`).then((res) => {
+      cachedGet(`/api/customer/items/${itemId}/`, {}, { ttlMs: 60_000 }).then((res) => {
         setItem(res.data);
         setShowVideo(false);
         setQuantity(1);
@@ -349,7 +341,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 className="w-full h-full relative"
               >
                 <video
-                  src={item.video}
+                  src={resolveMediaUrl(item.video, "")}
                   controls
                   autoPlay
                   playsInline
@@ -363,7 +355,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               <>
                 {(item?.video && !item?.image1) ? (
                   <video
-                    src={item.video.startsWith("http") ? item.video : `https://cleverdining-2.onrender.com${item.video}`}
+                    src={resolveMediaUrl(item.video, "")}
                     className="w-full h-full object-cover"
                     muted
                     playsInline
@@ -382,23 +374,18 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                         </div>
                       )}
 
-                      <img
-                        src={getImageUrl(item?.image1)}
+                      <OptimizedImage
+                        src={item?.image1}
                         alt={item?.item_name || "Food Item"}
+                        width={600}
+                        height={400}
                         className={cn(
                           "w-full h-full object-cover transition-opacity duration-500",
                           isImageLoading ? "opacity-0" : "opacity-100"
                         )}
                         onLoad={() => setIsImageLoading(false)}
-                        onError={(e) => {
+                        onError={() => {
                           setIsImageLoading(false);
-                          const fallback = "https://placehold.co/600x400?text=No+Image";
-                          if (e.currentTarget.src !== fallback) {
-                            e.currentTarget.src = fallback;
-                            return;
-                          }
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.parentElement?.parentElement?.querySelector('.fallback-placeholder')?.classList.remove('hidden');
                         }}
                       />
                     </div>

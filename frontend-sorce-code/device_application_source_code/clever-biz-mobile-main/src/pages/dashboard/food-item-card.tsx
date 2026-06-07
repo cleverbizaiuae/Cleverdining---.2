@@ -4,6 +4,7 @@ import { FoodItemTypes } from "./food-items";
 import { cn } from "clsx-for-tailwind";
 import { API_BASE_URL } from "../../lib/axios";
 import { getSessionCurrencyCode } from "../../utils/regionSession";
+import { OptimizedImage } from "../../components/OptimizedImage";
 
 interface FoodItemCardProps {
     item: FoodItemTypes;
@@ -96,17 +97,13 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                     ) : (
                         <>
                             {item.image1 && !imageFailed ? (
-                                <img
-                                    src={(() => {
-                                        let url = item.image1;
-                                        if (url.startsWith("http://")) url = url.replace("http://", "https://");
-                                        if (url.startsWith("/")) url = `${API_BASE_URL}${url}`;
-                                        return url;
-                                    })()}
+                                <OptimizedImage
+                                    src={item.image1}
                                     alt={item.item_name}
+                                    width={112}
+                                    height={112}
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                    onError={(e) => {
-                                        e.currentTarget.style.display = "none";
+                                    onError={() => {
                                         setImageFailed(true);
                                     }}
                                 />

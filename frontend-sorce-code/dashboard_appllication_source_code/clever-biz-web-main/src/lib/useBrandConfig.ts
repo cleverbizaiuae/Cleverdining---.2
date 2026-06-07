@@ -65,8 +65,15 @@ function normalizeBaseUrl(url: string) {
 }
 
 const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+const isLocalBrowser =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 const API_BASE_URL = normalizeBaseUrl(
-  envApiUrl && envApiUrl !== "/api" ? envApiUrl : "https://cleverdining-2.onrender.com"
+  isLocalBrowser
+    ? "http://127.0.0.1:8000"
+    : envApiUrl && envApiUrl !== "/api"
+    ? envApiUrl
+    : "https://cleverdining-2.onrender.com"
 );
 
 function getAuthHeaders(): Record<string, string> {
@@ -161,8 +168,8 @@ export function useBrandConfig(restaurantId?: string | number | null) {
       return mapped;
     },
     placeholderData: mapConfig(cached),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 0,
+    refetchInterval: 4_000,
     refetchOnWindowFocus: true,
   });
 

@@ -153,3 +153,53 @@ class GameScore(models.Model):
 
     def __str__(self):
         return f"{self.player_name}:{self.game_type}:{self.score}"
+
+
+class Lead(models.Model):
+    STATUS_CHOICES = [
+        ("new", "New"),
+        ("contacted", "Contacted"),
+        ("qualified", "Qualified"),
+        ("converted", "Converted"),
+        ("lost", "Lost"),
+    ]
+    SOURCE_CHOICES = [
+        ("whatsapp", "WhatsApp"),
+        ("walk-in", "Walk-in"),
+        ("reservation", "Reservation"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    restaurant = models.ForeignKey(
+        "restaurant.Restaurant",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="leads",
+    )
+    name = models.TextField(default="Guest")
+    phone = models.TextField(db_index=True)
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default="other")
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="new")
+    notes = models.TextField(blank=True, default="")
+    tags = models.JSONField(default=list, blank=True)
+    total_reservation_attempts = models.PositiveIntegerField(default=0)
+    total_confirmed_reservations = models.PositiveIntegerField(default=0)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "leads"
+        ordering = ["-last_seen"]
+        unique_together = ("restaurant", "phone")
+        indexes = [
+            models.Index(fields=["restaurant", "status"]),
+            models.Index(fields=["phone"]),
+            models.Index(fields=["last_seen"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.phone})"

@@ -1,5 +1,5 @@
 import { cn } from "clsx-for-tailwind";
-import { API_BASE_URL } from "../../lib/axios";
+import { resolveMediaUrl } from "../../lib/media";
 
 export type CategoryItemType = {
   id: number;
@@ -27,14 +27,13 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       {cat.image ? (
         <div className="absolute inset-0 z-0">
           <img
-            src={(() => {
-              let url = cat.image;
-              if (url.startsWith("http://")) url = url.replace("http://", "https://");
-              if (url.startsWith("/")) url = `${API_BASE_URL}${url}`;
-              return url;
-            })()}
+            src={resolveMediaUrl(cat.image)}
             alt={cat.Category_name}
+            width={72}
+            height={72}
             loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-105"
             onError={(e) => {
               e.currentTarget.style.display = "none";

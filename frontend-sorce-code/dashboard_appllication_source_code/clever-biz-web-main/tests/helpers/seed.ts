@@ -18,7 +18,12 @@ type SeedCreds = Record<RoleKey, { email: string; password: string }>;
 const API_BASE_URL =
   process.env.API_BASE_URL ||
   process.env.VITE_API_URL ||
-  "https://cleverdining-2.onrender.com";
+  "http://127.0.0.1:8000";
+if (/cleverdining-2\.onrender\.com/i.test(API_BASE_URL) && process.env.ALLOW_REMOTE_E2E !== "true") {
+  throw new Error(
+    "[seed] Refusing to seed the deployed API. Use a disposable API_BASE_URL or set ALLOW_REMOTE_E2E=true explicitly."
+  );
+}
 
 const DUPLICATE_ERROR_PATTERN =
   /already exists|already registered|already taken|unique|duplicate/i;

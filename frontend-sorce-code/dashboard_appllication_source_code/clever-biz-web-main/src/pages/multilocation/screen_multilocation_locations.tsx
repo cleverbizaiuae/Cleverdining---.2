@@ -3,6 +3,7 @@ import { ExternalLink, MapPin, Search } from "lucide-react";
 import { useNavigate } from "react-router";
 import { buildDashboardSummary, getDefaultDateRange, listLocations, normalizeDateRange } from "./store";
 import { StatusBadge, formatCurrency } from "./components";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 export default function ScreenMultiLocationLocations() {
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ export default function ScreenMultiLocationLocations() {
           >
             <div className="h-44 w-full bg-slate-100">
               {location.image_url ? (
-                <img src={location.image_url} alt={location.name} className="w-full h-full object-cover" />
+                <OptimizedImage src={location.image_url} alt={location.name} width={640} height={176} className="w-full h-full object-cover" />
               ) : (
                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">No image</div>
               )}

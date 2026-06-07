@@ -26,7 +26,12 @@ function resolveStoredRestaurantId() {
     const parsed = JSON.parse(localStorage.getItem("userInfo") || "{}");
     return (
       parsed?.user?.restaurants?.[0]?.id ||
+      parsed?.restaurants?.[0]?.id ||
+      parsed?.restaurant?.id ||
       parsed?.restaurant_id ||
+      parsed?.restaurantId ||
+      localStorage.getItem("restaurantId") ||
+      localStorage.getItem("selectedRestaurantId") ||
       localStorage.getItem("restaurant_id") ||
       null
     );
@@ -60,14 +65,20 @@ function BrandWrapper({
     root.style.setProperty("--primary", primaryHsl);
     root.style.setProperty("--brand-primary", brand.primaryColor || "#0055FE");
     if (hasBranding) {
+      root.style.setProperty("--font-sans", fontFamily);
+      root.style.setProperty("--brand-font-family", fontFamily);
       root.style.setProperty("font-family", fontFamily);
     } else {
+      root.style.removeProperty("--font-sans");
+      root.style.removeProperty("--brand-font-family");
       root.style.removeProperty("font-family");
     }
 
     return () => {
       root.style.removeProperty("--primary");
       root.style.removeProperty("--brand-primary");
+      root.style.removeProperty("--font-sans");
+      root.style.removeProperty("--brand-font-family");
       root.style.removeProperty("font-family");
     };
   }, [brand.primaryColor, fontFamily, hasBranding, primaryHsl]);

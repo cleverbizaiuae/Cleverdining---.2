@@ -75,7 +75,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             'confirmed_at', 'cancelled_at', 'cancel_reason'
         ]
 
-from django_filters.rest_framework import DjangoFilterBackend
+from core.filter_backends import SchemaSafeDjangoFilterBackend as DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 import csv
 from django.http import HttpResponse

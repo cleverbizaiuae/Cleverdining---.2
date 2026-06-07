@@ -12,16 +12,16 @@ import toast from "react-hot-toast";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
-import axiosInstance from "../lib/axios";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
 import { Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-react";
-import { Logo } from "@/components/icons/logo";
+import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
 import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 
 function hexToRgba(hex: string, alpha: number): string {
   const cleaned = (hex || "").replace("#", "");
@@ -80,6 +80,7 @@ const LayoutDashboard = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [categories, setCategories] = useState<CategoryItemType[]>([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [isDetailOpen, setDetailOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [isAssistanceOpen, setAssistanceOpen] = useState(false);
@@ -118,7 +119,8 @@ const LayoutDashboard = () => {
           data.type === 'category_updated' ||
           data.type === 'category_deleted'
         ) {
-          // Trigger a re-fetch
+          invalidateApiCache("customer/categories");
+          invalidateApiCache("customer/items");
           setLastUpdate(Date.now());
         }
       } catch (e) {
@@ -238,14 +240,14 @@ const LayoutDashboard = () => {
       const bootstrapSession = async () => {
         try {
           // 1. Fetch Restaurants
-          const resResponse = await axiosInstance.get("/api/customer/restaurants/");
+          const resResponse = await cachedGet("/api/customer/restaurants/", {}, { ttlMs: 60_000 });
           const restaurants = resResponse.data;
 
           if (restaurants && restaurants.length > 0) {
             const firstRestaurant = restaurants[0];
 
             // 2. Fetch Devices for the first restaurant
-            const devResponse = await axiosInstance.get(`/api/customer/devices/?restaurant_id=${firstRestaurant.id}`);
+            const devResponse = await cachedGet(`/api/customer/devices/?restaurant_id=${firstRestaurant.id}`, {}, { ttlMs: 60_000 });
             const devices = devResponse.data;
 
             if (devices && devices.length > 0) {
@@ -321,16 +323,18 @@ const LayoutDashboard = () => {
       const targetId = rId || restaurantId;
 
       const url = targetId ? `/api/customer/categories/?restaurant_id=${targetId}` : "/api/customer/categories/";
-      const response = await axiosInstance.get(url);
+      const response = await cachedGet(url, {}, { ttlMs: 30_000 });
       const data = response.data;
       setCategories(Array.isArray(data) ? data : data?.results || []);
     } catch (error) {
       console.warn("Failed to fetch categories", error);
+    } finally {
+      setCategoriesLoaded(true);
     }
   };
   useEffect(() => {
     fetchCategories();
-  }, [lastUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastUpdate]);
 
   const fetchItems = async () => {
     try {
@@ -358,22 +362,25 @@ const LayoutDashboard = () => {
         url += `?${params.join("&")}`;
       }
 
-      const response = await axiosInstance.get(url);
+      const response = await cachedGet(url, {}, { ttlMs: 8_000 });
       setItems(response.data.results || []);
     } catch (error) {
       console.warn("Failed to fetch items", error);
     }
   };
   useEffect(() => {
-    // Debounced search effect - only fetch after user stops typing
+    if (!categoriesLoaded) return;
+
+    // Search input remains debounced, while initial load and category changes
+    // fetch immediately so the menu does not add an artificial 300ms delay.
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
       fetchItems();
-    }, 300); // Reduced from 400ms for faster response
+    }, search.trim() ? 300 : 0);
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [search, selectedCategory, categories, lastUpdate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, selectedCategory, categories, categoriesLoaded, lastUpdate]);
 
   useEffect(() => {
     if (selectedCategory !== null && categories[selectedCategory]?.id) {
@@ -510,6 +517,9 @@ const LayoutDashboard = () => {
                 alt="Brand cover"
                 className="absolute inset-0 h-full w-full object-cover scale-110"
                 style={{ filter: "blur(18px)" }}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
                 onError={() => setCoverImgFailed(true)}
               />
               <motion.img
@@ -517,6 +527,9 @@ const LayoutDashboard = () => {
                 alt="Brand splash"
                 className="absolute inset-0 h-full w-full object-cover"
                 style={{ objectPosition: "center top" }}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
                 initial={{ opacity: 0.45, scale: 1 }}
                 animate={splashState === "collapsing" ? { opacity: 0.35, scale: 1.06 } : { opacity: 0.55, scale: 1 }}
                 transition={{ duration: 0.48, ease: [0.4, 0, 0.2, 1] }}
@@ -540,7 +553,16 @@ const LayoutDashboard = () => {
                 className="h-24 w-24 rounded-full border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
               >
                 {brandLogoUrl ? (
-                  <img src={brandLogoUrl} alt={restaurantName} className="h-full w-full rounded-full object-contain bg-transparent p-1.5" />
+                  <img
+                    src={brandLogoUrl}
+                    alt={restaurantName}
+                    width={96}
+                    height={96}
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
+                    className="h-full w-full rounded-full object-contain bg-transparent p-1.5"
+                  />
                 ) : (
                   <span className="text-white text-5xl font-bold leading-none" style={{ fontFamily: brandFontFamily }}>
                     {(restaurantName || "W").charAt(0).toUpperCase()}
@@ -611,6 +633,9 @@ const LayoutDashboard = () => {
                       alt={`${restaurantName} cover`}
                       className="absolute inset-0 h-full w-full object-cover"
                       style={{ objectPosition: "center top" }}
+                      loading="eager"
+                      decoding="async"
+                      fetchPriority="high"
                       onError={() => setCoverImgFailed(true)}
                     />
                   ) : null}
@@ -663,6 +688,11 @@ const LayoutDashboard = () => {
                           <img
                             src={brandLogoUrl}
                             alt={`${restaurantName} logo`}
+                            width={40}
+                            height={40}
+                            loading="eager"
+                            decoding="async"
+                            fetchPriority="high"
                             className="h-full w-full object-contain bg-transparent p-0.5"
                             onError={(event) => {
                               (event.currentTarget as HTMLImageElement).style.display = "none";

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, X } from "lucide-react";
 import type { UpsellSuggestion } from "../lib/upsellApi";
+import { OptimizedImage } from "./OptimizedImage";
 
 type Props = {
   open: boolean;
@@ -119,13 +120,12 @@ export default function UpsellBottomSheet({
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
-                        <img
-                          src={item.image1 || "https://placehold.co/240x180?text=No+Image"}
+                        <OptimizedImage
+                          src={item.image1}
                           alt={item.item_name}
+                          width={240}
+                          height={180}
                           className="h-28 w-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = "https://placehold.co/240x180?text=No+Image";
-                          }}
                         />
                       </div>
 
@@ -157,13 +157,12 @@ export default function UpsellBottomSheet({
               <>
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-2.5">
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
-                    <img
-                      src={primaryItem.image1 || "https://placehold.co/200x200?text=No+Image"}
+                    <OptimizedImage
+                      src={primaryItem.image1}
                       alt={primaryItem.item_name}
+                      width={80}
+                      height={80}
                       className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://placehold.co/200x200?text=No+Image";
-                      }}
                     />
                   </div>
                   <div className="min-w-0 flex-1">

@@ -4,16 +4,43 @@ import {
   SubscriptionIcon1,
   SubscriptionIcon2,
   SubscriptionIcon3,
-} from "../../components/utilities";
-import heroImage from "../../assets/landing_hero.jpg";
-import subscriptionCardOverlay from "../../assets/subscription-card-overlay.webp";
+} from "../../components/landingVisuals";
+import heroImage from "../../assets/landing_hero.webp";
 import { Link, useNavigate } from "react-router";
 import { Disclosure, DisclosureButton } from "@headlessui/react";
-import { IoChevronUpCircleOutline } from "react-icons/io5";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { faqs } from "@/data";
-import { CheckCircle } from "@/components/icons";
+
+const ChevronUpCircleIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+    <path
+      d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+    <path
+      d="m8 14 4-4 4 4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const CheckMarkIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+    <path
+      d="m5 12 4.2 4.2L19 6.8"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 export const getAccessToken = () => localStorage.getItem("accessToken");
 export const getUserInfo = () =>
   JSON.parse(localStorage.getItem("userInfo") || "{}");
@@ -140,6 +167,11 @@ const ScreenLanding = () => {
                 <img
                   src={heroImage}
                   alt="AI-generated image of a professional chef holding a tablet device"
+                  width={682}
+                  height={1024}
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
                   className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                 />
 
@@ -213,7 +245,7 @@ const ScreenLanding = () => {
                             {faq.question}
                           </span>
                         </div>
-                        <IoChevronUpCircleOutline
+                        <ChevronUpCircleIcon
                           className={cn(
                             "h-6 w-6 transition-transform duration-300",
                             open ? "transform rotate-180 text-[#0055FE]" : "text-slate-400"
@@ -315,7 +347,7 @@ const PricingSection = () => {
           ].map((item, i) => (
             <li key={i} className="flex items-start gap-3">
               <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center text-[#0055FE]">
-                <CheckCircle className="w-3.5 h-3.5" />
+                <CheckMarkIcon className="w-3.5 h-3.5" />
               </div>
               <span className="text-sm font-medium">{item}</span>
             </li>
@@ -366,7 +398,7 @@ const PricingSection = () => {
             ].map((item, i) => (
               <li key={i} className="flex items-start gap-3 group">
                 <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-blue-400/30 flex items-center justify-center text-white group-hover:bg-white group-hover:text-[#0055FE] transition-colors">
-                  <CheckCircle className="w-3.5 h-3.5" />
+                  <CheckMarkIcon className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-sm font-medium">{item}</span>
               </li>
@@ -410,7 +442,7 @@ const PricingSection = () => {
           ].map((item, i) => (
             <li key={i} className="flex items-start gap-3">
               <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center text-[#0055FE]">
-                <CheckCircle className="w-3.5 h-3.5" />
+                <CheckMarkIcon className="w-3.5 h-3.5" />
               </div>
               <span className="text-sm font-medium">{item}</span>
             </li>

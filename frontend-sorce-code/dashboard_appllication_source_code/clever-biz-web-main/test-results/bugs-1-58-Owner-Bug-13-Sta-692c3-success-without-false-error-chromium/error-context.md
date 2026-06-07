@@ -1,0 +1,110 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "Collapse sidebar" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+    - img "CleverBiz" [ref=e9]
+    - generic [ref=e10]:
+      - link "Dashboard" [ref=e11] [cursor=pointer]:
+        - /url: /restaurant
+        - img [ref=e12]
+        - text: Dashboard
+      - link "Orders" [ref=e17] [cursor=pointer]:
+        - /url: /restaurant/orders
+        - img [ref=e18]
+        - text: Orders
+      - link "Reservations" [ref=e21] [cursor=pointer]:
+        - /url: /restaurant/reservations
+        - img [ref=e22]
+        - text: Reservations
+      - link "Messages" [ref=e24] [cursor=pointer]:
+        - /url: /restaurant/messages
+        - img [ref=e25]
+        - text: Messages
+      - link "Management" [ref=e27] [cursor=pointer]:
+        - /url: /restaurant/management
+        - img [ref=e28]
+        - text: Management
+      - link "Tables" [ref=e33] [cursor=pointer]:
+        - /url: /restaurant/devices
+        - img [ref=e34]
+        - text: Tables
+      - link "Payments" [ref=e41] [cursor=pointer]:
+        - /url: /restaurant/payments
+        - img [ref=e42]
+        - text: Payments
+      - link "Branding" [ref=e45] [cursor=pointer]:
+        - /url: /restaurant/branding
+        - img [ref=e46]
+        - text: Branding
+      - link "AI Upsell" [ref=e50] [cursor=pointer]:
+        - /url: /restaurant/ai-upsell
+        - img [ref=e51]
+        - text: AI Upsell
+      - link "Customers" [ref=e63] [cursor=pointer]:
+        - /url: /restaurant/crm
+        - img [ref=e64]
+        - text: Customers
+    - button "Log Out" [ref=e69] [cursor=pointer]:
+      - img [ref=e70]
+      - generic [ref=e73]: Log Out
+  - generic [ref=e74]:
+    - banner [ref=e75]:
+      - generic [ref=e77]:
+        - heading "Management" [level=1] [ref=e78]
+        - paragraph [ref=e79]: Thursday, 4 June 2026
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - paragraph [ref=e82]: Welcome, E2E Owner
+          - paragraph [ref=e83]: owner
+        - generic [ref=e86]: E
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - heading "Team Management" [level=2] [ref=e91]:
+              - img [ref=e92]
+              - text: Team Management
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - img [ref=e97]
+                - textbox "Search by name or username" [ref=e100]: Staff QA
+              - button "Add Member" [ref=e101] [cursor=pointer]:
+                - img [ref=e102]
+                - text: Add Member
+          - table [ref=e104]:
+            - rowgroup [ref=e105]:
+              - row "Name Username Role Actions" [ref=e106]:
+                - columnheader "Name" [ref=e107]
+                - columnheader "Username" [ref=e108]
+                - columnheader "Role" [ref=e109]
+                - columnheader "Actions" [ref=e110]
+            - rowgroup [ref=e111]:
+              - row "No team members found" [ref=e112]:
+                - cell "No team members found" [ref=e113]
+        - dialog [ref=e114]:
+          - generic [ref=e115]:
+            - generic [ref=e116]:
+              - heading "Create Member" [level=3] [ref=e117]
+              - button [ref=e118] [cursor=pointer]:
+                - img [ref=e119]
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]: Name
+                - textbox "Full Name" [ref=e125]
+              - generic [ref=e126]:
+                - generic [ref=e127]: Email
+                - textbox "user@restaurant.com" [ref=e128]: staff.ok.1780557260610@test.com
+              - generic [ref=e129]:
+                - generic [ref=e130]: Password
+                - textbox "••••••••" [ref=e131]: Password123!
+              - generic [ref=e132]:
+                - generic [ref=e133]: Role
+                - combobox [ref=e134]:
+                  - option "Staff" [selected]
+                  - option "Chef"
+                  - option "Manager"
+              - button "Creating..." [disabled] [ref=e135] [cursor=pointer]
+```

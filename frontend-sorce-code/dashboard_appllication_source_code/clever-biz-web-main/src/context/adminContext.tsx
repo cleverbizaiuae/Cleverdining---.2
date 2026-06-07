@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axiosInstance from "@/lib/axios";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import {
   createContext,
   useContext,
@@ -71,7 +72,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
   const fetchPrivacyPolicy = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await axiosInstance.get("/adminapi/policy/");
+      const res = await cachedGet("/adminapi/policy/", {}, { ttlMs: 120_000 });
       setPrivacyPolicy(res.data?.results ?? []);
     } catch (error: any) {
       console.error("Failed to load privacy policy", error);
@@ -90,6 +91,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
         text: content, // ⬅︎ change to { content } if required by backend
       });
       setPrivacyPolicy((prev) => [data, ...prev]);
+      invalidateApiCache("policy");
       toast.success("Privacy policy created!");
     } catch (error: any) {
       console.error("Failed to create privacy policy", error);
@@ -108,6 +110,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
           text: content, // ⬅︎ change to { content } if required by backend
         });
         setPrivacyPolicy((prev) => prev.map((p) => (p.id === id ? data : p)));
+        invalidateApiCache("policy");
         toast.success("Privacy policy updated successfully!");
       } catch (error: any) {
         console.error("Failed to update privacy policy", error);
@@ -125,6 +128,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
     try {
       await axiosInstance.delete(`/adminapi/policy/${id}/`);
       setPrivacyPolicy((prev) => prev.filter((p) => p.id !== id));
+      invalidateApiCache("policy");
       toast.success("Privacy policy deleted!");
     } catch (error: any) {
       console.error("Failed to delete privacy policy", error);
@@ -139,7 +143,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
   const fetchTermsAndConditions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await axiosInstance.get("/adminapi/terms-and-conditions/");
+      const res = await cachedGet("/adminapi/terms-and-conditions/", {}, { ttlMs: 120_000 });
       setTermsAndConditions(res.data?.results ?? []);
     } catch (error: any) {
       console.error("Failed to load terms and conditions", error);
@@ -161,6 +165,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
         }
       );
       setTermsAndConditions((prev) => [data, ...prev]);
+      invalidateApiCache("terms-and-conditions");
       toast.success("Terms and conditions created!");
     } catch (error: any) {
       console.error("Failed to create terms and conditions", error);
@@ -184,6 +189,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
         setTermsAndConditions((prev) =>
           prev.map((t) => (t.id === id ? data : t))
         );
+        invalidateApiCache("terms-and-conditions");
         toast.success("Terms and conditions updated successfully!");
       } catch (error: any) {
         console.error("Failed to update terms and conditions", error);
@@ -201,6 +207,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
     try {
       await axiosInstance.delete(`/adminapi/terms-and-conditions/${id}/`);
       setTermsAndConditions((prev) => prev.filter((t) => t.id !== id));
+      invalidateApiCache("terms-and-conditions");
       toast.success("Terms and conditions deleted!");
     } catch (error: any) {
       console.error("Failed to delete terms and conditions", error);
@@ -215,7 +222,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
   const fetchFAQs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await axiosInstance.get("/adminapi/faq/");
+      const res = await cachedGet("/adminapi/faq/", {}, { ttlMs: 120_000 });
       setFaqs(res.data?.results ?? []);
     } catch (error: any) {
       console.error("Failed to load FAQs", error);
@@ -235,6 +242,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
         answer,
       });
       setFaqs((prev) => [...prev, data]);
+      invalidateApiCache("faq");
       toast.success("FAQ created successfully!");
     } catch (error: any) {
       console.error("Failed to create FAQ", error);
@@ -254,6 +262,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
           answer,
         });
         setFaqs((prev) => prev.map((f) => (f.id === id ? data : f)));
+        invalidateApiCache("faq");
         toast.success("FAQ updated successfully!");
       } catch (error: any) {
         console.error("Failed to update FAQ", error);
@@ -271,6 +280,7 @@ export const AdminProvider: React.FC<{ children: ReactNode }> = ({
     try {
       await axiosInstance.delete(`/adminapi/faq/${id}/`);
       setFaqs((prev) => prev.filter((f) => f.id !== id));
+      invalidateApiCache("faq");
       toast.success("FAQ deleted successfully!");
     } catch (error: any) {
       console.error("Failed to delete FAQ", error);
