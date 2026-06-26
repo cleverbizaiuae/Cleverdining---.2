@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp } from "lucide-react";
+import { ArrowDownUp, MapPin, Users } from "lucide-react";
 import { useNavigate } from "react-router";
+import axiosInstance from "@/lib/axios";
 import {
   buildDashboardSummary,
   getDefaultDateRange,
@@ -27,13 +28,35 @@ export default function ScreenMultiLocationDashboard() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
+    let cancelled = false;
+    const hydrateMetrics = async () => {
+      try {
+        await axiosInstance.post("/api/seed-multi-location");
+      } catch {
+        // Local store still guarantees a non-empty first run when backend seed endpoints are unavailable.
+      }
+      try {
+        await axiosInstance.post("/api/ensure-location-metrics");
+      } catch {
+        // Metrics are generated locally by the store as a fallback.
+      }
+      if (!cancelled) setSummary(buildDashboardSummary(normalizeDateRange(range.startDate, range.endDate)));
+    };
+    hydrateMetrics();
     const load = () => {
       setSummary(buildDashboardSummary(normalizeDateRange(range.startDate, range.endDate)));
     };
     load();
     window.addEventListener("storage", load);
-    return () => window.removeEventListener("storage", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", load);
+    };
   }, [range.startDate, range.endDate]);
+
+  const sortedBreakdown = useMemo(() => [...summary.locations].sort((a, b) => b.revenue - a.revenue), [summary.locations]);
+  const bestLocation = sortedBreakdown[0];
+  const worstLocation = sortedBreakdown[sortedBreakdown.length - 1];
 
   const rankingRows = useMemo(() => {
     const rows = [...summary.locations];
@@ -43,11 +66,13 @@ export default function ScreenMultiLocationDashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <SummaryCard title="Total Revenue" value={formatCurrency(summary.total_revenue)} featured />
-        <SummaryCard title="Total Orders" value={summary.total_orders.toLocaleString("en-US")} />
-        <SummaryCard title="Active Locations" value={`${summary.active_locations}`} />
-        <SummaryCard title="Total Staff" value={`${summary.total_staff}`} />
+      <section className="flex flex-col gap-4 xl:flex-row">
+        <div className="xl:w-80 xl:shrink-0"><SummaryCard title="Total Revenue" value={formatCurrency(summary.total_revenue)} featured subtitle="Across all locations" /></div>
+        <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-3">
+          <SummaryCard title="Total Orders" value={summary.total_orders.toLocaleString("en-US")} subtitle="Processed" />
+          <SummaryCard title="Locations" value={`${summary.active_locations}`} subtitle={`${summary.locations.length} total`} icon={MapPin} />
+          <SummaryCard title="Total Staff" value={`${summary.total_staff}`} subtitle="Across locations" icon={Users} />
+        </div>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-5 gap-4">
@@ -58,6 +83,14 @@ export default function ScreenMultiLocationDashboard() {
           <RevenueShareDonut rows={summary.locations} />
         </div>
       </section>
+
+      {summary.locations.length >= 2 && (
+        <div className="text-sm text-slate-600">
+          Best: <span className="font-semibold text-slate-900">{bestLocation?.location_name || "-"}</span> ({formatCurrency(bestLocation?.revenue || 0)})
+          <span className="mx-2 text-slate-300">|</span>
+          Needs attention: <span className="font-semibold text-slate-900">{worstLocation?.location_name || "-"}</span> ({formatPercent(worstLocation?.revenue_share_pct || 0)} of total revenue)
+        </div>
+      )}
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-5">

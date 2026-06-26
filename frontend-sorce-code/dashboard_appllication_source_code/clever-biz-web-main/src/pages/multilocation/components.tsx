@@ -1,4 +1,4 @@
-import { Eye } from "lucide-react";
+import { Eye, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { LocationAggregate, MultiLocationRole, MultiLocationStatus } from "./store";
 
@@ -25,9 +25,9 @@ export function EyeTooltip({ text }: { text: string }) {
         type="button"
         className="w-6 h-6 rounded-md bg-slate-50 border border-slate-100 text-slate-400 inline-flex items-center justify-center"
       >
-        <Eye size={14} />
+        <Eye size={13} strokeWidth={1.8} />
       </button>
-      <span className="absolute right-0 top-[110%] w-64 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg p-2 z-20 shadow-lg">
+      <span className="absolute right-0 top-[110%] w-64 hidden group-hover:block group-focus-within:block bg-slate-900 text-white text-xs rounded-lg p-2 z-20 shadow-lg before:absolute before:-top-1 before:right-3 before:h-2 before:w-2 before:rotate-45 before:bg-slate-900">
         {text}
       </span>
     </span>
@@ -47,33 +47,43 @@ export function SummaryCard({
   title,
   value,
   featured,
+  subtitle,
+  icon: Icon,
 }: {
   title: string;
   value: string;
   featured?: boolean;
+  subtitle?: string;
+  icon?: LucideIcon;
 }) {
   return (
     <div className={`bg-white border border-slate-200 rounded-2xl ${featured ? "p-8 md:p-10 min-h-[156px]" : "p-5"}`}>
-      <p className="text-xs text-slate-500 uppercase tracking-wider">{title}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-slate-500 uppercase tracking-wider">{title}</p>
+        {Icon ? <Icon size={18} className="text-slate-400" strokeWidth={1.8} /> : null}
+      </div>
       <p className={`${featured ? "text-4xl md:text-5xl mt-4" : "text-3xl mt-3"} font-bold text-slate-900`}>{value}</p>
+      {subtitle ? <p className="mt-2 text-xs text-slate-500">{subtitle}</p> : null}
     </div>
   );
 }
 
 export function VerticalRevenueChart({ rows }: { rows: LocationAggregate[] }) {
-  const peak = Math.max(...rows.map((row) => row.revenue), 1);
+  const sortedRows = [...rows].sort((a, b) => b.revenue - a.revenue);
+  const peak = Math.max(...sortedRows.map((row) => row.revenue), 1);
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5">
       <h3 className="text-sm font-semibold text-slate-900 mb-4">Revenue by Location</h3>
       <div className="h-72 flex items-end gap-4">
-        {rows.map((row) => {
-          const height = Math.max(12, Math.round((row.revenue / peak) * 220));
+        {sortedRows.map((row) => {
+          const height = Math.max(4, Math.round((row.revenue / peak) * 220));
+          const shortLabel = row.location_name.split(" ")[0] || row.location_name;
           return (
             <div key={row.location_id} className="flex-1 min-w-0 text-center" title={`${row.location_name}: ${formatCurrency(row.revenue)}`}>
               <div className="relative h-60 flex items-end justify-center">
-                <div className="w-full rounded-t-xl bg-slate-900/90 hover:bg-slate-900 transition-colors" style={{ height }} />
+                <div className="w-full rounded-t-xl bg-[#0055FE] hover:bg-[#3378FF] transition-colors" style={{ height }} />
               </div>
-              <p className="text-xs text-slate-600 mt-2 truncate">{row.location_name}</p>
+              <p className="text-xs text-slate-600 mt-2 truncate">{shortLabel}</p>
               <p className="text-[11px] text-slate-400">{formatCurrency(row.revenue)}</p>
             </div>
           );
@@ -135,7 +145,7 @@ export function RevenueShareDonut({ rows }: { rows: LocationAggregate[] }) {
   const total = rows.reduce((sum, row) => sum + row.revenue, 0) || 1;
   const radius = 78;
   const circumference = 2 * Math.PI * radius;
-  const colors = ["#0f172a", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8"];
+  const colors = ["#0055FE", "#3378FF", "#60A5FA", "#93C5FD", "#BFDBFE"];
 
   let acc = 0;
   return (
@@ -168,7 +178,8 @@ export function RevenueShareDonut({ rows }: { rows: LocationAggregate[] }) {
               );
             })}
             <circle r={48} fill="white" />
-            <text textAnchor="middle" y="4" className="fill-slate-900 text-sm font-semibold">100%</text>
+            <text textAnchor="middle" y="-2" className="fill-slate-900 text-lg font-bold">{rows.length}</text>
+            <text textAnchor="middle" y="18" className="fill-slate-400 text-[11px] font-semibold">loc.</text>
           </g>
         </svg>
 

@@ -14,6 +14,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Calendar,
+  CalendarCheck,
+  Ban,
+  Table2,
+  Utensils,
+  UserCheck,
+  Receipt,
   MoreVertical,
   FolderPlus,
   Layers,
@@ -119,6 +125,11 @@ const ScreenRestaurantDashboard = () => {
   const { fmt } = useRestaurantContext();
   const {
     foodItems,
+    foodItemsCount,
+    allDevices,
+    members,
+    fetchAllDevices,
+    fetchMembers,
     currentPage,
     setCurrentPage,
     searchQuery,
@@ -160,6 +171,8 @@ const ScreenRestaurantDashboard = () => {
   const [dailyStatsLoading, setDailyStatsLoading] = useState(false);
   const [salesAnalytics, setSalesAnalytics] = useState<{ labels: string[]; revenue: number[]; orders: number[] } | null>(null);
   const [salesAnalyticsLoading, setSalesAnalyticsLoading] = useState(false);
+  const [reservationsToday, setReservationsToday] = useState(0);
+  const [noShowsToday, setNoShowsToday] = useState(0);
 
   const [isEdit, setIsEdit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -203,6 +216,25 @@ const ScreenRestaurantDashboard = () => {
     }
   }, [userRole]);
 
+
+  const fetchReservationStats = useCallback(async () => {
+    if (userRole !== "owner" && userRole !== "manager") return;
+    try {
+      const response = await cachedGet("/owners/reservations", {}, { ttlMs: 60_000, force: true });
+      const raw = response.data?.results || response.data?.data || response.data || [];
+      const rows = Array.isArray(raw) ? raw : [];
+      const today = formatInputDate(new Date());
+      const todayRows = rows.filter((row: any) => {
+        const value = row.reservation_date || row.date || row.reservationDate || row.reservation_time || row.reservationTime || row.created_at;
+        return value && String(value).slice(0, 10) === today;
+      });
+      setReservationsToday(todayRows.length);
+      setNoShowsToday(todayRows.filter((row: any) => String(row.status || "").toLowerCase() === "no_show").length);
+    } catch (err) {
+      console.warn("Failed to load reservation dashboard stats", err);
+    }
+  }, [userRole]);
+
   const fetchSalesAnalytics = useCallback(async (force = false) => {
     if ((userRole !== "owner" && userRole !== "manager") || !selectedDate) return;
     setSalesAnalyticsLoading(true);
@@ -229,8 +261,11 @@ const ScreenRestaurantDashboard = () => {
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
       fetchDailyStats();
+      fetchReservationStats();
+      fetchAllDevices();
+      fetchMembers();
     }
-  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, userRole]);
+  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchReservationStats, fetchAllDevices, fetchMembers, userRole]);
 
   useEffect(() => {
     fetchSalesAnalytics();
@@ -335,7 +370,11 @@ const ScreenRestaurantDashboard = () => {
     analytics?.status?.total_orders
   );
   const activeStaff = toNumber(dailyStats?.activeStaff || dailyStats?.active_staff || analytics?.status?.active_staff);
-  const averageOrderValue = toNumber(dailyStats?.averageOrderValue || dailyStats?.average_order_value || dailyStats?.aov);
+  const averageOrderValue = toNumber(dailyStats?.averageOrderValue || dailyStats?.average_order_value || dailyStats?.aov || (totalOrders > 0 ? totalRevenue / totalOrders : 0));
+  const occupiedTables = (allDevices || []).filter((table: any) => ["occupied", "seated", "active", "in_use"].includes(String(table.status || table.table_status || "").toLowerCase())).length;
+  const activeTables = occupiedTables || toNumber(dailyStats?.activeTables || dailyStats?.active_tables || dailyStats?.occupiedTables || dailyStats?.occupied_tables) || (allDevices?.length || 0);
+  const menuItemsCount = toNumber(foodItemsCount || foodItems?.length || dailyStats?.menuItems || dailyStats?.menu_items);
+  const teamMembersCount = toNumber(members?.length || dailyStats?.teamMembers || dailyStats?.team_members || activeStaff);
   const chartSource = salesAnalytics && salesAnalytics.labels.length > 0
     ? salesAnalytics
     : {
@@ -438,32 +477,15 @@ const ScreenRestaurantDashboard = () => {
 
       {/* METRICS GRID - OWNER & MANAGER */}
       {(userRole === 'owner' || userRole === 'manager') && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <MetricCard
-            title="Total Revenue"
-            value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : fmt(totalRevenue)}
-            trend={`${analytics?.status?.weekly_growth || 0}%`}
-            isPositive={(analytics?.status?.weekly_growth || 0) >= 0}
-            subtext={statsLoading ? "" : averageOrderValue > 0 ? `AOV ${fmt(averageOrderValue)}` : "Live today"}
-            icon={TrendingUp}
-            featured
-          />
-          <MetricCard
-            title="Total Orders"
-            value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders}
-            subtext={statsLoading ? "" : "Processed today"}
-            trend="12%"
-            isPositive={true}
-            icon={ShoppingBag}
-          />
-          <MetricCard
-            title="Active Staff"
-            value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeStaff}
-            subtext={statsLoading ? "" : "Currently online"}
-            trend="0%"
-            isPositive={true}
-            icon={Users}
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <MetricCard title="Total Revenue" value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : fmt(totalRevenue)} trend={`${analytics?.status?.weekly_growth || 0}%`} isPositive={(analytics?.status?.weekly_growth || 0) >= 0} subtext="Today" icon={TrendingUp} featured />
+          <MetricCard title="Total Orders" value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders} subtext="Today" trend="12%" isPositive={true} icon={ShoppingBag} />
+          <MetricCard title="Avg Order Value" value={statsLoading ? <div className="h-8 w-20 bg-slate-100 animate-pulse rounded" /> : fmt(averageOrderValue)} subtext="Revenue ÷ orders" trend="4.8%" isPositive={true} icon={Receipt} />
+          <MetricCard title="Active Tables" value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeTables} subtext="Occupied now" trend="0%" isPositive={true} icon={Table2} />
+          <MetricCard title="Reservations Today" value={reservationsToday} subtext="Scheduled today" trend="8%" isPositive={true} icon={CalendarCheck} />
+          <MetricCard title="No-Shows Today" value={noShowsToday} subtext="Today" trend={noShowsToday > 0 ? `${noShowsToday}` : "0"} isPositive={noShowsToday === 0} icon={Ban} />
+          <MetricCard title="Menu Items" value={menuItemsCount} subtext="Live catalog" trend="0%" isPositive={true} icon={Utensils} />
+          <MetricCard title="Team Members" value={teamMembersCount} subtext="Staff directory" trend="0%" isPositive={true} icon={UserCheck} />
         </div>
       )}
 

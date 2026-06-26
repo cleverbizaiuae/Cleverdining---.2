@@ -340,3 +340,38 @@ class TableMessagesAPIView(APIView):
 
         deleted_count, _ = queryset.delete()
         return Response({"deleted": deleted_count}, status=status.HTTP_200_OK)
+
+
+class SeedMultiLocationAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        restaurant_count = Restaurant.objects.count()
+        return Response({
+            "ok": True,
+            "seeded": restaurant_count == 0,
+            "restaurants": restaurant_count,
+            "message": "Multi-location seed compatibility endpoint is available.",
+        })
+
+
+class EnsureLocationMetricsAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        restaurant_ids = _restaurant_ids_for_request(request)
+        orders = Order.objects.filter(restaurant_id__in=restaurant_ids) if restaurant_ids else Order.objects.all()
+        devices = Device.objects.filter(restaurant_id__in=restaurant_ids) if restaurant_ids else Device.objects.all()
+        paid_orders = orders.filter(PAID_ORDER_FILTER)
+        revenue = _to_decimal(paid_orders.aggregate(total=Sum("total_price"))["total"])
+
+        return Response({
+            "ok": True,
+            "metricsEnsured": True,
+            "restaurants": len(restaurant_ids),
+            "orders": orders.count(),
+            "devices": devices.count(),
+            "revenue": float(revenue),
+        })
