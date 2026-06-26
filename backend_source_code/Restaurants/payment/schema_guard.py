@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db import connection
 
-from .models import OrderBill, OrderBillItem, Payment, PaymentAllocation
+from .models import OrderBill, OrderBillItem, Payment, PaymentAllocation, PaymentGateway
 
 _PAYMENT_SCHEMA_READY = False
 
@@ -75,6 +75,45 @@ def ensure_payment_schema(force: bool = False) -> bool:
             except Exception as field_exc:
                 print(
                     f"[SCHEMA-HEAL] Failed adding column {payment_table}.{field.column}: {field_exc}"
+                )
+
+        gateway_table = PaymentGateway._meta.db_table
+        if gateway_table not in tables:
+            with connection.schema_editor() as schema_editor:
+                schema_editor.create_model(PaymentGateway)
+            tables.add(gateway_table)
+            created_any = True
+            print(f"[SCHEMA-HEAL] Created missing table: {gateway_table}")
+
+        existing_gateway = _existing_columns(gateway_table)
+        gateway_required_field_names = [
+            "provider_metadata",
+            "is_enabled",
+            "sandbox_mode",
+            "connection_status",
+            "webhook_status",
+            "credentials_encrypted",
+            "last_validation_at",
+            "last_health_check_at",
+            "last_error",
+        ]
+        for field_name in gateway_required_field_names:
+            field = PaymentGateway._meta.get_field(field_name)
+            if field.column in existing_gateway:
+                continue
+            try:
+                with connection.schema_editor() as schema_editor:
+                    schema_editor.add_field(PaymentGateway, field)
+                existing_gateway.add(field.column)
+                created_any = True
+                print(f"[SCHEMA-HEAL] Added missing column: {gateway_table}.{field.column}")
+            except Exception as field_exc:
+                if "duplicate column" in str(field_exc).lower():
+                    existing_gateway.add(field.column)
+                    print(f"[SCHEMA-HEAL] Column already exists: {gateway_table}.{field.column}")
+                    continue
+                print(
+                    f"[SCHEMA-HEAL] Failed adding column {gateway_table}.{field.column}: {field_exc}"
                 )
 
         if created_any:

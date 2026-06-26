@@ -191,7 +191,11 @@ class RestaurantViewSet(ModelViewSet):
 
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
+from django.db import DatabaseError
+import traceback
 from .models import Integration
+from .integration_detection import sync_detected_integrations
+from .schema_guard import ensure_adminapi_schema
 from .serializers import IntegrationSerializer
 
 
@@ -200,14 +204,28 @@ class IntegrationAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        ensure_adminapi_schema()
+        try:
+            sync_detected_integrations()
+        except DatabaseError:
+            # If migrations have not run yet, keep the endpoint behaviour predictable.
+            pass
         integrations = Integration.objects.all().order_by('-created_at')
         return Response(IntegrationSerializer(integrations, many=True).data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = IntegrationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        integration = serializer.save()
-        return Response(IntegrationSerializer(integration).data, status=status.HTTP_201_CREATED)
+        ensure_adminapi_schema()
+        try:
+            serializer = IntegrationSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            integration = serializer.save()
+            return Response(IntegrationSerializer(integration).data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            print("[INTEGRATIONS] Failed to create integration:", repr(exc))
+            traceback.print_exc()
+            if hasattr(exc, "detail"):
+                return Response({"error": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class IntegrationDetailAPIView(APIView):
@@ -215,21 +233,31 @@ class IntegrationDetailAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get_object(self, pk):
+        ensure_adminapi_schema()
         try:
             return Integration.objects.get(pk=pk)
         except Integration.DoesNotExist:
             return None
 
     def patch(self, request, pk):
+        ensure_adminapi_schema()
         integration = self.get_object(pk)
         if not integration:
             return Response({'error': 'Integration not found'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = IntegrationSerializer(integration, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        integration = serializer.save()
-        return Response(IntegrationSerializer(integration).data, status=status.HTTP_200_OK)
+        try:
+            serializer = IntegrationSerializer(integration, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            integration = serializer.save()
+            return Response(IntegrationSerializer(integration).data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            print("[INTEGRATIONS] Failed to update integration:", repr(exc))
+            traceback.print_exc()
+            if hasattr(exc, "detail"):
+                return Response({"error": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def delete(self, request, pk):
+        ensure_adminapi_schema()
         integration = self.get_object(pk)
         if not integration:
             return Response({'error': 'Integration not found'}, status=status.HTTP_404_NOT_FOUND)

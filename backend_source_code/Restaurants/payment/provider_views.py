@@ -14,6 +14,7 @@ from restaurant.models import Restaurant
 from restaurant.region_config import get_region_config
 from .models import Payment, PaymentGateway
 from .provider_registry import PAYMENT_PROVIDER_CODES, get_provider, provider_metadata_payload
+from .schema_guard import ensure_payment_schema
 from .serializers import PaymentGatewaySerializer
 from .services import PaymentService
 
@@ -120,6 +121,7 @@ class PaymentProviderListAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        ensure_payment_schema()
         restaurant = None
         restaurant_id = request.query_params.get("restaurantId") or request.query_params.get("restaurant_id")
         if restaurant_id:
