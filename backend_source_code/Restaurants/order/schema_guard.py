@@ -7,10 +7,10 @@ from .models import ItemAssociation, Order, UpsellEvent, UpsellItemSetting, Upse
 
 def ensure_order_notes_column() -> bool:
     """
-    Runtime guard for legacy deployments where `order_order.notes`
-    migration was not applied.
+    Runtime guard for legacy deployments where later `order_order`
+    migrations were not applied.
 
-    Returns True if the column exists (or was created), otherwise False.
+    Returns True if required columns exist (or were created), otherwise False.
     """
     try:
         with connection.cursor() as cursor:
@@ -20,18 +20,19 @@ def ensure_order_notes_column() -> bool:
 
             description = connection.introspection.get_table_description(cursor, "order_order")
             columns = {col.name for col in description}
-            if "notes" in columns:
+            missing = [field_name for field_name in ["notes", "amount_paid"] if field_name not in columns]
+            if not missing:
                 return True
 
-        # Add only missing field; no-op for already up-to-date schemas.
-        field = Order._meta.get_field("notes")
-        with connection.schema_editor() as schema_editor:
-            schema_editor.add_field(Order, field)
+        for field_name in missing:
+            field = Order._meta.get_field(field_name)
+            with connection.schema_editor() as schema_editor:
+                schema_editor.add_field(Order, field)
+            print(f"[SCHEMA-HEAL] Added missing column: order_order.{field_name}")
 
-        print("[SCHEMA-HEAL] Added missing column: order_order.notes")
         return True
     except Exception as exc:
-        print(f"[SCHEMA-HEAL] Failed ensuring order_order.notes: {exc}")
+        print(f"[SCHEMA-HEAL] Failed ensuring order_order legacy columns: {exc}")
         return False
 
 

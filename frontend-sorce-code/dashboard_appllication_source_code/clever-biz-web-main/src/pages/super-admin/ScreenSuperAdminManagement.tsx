@@ -80,10 +80,21 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
     ownerPassword: String(restaurant?.ownerPassword ?? restaurant?.owner_password ?? ""),
 });
 
+const normalisePlanLabel = (pkg: string) => {
+    const value = String(pkg || "Standard").toLowerCase();
+    if (value === "starter" || value === "standard") return "Standard";
+    if (value === "professional" || value === "pro") return "Pro";
+    return "Enterprise";
+};
+
 const ScreenSuperAdminManagement = () => {
     const queryClient = useQueryClient();
     const [searchQuery, setSearchQuery] = useState("");
     const [regionFilter, setRegionFilter] = useState<"all" | "UAE" | "UK">("all");
+    const [packageFilter, setPackageFilter] = useState("all");
+    const [countryFilter, setCountryFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [pendingStatusChange, setPendingStatusChange] = useState<{ id: string; status: string } | null>(null);
 
     // Modal States
     const [selectedRestaurant, setSelectedRestaurant] = useState<RegisteredRestaurant | null>(null);
@@ -107,7 +118,7 @@ const ScreenSuperAdminManagement = () => {
         qrCodes: 10,
         tableCount: 10,
         paymentProcessor: "stripe",
-        package: "Starter"
+        package: "Standard"
     });
 
     // Add Form
@@ -125,7 +136,7 @@ const ScreenSuperAdminManagement = () => {
         qrCodes: 10,
         tableCount: 10,
         paymentProcessor: "stripe",
-        package: "Starter", // UI Package Name
+        package: "Standard", // UI Package Name
         plan: "standard",   // Backend Plan ID
         subscriptionMonths: 12,
         whatsappEnabled: false,
@@ -350,17 +361,41 @@ const ScreenSuperAdminManagement = () => {
         const lowerQ = searchQuery.toLowerCase();
         return restaurants.filter((r) => {
             const matchesRegion = regionFilter === "all" || r.region === regionFilter;
+            const matchesPackage = packageFilter === "all" || normalisePlanLabel(r.package) === packageFilter;
+            const matchesCountry = countryFilter === "all" || r.country === countryFilter || r.region === countryFilter;
+            const matchesStatus = statusFilter === "all" || r.status === statusFilter;
             const matchesText =
                 r.name.toLowerCase().includes(lowerQ) ||
                 r.city.toLowerCase().includes(lowerQ) ||
                 r.country.toLowerCase().includes(lowerQ);
-            return matchesRegion && matchesText;
+            return matchesRegion && matchesPackage && matchesCountry && matchesStatus && matchesText;
         });
-    }, [restaurants, searchQuery, regionFilter]);
+    }, [restaurants, searchQuery, regionFilter, packageFilter, countryFilter, statusFilter]);
 
     // --- Handlers ---
     const handleStatusChange = (id: string, status: string) => {
+        if (status === "on_hold") {
+            setPendingStatusChange({ id, status });
+            return;
+        }
         updateStatusMutation.mutate({ id, status });
+    };
+
+    const confirmPendingStatusChange = () => {
+        if (!pendingStatusChange) return;
+        updateStatusMutation.mutate(pendingStatusChange);
+        setPendingStatusChange(null);
+    };
+
+    const packages = Array.from(new Set(restaurants.map((r) => normalisePlanLabel(r.package)).filter(Boolean)));
+    const countries = Array.from(new Set(restaurants.map((r) => r.country || r.region).filter(Boolean)));
+    const hasFilters = regionFilter !== "all" || packageFilter !== "all" || countryFilter !== "all" || statusFilter !== "all" || searchQuery.trim().length > 0;
+    const clearFilters = () => {
+        setRegionFilter("all");
+        setPackageFilter("all");
+        setCountryFilter("all");
+        setStatusFilter("all");
+        setSearchQuery("");
     };
 
     const handleViewRestaurant = (restaurant: RegisteredRestaurant) => {
@@ -374,7 +409,7 @@ const ScreenSuperAdminManagement = () => {
             qrCodes: restaurant.qrCodes || 10,
             tableCount: restaurant.tableCount || 10,
             paymentProcessor: restaurant.paymentProcessor || "stripe",
-            package: restaurant.package || "Starter"
+            package: restaurant.package || "Standard"
         });
         setShowPassword(false);
         setIsEditing(false);
@@ -404,23 +439,23 @@ const ScreenSuperAdminManagement = () => {
     const resetNewRestaurant = () => {
         setNewRestaurant({
             name: "", location: "", region: "UAE", city: "Dubai", country: "UAE", phone: "", email: "", ownerName: "",
-            qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Starter", plan: "standard", subscriptionMonths: 12, whatsappEnabled: false, ownerPassword: ""
+            qrCodes: 10, tableCount: 10, paymentProcessor: "stripe", package: "Standard", plan: "standard", subscriptionMonths: 12, whatsappEnabled: false, ownerPassword: ""
         });
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active': return 'bg-green-100 text-green-700';
-            case 'on_hold': return 'bg-amber-100 text-amber-700';
-            default: return 'bg-slate-100 text-slate-600';
+            case 'active': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+            case 'on_hold': return 'bg-amber-50 text-amber-700 border border-amber-100';
+            default: return 'bg-slate-100 text-slate-600 border border-slate-200';
         }
     };
 
     const getPackageColor = (pkg: string) => {
-        switch (pkg) {
-            case 'Enterprise': return 'bg-purple-100 text-purple-700';
-            case 'Starter': return 'bg-blue-100 text-blue-700';
-            default: return 'bg-slate-100 text-slate-600';
+        switch (normalisePlanLabel(pkg)) {
+            case 'Enterprise': return 'bg-slate-900 text-white border border-slate-900';
+            case 'Pro': return 'bg-violet-50 text-violet-700 border border-violet-100';
+            default: return 'bg-blue-50 text-blue-700 border border-blue-100';
         }
     };
 
@@ -448,6 +483,10 @@ const ScreenSuperAdminManagement = () => {
                         <option value="UAE">UAE</option>
                         <option value="UK">UK</option>
                     </select>
+                    <select value={packageFilter} onChange={(e) => setPackageFilter(e.target.value)} className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"><option value="all">All Packages</option>{packages.map((pkg) => <option key={pkg} value={pkg}>{pkg}</option>)}</select>
+                    <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"><option value="all">All Countries</option>{countries.map((country) => <option key={country} value={country}>{country}</option>)}</select>
+                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"><option value="all">All Statuses</option><option value="active">Active</option><option value="on_hold">On Hold</option></select>
+                    {hasFilters && <button onClick={clearFilters} className="h-10 px-3 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Clear Filters</button>}
                     {/* Search Input */}
                     <div className="relative flex-1 sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -469,6 +508,21 @@ const ScreenSuperAdminManagement = () => {
                     </button>
                 </div>
             </div>
+
+
+            {pendingStatusChange && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-600"><AlertTriangle className="h-5 w-5" /></div>
+                        <h3 className="text-lg font-semibold text-slate-900">Put restaurant on hold?</h3>
+                        <p className="mt-2 text-sm text-slate-500">This pauses the account in Super Admin management. Confirm before applying this status change.</p>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button onClick={() => setPendingStatusChange(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancel</button>
+                            <button onClick={confirmPendingStatusChange} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white">Confirm On Hold</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- Stats Cards --- */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -525,7 +579,7 @@ const ScreenSuperAdminManagement = () => {
                         {/* Package Column */}
                         <div className="col-span-2 text-center">
                             <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${getPackageColor(restaurant.package)}`}>
-                                {restaurant.package}
+                                {normalisePlanLabel(restaurant.package)}
                             </span>
                         </div>
 
@@ -766,13 +820,15 @@ const ScreenSuperAdminManagement = () => {
                                                 value={newRestaurant.plan}
                                                 onChange={(e) => {
                                                     const plan = e.target.value;
-                                                    let pkg = "Starter";
+                                                    let pkg = "Standard";
                                                     if (plan === 'enterprise') pkg = "Enterprise";
+                                                    if (plan === 'pro') pkg = "Pro";
                                                     setNewRestaurant({ ...newRestaurant, plan, package: pkg });
                                                 }}
                                                 className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none"
                                             >
-                                                <option value="standard">Starter Plan</option>
+                                                <option value="standard">Standard Plan</option>
+                                                <option value="pro">Pro Plan</option>
                                                 <option value="enterprise">Enterprise Plan</option>
                                             </select>
                                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
@@ -963,7 +1019,7 @@ const ScreenSuperAdminManagement = () => {
                                     {selectedRestaurant.status === 'active' ? 'Active' : 'On Hold'}
                                 </span>
                                 <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${getPackageColor(selectedRestaurant.package)}`}>
-                                    {selectedRestaurant.package}
+                                    {normalisePlanLabel(selectedRestaurant.package)}
                                 </span>
                                 {selectedRestaurant.rating && (
                                     <div className="flex items-center gap-1 ml-auto">
@@ -1152,7 +1208,8 @@ const ScreenSuperAdminManagement = () => {
                                 <label className="block text-xs font-medium text-slate-700 mb-1">Package</label>
                                 <div className="relative">
                                     <select value={editForm.package} onChange={(e) => setEditForm({ ...editForm, package: e.target.value })} className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none">
-                                        <option value="Starter">Starter</option>
+                                        <option value="Standard">Standard</option>
+                                        <option value="Pro">Pro</option>
                                         <option value="Enterprise">Enterprise</option>
                                     </select>
                                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />

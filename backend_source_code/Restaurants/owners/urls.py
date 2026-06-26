@@ -13,6 +13,7 @@ from vapi.views import CreateAssistantView,UpdateAssistantNumber,GetRestaurantAs
 from payment.views import StripeDetailsViewSet, PaymentGatewayViewSet
 from payment.admin_views import PaymentAdminViewSet
 from .views import GenerateImageView, RestaurantSettingsView
+from integrations.views import Dialog360SettingsView
 
 
 
@@ -56,5 +57,5 @@ urlpatterns = [
     path('sales-report/monthly/', MonthlySalesReportView.as_view(), name='monthly-sales-report'),
     path('generate-image/', GenerateImageView.as_view(), name='generate-image'),
     path('restaurant-settings/', RestaurantSettingsView.as_view(), name='restaurant-settings'),
+    path('whatsapp/360dialog-settings/', Dialog360SettingsView.as_view(), name='360dialog-settings'),
 ]
-

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
   Facebook,
@@ -9,7 +9,9 @@ import {
 } from "lucide-react";
 import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
 import { cachedGet } from "@/lib/requestCache";
+import axiosInstance from "@/lib/axios";
 import logoImg from "@/assets/icon-32.png";
+import { useNavigate } from "react-router-dom";
 
 const firstNonEmpty = (...values: unknown[]) => {
   for (const value of values) {
@@ -49,6 +51,18 @@ const hexToRgba = (hex: string, alpha: number) => {
   const g = (value >> 8) & 255;
   const b = value & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const cleanupSessionStorage = () => {
+  localStorage.removeItem("userInfo");
+  localStorage.removeItem("guest_session_token");
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("pending_order_id");
+  localStorage.removeItem("bulk_checkout");
+  localStorage.removeItem("last_paid_restaurant_id");
+  localStorage.removeItem("chat_messages_cache");
+  localStorage.removeItem("newMessage");
+  localStorage.removeItem("cart");
 };
 
 const useDecodedImage = (src: string | null) => {
@@ -98,33 +112,62 @@ const useDecodedImage = (src: string | null) => {
 };
 
 const SuccessPage = () => {
+  const navigate = useNavigate();
+  const paymentParams = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeSessionId = params.get("session_id");
+    const checkoutSessionId = params.get("cko-session-id");
+    const transactionId = params.get("transaction_id") || params.get("payment_id");
+    return {
+      sessionId: stripeSessionId || transactionId,
+      checkoutSessionId,
+      hasGatewayReference: Boolean(stripeSessionId || checkoutSessionId || transactionId),
+    };
+  }, []);
+  const paymentSessionId = paymentParams.sessionId || paymentParams.checkoutSessionId;
+  const [paymentVerified, setPaymentVerified] = useState(!paymentParams.hasGatewayReference);
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>("");
   const [restaurantId, setRestaurantId] = useState<string | null>(() => resolveStoredRestaurantId());
   const brand = useBrandConfig(restaurantId);
   const coverImage = useDecodedImage(brand.coverImageUrl);
   const logoImage = useDecodedImage(brand.logoUrl);
+  const sessionCleanedRef = useRef(false);
 
-  // Cleanup function - clears ALL session-related state for complete isolation
-  const cleanupSession = () => {
-    localStorage.removeItem("userInfo");
-    localStorage.removeItem("guest_session_token");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("pending_order_id");
-    localStorage.removeItem("bulk_checkout");
-    localStorage.removeItem("last_paid_restaurant_id");
-    // Clear chat/messages state for session isolation
-    localStorage.removeItem("chat_messages_cache");
-    localStorage.removeItem("newMessage");
-    localStorage.removeItem("cart");
-  };
+  useEffect(() => {
+    if (!paymentParams.hasGatewayReference) return;
+    let cancelled = false;
+
+    const verifySettlement = async () => {
+      try {
+        const verifyPayload = paymentParams.checkoutSessionId
+          ? { "cko-session-id": paymentParams.checkoutSessionId }
+          : { session_id: paymentParams.sessionId };
+        const response = await axiosInstance.post("/api/customer/payment/verify/", verifyPayload);
+        const remainingAmount = Number(response.data?.remaining_amount || 0);
+        if (response.data?.fully_paid === false || remainingAmount > 0) {
+          navigate("/dashboard/orders?payment=partial", { replace: true });
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to verify payment settlement:", error);
+      }
+      if (!cancelled) setPaymentVerified(true);
+    };
+
+    void verifySettlement();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, paymentParams]);
 
   useEffect(() => {
     // Prevent back navigation
-    window.history.pushState(null, "", window.location.href);
-    window.onpopstate = function () {
+    const handlePopState = () => {
       window.history.go(1);
     };
+    window.history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", handlePopState);
 
     // Fetch restaurant info including Google Review URL
     const fetchRestaurantInfo = async () => {
@@ -139,18 +182,21 @@ const SuccessPage = () => {
           }, { ttlMs: 2_000 });
 
           if (res.data) {
-            setRestaurantName(res.data.restaurant_name || "");
+            const nextRestaurantName = res.data.restaurant_name || "";
+            setRestaurantName((current) => current === nextRestaurantName ? current : nextRestaurantName);
             const resolvedRestaurantId =
               res.data.restaurant_id ??
               res.data.restaurant ??
               res.data?.restaurant_details?.id ??
               null;
             if (resolvedRestaurantId !== null && resolvedRestaurantId !== undefined) {
-              setRestaurantId(String(resolvedRestaurantId));
+              const nextRestaurantId = String(resolvedRestaurantId);
+              setRestaurantId((current) => current === nextRestaurantId ? current : nextRestaurantId);
             }
             // The restaurant google_review_url should be included in order response
             // If not, we need to add it to the order serializer
-            setGoogleReviewUrl(res.data.restaurant_google_review_url || res.data.google_review_url || null);
+            const nextReviewUrl = res.data.restaurant_google_review_url || res.data.google_review_url || null;
+            setGoogleReviewUrl((current) => current === nextReviewUrl ? current : nextReviewUrl);
           }
         }
       } catch (error) {
@@ -158,15 +204,18 @@ const SuccessPage = () => {
       }
     };
 
-    fetchRestaurantInfo();
+    void fetchRestaurantInfo();
 
-    // Auto cleanup after delay (session ends)
-    const timer = setTimeout(() => {
-      cleanupSession();
-    }, 120000); // 2 minutes
-
-    return () => clearTimeout(timer);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!paymentVerified || sessionCleanedRef.current) return;
+    sessionCleanedRef.current = true;
+    cleanupSessionStorage();
+  }, [paymentVerified]);
 
   const resolvedRestaurantName = useMemo(() => {
     const remoteName = (brand.restaurantName || "").trim();
@@ -202,11 +251,19 @@ const SuccessPage = () => {
     }
 
     // Cleanup session before leaving
-    cleanupSession();
+    cleanupSessionStorage();
 
     // Open in new tab/window (external)
     window.open(resolvedGoogleReviewUrl, "_blank", "noopener,noreferrer");
   };
+
+  if (!paymentVerified) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 text-white">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-label="Verifying payment" />
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
@@ -347,8 +404,8 @@ const SuccessPage = () => {
         {/* Footer */}
         <div className="border-t border-white/10 px-2 py-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <span className="text-xs text-white/45">Powered by</span>
-            <img src={logoImg} alt="Cleverbiz AI" className="h-4 w-auto opacity-60" />
+            <img src={logoImg} alt="CleverBiz AI" className="h-4 w-auto opacity-60" />
+            <span className="text-xs text-white/45">Powered by CleverBiz AI</span>
           </div>
           <p className="text-xs text-white/40">Scan QR code to start a new session</p>
         </div>

@@ -61,6 +61,7 @@ const ScreenSuperAdminDashboard = lazy(() => import("./pages/super-admin/ScreenS
 const ScreenSuperAdminManagement = lazy(() => import("./pages/super-admin/ScreenSuperAdminManagement"));
 const ScreenSuperAdminCrm = lazy(() => import("./pages/super-admin/ScreenSuperAdminCrm"));
 const ScreenSuperAdminMultiLocation = lazy(() => import("./pages/super-admin/ScreenSuperAdminMultiLocation"));
+const ScreenSuperAdminIntegrations = lazy(() => import("./pages/super-admin/ScreenSuperAdminIntegrations"));
 
 // Admin pages
 const AdminRuntime = lazy(() => import("./pages/super-admin/AdminRuntime"));
@@ -118,6 +119,7 @@ function App() {
         <Route path="management" element={<ScreenSuperAdminManagement />} />
         <Route path="crm" element={<ScreenSuperAdminCrm />} />
         <Route path="multi-location" element={<ScreenSuperAdminMultiLocation />} />
+        <Route path="integrations" element={<ScreenSuperAdminIntegrations />} />
         <Route path="register-restaurant" element={<ScreenAdminRegister />} />
       </Route>
 

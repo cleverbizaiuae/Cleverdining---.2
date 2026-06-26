@@ -11,7 +11,6 @@ import {
   Minus,
   Plus,
   Zap,
-  Receipt,
   CheckCircle,
   CreditCard,
   Banknote,
@@ -19,6 +18,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { useCart } from "@/context/CartContext";
 import { getSessionCurrencyCode } from "@/utils/regionSession";
 import { AnimatePresence, motion } from "motion/react";
@@ -28,6 +28,11 @@ import {
   setLocalStorageSynced,
 } from "@/lib/tableIdentity";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
+import {
+  isPaymentPaid,
+  normalizePaymentStatus,
+  shouldRemoveFromActiveOrders,
+} from "./order-lifecycle";
 
 type BackendOrderItem = {
   id?: number;
@@ -42,6 +47,16 @@ type BackendOrder = {
   order_items?: BackendOrderItem[];
   items?: BackendOrderItem[];
   total_price?: number | string;
+  amount_paid?: number | string;
+  amountPaid?: number | string;
+  remaining_amount?: number | string;
+  remainingAmount?: number | string;
+  is_fully_paid?: boolean;
+  isFullyPaid?: boolean;
+  is_partially_paid?: boolean;
+  isPartiallyPaid?: boolean;
+  bill_payment_status?: string;
+  payment_progress?: number | string;
   status?: string;
   payment_status?: string;
   created_time?: string;
@@ -119,6 +134,24 @@ const mapBackendStatus = (status: string): OrderStage => {
   return "Pending";
 };
 
+const getOrderTotal = (order: Pick<Order, "total" | "total_price">): number =>
+  toNumber(order.total ?? order.total_price);
+
+const getOrderPaidAmount = (order: Order): number => {
+  const total = getOrderTotal(order);
+  const paid = toNumber(order.amount_paid ?? order.amountPaid);
+  if (paid > 0) return Math.min(paid, total);
+  return isPaymentPaid(order.payment_status || order.paymentStatus) ? total : 0;
+};
+
+const getOrderRemainingAmount = (order: Order): number => {
+  const explicitRemaining = toNumber(order.remaining_amount ?? order.remainingAmount);
+  if (explicitRemaining > 0 || order.remaining_amount !== undefined || order.remainingAmount !== undefined) {
+    return explicitRemaining;
+  }
+  return Math.max(0, getOrderTotal(order) - getOrderPaidAmount(order));
+};
+
 const mapBackendOrder = (backendOrder: BackendOrder): Order => {
   const sourceItems = backendOrder.order_items || backendOrder.items || [];
   const items: OrderItem[] = sourceItems.map((item, index) => ({
@@ -131,20 +164,50 @@ const mapBackendOrder = (backendOrder: BackendOrder): Order => {
   }));
 
   const backendStatus = String(backendOrder.status || "pending").toLowerCase();
+  const backendPaymentStatus = normalizePaymentStatus(backendOrder.payment_status);
+  const total = toNumber(backendOrder.total_price);
+  const hasExplicitPaid = backendOrder.amount_paid !== undefined || backendOrder.amountPaid !== undefined;
+  const rawPaid = toNumber(backendOrder.amount_paid ?? backendOrder.amountPaid);
+  const remainingAmount =
+    backendOrder.remaining_amount !== undefined || backendOrder.remainingAmount !== undefined
+      ? toNumber(backendOrder.remaining_amount ?? backendOrder.remainingAmount)
+      : Math.max(0, total - rawPaid);
+  const amountPaid = hasExplicitPaid ? rawPaid : Math.max(0, total - remainingAmount);
+  const isFullyPaid =
+    backendOrder.is_fully_paid === true ||
+    backendOrder.isFullyPaid === true ||
+    isPaymentPaid(backendPaymentStatus) ||
+    (total > 0 && remainingAmount <= 0.001);
+  const isPartiallyPaid =
+    backendOrder.is_partially_paid === true ||
+    backendOrder.isPartiallyPaid === true ||
+    backendPaymentStatus === "partially_paid" ||
+    (!isFullyPaid && amountPaid > 0.001);
 
   return {
     id: `local-${backendOrder.id}`,
     backendId: String(backendOrder.id),
     items,
-    total: toNumber(backendOrder.total_price),
-    total_price: toNumber(backendOrder.total_price),
+    total,
+    total_price: total,
+    amountPaid,
+    amount_paid: amountPaid,
+    remainingAmount,
+    remaining_amount: remainingAmount,
+    isFullyPaid,
+    is_fully_paid: isFullyPaid,
+    isPartiallyPaid,
+    is_partially_paid: isPartiallyPaid,
+    bill_payment_status: backendOrder.bill_payment_status,
+    payment_progress: backendOrder.payment_progress,
     status: mapBackendStatus(backendStatus),
-    paymentStatus: String(backendOrder.payment_status || "unpaid").toLowerCase() === "paid" ? "Paid" : "Unpaid",
-    payment_status: backendOrder.payment_status || "unpaid",
+    backendStatus,
+    paymentStatus: isFullyPaid ? "Paid" : "Unpaid",
+    payment_status: isFullyPaid ? "paid" : backendPaymentStatus,
     timestamp: backendOrder.created_time || new Date().toISOString(),
     created_time: backendOrder.created_time,
     device_name: backendOrder.device_name,
-    shouldRemove: backendStatus === "cancelled" || backendStatus === "delivered" || backendStatus === "completed",
+    shouldRemove: shouldRemoveFromActiveOrders(backendStatus, isFullyPaid ? "paid" : backendPaymentStatus),
   };
 };
 
@@ -320,7 +383,9 @@ const ScreenOrders = () => {
         const backendOrder = mappedById.get(order.backendId);
 
         if (!backendOrder) {
-          return { ...order, shouldRemove: true };
+          // The list endpoint may omit fulfilled orders before their payment state
+          // is refreshed. Absence alone is not proof that an order was paid.
+          return order;
         }
 
         existingIds.add(order.backendId);
@@ -329,7 +394,18 @@ const ScreenOrders = () => {
           items: backendOrder.items,
           total: backendOrder.total,
           total_price: backendOrder.total_price,
+          amountPaid: backendOrder.amountPaid,
+          amount_paid: backendOrder.amount_paid,
+          remainingAmount: backendOrder.remainingAmount,
+          remaining_amount: backendOrder.remaining_amount,
+          isFullyPaid: backendOrder.isFullyPaid,
+          is_fully_paid: backendOrder.is_fully_paid,
+          isPartiallyPaid: backendOrder.isPartiallyPaid,
+          is_partially_paid: backendOrder.is_partially_paid,
+          bill_payment_status: backendOrder.bill_payment_status,
+          payment_progress: backendOrder.payment_progress,
           status: backendOrder.status,
+          backendStatus: backendOrder.backendStatus,
           paymentStatus: backendOrder.paymentStatus,
           payment_status: backendOrder.payment_status,
           timestamp: backendOrder.timestamp,
@@ -338,7 +414,9 @@ const ScreenOrders = () => {
         };
       });
 
-      const additions = mapped.filter((order) => order.backendId && !existingIds.has(order.backendId));
+      const additions = mapped.filter(
+        (order) => order.backendId && !existingIds.has(order.backendId) && !order.shouldRemove,
+      );
       return [...additions, ...synced];
     });
   }, []);
@@ -440,8 +518,14 @@ const ScreenOrders = () => {
   }, [orders]);
 
   const fullSubtotal = useMemo(() => {
-    return unpaidOrders.reduce((sum, order) => sum + toNumber(order.total ?? order.total_price), 0);
+    return unpaidOrders.reduce((sum, order) => sum + getOrderRemainingAmount(order), 0);
   }, [unpaidOrders]);
+
+  const totalAlreadyPaid = useMemo(() => {
+    return unpaidOrders.reduce((sum, order) => sum + getOrderPaidAmount(order), 0);
+  }, [unpaidOrders]);
+
+  const hasPartialPayments = totalAlreadyPaid > 0.001;
 
   const myItemsSubtotal = useMemo(() => {
     return allItems
@@ -508,7 +592,7 @@ const ScreenOrders = () => {
       const colorName = CHWAZI_COLOR_NAMES[winner.color] || "Lucky";
       setTreater(colorName);
       closeChwazi();
-    }, 2500);
+    }, 2000);
   }, [closeChwazi, setTreater]);
 
   const startChwaziCountdown = useCallback(() => {
@@ -567,6 +651,15 @@ const ScreenOrders = () => {
   };
 
   const handleChwaziPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (chwaziPhase === "chosen") {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // no-op
+      }
+      return;
+    }
+
     chwaziPointersRef.current.delete(event.pointerId);
     const points = syncChwaziPoints();
 
@@ -655,8 +748,22 @@ const ScreenOrders = () => {
 
   const handleCheckoutResponse = async (data: any, isPayingAll: boolean) => {
     const url: string | undefined = data?.url;
+    const remainingAmount = toNumber(data?.remaining_amount);
+    const isPartial = data?.is_partial === true || data?.fully_paid === false || remainingAmount > 0;
 
-    if (url && paymentMethod !== "cash") {
+    if (paymentMethod === "cash") {
+      setIsCheckoutOpen(false);
+      toast.success(
+        isPartial
+          ? "Cash share requested. The remaining balance stays open until all shares are confirmed."
+          : "Cash payment requested. Waiting for staff confirmation.",
+        { duration: 4000 },
+      );
+      await pollOrderStatus();
+      return;
+    }
+
+    if (url) {
       if (tableInfo.restaurantId) {
         setLocalStorageSynced("last_paid_restaurant_id", tableInfo.restaurantId);
       }
@@ -664,7 +771,7 @@ const ScreenOrders = () => {
       return;
     }
 
-    if (isPayingAll) {
+    if (isPayingAll && !isPartial && data?.fully_paid !== false) {
       preloadThankYouPage();
       setIsPaymentSuccess(true);
       window.setTimeout(async () => {
@@ -718,7 +825,7 @@ const ScreenOrders = () => {
         );
 
         invalidateApiCache("customer/uncomplete/orders");
-        await handleCheckoutResponse(response.data, true);
+        await handleCheckoutResponse(response.data, false);
         return;
       }
 
@@ -904,6 +1011,11 @@ const ScreenOrders = () => {
             <span>Pay Now</span>
             <span>{fmt(fullSubtotal)}</span>
           </button>
+          {hasPartialPayments && (
+            <p className="mt-2 text-center text-[11px] font-medium text-slate-500">
+              {fmt(totalAlreadyPaid)} already paid · {fmt(fullSubtotal)} left
+            </p>
+          )}
         </div>
       )}
 
@@ -950,10 +1062,17 @@ const ScreenOrders = () => {
 
                   <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                     <div className="bg-slate-50 rounded-2xl p-3.5 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500">Orders ({unpaidOrders.length})</span>
-                        <span className="text-sm font-semibold text-slate-900">{fmt(subtotal)}</span>
-                      </div>
+	                      <div className="flex items-center justify-between">
+	                        <span className="text-sm text-slate-500">Balance left ({unpaidOrders.length})</span>
+	                        <span className="text-sm font-semibold text-slate-900">{fmt(subtotal)}</span>
+	                      </div>
+
+	                      {hasPartialPayments && splitMode !== "items" && (
+	                        <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+	                          <span className="text-xs text-slate-500">Already paid</span>
+	                          <span className="text-xs font-semibold text-green-600">{fmt(totalAlreadyPaid)}</span>
+	                        </div>
+	                      )}
 
                       {tipAmount > 0 && (
                         <div className="flex items-center justify-between border-t border-slate-200 pt-2">
@@ -1208,10 +1327,11 @@ const ScreenOrders = () => {
         </div>
       </Dialog>
 
-      <AnimatePresence>
-        {isChwaziOpen && (
+      {createPortal(
+        <AnimatePresence>
+          {isChwaziOpen && (
           <motion.div
-            className="fixed inset-0 z-[9999] bg-slate-900"
+            className="fixed inset-0 z-[2147483647] bg-slate-900"
             style={{ touchAction: "none", userSelect: "none" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1292,8 +1412,10 @@ const ScreenOrders = () => {
               </div>
             )}
           </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 };

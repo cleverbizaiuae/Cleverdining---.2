@@ -55,15 +55,22 @@ class Restaurant(models.Model):
     
     # WhatsApp Configuration (Enterprise)
     whatsapp_enabled = models.BooleanField(default=False)
+    whatsapp_provider = models.CharField(max_length=30, default='manual')
     whatsapp_waba_id = models.CharField(max_length=255, null=True, blank=True)
     whatsapp_phone_number_id = models.CharField(max_length=255, null=True, blank=True)
     whatsapp_business_display_number = models.CharField(max_length=50, null=True, blank=True)
     whatsapp_access_token = models.TextField(null=True, blank=True) # Encrypt in production!
+    whatsapp_360dialog_channel_id = models.CharField(max_length=255, null=True, blank=True)
     whatsapp_app_id = models.CharField(max_length=255, null=True, blank=True)
     whatsapp_app_secret = models.CharField(max_length=255, null=True, blank=True)
     whatsapp_webhook_verify_token = models.CharField(max_length=255, null=True, blank=True)
     whatsapp_webhook_callback_url = models.URLField(max_length=500, null=True, blank=True)
     whatsapp_api_version = models.CharField(max_length=10, default="v20.0")
+    whatsapp_chatbot_enabled = models.BooleanField(default=False)
+    whatsapp_greeting_tone = models.CharField(max_length=30, default='classic')
+    whatsapp_emoji_style = models.CharField(max_length=30, default='minimal')
+    whatsapp_signoff = models.CharField(max_length=255, blank=True, default='We look forward to hosting you.')
+    whatsapp_special_phrases = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

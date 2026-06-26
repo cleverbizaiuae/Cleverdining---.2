@@ -2,6 +2,8 @@ from rest_framework import serializers
 from .models import Order, OrderItem, Cart, CartItem
 from item.models import Item
 from .schema_guard import ensure_order_notes_column
+from decimal import Decimal
+from django.db.models import Sum
 
 class OrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name')
@@ -115,9 +117,107 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     restaurant_name = serializers.CharField(source='restaurant.resturent_name', read_only=True)
     google_review_url = serializers.CharField(source='restaurant.google_review_url', read_only=True, allow_null=True)
     special_request = serializers.SerializerMethodField()
+    amount_paid = serializers.SerializerMethodField()
+    amountPaid = serializers.SerializerMethodField()
+    remaining_amount = serializers.SerializerMethodField()
+    remainingAmount = serializers.SerializerMethodField()
+    is_fully_paid = serializers.SerializerMethodField()
+    isFullyPaid = serializers.SerializerMethodField()
+    is_partially_paid = serializers.SerializerMethodField()
+    isPartiallyPaid = serializers.SerializerMethodField()
+    bill_payment_status = serializers.SerializerMethodField()
+    payment_progress = serializers.SerializerMethodField()
 
     def get_special_request(self, obj):
         return obj.notes or ""
+
+    def _money(self, value):
+        return str(Decimal(str(value or 0)).quantize(Decimal("0.01")))
+
+    def _payment_snapshot(self, obj):
+        cache_key = "_order_payment_snapshot"
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
+        total = Decimal(str(obj.total_price or 0)).quantize(Decimal("0.01"))
+        paid = Decimal(str(getattr(obj, "amount_paid", 0) or 0)).quantize(Decimal("0.01"))
+        bill_status = "fully_paid" if str(obj.payment_status or "").lower() == "paid" else "unpaid"
+
+        try:
+            bill = obj.bill
+        except Exception:
+            bill = None
+
+        if bill is not None:
+            paid = max(paid, Decimal(str(bill.paid_amount or 0)).quantize(Decimal("0.01")))
+            bill_status = str(bill.payment_status or bill_status).lower()
+        else:
+            try:
+                from payment.models import Payment
+                paid = Payment.objects.filter(
+                    order=obj,
+                    status__in=["completed", "paid", "succeeded", "success"],
+                ).aggregate(total=Sum("amount")).get("total") or Decimal("0.00")
+                paid = Decimal(str(paid)).quantize(Decimal("0.01"))
+            except Exception:
+                if str(obj.payment_status or "").lower() in {"paid", "completed", "succeeded", "success"}:
+                    paid = total
+                else:
+                    paid = Decimal("0.00")
+
+        if str(obj.payment_status or "").lower() in {"paid", "completed", "succeeded", "success"}:
+            paid = max(paid, total)
+
+        paid = min(max(paid, Decimal("0.00")), total)
+        remaining = max(total - paid, Decimal("0.00")).quantize(Decimal("0.01"))
+        is_fully_paid = remaining <= Decimal("0.001")
+        is_partially_paid = paid > Decimal("0.001") and not is_fully_paid
+        if is_fully_paid:
+            bill_status = "fully_paid"
+        elif is_partially_paid:
+            bill_status = "partially_paid"
+
+        snapshot = {
+            "total": total,
+            "paid": paid,
+            "remaining": remaining,
+            "is_fully_paid": is_fully_paid,
+            "is_partially_paid": is_partially_paid,
+            "bill_payment_status": bill_status,
+            "payment_progress": float((paid / total) * 100) if total > 0 else 100.0,
+        }
+        setattr(obj, cache_key, snapshot)
+        return snapshot
+
+    def get_amount_paid(self, obj):
+        return self._money(self._payment_snapshot(obj)["paid"])
+
+    def get_amountPaid(self, obj):
+        return self.get_amount_paid(obj)
+
+    def get_remaining_amount(self, obj):
+        return self._money(self._payment_snapshot(obj)["remaining"])
+
+    def get_remainingAmount(self, obj):
+        return self.get_remaining_amount(obj)
+
+    def get_is_fully_paid(self, obj):
+        return self._payment_snapshot(obj)["is_fully_paid"]
+
+    def get_isFullyPaid(self, obj):
+        return self.get_is_fully_paid(obj)
+
+    def get_is_partially_paid(self, obj):
+        return self._payment_snapshot(obj)["is_partially_paid"]
+
+    def get_isPartiallyPaid(self, obj):
+        return self.get_is_partially_paid(obj)
+
+    def get_bill_payment_status(self, obj):
+        return self._payment_snapshot(obj)["bill_payment_status"]
+
+    def get_payment_progress(self, obj):
+        return round(self._payment_snapshot(obj)["payment_progress"], 2)
 
     def get_payments(self, obj):
         try:
@@ -132,7 +232,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'tip_amount', 'tip_type', 'notes', 'special_request', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'google_review_url']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'amount_paid', 'amountPaid', 'remaining_amount', 'remainingAmount', 'is_fully_paid', 'isFullyPaid', 'is_partially_paid', 'isPartiallyPaid', 'bill_payment_status', 'payment_progress', 'tip_amount', 'tip_type', 'notes', 'special_request', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'google_review_url']
 
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)

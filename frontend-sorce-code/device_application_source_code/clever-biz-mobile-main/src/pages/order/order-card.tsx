@@ -47,16 +47,31 @@ const normalizeItems = (order: Order): OrderItem[] => {
 export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
   const currencyCode = getSessionCurrencyCode();
   const normalizedStatus = normalizeStatus(String(order.status));
+  const backendStatus = String(order.backendStatus || order.status || "").toLowerCase();
   const currentStepIndex = steps.findIndex((step) => step.id === normalizedStatus);
   const items = normalizeItems(order);
   const total = parseMoney(order.total ?? order.total_price);
+  const explicitRemaining = parseMoney(order.remaining_amount ?? order.remainingAmount);
+  const paidAmount = parseMoney(order.amount_paid ?? order.amountPaid);
+  const hasRemainingField = order.remaining_amount !== undefined || order.remainingAmount !== undefined;
+  const remainingAmount = hasRemainingField ? explicitRemaining : Math.max(0, total - paidAmount);
+  const resolvedPaidAmount = paidAmount > 0 ? paidAmount : Math.max(0, total - remainingAmount);
+  const isFullyPaid = order.is_fully_paid === true || order.isFullyPaid === true || order.paymentStatus === "Paid";
+  const isPartiallyPaid =
+    order.is_partially_paid === true ||
+    order.isPartiallyPaid === true ||
+    (!isFullyPaid && resolvedPaidAmount > 0.001);
+  const paymentProgress = total > 0 ? Math.min(100, Math.max(0, (resolvedPaidAmount / total) * 100)) : 0;
   const orderTime = order.timestamp || order.created_time;
   const statusMeta =
     normalizedStatus === "Pending"
       ? { icon: "⏳", label: "Pending" }
       : normalizedStatus === "Preparing"
         ? { icon: "👨‍🍳", label: "Preparing" }
-        : { icon: "✅", label: "Served" };
+        : {
+            icon: "✅",
+            label: backendStatus === "delivered" || backendStatus === "completed" ? "Delivered" : "Served",
+          };
 
   const relativeTime = (value: string | undefined) => {
     if (!value) return "--";
@@ -113,6 +128,20 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
         })}
 
         {items.length === 0 && <p className="text-sm text-slate-400">No items in this order.</p>}
+
+        {(isPartiallyPaid || resolvedPaidAmount > 0.001) && (
+          <div className="rounded-xl border border-primary/10 bg-primary/5 px-3 py-2 space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold">
+              <span className="text-primary">{isFullyPaid ? "Paid" : "Partially paid"}</span>
+              <span className="text-slate-500">
+                {fmt(resolvedPaidAmount)} paid · {fmt(remainingAmount)} left
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white overflow-hidden">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${paymentProgress}%` }} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="px-4 pb-4 pt-2 flex items-center justify-between border-t border-gray-50">

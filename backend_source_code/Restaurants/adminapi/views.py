@@ -188,3 +188,50 @@ class RestaurantViewSet(ModelViewSet):
     
 
 
+
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
+from .models import Integration
+from .serializers import IntegrationSerializer
+
+
+class IntegrationAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        integrations = Integration.objects.all().order_by('-created_at')
+        return Response(IntegrationSerializer(integrations, many=True).data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = IntegrationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        integration = serializer.save()
+        return Response(IntegrationSerializer(integration).data, status=status.HTTP_201_CREATED)
+
+
+class IntegrationDetailAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get_object(self, pk):
+        try:
+            return Integration.objects.get(pk=pk)
+        except Integration.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        integration = self.get_object(pk)
+        if not integration:
+            return Response({'error': 'Integration not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = IntegrationSerializer(integration, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        integration = serializer.save()
+        return Response(IntegrationSerializer(integration).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        integration = self.get_object(pk)
+        if not integration:
+            return Response({'error': 'Integration not found'}, status=status.HTTP_404_NOT_FOUND)
+        integration.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

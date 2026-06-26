@@ -7,7 +7,8 @@ import {
     LayoutDashboard,
     Users,
     ContactRound,
-    Network,
+    Building2,
+    Link2,
     LogOut,
     Menu,
     X,
@@ -31,7 +32,7 @@ const SuperAdminLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem("superAdminSidebarCollapsed") === "true");
 
     // --- Authentication Check ---
     useEffect(() => {
@@ -40,6 +41,10 @@ const SuperAdminLayout = () => {
             navigate("/superadmin/login", { replace: true });
         }
     }, [navigate]);
+
+    useEffect(() => {
+        localStorage.setItem("superAdminSidebarCollapsed", String(isCollapsed));
+    }, [isCollapsed]);
 
     // Format Date: "Monday, 12 January 2026"
     const today = new Date();
@@ -59,8 +64,9 @@ const SuperAdminLayout = () => {
     const navItems = [
         { label: "Dashboard", path: "/superadmin", icon: <LayoutDashboard size={20} /> },
         { label: "Management", path: "/superadmin/management", icon: <Users size={20} /> },
+        { label: "Multi Location", path: "/superadmin/multi-location", icon: <Building2 size={20} /> },
+        { label: "Integrations", path: "/superadmin/integrations", icon: <Link2 size={20} /> },
         { label: "CRM", path: "/superadmin/crm", icon: <ContactRound size={20} /> },
-        { label: "Multi-Location", path: "/superadmin/multi-location", icon: <Network size={20} /> },
     ];
 
     return (
@@ -78,7 +84,7 @@ const SuperAdminLayout = () => {
                 <aside className={`
                 fixed top-0 left-0 h-full bg-white border-r border-slate-200 shadow-xl z-50 transition-all duration-300
                 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-                w-64 ${isCollapsed ? "lg:w-20" : "lg:w-64"}
+                ${sidebarOpen ? "w-64" : isCollapsed ? "w-64 lg:w-20" : "w-64 lg:w-64"}
             `}>
                     <div className="flex flex-col h-full relative">
                         {/* Collapse Toggle Button - Desktop Only */}
@@ -91,7 +97,7 @@ const SuperAdminLayout = () => {
 
                         {/* Sidebar Header */}
                         <div className="h-16 flex items-center justify-center px-4 border-b border-slate-100">
-                            {isCollapsed ? (
+                            {isCollapsed && !sidebarOpen ? (
                                 <>
                                     <div className="hidden w-10 h-10 bg-gradient-to-br from-[#0055FE] to-cyan-400 rounded-xl lg:flex items-center justify-center text-white font-bold text-xl">
                                         C
@@ -114,10 +120,10 @@ const SuperAdminLayout = () => {
                                     <Link
                                         key={item.path}
                                         to={item.path}
-                                        title={isCollapsed ? item.label : undefined}
+                                        title={isCollapsed && !sidebarOpen ? item.label : undefined}
                                         className={`
                                         admin-sidebar-item flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-                                        ${isCollapsed ? "lg:justify-center" : ""}
+                                        ${isCollapsed && !sidebarOpen ? "lg:justify-center" : ""}
                                         ${isActive
                                                 ? "bg-[#0055FE] text-white shadow-lg shadow-blue-500/20"
                                                 : "text-slate-500 hover:bg-slate-50 hover:text-[#0055FE]"
@@ -125,7 +131,7 @@ const SuperAdminLayout = () => {
                                     `}
                                     >
                                         {item.icon}
-                                        {isCollapsed ? <span className="lg:hidden">{item.label}</span> : item.label}
+                                        {isCollapsed && !sidebarOpen ? <span className="lg:hidden">{item.label}</span> : item.label}
                                     </Link>
                                 );
                             })}
@@ -135,14 +141,14 @@ const SuperAdminLayout = () => {
                         <div className="p-3 border-t border-slate-100">
                             <button
                                 onClick={handleLogout}
-                                title={isCollapsed ? "Logout" : undefined}
+                                title={isCollapsed && !sidebarOpen ? "Logout" : undefined}
                                 className={`
                                 flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all
-                                ${isCollapsed ? "lg:justify-center" : ""}
+                                ${isCollapsed && !sidebarOpen ? "lg:justify-center" : ""}
                             `}
                             >
                                 <LogOut size={20} />
-                                {isCollapsed ? <span className="lg:hidden">Logout</span> : "Logout"}
+                                {isCollapsed && !sidebarOpen ? <span className="lg:hidden">Logout</span> : "Logout"}
                             </button>
                         </div>
                     </div>

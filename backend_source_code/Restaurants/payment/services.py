@@ -2,10 +2,12 @@ from .models import PaymentGateway, Payment, StripeDetails
 from .adapters import StripeAdapter, CheckoutAdapter, CashAdapter, PayTabsAdapter, PaymeAdapter
 from rest_framework.exceptions import ValidationError
 from decimal import Decimal
+import json
+from django.db import transaction
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
-from django.db.models import Q
+from django.db.models import Q, Sum
 from restaurant.region_config import get_region_config
 from .split_bill import (
     apply_successful_payment,
@@ -17,6 +19,7 @@ from .split_bill import (
 from .schema_guard import ensure_payment_schema
 
 channel_layer = get_channel_layer()
+PAYMENT_EPSILON = Decimal("0.01")
 
 
 def _to_decimal(value):
@@ -26,6 +29,101 @@ def _to_decimal(value):
         return Decimal(str(value))
     except Exception:
         return Decimal("0")
+
+
+def _q_money(value):
+    return _to_decimal(value).quantize(Decimal("0.01"))
+
+
+def _json_safe(value):
+    try:
+        return json.loads(json.dumps(value, default=str))
+    except Exception:
+        return {"raw": str(value)}
+
+
+def _remaining_for_order(order):
+    total = _q_money(order.total_price)
+    paid = min(total, max(Decimal("0.00"), _q_money(getattr(order, "amount_paid", 0))))
+    return max(total - paid, Decimal("0.00"))
+
+
+def _mark_order_payment_progress(order, paid_amount):
+    total = _q_money(order.total_price)
+    paid = min(total, max(Decimal("0.00"), _q_money(paid_amount)))
+    remaining = max(total - paid, Decimal("0.00"))
+    if remaining <= PAYMENT_EPSILON:
+        paid = total
+        remaining = Decimal("0.00")
+    order.amount_paid = paid
+    if remaining <= PAYMENT_EPSILON:
+        order.payment_status = 'paid'
+        if order.status not in {'cancelled', 'completed'}:
+            order.status = 'delivered'
+    elif paid > PAYMENT_EPSILON:
+        order.payment_status = 'partially_paid'
+        if order.status == 'awaiting_cash':
+            order.status = 'served'
+    else:
+        order.payment_status = 'unpaid'
+    order.save(update_fields=['amount_paid', 'payment_status', 'status', 'updated_time'])
+
+
+def settle_bulk_split_payment(payment):
+    """Apply one completed session-level split payment without closing early."""
+    from order.models import Order
+
+    anchor = payment.order
+    session = anchor.guest_session
+    eligible_statuses = ['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash']
+    session_scope = Q(guest_session=session)
+    if session and session.created_at:
+        session_scope |= Q(device=anchor.device, created_time__gte=session.created_at)
+    orders = Order.objects.filter(
+        session_scope,
+        restaurant=anchor.restaurant,
+        status__in=eligible_statuses,
+    ).distinct()
+    orders_list = list(orders.order_by("created_time", "id"))
+    total_amount = sum((_to_decimal(order.total_price) for order in orders_list), Decimal("0"))
+    split_paid_amount = Payment.objects.filter(
+        order__in=orders,
+        created_by__startswith='guest_bulk_evenly',
+        status='completed',
+    ).aggregate(total=Sum('amount')).get('total') or Decimal("0")
+    separately_paid_amount = sum(
+        (_to_decimal(order.total_price) for order in orders_list if order.payment_status == 'paid'),
+        Decimal("0"),
+    )
+    completed_amount = min(total_amount, _to_decimal(split_paid_amount) + separately_paid_amount)
+    remaining_amount = max(total_amount - _to_decimal(completed_amount), Decimal("0"))
+    fully_paid = remaining_amount <= PAYMENT_EPSILON
+    if fully_paid:
+        completed_amount = total_amount
+        remaining_amount = Decimal("0.00")
+
+    paid_ratio = (completed_amount / total_amount) if total_amount > Decimal("0") else Decimal("1")
+    for order in orders_list:
+        order_total = _q_money(order.total_price)
+        if fully_paid or order.payment_status == 'paid':
+            order.amount_paid = order_total
+            order.payment_status = 'paid'
+            if order.status not in {'cancelled', 'completed'}:
+                order.status = 'delivered'
+        else:
+            order.amount_paid = min(order_total, _q_money(order_total * paid_ratio))
+            order.payment_status = 'partially_paid' if order.amount_paid > PAYMENT_EPSILON else 'unpaid'
+            if order.status == 'awaiting_cash':
+                order.status = 'served'
+        order.save(update_fields=['amount_paid', 'payment_status', 'status', 'updated_time'])
+
+    return {
+        'total_amount': total_amount,
+        'paid_amount': min(_to_decimal(completed_amount), total_amount),
+        'remaining_amount': remaining_amount,
+        'fully_paid': fully_paid,
+        'orders': orders,
+    }
 
 class PaymentService:
     ADAPTERS = {
@@ -197,8 +295,9 @@ class PaymentService:
         split_type = 'full_bill'
         payer_id_or_name = ''
 
-        # Keep existing bulk checkout behavior unchanged.
-        if created_by != 'guest_bulk':
+        # Session-level bulk payments do not use a single-order bill ledger.
+        is_guest_bulk = str(created_by or '').startswith('guest_bulk')
+        if not is_guest_bulk:
             if split_data:
                 split_context = prepare_split_checkout(order, split_data)
                 bill = split_context["bill"]
@@ -253,7 +352,8 @@ class PaymentService:
             split_type=split_type,
             payer_id_or_name=payer_id_or_name,
             status=result.get('status', 'pending'),
-            created_by=created_by # Store who initiated (e.g., 'guest_bulk')
+            created_by=created_by, # Store who initiated (e.g., 'guest_bulk')
+            raw_response=_json_safe(result.get('raw_response')) if result.get('raw_response') is not None else None,
         )
         if split_context and bill:
             register_pending_allocations(payment, split_context["plan"])
@@ -276,16 +376,184 @@ class PaymentService:
         return result
 
     @staticmethod
+    def _gateway_confirmed_amount(payment, verification_result):
+        requested = _q_money(payment.amount)
+        raw_amount = None
+        if isinstance(verification_result, dict):
+            raw_amount = verification_result.get('amount')
+
+        if raw_amount in (None, ""):
+            return requested
+
+        confirmed = _q_money(raw_amount)
+        if confirmed + Decimal("0.01") < requested:
+            raise ValidationError(
+                f"Gateway confirmed {confirmed}, but this payment requires {requested}."
+            )
+        return requested
+
+    @staticmethod
+    def _emit_order_update(order, event_type="order_paid"):
+        order_data = OrderDetailSerializer(order).data
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{order.restaurant.id}",
+            {
+                "type": event_type,
+                "order": order_data
+            }
+        )
+
+    @staticmethod
+    def _emit_payment_update(payment, event="payment:updated"):
+        from .serializers import PaymentSerializer
+        payment_data = PaymentSerializer(payment).data
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{payment.restaurant.id}",
+            {
+                "type": "payment_update",
+                "event": event,
+                "payment": payment_data
+            }
+        )
+
+    @staticmethod
+    def _settle_orders_with_payment_amount(payment, orders):
+        amount_left = _q_money(payment.amount)
+        touched_orders = []
+
+        for order in orders:
+            remaining = _remaining_for_order(order)
+            if remaining <= PAYMENT_EPSILON:
+                continue
+
+            applied = min(remaining, amount_left)
+            if applied <= PAYMENT_EPSILON:
+                break
+
+            next_paid = _q_money(getattr(order, "amount_paid", 0)) + applied
+            _mark_order_payment_progress(order, next_paid)
+            touched_orders.append(order)
+            amount_left = _q_money(amount_left - applied)
+
+        return touched_orders
+
+    @staticmethod
+    def _orders_settlement_payload(orders):
+        orders_list = list(orders)
+        total_amount = sum((_q_money(order.total_price) for order in orders_list), Decimal("0.00"))
+        paid_amount = sum(
+            (min(_q_money(order.total_price), _q_money(getattr(order, "amount_paid", 0))) for order in orders_list),
+            Decimal("0.00"),
+        )
+        paid_amount = min(total_amount, paid_amount)
+        remaining_amount = max(total_amount - paid_amount, Decimal("0.00"))
+        if remaining_amount <= PAYMENT_EPSILON:
+            paid_amount = total_amount
+            remaining_amount = Decimal("0.00")
+        return {
+            'total_amount': str(_q_money(total_amount)),
+            'paid_amount': str(_q_money(paid_amount)),
+            'remaining_amount': str(_q_money(remaining_amount)),
+            'fully_paid': remaining_amount <= PAYMENT_EPSILON,
+            'payment_status': 'paid' if remaining_amount <= PAYMENT_EPSILON else ('partially_paid' if paid_amount > PAYMENT_EPSILON else 'unpaid'),
+        }
+
+    @staticmethod
+    def _finalize_completed_payment(payment, verification_result=None, *, already_verified=False):
+        ensure_payment_schema()
+        verification_result = verification_result or {}
+
+        with transaction.atomic():
+            payment = Payment.objects.select_for_update().select_related(
+                'order', 'restaurant', 'device', 'bill'
+            ).get(pk=payment.pk)
+            was_completed = payment.status == 'completed'
+
+            if not was_completed:
+                PaymentService._gateway_confirmed_amount(payment, verification_result)
+                payment.status = 'completed'
+                payment.raw_response = _json_safe(verification_result)
+                payment.save(update_fields=["status", "raw_response", "updated_at"])
+
+            if payment.created_by and payment.created_by.startswith('guest_bulk_evenly'):
+                settlement = settle_bulk_split_payment(payment)
+                payload = {
+                    'status': 'completed',
+                    'transaction_id': payment.transaction_id,
+                    'amount': float(payment.amount),
+                    'remaining_amount': str(settlement['remaining_amount']),
+                    'paid_amount': str(settlement['paid_amount']),
+                    'fully_paid': settlement['fully_paid'],
+                    'payment_status': 'paid' if settlement['fully_paid'] else 'partially_paid',
+                    'idempotent': was_completed,
+                }
+                affected_orders = list(settlement['orders'])
+
+            elif payment.bill_id:
+                updated_bill = apply_successful_payment(payment) if not was_completed else ensure_bill_for_order(payment.order)
+                payment.order.refresh_from_db()
+                payload = {
+                    'status': 'completed',
+                    'transaction_id': payment.transaction_id,
+                    'amount': float(payment.amount),
+                    'remaining_amount': str(_q_money(updated_bill.remaining_amount)),
+                    'paid_amount': str(_q_money(updated_bill.paid_amount)),
+                    'fully_paid': updated_bill.payment_status == "fully_paid",
+                    'payment_status': 'paid' if updated_bill.payment_status == "fully_paid" else updated_bill.payment_status,
+                    'idempotent': was_completed,
+                }
+                affected_orders = [payment.order]
+
+            else:
+                from order.models import Order
+                main_order = payment.order
+                orders_to_update = [main_order]
+                if payment.created_by == 'guest_bulk' and main_order.guest_session:
+                    bulk_orders = Order.objects.filter(
+                        Q(guest_session=main_order.guest_session) | Q(device=main_order.device),
+                        restaurant=main_order.restaurant,
+                        status__in=['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
+                    ).exclude(id=main_order.id).exclude(payment_status='paid').order_by('created_time', 'id')
+                    orders_to_update.extend(list(bulk_orders))
+
+                if not was_completed:
+                    affected_orders = PaymentService._settle_orders_with_payment_amount(payment, orders_to_update)
+                else:
+                    affected_orders = list(orders_to_update)
+                payload = {
+                    'status': 'completed',
+                    'transaction_id': payment.transaction_id,
+                    'amount': float(payment.amount),
+                    'idempotent': was_completed,
+                    **PaymentService._orders_settlement_payload(orders_to_update),
+                }
+
+        for order in affected_orders:
+            try:
+                PaymentService._emit_order_update(order)
+            except Exception as e:
+                print(f"Failed to send order payment notification: {e}")
+
+        try:
+            payment.refresh_from_db()
+            PaymentService._emit_payment_update(payment)
+        except Exception as e:
+            print(f"Failed to send payment update notification: {e}")
+
+        if payload.get('fully_paid') and payment.order.guest_session:
+            from order.models import Cart
+            Cart.objects.filter(guest_session=payment.order.guest_session).delete()
+            PaymentService._close_session_and_clear_chat_if_settled(payment.order)
+
+        return payload
+
+    @staticmethod
     def verify_payment(payment, data):
         ensure_payment_schema()
-        # Idempotency guard: don't re-process already completed transactions.
+        # Idempotency guard: return the current ledger state without re-applying
+        # the transaction.
         if payment.status == 'completed':
-            return {
-                'status': 'completed',
-                'transaction_id': payment.transaction_id,
-                'amount': float(payment.amount),
-                'idempotent': True,
-            }
+            return PaymentService._finalize_completed_payment(payment, data or {})
 
         # Find gateway based on payment provider
         gateway = PaymentGateway.objects.filter(restaurant=payment.restaurant, provider=payment.provider).first()
@@ -311,108 +579,7 @@ class PaymentService:
         verification_result = adapter.verify_payment(data)
         
         if verification_result.get('status') == 'completed':
-            payment.status = 'completed'
-            payment.save(update_fields=["status", "updated_at"])
-
-            if payment.bill_id:
-                updated_bill = apply_successful_payment(payment)
-                main_order = payment.order
-                main_order.refresh_from_db()
-
-                order_data = OrderDetailSerializer(main_order).data
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{main_order.restaurant.id}",
-                    {
-                        "type": "order_paid",
-                        "order": order_data
-                    }
-                )
-
-                from .serializers import PaymentSerializer
-                payment_data = PaymentSerializer(payment).data
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{payment.restaurant.id}",
-                    {
-                        "type": "payment_update",
-                        "event": "payment:updated",
-                        "payment": payment_data
-                    }
-                )
-
-                if main_order.guest_session and updated_bill and updated_bill.payment_status == "fully_paid":
-                    from order.models import Cart
-                    Cart.objects.filter(guest_session=main_order.guest_session).delete()
-                    PaymentService._close_session_and_clear_chat_if_settled(main_order)
-                return verification_result
-            
-            # Logic for Single vs Bulk
-            main_order = payment.order
-            
-            # Always mark the primary order as paid
-            orders_to_update = [main_order]
-            
-            if payment.created_by == 'guest_bulk' and main_order.guest_session:
-                # Find all other unpaid orders for this session
-                # (Logic matches CreateBulkCheckoutSessionView filtering)
-                from order.models import Order
-                bulk_orders = Order.objects.filter(
-                    Q(guest_session=main_order.guest_session) | Q(device=main_order.device),
-                    restaurant=main_order.restaurant,
-                    status__in=['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
-                ).exclude(id=main_order.id).exclude(payment_status='paid')
-                
-                orders_to_update.extend(list(bulk_orders))
-
-            for order in orders_to_update:
-                user_updated = False
-                if order.status != 'completed':
-                     # Do not auto-complete orders if they are just paid? 
-                     # Actually for "Fast Food" flow maybe? 
-                     # But for dining, paying doesn't mean eating is done.
-                     # However, current logic sets it to 'paid'.
-                     # Let's keep status as is, but update payment_status.
-                     # UNLESS it was 'awaiting_cash', then revert to 'served' or keep 'served'?
-                     # 'paid' is a valid status in constants.
-                     pass
-
-                # Update Payment Status
-                order.payment_status = 'paid'
-                if order.status == 'awaiting_cash':
-                    order.status = 'preparing' # or 'served'? If it was 'awaiting_cash', it was likely new.
-                
-                # If we want to show it as "Paid" in dashboard column:
-                # The dashboard uses payment_status.
-                
-                order.save()
-                
-                # Notify Restaurant
-                order_data = OrderDetailSerializer(order).data
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{order.restaurant.id}",
-                    {
-                        "type": "order_paid",
-                        "order": order_data
-                    }
-                )
-
-            # Notify Restaurant of payment update (just once for the transaction)
-            from .serializers import PaymentSerializer
-            payment_data = PaymentSerializer(payment).data
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{payment.restaurant.id}",
-                {
-                    "type": "payment_update",
-                    "event": "payment:updated",
-                    "payment": payment_data
-                }
-            )
-
-            # Clear Cart on Successful Payment (Backend Cleanup)
-            if main_order.guest_session:
-                from order.models import Cart
-                Cart.objects.filter(guest_session=main_order.guest_session).delete()
-
-            PaymentService._close_session_and_clear_chat_if_settled(main_order)
+            return PaymentService._finalize_completed_payment(payment, verification_result)
         else:
             resolved_status = str(verification_result.get("status") or "").lower()
             if resolved_status in {"failed", "declined", "cancelled", "canceled"}:
@@ -500,6 +667,32 @@ class PaymentService:
         if result and result.get('status') == 'completed':
             transaction_id = result.get('transaction_id')
             payment = Payment.objects.filter(transaction_id=transaction_id).first()
+            if not payment:
+                meta = result.get('meta') or {}
+                bill_id = meta.get('bill_id')
+                order_id = meta.get('primary_order_id') or meta.get('order_id')
+                guest_session_id = meta.get('guest_session_id')
+                candidates = Payment.objects.filter(
+                    restaurant_id=restaurant_id,
+                    provider=provider,
+                    status='pending',
+                ).order_by('-created_at')
+                if bill_id:
+                    payment = candidates.filter(bill_id=bill_id).first()
+                if not payment and order_id:
+                    payment = candidates.filter(order_id=order_id).first()
+                if not payment and guest_session_id:
+                    payment = candidates.filter(
+                        created_by__contains=f":{guest_session_id}:"
+                    ).first() or candidates.filter(created_by='guest_bulk').first()
             if payment:
-                PaymentService.verify_payment(payment, result)
+                PaymentService._finalize_completed_payment(payment, result, already_verified=True)
+        elif result and str(result.get('status') or '').lower() in {'failed', 'declined', 'cancelled', 'canceled'}:
+            transaction_id = result.get('transaction_id')
+            payment = Payment.objects.filter(transaction_id=transaction_id).first() if transaction_id else None
+            if payment:
+                payment.status = "failed"
+                payment.raw_response = _json_safe(result)
+                payment.save(update_fields=["status", "raw_response", "updated_at"])
+                mark_payment_failed(payment)
         return result

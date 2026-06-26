@@ -48,7 +48,10 @@ class PaymentGatewaySerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentGateway
         fields = [
-            'id', 'provider', 'is_active', 'key_id', 'key_secret', 'created_at'
+            'id', 'provider', 'is_active', 'key_id', 'key_secret',
+            'apple_pay_enabled', 'apple_merchant_id', 'apple_domain_verified',
+            'google_pay_enabled', 'google_merchant_id', 'google_environment',
+            'created_at'
         ]
         extra_kwargs = {
             'key_secret': {'write_only': True},

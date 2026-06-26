@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from .health_views import health_check
 from restaurant.views import BrandConfigAPIView
 from customer.compat_views import DailyStatsAPIView, LeadsAPIView, SalesAnalyticsAPIView, TableMessagesAPIView
+from adminapi.views import IntegrationAPIView, IntegrationDetailAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -37,6 +38,11 @@ urlpatterns = [
     path('api/table-messages/<str:identifier>', TableMessagesAPIView.as_view()),
     path('api/table-messages/<str:identifier>/', TableMessagesAPIView.as_view()),
     path('api/brand-config', BrandConfigAPIView.as_view()),
+    path('api/integrations', IntegrationAPIView.as_view()),
+    path('api/integrations/', IntegrationAPIView.as_view()),
+    path('api/integrations/<uuid:pk>', IntegrationDetailAPIView.as_view()),
+    path('api/integrations/<uuid:pk>/', IntegrationDetailAPIView.as_view()),
+    path('api/integrations/', include('integrations.urls')),
     path('api/brand-config/', BrandConfigAPIView.as_view()),
     path('api/', include('customer.intelligence_urls')),
     path('', include('accounts.urls')),

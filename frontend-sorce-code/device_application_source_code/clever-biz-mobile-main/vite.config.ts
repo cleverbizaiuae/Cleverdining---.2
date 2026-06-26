@@ -4,15 +4,10 @@ import path from "path";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-// Build version for cache busting
-const BUILD_VERSION = Date.now().toString(36);
 const isProd = process.env.NODE_ENV === "production";
 
 // https://vite.dev/config/
 export default defineConfig({
-  define: {
-    __BUILD_VERSION__: JSON.stringify(BUILD_VERSION),
-  },
   assetsInclude: ["**/icon-32.png", "**/icon-512.png"],
   plugins: [
     react(),
@@ -24,6 +19,8 @@ export default defineConfig({
         // Skip waiting and claim clients immediately
         skipWaiting: true,
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        navigationPreload: true,
 
         // Keep the first install lean. Page chunks and media are runtime-cached
         // after use, so new QR scans are not delayed by downloading every route.

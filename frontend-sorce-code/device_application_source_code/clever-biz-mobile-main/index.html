@@ -29,18 +29,13 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #ffffff;
+      background: var(--startup-background, linear-gradient(160deg, #0055FEdd 0%, #0055FE 100%));
       z-index: 99999;
       font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-      transition: opacity 0.3s ease;
-    }
-
-    #app-loader.hidden {
-      opacity: 0;
-      pointer-events: none;
     }
 
     #app-loader .spinner {
+      display: none;
       width: 36px;
       height: 36px;
       border: 3px solid #E5E7EB;
@@ -50,6 +45,7 @@
     }
 
     #app-loader .brand {
+      display: none;
       font-size: 22px;
       font-weight: 700;
       color: #1E293B;
@@ -58,6 +54,7 @@
     }
 
     #app-loader .status {
+      display: none;
       font-size: 13px;
       color: #94A3B8;
       margin-top: 12px;
@@ -82,6 +79,31 @@
     (function () {
       'use strict';
 
+      // Match the synchronous startup shell to the cached restaurant theme.
+      // This prevents a white/platform loader flash before React paints.
+      try {
+        var storedUser = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        var startupRestaurantId = storedUser && storedUser.user && storedUser.user.restaurants &&
+          storedUser.user.restaurants[0] && storedUser.user.restaurants[0].id;
+        var scopedBrandKey = startupRestaurantId
+          ? 'cb_brand_config_cache:' + String(startupRestaurantId)
+          : '';
+        var cachedBrand = scopedBrandKey
+          ? JSON.parse(localStorage.getItem(scopedBrandKey) || '{}')
+          : {};
+        var primary = /^#[0-9a-fA-F]{6}$/.test(cachedBrand.primaryColor || '')
+          ? cachedBrand.primaryColor
+          : '#0055FE';
+        var startupBackground = cachedBrand.themePreset === 'luxury_dark'
+          ? 'linear-gradient(160deg, #0f0f0f 0%, #1a1a2e 100%)'
+          : cachedBrand.themePreset === 'warm_casual'
+            ? 'linear-gradient(160deg, #7c2d12 0%, #c2410c 100%)'
+            : 'linear-gradient(160deg, ' + primary + 'dd 0%, ' + primary + ' 100%)';
+        document.documentElement.style.setProperty('--startup-background', startupBackground);
+      } catch (_) {
+        // The default platform gradient remains available.
+      }
+
       // -- Offline detection --
       if (!navigator.onLine) {
         window.addEventListener('DOMContentLoaded', function () {
@@ -97,9 +119,6 @@
         return; // Don't auto-refresh while offline
       }
 
-      // -- Build version check --
-      var STORED_VERSION_KEY = 'cleverdining_build_version';
-
       // -- Auto-refresh guard (max 1 per session) --
       var REFRESH_KEY = 'cleverdining_auto_refreshed';
       var alreadyRefreshed = sessionStorage.getItem(REFRESH_KEY) === 'true';
@@ -111,28 +130,29 @@
         if (root && root.children.length === 0 && !alreadyRefreshed) {
           console.warn('[PWA Recovery] App not rendered after 5s, forcing refresh');
           sessionStorage.setItem(REFRESH_KEY, 'true');
-          // Clear all caches before refresh
-          if ('caches' in window) {
-            caches.keys().then(function (keys) {
-              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-            }).then(function () {
-              window.location.reload();
-            });
-          } else {
-            window.location.reload();
-          }
+          window.location.reload();
         }
       }, 5000);
 
       // React will call this when mounted to cancel the timeout
       window.__cancelAppRecovery = function () {
         clearTimeout(appReadyTimeout);
-        // Hide the loader
         var loader = document.getElementById('app-loader');
-        if (loader) {
-          loader.classList.add('hidden');
-          setTimeout(function () { loader.remove(); }, 300);
+        if (!loader) return;
+
+        var root = document.getElementById('root');
+        if (root && root.children.length > 0) {
+          loader.remove();
+          return;
         }
+
+        var observer = new MutationObserver(function () {
+          if (root && root.children.length > 0) {
+            observer.disconnect();
+            loader.remove();
+          }
+        });
+        if (root) observer.observe(root, { childList: true });
       };
     })();
   </script>

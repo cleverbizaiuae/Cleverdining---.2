@@ -23,10 +23,57 @@ from django.db.models import Sum
 from channels.layers import get_channel_layer
 from .schema_guard import ensure_order_notes_column
 from payment.schema_guard import ensure_payment_schema
+from decimal import Decimal
 channel_layer = get_channel_layer()
 from message.models import ChatMessage
 from datetime import datetime
 from calendar import monthrange
+
+
+def _order_payment_totals(order):
+    total = Decimal(str(order.total_price or 0)).quantize(Decimal("0.01"))
+    paid = Decimal(str(getattr(order, "amount_paid", 0) or 0)).quantize(Decimal("0.01"))
+    try:
+        bill = order.bill
+    except Exception:
+        bill = None
+
+    if bill is not None:
+        paid = max(paid, Decimal(str(bill.paid_amount or 0)).quantize(Decimal("0.01")))
+    else:
+        try:
+            from payment.models import Payment
+            paid = Payment.objects.filter(
+                order=order,
+                status__in=["completed", "paid", "succeeded", "success"],
+            ).aggregate(total=Sum("amount")).get("total") or Decimal("0.00")
+            paid = Decimal(str(paid)).quantize(Decimal("0.01"))
+        except Exception:
+            paid = Decimal("0.00")
+
+    if str(order.payment_status or "").lower() in {"paid", "completed", "succeeded", "success"}:
+        paid = max(paid, total)
+
+    paid = min(max(paid, Decimal("0.00")), total)
+    remaining = max(total - paid, Decimal("0.00")).quantize(Decimal("0.01"))
+    return total, paid, remaining
+
+
+def _block_unpaid_completion(order, new_status):
+    if str(new_status or "").lower() not in {"completed", "paid", "delivered"}:
+        return None
+    total, paid, remaining = _order_payment_totals(order)
+    if remaining > Decimal("0.001"):
+        return Response(
+            {
+                "error": "Cannot complete order before the bill is fully paid.",
+                "total": str(total),
+                "amount_paid": str(paid),
+                "remaining": str(remaining),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
 
 
 
@@ -196,6 +243,9 @@ class ConfirmCashPaymentAPIView(APIView):
 
     def patch(self, request, pk):
         from payment.models import Payment
+        from payment.services import PaymentService, settle_bulk_split_payment
+        from payment.split_bill import apply_successful_payment
+        from django.utils import timezone
         import uuid
         ensure_payment_schema()
 
@@ -211,25 +261,52 @@ class ConfirmCashPaymentAPIView(APIView):
         if order.payment_status == 'paid':
              return Response({"message": "Order is already paid"}, status=status.HTTP_200_OK)
 
-        # Update Order (and all other session orders ONLY if they are also awaiting cash)
+        pending_cash_payment = Payment.objects.filter(
+            order=order,
+            provider='cash',
+            status='pending',
+        ).order_by('-created_at').first()
+
+        if pending_cash_payment:
+            pending_cash_payment.status = 'completed'
+            pending_cash_payment.confirmed_at = timezone.now()
+            pending_cash_payment.save(update_fields=['status', 'confirmed_at', 'updated_at'])
+
+            if pending_cash_payment.created_by and pending_cash_payment.created_by.startswith('guest_bulk_evenly'):
+                settlement = settle_bulk_split_payment(pending_cash_payment)
+                if settlement['fully_paid']:
+                    PaymentService._close_session_and_clear_chat_if_settled(order)
+                order.refresh_from_db()
+                return Response({
+                    'message': 'Cash share confirmed.',
+                    'payment_status': order.payment_status,
+                    'paid_amount': str(settlement['paid_amount']),
+                    'remaining_amount': str(settlement['remaining_amount']),
+                    'fully_paid': settlement['fully_paid'],
+                })
+
+            if pending_cash_payment.bill_id:
+                bill = apply_successful_payment(pending_cash_payment)
+                if bill.payment_status == 'fully_paid':
+                    PaymentService._close_session_and_clear_chat_if_settled(order)
+                order.refresh_from_db()
+                return Response({
+                    'message': 'Cash payment confirmed.',
+                    'payment_status': order.payment_status,
+                    'paid_amount': str(bill.paid_amount),
+                    'remaining_amount': str(bill.remaining_amount),
+                    'fully_paid': bill.payment_status == 'fully_paid',
+                })
+
+        # Legacy full-order cash confirmation. Confirm only the selected order;
+        # the table-level action explicitly calls this endpoint for every order.
         orders_to_update = [order]
         
-        if order.guest_session:
-             # Auto-confirm ALL other unpaid orders for this session (Bulk Cash Payment)
-             # This ensures that if the customer paid "Table 2" total, all orders for Table 2 are marked paid.
-             session_orders = Order.objects.filter(
-                 guest_session=order.guest_session,
-                 # We should include 'pending', 'preparing', 'served' too, not just 'awaiting_cash',
-                 # because often staff just takes cash without user clicking "Pay by Cash".
-                 status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
-             ).exclude(pk=order.pk).exclude(payment_status='paid')
-             
-             orders_to_update.extend(list(session_orders))
-        
         for o in orders_to_update:
-            o.status = 'completed'
+            o.status = 'delivered'
+            o.amount_paid = o.total_price
             o.payment_status = 'paid'
-            o.save()
+            o.save(update_fields=['status', 'amount_paid', 'payment_status', 'updated_time'])
             
             # CREATE PAYMENT RECORD
             payment_created = False
@@ -433,7 +510,7 @@ class MyOrdersAPIView(generics.ListAPIView):
         user = self.request.user
         # Optimized: Use select_related and prefetch_related to avoid N+1 queries
         base_qs = Order.objects.select_related(
-            'device', 'restaurant', 'guest_session'
+            'device', 'restaurant', 'guest_session', 'bill'
         ).prefetch_related(
             'order_items__item', 'payments'
         )
@@ -512,7 +589,7 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
             
             # Optimized: Use select_related and prefetch_related to avoid N+1 queries
             base_qs = Order.objects.select_related(
-                'device', 'restaurant', 'guest_session', 'business_day'
+                'device', 'restaurant', 'guest_session', 'business_day', 'bill'
             ).prefetch_related(
                 'order_items__item', 'payments'
             )
@@ -623,6 +700,10 @@ class OwnerUpdateOrderStatusAPIView(APIView):
         if new_status not in dict(Order._meta.get_field('status').choices):
             return Response({"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
 
+        completion_block = _block_unpaid_completion(order, new_status)
+        if completion_block is not None:
+            return completion_block
+
 
         
         # Allow cancelling a completed order (Voiding)
@@ -704,7 +785,7 @@ class OwnerOrderDetailAPIView(generics.RetrieveAPIView):
         ensure_payment_schema()
         user = self.request.user
         base_qs = Order.objects.select_related(
-            'device', 'restaurant', 'guest_session', 'business_day'
+            'device', 'restaurant', 'guest_session', 'business_day', 'bill'
         ).prefetch_related(
             'order_items__item', 'payments'
         )
@@ -772,7 +853,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
              return (
                 Order.objects
                 .filter(restaurant_id=restaurant_id)
-                .select_related('device', 'restaurant', 'guest_session', 'business_day')
+                .select_related('device', 'restaurant', 'guest_session', 'business_day', 'bill')
                 .prefetch_related('order_items__item', 'payments')
                 .order_by('-created_time')
              )
@@ -818,6 +899,8 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         ensure_payment_schema()
         user = request.user
         new_status = request.data.get('status')
+        if new_status not in dict(Order._meta.get_field('status').choices):
+            return Response({"detail": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             order = Order.objects.get(pk=pk)
@@ -832,6 +915,10 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         
         if order.status == "completed":
             return Response({"detail": "Order already completed"}, status=status.HTTP_400_BAD_REQUEST)
+
+        completion_block = _block_unpaid_completion(order, new_status)
+        if completion_block is not None:
+            return completion_block
 
         order.status = new_status
         order.save(update_fields=['status', 'updated_time'])

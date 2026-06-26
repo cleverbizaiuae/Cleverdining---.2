@@ -1,25 +1,84 @@
-import { lazy, Suspense, useEffect, useMemo, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 
 import { PrivateRouteGuard } from "./components/route-guard";
-import { FONT_PRESETS, hexToHsl, useBrandConfig } from "./lib/useBrandConfig";
-const CancelPage = lazy(() => import("./pages/CancelPage"));
-const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
-const LayoutDashboard = lazy(() => import("./pages/layout_dashboard"));
-const ScreenOrders = lazy(() => import("./pages/order/screen_orders"));
-const ScreenCart = lazy(() => import("./pages/screen_cart"));
-const ScreenHome = lazy(() => import("./pages/screen_home"));
-const ScreenMessage = lazy(() => import("./pages/screen_message"));
-const ScreenSplash = lazy(() => import("./pages/screen_splash"));
-const SuccessPage = lazy(() => import("./pages/SuccessPage"));
-const NotFoundPage = lazy(() => import("./pages/not-found").then((m) => ({ default: m.NotFoundPage })));
-const TableEntry = lazy(() => import("./pages/TableEntry"));
-const TableLanding = lazy(() => import("./pages/TableLanding"));
-const ScreenScanTable = lazy(() => import("./pages/screen_scan_table"));
+import ScreenSplash from "./pages/screen_splash";
+import { ActiveBrandProvider, FONT_PRESETS, getBrandSplashSessionKey, hexToHsl, useBrandConfig } from "./lib/useBrandConfig";
+import { loadDashboardRuntime, loadHomeScreen } from "./lib/dashboardPreload";
+
+const CHUNK_RELOAD_KEY = "cb_chunk_reload_attempted";
+
+function lazyWithRecovery<T extends ComponentType>(loader: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    try {
+      const module = await loader();
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      return module;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isChunkFailure = /dynamically imported module|module script|ChunkLoadError|Loading chunk/i.test(message);
+      if (isChunkFailure && !sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+        window.location.reload();
+        return new Promise<never>(() => undefined);
+      }
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      throw error;
+    }
+  });
+}
+
+const CancelPage = lazyWithRecovery(() => import("./pages/CancelPage"));
+const CheckoutPage = lazyWithRecovery(() => import("./pages/CheckoutPage"));
+const DashboardRuntime = lazyWithRecovery(loadDashboardRuntime);
+const ScreenOrders = lazyWithRecovery(() => import("./pages/order/screen_orders"));
+const ScreenCart = lazyWithRecovery(() => import("./pages/screen_cart"));
+const ScreenHome = lazyWithRecovery(loadHomeScreen);
+const ScreenMessage = lazyWithRecovery(() => import("./pages/screen_message"));
+const SuccessPage = lazyWithRecovery(() => import("./pages/SuccessPage"));
+const NotFoundPage = lazyWithRecovery(() => import("./pages/not-found").then((m) => ({ default: m.NotFoundPage })));
+const TableEntry = lazyWithRecovery(() => import("./pages/TableEntry"));
+const TableLanding = lazyWithRecovery(() => import("./pages/TableLanding"));
+const ScreenScanTable = lazyWithRecovery(() => import("./pages/screen_scan_table"));
 
 const RouteLoader = () => (
-  <div className="flex items-center justify-center h-screen text-slate-500">Loading...</div>
+  <div className="h-[100dvh] w-full bg-[linear-gradient(160deg,#0055FEdd_0%,#0055FE_100%)]" aria-label="Loading menu" />
 );
+
+function DashboardExperience({ restaurantId }: { restaurantId: string | number | null }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const splashSessionKey = useMemo(() => getBrandSplashSessionKey(restaurantId), [restaurantId]);
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      return !sessionStorage.getItem(splashSessionKey);
+    } catch {
+      return true;
+    }
+  });
+
+  const completeSplash = useCallback(() => {
+    setShowSplash(false);
+    if (location.pathname === "/splash") {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!showSplash && location.pathname === "/splash") {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [location.pathname, navigate, showSplash]);
+
+  return (
+    <>
+      <Suspense fallback={<RouteLoader />}>
+        <DashboardRuntime />
+      </Suspense>
+      {showSplash ? <ScreenSplash onComplete={completeSplash} sessionKey={splashSessionKey} /> : null}
+    </>
+  );
+}
 
 function resolveStoredRestaurantId() {
   try {
@@ -83,7 +142,7 @@ function BrandWrapper({
     };
   }, [brand.primaryColor, fontFamily, hasBranding, primaryHsl]);
 
-  return <>{children}</>;
+  return <ActiveBrandProvider brand={brand}>{children}</ActiveBrandProvider>;
 }
 
 function App() {
@@ -133,20 +192,13 @@ function App() {
       <Route path="/scan-table" element={<ScreenScanTable />} />
       <Route path="/login" element={<TableLanding />} /> {/* Added for QR Code compatibility */}
       <Route path="/t/:restaurantId/:tableToken" element={<TableLanding />} />
-      <Route
-        path="/splash"
-        element={
-          <PrivateRouteGuard>
-            <ScreenSplash />
-          </PrivateRouteGuard>
-        }
-      />
-
-      <Route path="/dashboard" element={
+      <Route element={
         <PrivateRouteGuard>
-          <LayoutDashboard />
+          <DashboardExperience key={String(restaurantId || "default")} restaurantId={restaurantId} />
         </PrivateRouteGuard>
       }>
+        <Route path="/splash" element={<ScreenHome />} />
+        <Route path="/dashboard">
         <Route index={true} element={<ScreenHome />} />
         <Route path="message" element={<ScreenMessage />} />
         <Route path="cart" element={<ScreenCart />} />
@@ -154,6 +206,7 @@ function App() {
         <Route path="checkout" element={<CheckoutPage />} />
         <Route path="success" element={<SuccessPage />} />
         <Route path="cancel" element={<CancelPage />} />
+        </Route>
       </Route>
 
       <Route path="/table/:uuid" element={<TableEntry />} />

@@ -113,6 +113,14 @@ export default function CheckoutPage() {
     return 0;
   };
 
+  const getRemainingAmount = (order: any): number => {
+    const explicit = order?.remaining_amount ?? order?.remainingAmount;
+    if (explicit !== undefined && explicit !== null && explicit !== "") {
+      return Math.max(0, toSafeNumber(explicit));
+    }
+    return Math.max(0, toSafeNumber(order?.total_price) - toSafeNumber(order?.amount_paid ?? order?.amountPaid));
+  };
+
   const userInfo = (() => {
     try {
       const raw = localStorage.getItem("userInfo");
@@ -198,8 +206,10 @@ export default function CheckoutPage() {
 
   // Calculate Subtotal - use order.total_price for accuracy
   const subtotal = isBulkCheckout
-    ? allOrders.reduce((acc, o) => acc + toSafeNumber(o?.total_price), 0)
-    : toSafeNumber(orderData?.total_price);
+    ? allOrders.reduce((acc, o) => acc + getRemainingAmount(o), 0)
+    : billSummary
+      ? toSafeNumber(billSummary.remaining_amount)
+      : getRemainingAmount(orderData);
 
   // Collect all items from all orders for display
   // Backend uses 'order_items' field, fallback to 'items' for compatibility
@@ -302,6 +312,26 @@ export default function CheckoutPage() {
 
   const finalTotal = payableAmount.toFixed(2);
   const canProceed = splitType !== "my_items" || selectedItems.length > 0;
+
+  const handleWalletSuccess = (result: {
+    transactionId?: string;
+    fullyPaid?: boolean;
+    remainingAmount?: string | number;
+  }, paymentMethodName: 'apple_pay' | 'google_pay') => {
+    const remaining = toSafeNumber(result.remainingAmount);
+    if (result.fullyPaid === false || remaining > 0.001) {
+      navigate('/dashboard/orders?payment=partial', { replace: true });
+      return;
+    }
+    navigate(`/dashboard/success/?session_id=${encodeURIComponent(result.transactionId || "")}`, {
+      replace: true,
+      state: {
+        orderId,
+        paymentMethod: paymentMethodName,
+        transactionId: result.transactionId,
+      },
+    });
+  };
 
   const updateSelectedItemQuantity = (billItemId: number, maxQty: number, nextValue: string) => {
     const parsed = Number(nextValue);
@@ -701,14 +731,7 @@ export default function CheckoutPage() {
             countryCode={countryAlpha2}
             onSuccess={(result) => {
               console.log('Apple Pay Success:', result);
-              // Navigate to success page
-              navigate('/payment-success', {
-                state: {
-                  orderId,
-                  paymentMethod: 'apple_pay',
-                  transactionId: result.transactionId
-                }
-              });
+              handleWalletSuccess(result, 'apple_pay');
             }}
             onError={(error) => {
               console.error('Apple Pay Error:', error);
@@ -730,14 +753,7 @@ export default function CheckoutPage() {
             countryCode={countryAlpha2}
             onSuccess={(result) => {
               console.log('Google Pay Success:', result);
-              // Navigate to success page
-              navigate('/payment-success', {
-                state: {
-                  orderId,
-                  paymentMethod: 'google_pay',
-                  transactionId: result.transactionId
-                }
-              });
+              handleWalletSuccess(result, 'google_pay');
             }}
             onError={(error) => {
               console.error('Google Pay Error:', error);

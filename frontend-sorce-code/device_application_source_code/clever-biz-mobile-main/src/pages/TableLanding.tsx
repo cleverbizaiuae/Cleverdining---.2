@@ -4,6 +4,7 @@ import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
 import { getRegionConfig } from '../config/regionConfig';
 import { resetUpsellSession } from '../lib/upsellSession';
+import { cacheBrandConfigForRestaurant, getBrandSplashSessionKey } from '../lib/useBrandConfig';
 
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
@@ -34,9 +35,30 @@ export default function TableLanding() {
             }
 
             try {
-                const res = await axios.post('/api/customer/resolve-table/', payload);
+                const candidateRestaurantId = payload.restaurant_id;
+                const brandRequest = candidateRestaurantId
+                    ? axios.get(`/api/brand-config/?restaurant_id=${encodeURIComponent(candidateRestaurantId)}`).catch(() => null)
+                    : Promise.resolve(null);
+                const [res, warmedBrand] = await Promise.all([
+                    axios.post('/api/customer/resolve-table/', payload),
+                    brandRequest,
+                ]);
 
                 const { guest_session_id, session_token, table_id, table_name } = res.data;
+                const resolvedRestaurantId = res.data.restaurant_id;
+
+                if (warmedBrand && String(candidateRestaurantId) === String(resolvedRestaurantId)) {
+                    cacheBrandConfigForRestaurant(resolvedRestaurantId, warmedBrand.data);
+                } else if (resolvedRestaurantId) {
+                    try {
+                        const brandResponse = await axios.get(
+                            `/api/brand-config/?restaurant_id=${encodeURIComponent(resolvedRestaurantId)}`,
+                        );
+                        cacheBrandConfigForRestaurant(resolvedRestaurantId, brandResponse.data);
+                    } catch {
+                        // Branding remains on safe defaults until the background refresh succeeds.
+                    }
+                }
 
                 // Store session token
                 localStorage.setItem('guest_session_token', session_token);
@@ -78,6 +100,9 @@ export default function TableLanding() {
                     role: "guest",
                 };
                 localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                localStorage.removeItem('cb_brand_config_cache');
+                sessionStorage.removeItem('cb_splash_seen');
+                sessionStorage.removeItem(getBrandSplashSessionKey(resolvedRestaurantId));
 
                 // Redirect to home (Force reload to initialize WebSocket with new token)
                 window.location.href = '/';

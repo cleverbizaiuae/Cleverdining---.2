@@ -61,7 +61,8 @@ export default function CheckoutButton({
             provider,
             tip_amount: tipAmount,
             tip_type: tipType,
-            tip_value: tipValue
+            tip_value: tipValue,
+            ...(splitPayload || {}),
           },
           {
             headers: {

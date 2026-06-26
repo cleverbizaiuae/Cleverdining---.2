@@ -18,7 +18,18 @@ export type Order = {
   items?: OrderItem[];
   total?: number;
   total_price?: string | number;
+  amountPaid?: string | number;
+  amount_paid?: string | number;
+  remainingAmount?: string | number;
+  remaining_amount?: string | number;
+  isFullyPaid?: boolean;
+  is_fully_paid?: boolean;
+  isPartiallyPaid?: boolean;
+  is_partially_paid?: boolean;
+  bill_payment_status?: string;
+  payment_progress?: string | number;
   status: OrderStage | string;
+  backendStatus?: string;
   paymentStatus?: "Paid" | "Unpaid";
   payment_status?: string;
   timestamp?: string;

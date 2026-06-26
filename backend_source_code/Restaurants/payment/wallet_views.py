@@ -14,15 +14,30 @@ from django.shortcuts import get_object_or_404
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import uuid
+from decimal import Decimal
 
 from .models import PaymentGateway, Payment
 from .serializers import PaymentSerializer
 from .schema_guard import ensure_payment_schema
+from .services import PaymentService
+from .adapters import StripeAdapter, PayTabsAdapter, CheckoutAdapter
+from .split_bill import ensure_bill_for_order
 from order.models import Order
 from order.serializers import OrderDetailSerializer
 from restaurant.models import Restaurant
 
 channel_layer = get_channel_layer()
+
+
+def _gateway_supports_direct_wallet(gateway) -> bool:
+    """Direct wallet buttons need server-side token capture, not hosted-page support."""
+    adapter_map = {
+        'stripe': StripeAdapter,
+        'paytabs': PayTabsAdapter,
+        'checkout': CheckoutAdapter,
+    }
+    adapter_class = adapter_map.get(gateway.provider)
+    return bool(adapter_class and hasattr(adapter_class(gateway), 'process_wallet_token'))
 
 
 class WalletAvailabilityView(APIView):
@@ -66,16 +81,19 @@ class WalletAvailabilityView(APIView):
         
         if gateway:
             availability['gateway_provider'] = gateway.provider
+            supports_direct_wallet = _gateway_supports_direct_wallet(gateway)
             
             # Apple Pay: Enabled + Merchant ID + Domain Verified
             if (gateway.apple_pay_enabled and 
                 gateway.apple_merchant_id and 
-                gateway.apple_domain_verified):
+                gateway.apple_domain_verified and
+                supports_direct_wallet):
                 availability['apple_pay_available'] = True
             
             # Google Pay: Enabled + Merchant ID
             if (gateway.google_pay_enabled and 
-                gateway.google_merchant_id):
+                gateway.google_merchant_id and
+                supports_direct_wallet):
                 availability['google_pay_available'] = True
                 availability['google_environment'] = gateway.google_environment
                 availability['google_merchant_id'] = gateway.google_merchant_id
@@ -137,11 +155,24 @@ class WalletPaymentConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate amount matches (with small tolerance for rounding)
-        expected_amount = float(order.total_price) + float(tip_amount)
-        if abs(float(amount) - expected_amount) > 0.01:
+        try:
+            requested_amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+        except Exception:
             return Response(
-                {'error': f'Amount mismatch. Expected {expected_amount}, got {amount}'},
+                {'error': 'Invalid payment amount'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        bill = ensure_bill_for_order(order, lock=True)
+        remaining_amount = Decimal(str(bill.remaining_amount or 0)).quantize(Decimal("0.01"))
+        if requested_amount <= Decimal("0.00"):
+            return Response(
+                {'error': 'Payment amount must be greater than zero'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if requested_amount > remaining_amount + Decimal("0.01"):
+            return Response(
+                {'error': f'Amount exceeds remaining balance. Remaining {remaining_amount}, got {requested_amount}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -187,34 +218,33 @@ class WalletPaymentConfirmView(APIView):
             )
         
         if result.get('status') == 'completed':
-            # Create Payment record
             payment = Payment.objects.create(
                 order=order,
                 restaurant=order.restaurant,
                 device=order.device,
+                bill=bill,
                 provider=wallet_type,
                 transaction_id=result.get('transaction_id') or f"{wallet_type}_{order.id}_{uuid.uuid4().hex[:8]}",
                 wallet_token_reference=wallet_token[:50] if wallet_token else None,  # Store partial for reference
-                amount=amount,
-                status='completed',
-                created_by='guest_wallet'
+                amount=requested_amount,
+                status='pending',
+                created_by='guest_wallet',
+                raw_response=result,
             )
-            
-            # Update order status
-            order.status = 'paid'
-            order.payment_status = 'paid'
-            if tip_amount:
-                order.tip_amount = tip_amount
-            order.save()
-            
-            # Emit real-time events
-            self._emit_payment_events(order, payment)
+
+            settlement = PaymentService._finalize_completed_payment(payment, {
+                'status': 'completed',
+                'transaction_id': payment.transaction_id,
+                'amount': requested_amount,
+                'wallet_type': wallet_type,
+            }, already_verified=True)
             
             return Response({
                 'status': 'success',
                 'payment_id': payment.id,
                 'transaction_id': payment.transaction_id,
-                'message': 'Payment completed successfully'
+                'message': 'Payment completed successfully',
+                **settlement,
             })
         
         elif result.get('status') == 'cancelled':
@@ -237,8 +267,6 @@ class WalletPaymentConfirmView(APIView):
         For PayTabs: Use Direct Payment API
         For Checkout: Use Tokens API
         """
-        from .adapters import StripeAdapter, PayTabsAdapter, CheckoutAdapter
-        
         adapter_map = {
             'stripe': StripeAdapter,
             'paytabs': PayTabsAdapter,
@@ -260,15 +288,10 @@ class WalletPaymentConfirmView(APIView):
                 amount=amount
             )
         
-        # Fallback: For gateways that handle wallets via their hosted page
-        # (like PayTabs with apple_pay in payment_methods),
-        # we trust the token and mark as completed
-        # This assumes the token was validated client-side
-        return {
-            'status': 'completed',
-            'transaction_id': f"{wallet_type}_{order.id}_{uuid.uuid4().hex[:8]}",
-            'amount': amount
-        }
+        raise Exception(
+            f"{gateway.provider} does not support direct {wallet_type} token capture. "
+            "Use the hosted card checkout so the gateway can handle wallet authorization."
+        )
     
     def _emit_payment_events(self, order, payment):
         """Emit real-time events for payment completion"""

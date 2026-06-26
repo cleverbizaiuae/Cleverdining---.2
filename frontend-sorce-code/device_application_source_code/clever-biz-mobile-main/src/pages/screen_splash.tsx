@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, useActiveBrandConfig } from "@/lib/useBrandConfig";
 
 type SplashState = "splash" | "collapsing" | "done";
-
-const BRAND_SPLASH_SESSION_KEY = "cb_splash_seen";
 
 function getFontFamily(fontPreset: string): string {
   return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
@@ -23,12 +20,17 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export default function ScreenSplash() {
-  const navigate = useNavigate();
+export default function ScreenSplash({
+  onComplete,
+  sessionKey,
+}: {
+  onComplete?: () => void;
+  sessionKey: string;
+}) {
   const timerRef = useRef<number | null>(null);
   const [coverImgFailed, setCoverImgFailed] = useState(false);
-  const [restaurantId, setRestaurantId] = useState<number | null>(null);
-  const brand = useBrandConfig(restaurantId);
+  const [logoImgFailed, setLogoImgFailed] = useState(false);
+  const brand = useActiveBrandConfig();
 
   const fallbackRestaurantName = useMemo(() => {
     try {
@@ -68,33 +70,23 @@ export default function ScreenSplash() {
 
   const [splashState, setSplashState] = useState<SplashState>(() => {
     try {
-      return sessionStorage.getItem(BRAND_SPLASH_SESSION_KEY) ? "done" : "splash";
+      return sessionStorage.getItem(sessionKey) ? "done" : "splash";
     } catch {
       return "splash";
     }
   });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("userInfo");
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      const nextRestaurantId = parsed?.user?.restaurants?.[0]?.id;
-      if (nextRestaurantId) {
-        setRestaurantId(nextRestaurantId);
-      }
-    } catch {
-      // Silent fallback.
-    }
-  }, []);
-
-  useEffect(() => {
     setCoverImgFailed(false);
   }, [brandCoverUrl]);
 
+  useEffect(() => {
+    setLogoImgFailed(false);
+  }, [brandLogoUrl]);
+
   const dismissSplash = useCallback(() => {
     try {
-      sessionStorage.setItem(BRAND_SPLASH_SESSION_KEY, "1");
+      sessionStorage.setItem(sessionKey, "1");
     } catch {
       // Non-blocking.
     }
@@ -102,15 +94,10 @@ export default function ScreenSplash() {
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       setSplashState("done");
+      onComplete?.();
       timerRef.current = null;
-    }, 520);
-  }, []);
-
-  useEffect(() => {
-    if (splashState === "done") {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [navigate, splashState]);
+    }, 680);
+  }, [onComplete, sessionKey]);
 
   useEffect(() => {
     return () => {
@@ -121,12 +108,15 @@ export default function ScreenSplash() {
   }, []);
 
   if (splashState === "done") {
-    return <div className="h-screen w-screen bg-slate-950" />;
+    return null;
   }
 
   return (
-    <div
+    <motion.div
       className="fixed inset-0 z-[60] bg-slate-950"
+      initial={{ y: 0 }}
+      animate={splashState === "collapsing" ? { y: "-100%" } : { y: 0 }}
+      transition={{ duration: 0.65, ease: [0.76, 0, 0.24, 1] }}
       onClick={dismissSplash}
       role="button"
       tabIndex={0}
@@ -139,31 +129,18 @@ export default function ScreenSplash() {
     >
       <div className="absolute inset-0" style={{ background: splashGradient }} />
       {brandCoverUrl && !coverImgFailed ? (
-        <>
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url(${brandCoverUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              filter: "blur(18px)",
-              transform: "scale(1.1)",
-            }}
-          />
-          <motion.img
-            src={brandCoverUrl}
-            alt={`${restaurantName} cover`}
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition: "center top" }}
-            loading="eager"
-            decoding="async"
-            fetchPriority="high"
-            initial={{ opacity: 0.45, scale: 1 }}
-            animate={splashState === "collapsing" ? { opacity: 0.55, scale: 1.06 } : { opacity: 0.55, scale: 1 }}
-            transition={{ duration: 0.48, ease: [0.4, 0, 0.2, 1] }}
-            onError={() => setCoverImgFailed(true)}
-          />
-        </>
+        <motion.img
+          src={brandCoverUrl}
+          alt={`${restaurantName} cover`}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition: "center top" }}
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
+          animate={splashState === "collapsing" ? { scale: 1.035 } : { scale: 1 }}
+          transition={{ duration: 0.36, ease: [0.4, 0, 0.2, 1] }}
+          onError={() => setCoverImgFailed(true)}
+        />
       ) : null}
       <div
         className="absolute inset-0"
@@ -175,15 +152,15 @@ export default function ScreenSplash() {
 
       <motion.div
         className="relative z-10 h-full flex flex-col"
-        initial={{ opacity: 1, y: 0 }}
-        animate={splashState === "collapsing" ? { opacity: 0, y: -16 } : { opacity: 1, y: 0 }}
-        transition={{ duration: 0.32, ease: [0.4, 0, 1, 1] }}
+        initial={{ opacity: 1 }}
+        animate={splashState === "collapsing" ? { opacity: 0 } : { opacity: 1 }}
+        transition={{ duration: 0.25, ease: "easeIn" }}
       >
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.55, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+            transition={{ duration: 0.34, delay: 0.06, ease: [0.34, 1.3, 0.64, 1] }}
             className="h-24 w-24 rounded-full shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
             style={{
               background: "rgba(255,255,255,0.12)",
@@ -191,7 +168,7 @@ export default function ScreenSplash() {
               border: "1px solid rgba(255,255,255,0.22)",
             }}
           >
-            {brandLogoUrl ? (
+            {brandLogoUrl && !logoImgFailed ? (
               <img
                 src={brandLogoUrl}
                 alt={restaurantName}
@@ -201,6 +178,7 @@ export default function ScreenSplash() {
                 loading="eager"
                 decoding="async"
                 fetchPriority="high"
+                onError={() => setLogoImgFailed(true)}
               />
             ) : (
               <span className="text-white font-bold text-5xl" style={{ fontFamily: brandFontFamily }}>
@@ -212,7 +190,7 @@ export default function ScreenSplash() {
           <motion.h1
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.32 }}
+            transition={{ duration: 0.34, delay: 0.12 }}
             className="mt-5 text-white font-bold leading-tight"
             style={{
               fontFamily: brandFontFamily,
@@ -226,7 +204,7 @@ export default function ScreenSplash() {
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.42 }}
+              transition={{ duration: 0.3, delay: 0.17 }}
               className="mt-3 max-w-xs text-sm leading-relaxed text-white/72"
             >
               {brand.tagline}
@@ -238,7 +216,7 @@ export default function ScreenSplash() {
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.5 }}
+            transition={{ duration: 0.32, delay: 0.2 }}
             onClick={(event) => {
               event.stopPropagation();
               dismissSplash();
@@ -255,6 +233,6 @@ export default function ScreenSplash() {
           <p className="mt-4 text-white/40 text-xs">Tap anywhere to skip</p>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

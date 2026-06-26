@@ -9,7 +9,7 @@ export const Footer: React.FC = () => {
                 rel="noopener noreferrer"
                 className="text-[10px] uppercase tracking-widest font-medium text-muted-foreground/60 hover:text-primary transition-colors"
             >
-                Powered by Cleverbiz AI
+                Powered by CleverBiz AI
             </a>
         </div>
     );

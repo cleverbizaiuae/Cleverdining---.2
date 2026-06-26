@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cachedGet } from "./requestCache";
 
 export type ThemePreset = "classic_clean" | "luxury_dark" | "warm_casual";
@@ -32,7 +32,8 @@ type BrandingSnapshot = {
   coverImageDataUrl?: string;
 };
 
-const BRAND_CACHE_KEY = "cb_brand_config_cache";
+const LEGACY_BRAND_CACHE_KEY = "cb_brand_config_cache";
+const BRAND_CACHE_PREFIX = "cb_brand_config_cache:";
 const BRAND_BRIDGE_KEY = "customer_branding";
 const BRAND_REMOTE_REFRESH_MS = 4_000;
 const preloadedBrandImages = new Set<string>();
@@ -140,6 +141,39 @@ function mapBrandConfig(payload: unknown): BrandConfig {
   };
 }
 
+function normalizeRestaurantId(restaurantId?: string | number | null): string | null {
+  if (restaurantId === null || restaurantId === undefined) return null;
+  const value = String(restaurantId).trim();
+  return value || null;
+}
+
+function resolveStoredRestaurantId(): string | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    return normalizeRestaurantId(
+      parsed?.user?.restaurants?.[0]?.id ||
+      parsed?.restaurants?.[0]?.id ||
+      parsed?.restaurant?.id ||
+      parsed?.restaurant_id ||
+      parsed?.restaurantId ||
+      localStorage.getItem("restaurantId") ||
+      localStorage.getItem("selectedRestaurantId") ||
+      localStorage.getItem("restaurant_id"),
+    );
+  } catch {
+    return normalizeRestaurantId(localStorage.getItem("restaurant_id"));
+  }
+}
+
+export function getBrandCacheKey(restaurantId: string | number): string {
+  return `${BRAND_CACHE_PREFIX}${String(restaurantId).trim()}`;
+}
+
+export function getBrandSplashSessionKey(restaurantId?: string | number | null): string {
+  const normalizedRestaurantId = normalizeRestaurantId(restaurantId) || resolveStoredRestaurantId();
+  return `cb_splash_seen:${normalizedRestaurantId || "default"}`;
+}
+
 function readBridgeSnapshot(): BrandingSnapshot {
   try {
     const raw = localStorage.getItem(BRAND_BRIDGE_KEY);
@@ -150,9 +184,10 @@ function readBridgeSnapshot(): BrandingSnapshot {
   }
 }
 
-function readCachedConfig(): Partial<BrandConfig> {
+function readCachedConfig(restaurantId: string | null): Partial<BrandConfig> {
+  if (!restaurantId) return {};
   try {
-    const raw = localStorage.getItem(BRAND_CACHE_KEY);
+    const raw = localStorage.getItem(getBrandCacheKey(restaurantId));
     if (!raw) return {};
     return mapBrandConfig(JSON.parse(raw));
   } catch {
@@ -160,9 +195,10 @@ function readCachedConfig(): Partial<BrandConfig> {
   }
 }
 
-function writeCachedConfig(config: BrandConfig): void {
+function writeCachedConfig(restaurantId: string, config: BrandConfig): void {
   try {
-    localStorage.setItem(BRAND_CACHE_KEY, JSON.stringify(config));
+    localStorage.setItem(getBrandCacheKey(restaurantId), JSON.stringify(config));
+    localStorage.removeItem(LEGACY_BRAND_CACHE_KEY);
   } catch {
     // Best effort.
   }
@@ -180,34 +216,63 @@ function preloadBrandImage(url: string | null | undefined): void {
 
 function getLocalFallback(): Partial<BrandConfig> {
   const bridge = readBridgeSnapshot();
+  const fallback: Partial<BrandConfig> = {};
+  if (typeof bridge.brandingEnabled === "boolean") fallback.brandingEnabled = bridge.brandingEnabled;
+  if (bridge.restaurantName?.trim()) fallback.restaurantName = bridge.restaurantName.trim();
+  if (bridge.logoDataUrl?.trim()) fallback.logoUrl = bridge.logoDataUrl.trim();
+  if (bridge.coverImageDataUrl?.trim()) fallback.coverImageUrl = bridge.coverImageDataUrl.trim();
+  return fallback;
+}
+
+function getInitialBrandConfig(explicitRestaurantId?: string | number | null): BrandConfig {
+  const restaurantId = normalizeRestaurantId(explicitRestaurantId) || resolveStoredRestaurantId();
   return {
-    brandingEnabled: Boolean(bridge.brandingEnabled),
-    restaurantName: bridge.restaurantName?.trim() || DEFAULT_BRAND.restaurantName,
-    logoUrl: bridge.logoDataUrl?.trim() || null,
-    coverImageUrl: bridge.coverImageDataUrl?.trim() || null,
+    ...DEFAULT_BRAND,
+    ...readCachedConfig(restaurantId),
+    ...(restaurantId ? {} : getLocalFallback()),
   };
 }
 
-export function useBrandConfig(restaurantId?: string | number | null) {
-  const [brand, setBrand] = useState<BrandConfig>(() => ({
-    ...DEFAULT_BRAND,
-    ...readCachedConfig(),
-    ...getLocalFallback(),
-  }));
+export function cacheBrandConfigForRestaurant(
+  restaurantId: string | number | null | undefined,
+  payload: unknown,
+): BrandConfig | null {
+  const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
+  if (!normalizedRestaurantId) return null;
+  const config = mapBrandConfig(payload);
+  writeCachedConfig(normalizedRestaurantId, config);
+  preloadBrandImage(config.logoUrl);
+  preloadBrandImage(config.coverImageUrl);
+  return config;
+}
 
+const ActiveBrandContext = createContext<BrandConfig | null>(null);
+
+export function ActiveBrandProvider({ brand, children }: { brand: BrandConfig; children: ReactNode }) {
+  return createElement(ActiveBrandContext.Provider, { value: brand }, children);
+}
+
+export function useActiveBrandConfig(): BrandConfig {
+  return useContext(ActiveBrandContext) || getInitialBrandConfig();
+}
+
+export function preloadCachedBrandAssets(): void {
+  const initial = getInitialBrandConfig(resolveStoredRestaurantId());
+  preloadBrandImage(initial.coverImageUrl);
+  preloadBrandImage(initial.logoUrl);
+}
+
+export function useBrandConfig(restaurantId?: string | number | null) {
   const normalizedRestaurantId = useMemo(() => {
-    if (restaurantId === null || restaurantId === undefined) return null;
-    const value = String(restaurantId).trim();
-    return value || null;
+    return normalizeRestaurantId(restaurantId) || resolveStoredRestaurantId();
   }, [restaurantId]);
+  const [brand, setBrand] = useState<BrandConfig>(() => getInitialBrandConfig(normalizedRestaurantId));
+  const [brandRestaurantId, setBrandRestaurantId] = useState(normalizedRestaurantId);
 
   const syncFromCache = useCallback(() => {
-    setBrand((prev) => ({
-      ...prev,
-      ...readCachedConfig(),
-      ...getLocalFallback(),
-    }));
-  }, []);
+    setBrand(getInitialBrandConfig(normalizedRestaurantId));
+    setBrandRestaurantId(normalizedRestaurantId);
+  }, [normalizedRestaurantId]);
 
   useEffect(() => {
     preloadBrandImage(brand.logoUrl);
@@ -215,8 +280,9 @@ export function useBrandConfig(restaurantId?: string | number | null) {
   }, [brand.coverImageUrl, brand.logoUrl]);
 
   useEffect(() => {
+    syncFromCache();
+
     if (!normalizedRestaurantId) {
-      syncFromCache();
       return;
     }
 
@@ -232,7 +298,8 @@ export function useBrandConfig(restaurantId?: string | number | null) {
         const mapped = mapBrandConfig(response.data);
         if (!isMounted) return;
         setBrand(mapped);
-        writeCachedConfig(mapped);
+        setBrandRestaurantId(normalizedRestaurantId);
+        writeCachedConfig(normalizedRestaurantId, mapped);
         preloadBrandImage(mapped.logoUrl);
         preloadBrandImage(mapped.coverImageUrl);
       } catch {
@@ -272,5 +339,7 @@ export function useBrandConfig(restaurantId?: string | number | null) {
     };
   }, [normalizedRestaurantId, syncFromCache]);
 
-  return brand;
+  return brandRestaurantId === normalizedRestaurantId
+    ? brand
+    : getInitialBrandConfig(normalizedRestaurantId);
 }

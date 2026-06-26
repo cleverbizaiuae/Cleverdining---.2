@@ -5,6 +5,7 @@ import requests
 import hmac
 import hashlib
 from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlunparse
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from restaurant.region_config import get_region_config
@@ -46,6 +47,14 @@ def _order_country_alpha2(order):
     settings_map = _order_region_settings(order)
     return "GB" if settings_map["country_code"] == "+44" else "AE"
 
+
+def _append_query(url, **params):
+    parsed = urlparse(url or "")
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        query[key] = value
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
 class StripeAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         stripe.api_key = self.gateway.get_decrypted_secret()
@@ -75,7 +84,7 @@ class StripeAdapter(PaymentAdapter):
                     'quantity': 1,
                 }],
                 mode='payment',
-                success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
+                success_url=_append_query(success_url, session_id="{CHECKOUT_SESSION_ID}"),
                 cancel_url=cancel_url,
                 metadata=final_metadata
             )
@@ -177,7 +186,7 @@ class CheckoutAdapter(PaymentAdapter):
                     "country": _order_country_alpha2(order)
                 }
             },
-            "success_url": success_url + "?cko-session-id={cko-session-id}",
+            "success_url": _append_query(success_url, **{"cko-session-id": "{cko-session-id}"}),
             "cancel_url": cancel_url,
             "failure_url": cancel_url,
             "metadata": final_metadata,
@@ -348,7 +357,11 @@ class PaymeAdapter(PaymentAdapter):
             "transaction_id": str(transaction_id),
             "provider": "payme",
             "status": "pending",
-            "raw_response": data,
+            "raw_response": {
+                **data,
+                "_client_success_url": success_url,
+                "_client_cancel_url": cancel_url,
+            },
         }
 
     def verify_payment(self, data):
@@ -510,6 +523,8 @@ class PayTabsAdapter(PaymentAdapter):
         import time
         unique_cart_id = f"{order.id}_{int(time.time())}"
 
+        backend_base_url = (getattr(settings, "SITE_URL", "") or "https://cleverdining-2.onrender.com").rstrip("/")
+
         payload = {
             "profile_id": profile_id,
             "tran_type": "sale",
@@ -518,8 +533,8 @@ class PayTabsAdapter(PaymentAdapter):
             "cart_description": desc,
             "cart_currency": _order_currency(order),
             "cart_amount": float(amount if amount is not None else order.total_price),
-            "callback": "https://cleverdining-2.onrender.com/api/payment/webhook/paytabs/",
-            "return": "https://cleverdining-2.onrender.com/api/customer/payment/paytabs/return/", 
+            "callback": f"{backend_base_url}/api/payment/webhook/paytabs/",
+            "return": f"{backend_base_url}/api/customer/payment/paytabs/return/",
             "hide_shipping": True,
             # Explicitly enable Apple Pay and card payments
             "payment_methods": ["all", "applepay"]
@@ -551,7 +566,11 @@ class PayTabsAdapter(PaymentAdapter):
                 'transaction_id': data.get('tran_ref'), 
                 'provider': 'paytabs',
                 'status': 'pending',
-                'raw_response': data
+                'raw_response': {
+                    **data,
+                    '_client_success_url': success_url,
+                    '_client_cancel_url': cancel_url,
+                }
             }
 
         except Exception as e:
@@ -560,9 +579,26 @@ class PayTabsAdapter(PaymentAdapter):
             raise ValidationError(f"PayTabs Connection Failed: {str(e)}")
 
     def verify_payment(self, data):
-        # PayTabs usually relies on the Return URL parameters or Webhook.
-        # If the user is redirected back with a `tran_ref`, we can query the status.
-        return {'status': 'pending'} # Placeholder, as usually verification happens via Webhook/Redirect
+        payment_result = data.get('payment_result', {}) if isinstance(data, dict) else {}
+        response_status = (
+            data.get('respStatus')
+            or data.get('response_status')
+            or payment_result.get('response_status')
+        )
+        if response_status == 'A':
+            return {
+                'status': 'completed',
+                'transaction_id': data.get('tran_ref'),
+                'amount': data.get('cart_amount'),
+                'raw_response': data,
+            }
+        if response_status in {'C', 'D', 'E'}:
+            return {
+                'status': 'failed',
+                'transaction_id': data.get('tran_ref'),
+                'raw_response': data,
+            }
+        return {'status': 'pending'}
 
     def verify_webhook(self, request):
         # 1. Inputs

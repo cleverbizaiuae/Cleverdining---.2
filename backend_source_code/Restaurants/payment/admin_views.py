@@ -381,23 +381,19 @@ class PaymentAdminViewSet(ModelViewSet):
         payment = self.get_object()
         if payment.status != 'pending' and payment.status != 'initiated':
              return Response({'error': 'Payment is not pending'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Update Payment
-        payment.status = 'completed'
+
         payment.confirmed_at = timezone.now()
-        # payment.confirmed_by_staff = request.user.staff_profile # If staff
-        payment.save()
-        
-        # Update Order
-        order = payment.order
-        order.status = 'paid'
-        order.payment_status = 'paid'
-        order.save()
-        
-        # Emit Event
-        self._emit_update(payment, 'payment:cash_confirmed')
-        
-        return Response({'status': 'confirmed'})
+        payment.save(update_fields=['confirmed_at', 'updated_at'])
+
+        from .services import PaymentService
+        result = PaymentService._finalize_completed_payment(payment, {
+            'status': 'completed',
+            'transaction_id': payment.transaction_id,
+            'amount': payment.amount,
+            'confirmed_by': 'staff',
+        }, already_verified=True)
+
+        return Response({'status': 'confirmed', **result})
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):

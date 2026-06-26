@@ -12,6 +12,7 @@ class Order(models.Model):
     business_day = models.ForeignKey('restaurant.BusinessDay', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     status = models.CharField(max_length=20,choices=STATUS,default='pending')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_status = models.CharField(max_length=50, choices=PAYMENT_STATUS, default='unpaid',blank=True,null=True)
     notes = models.TextField(blank=True, null=True)
     tip_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)

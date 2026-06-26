@@ -1,4 +1,5 @@
 import stripe
+from decimal import Decimal, ROUND_HALF_UP
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from order.models import Order
@@ -19,8 +20,23 @@ from message.models import ChatMessage
 from restaurant.region_config import get_region_config
 from .split_bill import build_bill_summary, mark_payment_failed
 from .schema_guard import ensure_payment_schema
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 channel_layer = get_channel_layer()
+
+
+def _append_redirect_query(url, **params):
+    parsed = urlparse(url or "")
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        if value is not None:
+            query[key] = value
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _payment_client_url(payment, key, fallback):
+    raw = payment.raw_response if isinstance(payment.raw_response, dict) else {}
+    return raw.get(key) or fallback
 
 
 class PaymentGatewayViewSet(ModelViewSet):
@@ -172,8 +188,11 @@ class CreateBulkCheckoutSessionView(APIView):
         eligible_statuses = ['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash']
         # Include all unpaid orders for the same current table/device to avoid missing orders
         # when session records rotate or split.
+        session_scope = Q(guest_session=session)
+        if session.created_at:
+            session_scope |= Q(device=session.device, created_time__gte=session.created_at)
         unpaid_orders = Order.objects.filter(
-            Q(guest_session=session) | Q(device=session.device),
+            session_scope,
             restaurant=session.device.restaurant,
             status__in=eligible_statuses,
         ).exclude(payment_status='paid').distinct()
@@ -181,11 +200,25 @@ class CreateBulkCheckoutSessionView(APIView):
         if not unpaid_orders.exists():
              return Response({'error': 'No unpaid orders found'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. Aggregation
-        total_amount = sum(order.total_price for order in unpaid_orders)
+        # 3. Aggregation: charge only the outstanding table balance.
+        total_amount = sum(
+            max(Decimal(order.total_price or 0) - Decimal(getattr(order, "amount_paid", 0) or 0), Decimal("0"))
+            for order in unpaid_orders
+        )
         
         if total_amount == 0:
             return Response({'error': 'Total amount is 0'}, status=status.HTTP_400_BAD_REQUEST)
+
+        split_count = request.data.get('split_count')
+        try:
+            split_count = max(2, int(split_count)) if split_count else None
+        except (TypeError, ValueError):
+            return Response({'error': 'split_count must be a number of 2 or more'}, status=status.HTTP_400_BAD_REQUEST)
+        split_amount = (
+            (total_amount / Decimal(split_count)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if split_count
+            else total_amount
+        )
 
         # Provider
         provider = request.data.get('provider') 
@@ -193,6 +226,37 @@ class CreateBulkCheckoutSessionView(APIView):
             provider = request.query_params.get('provider')
         origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
         default_success_url = f'{origin}/dashboard/success/'
+        split_success_url = f'{origin}/dashboard/success/?payment=partial'
+
+        if split_count:
+            primary_order = unpaid_orders.last()
+            try:
+                result = PaymentService.create_payment(
+                    order=primary_order,
+                    success_url=split_success_url,
+                    cancel_url=f'{origin}/dashboard/orders/?payment=cancelled',
+                    provider=provider or None,
+                    amount=split_amount,
+                    metadata={
+                        'type': 'bulk_session_evenly',
+                        'guest_session_id': session.id,
+                        'split_count': split_count,
+                    },
+                    created_by=f'guest_bulk_evenly:{session.id}:{split_count}',
+                )
+                result.update({
+                    'is_partial': True,
+                    'split_count': split_count,
+                    'amount': str(split_amount),
+                    'total_amount': str(total_amount),
+                    'remaining_amount': str(total_amount),
+                    'fully_paid': False,
+                })
+                return Response(result)
+            except ValidationError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({'error': f"Payment Init Failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 4. Processing
         if provider == 'cash':
@@ -472,7 +536,13 @@ class VerifyPaymentView(APIView):
         # We need to identify the payment to verify. 
         # For Checkout.com, we get cko-session-id. For Stripe, we get session_id.
         
-        transaction_id = data.get('cko-session-id') or data.get('session_id')
+        transaction_id = (
+            data.get('cko-session-id')
+            or data.get('session_id')
+            or data.get('transaction_id')
+            or data.get('payment_id')
+            or data.get('id')
+        )
         
         if not transaction_id:
              return Response({'error': 'Transaction ID (session_id or cko-session-id) is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -567,25 +637,37 @@ class PayTabsReturnView(APIView):
                  # Successful!
                  # Call Service to finalize (update status, notify, clear cart)
                  # We can mock a verification data packet
-                 verification_data = {'payment_result': {'response_status': 'A'}, 'tran_ref': tran_ref}
+                 verification_data = {
+                     'payment_result': {'response_status': 'A'},
+                     'response_status': 'A',
+                     'tran_ref': tran_ref,
+                     'cart_amount': data.get('cart_amount'),
+                 }
                  PaymentService.verify_payment(payment, verification_data)
                  
                  # Redirect to Success
-                 from django.shortcuts import redirect
-                 return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/success/?session_id={tran_ref}')
+                 success_url = _payment_client_url(
+                     payment,
+                     '_client_success_url',
+                     'https://officialcleverdiningcustomer.netlify.app/dashboard/success/',
+                 )
+                 return redirect(_append_redirect_query(success_url, session_id=tran_ref))
             
             else:
                  # Failed/Cancelled
-                 payment.status = 'failed' if resp_status == 'E' else 'cancelled'
+                 payment.status = 'failed'
                  payment.save(update_fields=["status", "updated_at"])
                  mark_payment_failed(payment)
-                 from django.shortcuts import redirect
-                 return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason={resp_message}')
+                 cancel_url = _payment_client_url(
+                     payment,
+                     '_client_cancel_url',
+                     'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/',
+                 )
+                 return redirect(_append_redirect_query(cancel_url, payment='failed', reason=resp_message))
         
         else:
              # Payment not found?
-             from django.shortcuts import redirect
-             return redirect(f'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason=checkout_not_found')
+             return redirect('https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason=checkout_not_found')
 
     def get(self, request):
         # Allow GET access just in case PayTabs does a GET redirect (config dependent)
@@ -615,13 +697,25 @@ class PaymeReturnView(APIView):
         return data
 
     def _redirect_failed(self, reason="payme_failed"):
+        payment = getattr(self, "_current_payment", None)
+        cancel_url = _payment_client_url(
+            payment,
+            '_client_cancel_url',
+            'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/',
+        ) if payment else 'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/'
         return redirect(
-            f"https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason={reason}"
+            _append_redirect_query(cancel_url, payment='failed', reason=reason)
         )
 
     def _redirect_success(self, txn):
+        payment = getattr(self, "_current_payment", None)
+        success_url = _payment_client_url(
+            payment,
+            '_client_success_url',
+            'https://officialcleverdiningcustomer.netlify.app/dashboard/success/',
+        ) if payment else 'https://officialcleverdiningcustomer.netlify.app/dashboard/success/'
         return redirect(
-            f"https://officialcleverdiningcustomer.netlify.app/dashboard/success/?session_id={txn}"
+            _append_redirect_query(success_url, session_id=txn)
         )
 
     def post(self, request):
@@ -639,6 +733,7 @@ class PaymeReturnView(APIView):
         payment = Payment.objects.filter(transaction_id=transaction_id).first()
         if not payment:
             return self._redirect_failed("checkout_not_found")
+        self._current_payment = payment
 
         status_value = str(data.get("status") or "").lower()
         if status_value in {"paid", "success", "succeeded", "completed"}:

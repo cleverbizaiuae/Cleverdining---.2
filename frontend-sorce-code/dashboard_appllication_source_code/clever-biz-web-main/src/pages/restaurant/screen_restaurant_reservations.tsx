@@ -65,8 +65,37 @@ type CreateReservationForm = {
   customRequest: string;
 };
 
+type Dialog360Settings = {
+  provider: string;
+  enabled: boolean;
+  chatbotEnabled: boolean;
+  configured: boolean;
+  wabaId: string;
+  phoneNumberId: string;
+  displayNumber: string;
+  channelId: string;
+  callbackUrl: string;
+  verifyToken: string;
+};
+
 const BRAND = "#0055FE";
 const WHATSAPP = "#25D366";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const formatApiError = (data: any, fallback: string) => {
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.conflict) return data.error || "Table has a conflicting reservation";
+  if (typeof data.error === "string") return data.error;
+  if (typeof data.detail === "string") return data.detail;
+  const firstField = Object.entries(data).find(([, value]) => Array.isArray(value) || typeof value === "string");
+  if (firstField) {
+    const [field, value] = firstField;
+    const message = Array.isArray(value) ? value[0] : value;
+    return `${field.replace(/_/g, " ")}: ${message}`;
+  }
+  return fallback;
+};
 
 const statusConfig: Record<ReservationStatusKey, { label: string; bg: string; text: string; dot: string; border: string }> = {
   draft: { label: "Needs Approval", bg: "bg-violet-50", text: "text-violet-700", dot: "bg-violet-500", border: "border-l-violet-400" },
@@ -190,6 +219,191 @@ const KpiCard = ({ label, value, color }: { label: string; value: number | strin
   </div>
 );
 
+const Dialog360StatusCard = ({
+  settings,
+  loading,
+  onSaved,
+}: {
+  settings: Dialog360Settings | null;
+  loading: boolean;
+  onSaved: (settings: Dialog360Settings) => void;
+}) => {
+  const isConfigured = Boolean(settings?.configured);
+  const isEnabled = Boolean(settings?.enabled);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    enabled: false,
+    chatbotEnabled: false,
+    wabaId: "",
+    phoneNumberId: "",
+    displayNumber: "",
+    channelId: "",
+    verifyToken: "",
+    apiKey: "",
+  });
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      enabled: Boolean(settings?.enabled),
+      chatbotEnabled: Boolean(settings?.chatbotEnabled),
+      wabaId: settings?.wabaId || "",
+      phoneNumberId: settings?.phoneNumberId || "",
+      displayNumber: settings?.displayNumber || "",
+      channelId: settings?.channelId || "",
+      verifyToken: settings?.verifyToken || "",
+      apiKey: "",
+    }));
+  }, [settings]);
+
+  const updateForm = (key: keyof typeof form, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveSettings = async () => {
+    setSaving(true);
+    try {
+      const payload: Record<string, string | boolean> = {
+        provider: "360dialog",
+        enabled: form.enabled,
+        chatbotEnabled: form.chatbotEnabled,
+        wabaId: form.wabaId.trim(),
+        phoneNumberId: form.phoneNumberId.trim(),
+        displayNumber: form.displayNumber.trim(),
+        channelId: form.channelId.trim(),
+        verifyToken: form.verifyToken.trim(),
+      };
+      if (form.apiKey.trim()) payload.apiKey = form.apiKey.trim();
+      const response = await axiosInstance.patch("/owners/whatsapp/360dialog-settings/", payload);
+      onSaved(response.data);
+      setEditing(false);
+      toast.success("360dialog settings saved");
+    } catch (error: any) {
+      toast.error(formatApiError(error?.response?.data, "Could not save 360dialog settings"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyWebhook = async () => {
+    if (!settings?.callbackUrl) return;
+    await navigator.clipboard?.writeText(settings.callbackUrl);
+    toast.success("360dialog webhook URL copied");
+  };
+
+  return (
+    <div className="mb-6 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <MessageCircle className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900">360dialog WhatsApp Reservations</h2>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isConfigured ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${isConfigured ? "bg-emerald-500" : "bg-amber-500"}`} />
+                {loading ? "Checking" : isConfigured ? "Connected" : "Setup required"}
+              </span>
+              {isEnabled && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                  Chatbot {settings?.chatbotEnabled ? "on" : "ready"}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Incoming WhatsApp bookings are mapped by WABA ID or phone-number ID, then shown here as WhatsApp reservations.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditing((value) => !value)}
+              className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50"
+            >
+              {editing ? "Hide setup" : isConfigured ? "Edit setup" : "Complete setup"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-2 lg:min-w-[520px]">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="font-semibold uppercase tracking-wide text-slate-400">WABA ID</p>
+            <p className="mt-1 truncate font-medium text-slate-800">{settings?.wabaId || "Not set"}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="font-semibold uppercase tracking-wide text-slate-400">Phone Number ID</p>
+            <p className="mt-1 truncate font-medium text-slate-800">{settings?.phoneNumberId || "Not set"}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="font-semibold uppercase tracking-wide text-slate-400">Display Number</p>
+            <p className="mt-1 truncate font-medium text-slate-800">{settings?.displayNumber || "Not set"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={copyWebhook}
+            disabled={!settings?.callbackUrl}
+            className="rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-emerald-200 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <p className="font-semibold uppercase tracking-wide text-slate-400">Webhook URL</p>
+            <p className="mt-1 truncate font-medium text-slate-800">{settings?.callbackUrl || "Unavailable"}</p>
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">WABA ID</span>
+              <input value={form.wabaId} onChange={(event) => updateForm("wabaId", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Phone Number ID</span>
+              <input value={form.phoneNumberId} onChange={(event) => updateForm("phoneNumberId", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Display Number</span>
+              <input value={form.displayNumber} onChange={(event) => updateForm("displayNumber", event.target.value)} placeholder="+971..." className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">360dialog Channel ID</span>
+              <input value={form.channelId} onChange={(event) => updateForm("channelId", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="text-xs font-semibold text-slate-500">Webhook Verify Token</span>
+              <input value={form.verifyToken} onChange={(event) => updateForm("verifyToken", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="text-xs font-semibold text-slate-500">360dialog API Key</span>
+              <input value={form.apiKey} onChange={(event) => updateForm("apiKey", event.target.value)} type="password" placeholder={settings?.configured ? "Leave blank to keep existing key" : "Paste API key"} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-3">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <input type="checkbox" checked={form.enabled} onChange={(event) => updateForm("enabled", event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-emerald-600" />
+                Enable WhatsApp
+              </label>
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <input type="checkbox" checked={form.chatbotEnabled} onChange={(event) => updateForm("chatbotEnabled", event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-emerald-600" />
+                Enable booking chatbot
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={saveSettings}
+              disabled={saving}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save 360dialog Setup"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const GhostAction = ({ children, onClick, danger = false }: { children: React.ReactNode; onClick?: () => void; danger?: boolean }) => (
   <button
     type="button"
@@ -268,6 +482,8 @@ const ScreenRestaurantReservations = () => {
   const [historySource, setHistorySource] = useState("all");
   const [historyStart, setHistoryStart] = useState("");
   const [historyEnd, setHistoryEnd] = useState("");
+  const [dialog360Settings, setDialog360Settings] = useState<Dialog360Settings | null>(null);
+  const [dialog360Loading, setDialog360Loading] = useState(true);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearchQuery(reservationsSearchQuery), 350);
@@ -284,6 +500,25 @@ const ScreenRestaurantReservations = () => {
     fetchAllDevices(1, "");
     fetchDeviceStats();
   }, [fetchAllDevices, fetchDeviceStats]);
+
+  useEffect(() => {
+    let mounted = true;
+    setDialog360Loading(true);
+    axiosInstance
+      .get("/owners/whatsapp/360dialog-settings/")
+      .then((response) => {
+        if (mounted) setDialog360Settings(response.data);
+      })
+      .catch(() => {
+        if (mounted) setDialog360Settings(null);
+      })
+      .finally(() => {
+        if (mounted) setDialog360Loading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const normalizedReservations = useMemo(() => {
     return (reservations || []).map((reservation: any) => {
@@ -417,13 +652,17 @@ const ScreenRestaurantReservations = () => {
     if (!createForm.customerName.trim()) return toast.error("Customer name is required");
     if (!createForm.tableId) return toast.error("Select a table");
     if (!createForm.date || !createForm.time) return toast.error("Date and time are required");
+    const email = createForm.email.trim();
+    if (email && !EMAIL_PATTERN.test(email)) {
+      return toast.error("Email is optional. Enter a valid email address or leave it blank.");
+    }
     setActionLoading(true);
     try {
       const reservationTime = buildLocalDateTime(createForm.date, createForm.time);
       await axiosInstance.post(`${getReservationBase(userRole)}/`, {
         customerName: createForm.customerName.trim(),
         phone: createForm.phone.trim(),
-        email: createForm.email.trim() || null,
+        email: email || null,
         tableId: createForm.tableId,
         guestCount: Number(createForm.guestCount) || 1,
         reservationTime,
@@ -437,9 +676,7 @@ const ScreenRestaurantReservations = () => {
       setCreateMode(null);
       await refreshReservationData();
     } catch (error: any) {
-      const data = error?.response?.data;
-      const message = data?.error || data?.detail || (data?.conflict ? "Table has a conflicting reservation" : "Failed to create reservation");
-      toast.error(message);
+      toast.error(formatApiError(error?.response?.data, "Failed to create reservation"));
     } finally {
       setActionLoading(false);
     }
@@ -554,6 +791,8 @@ const ScreenRestaurantReservations = () => {
         <KpiCard label="No-Shows Today" value={counts.no_show} color="bg-rose-500" />
         <KpiCard label="WhatsApp Requests" value={counts.whatsapp} color="bg-[#25D366]" />
       </div>
+
+      <Dialog360StatusCard settings={dialog360Settings} loading={dialog360Loading} onSaved={setDialog360Settings} />
 
       <div className="mb-6">
         <div className="inline-flex max-w-full rounded-xl bg-slate-100 p-1">
@@ -904,8 +1143,8 @@ const ScreenRestaurantReservations = () => {
                 <input value={createForm.phone} onChange={(event) => updateCreateForm("phone", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-medium text-slate-600">Email</span>
-                <input value={createForm.email} onChange={(event) => updateCreateForm("email", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Email <span className="text-slate-400">(optional)</span></span>
+                <input type="email" value={createForm.email} onChange={(event) => updateCreateForm("email", event.target.value)} placeholder="guest@example.com" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
                 <span className="mb-1 block text-xs font-medium text-slate-600">Table</span>

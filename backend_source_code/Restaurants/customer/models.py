@@ -203,3 +203,43 @@ class Lead(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.phone})"
+
+
+class WhatsAppConversation(models.Model):
+    STATE_CHOICES = [
+        ("idle", "Idle"),
+        ("collecting", "Collecting Details"),
+        ("confirming", "Confirming"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+        ("handoff", "Staff Handoff"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    restaurant = models.ForeignKey(
+        "restaurant.Restaurant",
+        on_delete=models.CASCADE,
+        related_name="whatsapp_conversations",
+    )
+    phone = models.TextField(db_index=True)
+    provider = models.CharField(max_length=30, default="360dialog")
+    state = models.CharField(max_length=30, choices=STATE_CHOICES, default="idle")
+    context = models.JSONField(default=dict, blank=True)
+    external_chat_id = models.CharField(max_length=128, null=True, blank=True)
+    last_message_id = models.CharField(max_length=128, null=True, blank=True)
+    last_message = models.TextField(blank=True, default="")
+    last_response = models.TextField(blank=True, default="")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "whatsapp_conversations"
+        unique_together = ("restaurant", "phone", "provider")
+        indexes = [
+            models.Index(fields=["restaurant", "state"]),
+            models.Index(fields=["phone", "updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.restaurant_id}:{self.phone}:{self.state}"

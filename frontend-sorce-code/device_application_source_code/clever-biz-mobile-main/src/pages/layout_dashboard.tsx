@@ -4,12 +4,11 @@ import {
   ModalFoodDetail,
   ModalAssistance,
 } from "@/components/dialog";
-import { SocketContext } from "@/components/SocketContext";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion, AnimatePresence } from "motion/react";
 import toast from "react-hot-toast";
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider } from "../context/CartContext";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
@@ -20,7 +19,7 @@ import { Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-reac
 import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
-import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, useActiveBrandConfig } from "@/lib/useBrandConfig";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -68,12 +67,11 @@ function getFontFamily(fontPreset: string): string {
 }
 
 const LayoutDashboard = () => {
-  const BRAND_SPLASH_SESSION_KEY = "cb_splash_seen";
   const location = useLocation();
 
 
 
-  const isSubRoute = location.pathname !== "/dashboard";
+  const isSubRoute = location.pathname !== "/dashboard" && location.pathname !== "/splash";
 
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<number | null>(null);
@@ -167,10 +165,8 @@ const LayoutDashboard = () => {
   const searchTimeout = useRef<any>(null);
   const [tableName, setTableName] = useState("");
 
-  const [userInfo, setUserInfo] = useState<any>(null);
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
-  const brand = useBrandConfig(restaurantId);
-  const splashTimerRef = useRef<number | null>(null);
+  const brand = useActiveBrandConfig();
 
   const hasConfiguredContent = Boolean(
     brand.logoUrl || brand.coverImageUrl || (brand.restaurantName && brand.restaurantName !== "My Restaurant")
@@ -212,28 +208,7 @@ const LayoutDashboard = () => {
     setCoverImgFailed(false);
   }, [brandCoverUrl]);
 
-  const [splashState, setSplashState] = useState<"splash" | "collapsing" | "done">(() => {
-    try {
-      return sessionStorage.getItem(BRAND_SPLASH_SESSION_KEY) ? "done" : "splash";
-    } catch {
-      return "splash";
-    }
-  });
-
   useEffect(() => {
-    const fetchUserInfo = () => {
-      try {
-        const storedUserInfo = localStorage.getItem("userInfo");
-        if (storedUserInfo) {
-          setUserInfo(JSON.parse(storedUserInfo));
-        }
-      } catch (error) {
-        console.error("Failed to parse user info:", error);
-      }
-    };
-
-    fetchUserInfo();
-
     const storedUserInfo = localStorage.getItem("userInfo");
     if (!storedUserInfo) {
       // Dynamic Bootstrapping: Fetch valid restaurant and device from API
@@ -270,29 +245,6 @@ const LayoutDashboard = () => {
       bootstrapSession();
     }
   }, []);
-
-  const dismissBrandSplash = useCallback(() => {
-    try {
-      sessionStorage.setItem(BRAND_SPLASH_SESSION_KEY, "1");
-    } catch {
-      // Non-blocking.
-    }
-    setSplashState("collapsing");
-    if (splashTimerRef.current) window.clearTimeout(splashTimerRef.current);
-    splashTimerRef.current = window.setTimeout(() => {
-      setSplashState("done");
-      splashTimerRef.current = null;
-    }, 520);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (splashTimerRef.current) {
-        window.clearTimeout(splashTimerRef.current);
-      }
-    };
-  }, []);
-
 
   useEffect(() => {
     const fetchRestaurantId = () => {
@@ -496,125 +448,6 @@ const LayoutDashboard = () => {
 
   return (
     <CartProvider>
-      {splashState !== "done" && (
-        <motion.div
-          className="fixed inset-0 z-[120] bg-slate-950"
-          initial={{ opacity: 1 }}
-          animate={
-            splashState === "collapsing"
-              ? { opacity: 0, transition: { duration: 0.48, ease: [0.4, 0, 0.2, 1] } }
-              : { opacity: 1 }
-          }
-          onClick={dismissBrandSplash}
-          role="button"
-          tabIndex={0}
-        >
-          <div className="absolute inset-0" style={{ background: splashGradient }} />
-          {brandCoverUrl && !coverImgFailed ? (
-            <>
-              <img
-                src={brandCoverUrl}
-                alt="Brand cover"
-                className="absolute inset-0 h-full w-full object-cover scale-110"
-                style={{ filter: "blur(18px)" }}
-                loading="eager"
-                decoding="async"
-                fetchPriority="high"
-                onError={() => setCoverImgFailed(true)}
-              />
-              <motion.img
-                src={brandCoverUrl}
-                alt="Brand splash"
-                className="absolute inset-0 h-full w-full object-cover"
-                style={{ objectPosition: "center top" }}
-                loading="eager"
-                decoding="async"
-                fetchPriority="high"
-                initial={{ opacity: 0.45, scale: 1 }}
-                animate={splashState === "collapsing" ? { opacity: 0.35, scale: 1.06 } : { opacity: 0.55, scale: 1 }}
-                transition={{ duration: 0.48, ease: [0.4, 0, 0.2, 1] }}
-                onError={() => setCoverImgFailed(true)}
-              />
-            </>
-          ) : null}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/55 to-black/80" />
-
-          <motion.div
-            className="relative h-full flex flex-col px-8 text-center"
-            initial={{ opacity: 1, y: 0 }}
-            animate={splashState === "collapsing" ? { opacity: 0, y: -16 } : { opacity: 1, y: 0 }}
-            transition={{ duration: 0.32, ease: "easeIn" }}
-          >
-            <div className="flex-1 flex flex-col items-center justify-center gap-6">
-              <motion.div
-                initial={{ scale: 0.85, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.55, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
-                className="h-24 w-24 rounded-full border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/50 flex items-center justify-center overflow-hidden"
-              >
-                {brandLogoUrl ? (
-                  <img
-                    src={brandLogoUrl}
-                    alt={restaurantName}
-                    width={96}
-                    height={96}
-                    loading="eager"
-                    decoding="async"
-                    fetchPriority="high"
-                    className="h-full w-full rounded-full object-contain bg-transparent p-1.5"
-                  />
-                ) : (
-                  <span className="text-white text-5xl font-bold leading-none" style={{ fontFamily: brandFontFamily }}>
-                    {(restaurantName || "W").charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </motion.div>
-              <motion.h1
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.32 }}
-                className="text-white font-bold leading-tight"
-                style={{
-                  fontFamily: brandFontFamily,
-                  fontSize: "clamp(1.75rem, 6vw, 2.5rem)",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {restaurantName}
-              </motion.h1>
-              {brand.tagline ? (
-                <motion.p
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.55, delay: 0.42 }}
-                  className="-mt-3 max-w-xs text-sm leading-relaxed text-white/72"
-                >
-                  {brand.tagline}
-                </motion.p>
-              ) : null}
-            </div>
-            <div className="flex flex-col items-center gap-4 pb-16">
-              <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.5 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dismissBrandSplash();
-                }}
-                className="w-full max-w-xs py-4 rounded-2xl bg-white/95 text-slate-900 font-bold text-base tracking-tight shadow-2xl shadow-black/40 inline-flex items-center justify-center"
-                whileTap={{ scale: 0.97 }}
-              >
-                View Menu
-              </motion.button>
-            </div>
-            <p className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/40 text-xs">
-              Tap anywhere to skip
-            </p>
-          </motion.div>
-        </motion.div>
-      )}
-
       <div
         className="h-[100dvh] flex flex-col bg-background overflow-hidden"
         style={hasBranding ? ({ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties) : undefined}

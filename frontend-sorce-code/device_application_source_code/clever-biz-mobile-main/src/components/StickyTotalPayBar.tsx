@@ -7,6 +7,10 @@ import { getSessionCurrencyCode } from '../utils/regionSession';
 interface Order {
     id: number;
     total_price: string | number;
+    amount_paid?: string | number;
+    amountPaid?: string | number;
+    remaining_amount?: string | number;
+    remainingAmount?: string | number;
     payment_status?: string;
     status: string;
 }
@@ -16,7 +20,24 @@ interface StickyTotalPayBarProps {
     onPaymentSuccess?: () => void;
 }
 
-export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, onPaymentSuccess }) => {
+const toNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const parsed = Number(value.replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+};
+
+const getRemainingAmount = (order: Order): number => {
+    const explicitRemaining = order.remaining_amount ?? order.remainingAmount;
+    if (explicitRemaining !== undefined) return Math.max(0, toNumber(explicitRemaining));
+    const total = toNumber(order.total_price);
+    const paid = toNumber(order.amount_paid ?? order.amountPaid);
+    return Math.max(0, total - paid);
+};
+
+export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders }) => {
     const navigate = useNavigate();
     const currencyCode = getSessionCurrencyCode();
 
@@ -24,8 +45,8 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
     const unpaidOrders = useMemo(() => {
         return orders.filter(
             (o) =>
-                ['pending', 'preparing', 'served', 'completed', 'delivered', 'awaiting_cash'].includes(o.status) &&
-                (!o.payment_status || ['unpaid', 'pending', 'failed', 'pending_cash'].includes(o.payment_status))
+                ['pending', 'preparing', 'served', 'completed', 'delivered', 'awaiting_cash'].includes(o.status.toLowerCase()) &&
+                (!o.payment_status || ['unpaid', 'pending', 'failed', 'pending_cash', 'partially_paid'].includes(o.payment_status.toLowerCase()))
         );
     }, [orders]);
 
@@ -37,7 +58,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders, on
     }, [unpaidOrders]);
 
     const totalAmount = useMemo(() => {
-        return unpaidOrders.reduce((sum, o) => sum + Number(o.total_price), 0);
+        return unpaidOrders.reduce((sum, o) => sum + getRemainingAmount(o), 0);
     }, [unpaidOrders]);
 
     const handlePayAll = () => {

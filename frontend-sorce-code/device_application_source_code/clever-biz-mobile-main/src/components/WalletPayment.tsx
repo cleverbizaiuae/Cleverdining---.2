@@ -25,6 +25,9 @@ interface WalletPaymentResult {
     paymentId?: number;
     transactionId?: string;
     message?: string;
+    fullyPaid?: boolean;
+    remainingAmount?: string | number;
+    paymentStatus?: string;
 }
 
 interface WalletAvailability {
@@ -192,7 +195,10 @@ export const ApplePayButton = ({
                 status: 'success',
                 paymentId: result.data.payment_id,
                 transactionId: result.data.transaction_id,
-                message: result.data.message
+                message: result.data.message,
+                fullyPaid: result.data.fully_paid,
+                remainingAmount: result.data.remaining_amount,
+                paymentStatus: result.data.payment_status,
             });
 
         } catch (error: any) {
@@ -315,7 +321,10 @@ export const GooglePayButton = ({
                 status: 'success',
                 paymentId: result.data.payment_id,
                 transactionId: result.data.transaction_id,
-                message: result.data.message
+                message: result.data.message,
+                fullyPaid: result.data.fully_paid,
+                remainingAmount: result.data.remaining_amount,
+                paymentStatus: result.data.payment_status,
             });
 
         } catch (error: any) {

@@ -11,6 +11,7 @@ from order.models import Order
 from .models import OrderBill, OrderBillItem, Payment, PaymentAllocation
 
 TWO_PLACES = Decimal("0.01")
+PAYMENT_EPSILON = Decimal("0.01")
 
 
 def _to_decimal(value: Any) -> Decimal:
@@ -32,7 +33,7 @@ def _clamp_zero(value: Decimal) -> Decimal:
 def _bill_payment_status(total: Decimal, paid: Decimal) -> str:
     if paid <= Decimal("0"):
         return "unpaid"
-    if paid >= total:
+    if total - paid <= PAYMENT_EPSILON:
         return "fully_paid"
     return "partially_paid"
 
@@ -43,6 +44,16 @@ def _order_payment_status_from_bill(bill: OrderBill) -> str:
     if bill.payment_status == "partially_paid":
         return "partially_paid"
     return "unpaid"
+
+
+def _sync_order_from_bill(order: Order, bill: OrderBill) -> None:
+    order.amount_paid = min(_q(bill.total_amount), _q(bill.paid_amount))
+    order.payment_status = _order_payment_status_from_bill(bill)
+    if bill.payment_status == "fully_paid" and order.status not in {"cancelled", "completed"}:
+        order.status = "delivered"
+        order.save(update_fields=["amount_paid", "payment_status", "status", "updated_time"])
+        return
+    order.save(update_fields=["amount_paid", "payment_status", "updated_time"])
 
 
 def _table_or_order_ref(order: Order) -> str:
@@ -94,6 +105,7 @@ def ensure_bill_for_order(order: Order, *, lock: bool = False) -> OrderBill:
         bill.allocations.filter(participant_status="paid").aggregate(total=Sum("allocated_amount")).get("total")
         or Decimal("0")
     )
+    paid_amount = max(paid_amount, _q(getattr(order, "amount_paid", Decimal("0.00"))))
     paid_amount = min(paid_amount, bill.total_amount)
     bill.paid_amount = paid_amount
     bill.remaining_amount = _clamp_zero(_q(bill.total_amount - paid_amount))
@@ -105,8 +117,7 @@ def ensure_bill_for_order(order: Order, *, lock: bool = False) -> OrderBill:
 
     bill.save()
 
-    order.payment_status = _order_payment_status_from_bill(bill)
-    order.save(update_fields=["payment_status", "updated_time"])
+    _sync_order_from_bill(order, bill)
 
     return bill
 
@@ -492,6 +503,9 @@ def apply_successful_payment(payment: Payment) -> OrderBill | None:
     bill.paid_amount = min(_q(bill.total_amount), paid_total)
     bill.remaining_amount = _clamp_zero(_q(_to_decimal(bill.total_amount) - _to_decimal(bill.paid_amount)))
     bill.payment_status = _bill_payment_status(_to_decimal(bill.total_amount), _to_decimal(bill.paid_amount))
+    if bill.payment_status == "fully_paid":
+        bill.paid_amount = _q(bill.total_amount)
+        bill.remaining_amount = Decimal("0.00")
 
     if bill.split_method == "evenly":
         paid_shares = bill.allocations.filter(allocation_type="share", participant_status="paid").count()
@@ -501,8 +515,7 @@ def apply_successful_payment(payment: Payment) -> OrderBill | None:
     bill.save()
 
     order = bill.order
-    order.payment_status = _order_payment_status_from_bill(bill)
-    order.save(update_fields=["payment_status", "updated_time"])
+    _sync_order_from_bill(order, bill)
 
     return bill
 

@@ -56,6 +56,42 @@ const cleanNotes = (notes: string | null | undefined): string => {
     .trim();
 };
 
+const parseMoney = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const getPaymentInfo = (order: any) => {
+  const total = parseMoney(order?.total_price ?? order?.total);
+  const status = String(order?.payment_status || "").toLowerCase();
+  const explicitRemaining = order?.remaining_amount ?? order?.remainingAmount;
+  const explicitPaid = order?.amount_paid ?? order?.amountPaid;
+  const rawPaid = parseMoney(explicitPaid);
+  const remaining =
+    explicitRemaining !== undefined
+      ? Math.max(0, parseMoney(explicitRemaining))
+      : Math.max(0, total - rawPaid);
+  const paid = explicitPaid !== undefined ? rawPaid : Math.max(0, total - remaining);
+  const normalizedPaid = status === "paid" || status === "completed" ? Math.max(paid, total) : paid;
+  const normalizedRemaining = status === "paid" || status === "completed" ? 0 : Math.max(0, total - normalizedPaid);
+  const isFullyPaid = normalizedRemaining <= 0.001 || status === "paid" || status === "completed";
+  const isPartial = !isFullyPaid && (status === "partially_paid" || normalizedPaid > 0.001);
+  const progress = total > 0 ? Math.min(100, Math.max(0, (normalizedPaid / total) * 100)) : 0;
+  return {
+    total,
+    paid: normalizedPaid,
+    remaining: normalizedRemaining,
+    isFullyPaid,
+    isPartial,
+    progress,
+    status,
+  };
+};
+
 const ScreenRestaurantOrderList = () => {
   const currencyCode = getActiveRestaurantCurrency();
   const regionCode = getActiveRestaurantRegion();
@@ -229,7 +265,7 @@ const ScreenRestaurantOrderList = () => {
       };
     }
     acc[tableKey].orders.push(order);
-    acc[tableKey].totalAmount += parseFloat(order.total_price) || 0;
+    acc[tableKey].totalAmount += getPaymentInfo(order).remaining;
     return acc;
   }, {});
 
@@ -290,11 +326,21 @@ const ScreenRestaurantOrderList = () => {
     try {
       // Confirm first order - backend will handle session-level logic
       // For bulk confirmation, we confirm each order
+      let fullyPaid = true;
+      let remainingAmount = 0;
       for (const orderId of orderIds) {
-        await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
+        const response = await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
+        if (response.data?.fully_paid === false) {
+          fullyPaid = false;
+          remainingAmount = Number(response.data?.remaining_amount || 0);
+        }
       }
       invalidateApiCache("orders");
-      toast.success("Cash Received! All orders for this table completed.");
+      toast.success(
+        fullyPaid
+          ? "Cash received. The table balance is fully paid."
+          : `Cash share confirmed. Remaining balance: ${currencyCode} ${remainingAmount.toFixed(2)}`,
+      );
       // Refresh list
       fetchOrders(ordersCurrentPage, debouncedSearchQuery);
     } catch (e) {
@@ -306,9 +352,15 @@ const ScreenRestaurantOrderList = () => {
   // Keep backward compatible single order confirm
   const handleConfirmCash = async (orderId: number) => {
     try {
-      await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
+      const response = await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
       invalidateApiCache("orders");
-      toast.success("Cash Received! Session Completed.");
+      const fullyPaid = response.data?.fully_paid !== false;
+      const remainingAmount = Number(response.data?.remaining_amount || 0);
+      toast.success(
+        fullyPaid
+          ? "Cash received. The order is fully paid."
+          : `Cash share confirmed. Remaining balance: ${currencyCode} ${remainingAmount.toFixed(2)}`,
+      );
       // Refresh list
       fetchOrders(ordersCurrentPage, debouncedSearchQuery);
     } catch (e) {
@@ -361,6 +413,21 @@ const ScreenRestaurantOrderList = () => {
     setSelectedOrder(order);
     setViewModalOpen(true);
   };
+
+  const formatMoney = (value: number) => `${currencyCode} ${value.toFixed(2)}`;
+  const paymentBadgeClass = (info: ReturnType<typeof getPaymentInfo>) => {
+    if (info.isFullyPaid) return "bg-green-50 text-green-700";
+    if (info.isPartial) return "bg-amber-50 text-amber-700";
+    if (info.status === "pending_cash") return "bg-yellow-50 text-yellow-700";
+    return "bg-red-50 text-red-700";
+  };
+  const paymentBadgeLabel = (order: any) => {
+    const info = getPaymentInfo(order);
+    if (info.isFullyPaid) return "Paid";
+    if (info.isPartial) return `${formatMoney(info.remaining)} left`;
+    return order.payment_status || "Unpaid";
+  };
+  const selectedPaymentInfo = selectedOrder ? getPaymentInfo(selectedOrder) : null;
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
     await updateOrderStatus(orderId, newStatus);
@@ -581,11 +648,8 @@ const ScreenRestaurantOrderList = () => {
                     <p className="text-sm font-semibold text-slate-900">Order #{order.id}</p>
                     <p className="text-xs text-slate-500">Table {order.tableNo || "N/A"}</p>
                   </div>
-                  <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
-                    ? 'bg-green-50 text-green-700'
-                    : 'bg-red-50 text-red-700'
-                    }`}>
-                    {order.payment_status || "Unpaid"}
+                  <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${paymentBadgeClass(getPaymentInfo(order))}`}>
+                    {paymentBadgeLabel(order)}
                   </span>
                 </div>
 
@@ -593,6 +657,11 @@ const ScreenRestaurantOrderList = () => {
                   <div>
                     <p className="text-slate-400 uppercase tracking-wide">Amount</p>
                     <p className="font-semibold text-slate-900">{currencyCode} {order.total_price}</p>
+                    {getPaymentInfo(order).isPartial && (
+                      <p className="mt-0.5 text-[10px] font-semibold text-amber-600">
+                        {formatMoney(getPaymentInfo(order).paid)} paid
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-slate-400 uppercase tracking-wide">Placed</p>
@@ -611,7 +680,9 @@ const ScreenRestaurantOrderList = () => {
                     <option value="pending" className="text-yellow-600">Pending</option>
                     <option value="preparing" className="text-orange-600">Preparing</option>
                     <option value="served" className="text-green-600">Ready (Served)</option>
-                    <option value="delivered" className="text-green-700">Delivered</option>
+                    <option value="delivered" className="text-green-700" disabled={!getPaymentInfo(order).isFullyPaid}>
+                      Delivered{!getPaymentInfo(order).isFullyPaid ? " (paid only)" : ""}
+                    </option>
                     <option value="cancelled" className="text-red-600">Cancelled</option>
                   </select>
                   <button
@@ -650,17 +721,21 @@ const ScreenRestaurantOrderList = () => {
                     <td className="px-5 py-3 text-sm font-medium text-slate-900">#{order.id}</td>
                     <td className="px-5 py-3 text-xs text-slate-600">{order.tableNo || "N/A"}</td>
                     <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
-                        ? 'bg-green-50 text-green-700'
-                        : 'bg-red-50 text-red-700'
-                        }`}>
-                        {order.payment_status || "Unpaid"}
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${paymentBadgeClass(getPaymentInfo(order))}`}>
+                        {paymentBadgeLabel(order)}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-xs text-slate-500">
                       {new Date(order.timeOfOrder || order.created_time || order.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="px-5 py-3 text-sm font-medium text-slate-900">{currencyCode} {order.total_price}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">
+                      <div>{currencyCode} {order.total_price}</div>
+                      {getPaymentInfo(order).isPartial && (
+                        <div className="text-[10px] font-semibold text-amber-600">
+                          {formatMoney(getPaymentInfo(order).paid)} paid
+                        </div>
+                      )}
+                    </td>
                     <td className="px-5 py-3">
                       {/* STATUS DROPDOWN */}
                       <select
@@ -671,7 +746,9 @@ const ScreenRestaurantOrderList = () => {
                         <option value="pending" className="text-yellow-600">Pending</option>
                         <option value="preparing" className="text-orange-600">Preparing</option>
                         <option value="served" className="text-green-600">Ready (Served)</option>
-                        <option value="delivered" className="text-green-700">Delivered</option>
+                        <option value="delivered" className="text-green-700" disabled={!getPaymentInfo(order).isFullyPaid}>
+                          Delivered{!getPaymentInfo(order).isFullyPaid ? " (paid only)" : ""}
+                        </option>
                         <option value="cancelled" className="text-red-600">Cancelled</option>
                       </select>
                     </td>
@@ -887,10 +964,25 @@ const ScreenRestaurantOrderList = () => {
                 <div className="bg-slate-50 rounded-lg p-3 space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-500">Status</span>
-                    <span className={`font-bold uppercase ${selectedOrder.payment_status?.toLowerCase() === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
-                      {selectedOrder.payment_status || "Unpaid"}
+                    <span className={`font-bold uppercase ${selectedPaymentInfo?.isFullyPaid ? 'text-green-600' : selectedPaymentInfo?.isPartial ? 'text-amber-600' : 'text-red-500'}`}>
+                      {selectedPaymentInfo?.isFullyPaid ? "Paid" : selectedPaymentInfo?.isPartial ? "Partially Paid" : selectedOrder.payment_status || "Unpaid"}
                     </span>
                   </div>
+                  {selectedPaymentInfo && (
+                    <div className="rounded-lg bg-white border border-slate-200 p-3 space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Paid</span>
+                        <span className="font-semibold text-green-600">{formatMoney(selectedPaymentInfo.paid)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Remaining</span>
+                        <span className="font-semibold text-slate-900">{formatMoney(selectedPaymentInfo.remaining)}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-[#0055FE]" style={{ width: `${selectedPaymentInfo.progress}%` }} />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Display Payments if available */}
                   {selectedOrder.payments && selectedOrder.payments.length > 0 ? (
@@ -899,6 +991,10 @@ const ScreenRestaurantOrderList = () => {
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-slate-500">Method</span>
                           <span className="font-medium text-slate-900 capitalize">{p.provider?.replace('_', ' ') || "N/A"}</span>
+                        </div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-500">Amount</span>
+                          <span className="font-medium text-slate-900">{formatMoney(parseMoney(p.amount))}</span>
                         </div>
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-slate-500">Transaction ID</span>
