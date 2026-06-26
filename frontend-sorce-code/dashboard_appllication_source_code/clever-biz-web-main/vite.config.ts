@@ -145,13 +145,14 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] }
             }
           },
-          // Local JS/CSS route chunks: cache after first use, not during install.
+          // Local JS/CSS route chunks: serve quickly, but refresh in the background.
+          // CacheFirst kept old lazy route chunks alive for too long after deploys.
           {
             urlPattern: /\.(?:js|css)$/i,
-            handler: "CacheFirst",
+            handler: "StaleWhileRevalidate",
             options: {
               cacheName: "dashboard-static-assets",
-              expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              expiration: { maxEntries: 120, maxAgeSeconds: 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
           },
