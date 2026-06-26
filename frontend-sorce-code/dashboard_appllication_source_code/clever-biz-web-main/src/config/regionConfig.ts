@@ -15,7 +15,7 @@ export const REGION_CONFIG: Record<RegionCode, RegionSettings> = {
     timezone: "Asia/Dubai",
     phoneCode: "+971",
     countryLabel: "UAE",
-    payments: ["stripe", "checkout", "paytabs", "cash"],
+    payments: ["stripe", "checkout", "paytabs", "payme", "adyen", "worldpay", "sumup", "square", "cash"],
     defaultPaymentProvider: "stripe",
   },
   UK: {
@@ -23,7 +23,7 @@ export const REGION_CONFIG: Record<RegionCode, RegionSettings> = {
     timezone: "Europe/London",
     phoneCode: "+44",
     countryLabel: "United Kingdom",
-    payments: ["stripe", "payme", "cash"],
+    payments: ["stripe", "checkout", "payme", "adyen", "worldpay", "sumup", "square", "cash"],
     defaultPaymentProvider: "stripe",
   },
 };

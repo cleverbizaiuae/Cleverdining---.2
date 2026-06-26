@@ -29,6 +29,15 @@ from customer.compat_views import (
     TableMessagesAPIView,
 )
 from adminapi.views import IntegrationAPIView, IntegrationDetailAPIView
+from payment.provider_views import (
+    EnabledPaymentProvidersAPIView,
+    PaymentProviderConnectAPIView,
+    PaymentProviderDetailAPIView,
+    PaymentProviderListAPIView,
+    PaymentProviderStatusAPIView,
+    PaymentProviderTestAPIView,
+    PaymentProviderWebhookAPIView,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -54,6 +63,20 @@ urlpatterns = [
     path('api/integrations/<uuid:pk>', IntegrationDetailAPIView.as_view()),
     path('api/integrations/<uuid:pk>/', IntegrationDetailAPIView.as_view()),
     path('api/integrations/', include('integrations.urls')),
+    path('api/payment-providers', PaymentProviderListAPIView.as_view()),
+    path('api/payment-providers/', PaymentProviderListAPIView.as_view()),
+    path('api/payment-providers/enabled', EnabledPaymentProvidersAPIView.as_view()),
+    path('api/payment-providers/enabled/', EnabledPaymentProvidersAPIView.as_view()),
+    path('api/payment-providers/<str:provider>', PaymentProviderDetailAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/', PaymentProviderDetailAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/connect', PaymentProviderConnectAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/connect/', PaymentProviderConnectAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/test', PaymentProviderTestAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/test/', PaymentProviderTestAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/status', PaymentProviderStatusAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/status/', PaymentProviderStatusAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/webhook', PaymentProviderWebhookAPIView.as_view()),
+    path('api/payment-providers/<str:provider>/webhook/', PaymentProviderWebhookAPIView.as_view()),
     path('api/brand-config/', BrandConfigAPIView.as_view()),
     path('api/', include('customer.intelligence_urls')),
     path('', include('accounts.urls')),

@@ -1,5 +1,15 @@
 from .models import PaymentGateway, Payment, StripeDetails
-from .adapters import StripeAdapter, CheckoutAdapter, CashAdapter, PayTabsAdapter, PaymeAdapter
+from .adapters import (
+    StripeAdapter,
+    CheckoutAdapter,
+    CashAdapter,
+    PayTabsAdapter,
+    PaymeAdapter,
+    AdyenAdapter,
+    WorldpayAdapter,
+    SumUpAdapter,
+    SquareAdapter,
+)
 from rest_framework.exceptions import ValidationError
 from decimal import Decimal
 import json
@@ -132,10 +142,20 @@ class PaymentService:
         'cash': CashAdapter,
         'paytabs': PayTabsAdapter,
         'payme': PaymeAdapter,
+        'adyen': AdyenAdapter,
+        'worldpay': WorldpayAdapter,
+        'sumup': SumUpAdapter,
+        'square': SquareAdapter,
     }
 
     @staticmethod
     def _allowed_providers_for_restaurant(restaurant):
+        assigned = list(PaymentGateway.objects.filter(
+            restaurant=restaurant,
+            is_enabled=True,
+        ).values_list("provider", flat=True))
+        if assigned:
+            return set(assigned) | {"cash"}
         region = getattr(restaurant, "region", "UAE")
         region_cfg = get_region_config(region)
         return set(region_cfg.get("payments", []))
@@ -249,19 +269,22 @@ class PaymentService:
             gateway = PaymentGateway.objects.filter(
                 restaurant=restaurant,
                 provider=resolved_provider,
-                is_active=True
+                is_active=True,
+                is_enabled=True,
             ).first()
             if not gateway and not explicit_requested:
                 gateway = PaymentGateway.objects.filter(
                     restaurant=restaurant,
                     provider__in=list(allowed),
-                    is_active=True
+                    is_active=True,
+                    is_enabled=True,
                 ).first()
         else:
             gateway = PaymentGateway.objects.filter(
                 restaurant=restaurant,
                 provider__in=list(allowed),
-                is_active=True
+                is_active=True,
+                is_enabled=True,
             ).first()
 
         # Legacy fallback for StripeDetails-backed setups.

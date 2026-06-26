@@ -2,8 +2,7 @@ import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import { useEffect, useState, useRef, useContext } from "react";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
-import StripeConnectModal from "../model/StripeConnectModal";
-import PaymentGatewayModal from "../model/PaymentGatewayModal";
+import PaymentGatewayModal, { type GatewayProvider } from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import {
@@ -15,7 +14,9 @@ import {
   MoreHorizontal,
   Eye,
   Moon,
-  ChevronDown
+  ChevronDown,
+  CreditCard,
+  Activity,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency, getActiveRestaurantRegion } from "@/lib/utils";
@@ -95,15 +96,18 @@ const getPaymentInfo = (order: any) => {
 const ScreenRestaurantOrderList = () => {
   const currencyCode = getActiveRestaurantCurrency();
   const regionCode = getActiveRestaurantRegion();
-  type GatewayProvider = "stripe" | "checkout" | "paytabs" | "payme";
-  const gatewayOptions = getRegionConfig(regionCode).payments.filter(
+  const regionGatewayOptions = getRegionConfig(regionCode).payments.filter(
     (provider) => provider !== "cash"
   ) as GatewayProvider[];
 
   const providerLabel = (provider: GatewayProvider): string => {
     if (provider === "checkout") return "Checkout.com";
     if (provider === "paytabs") return "PayTabs";
-    if (provider === "payme") return "Payme (Bank)";
+    if (provider === "payme") return "PayMe";
+    if (provider === "adyen") return "Adyen";
+    if (provider === "worldpay") return "Worldpay";
+    if (provider === "sumup") return "SumUp";
+    if (provider === "square") return "Square";
     return "Stripe";
   };
   const { userRole } = useRole();
@@ -177,9 +181,9 @@ const ScreenRestaurantOrderList = () => {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [connectedGateways, setConnectedGateways] = useState<any[]>([]);
+  const [availableGateways, setAvailableGateways] = useState<any[]>([]);
 
   // Payment States
-  const [openStripe, setOpenStripe] = useState(false);
   const [openGatewayModal, setOpenGatewayModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<GatewayProvider>("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -203,10 +207,21 @@ const ScreenRestaurantOrderList = () => {
 
   const fetchGateways = async () => {
     try {
-      const { data } = await cachedGet("/owners/payment-gateways/", {}, { ttlMs: 60_000 });
-      setConnectedGateways(Array.isArray(data) ? data : data.results || []);
+      const { data } = await cachedGet("/api/payment-providers/enabled/", {}, { ttlMs: 30_000 });
+      const list = Array.isArray(data) ? data : data.results || [];
+      setAvailableGateways(list);
+      setConnectedGateways(list.filter((gw: any) => gw.credentialsConfigured || gw.is_active || gw.connectionStatus === "connected"));
     } catch (e) {
-      console.warn("Failed to fetch gateways", e);
+      console.warn("Failed to fetch provider framework gateways, falling back to legacy gateways", e);
+      try {
+        const { data } = await cachedGet("/owners/payment-gateways/", {}, { ttlMs: 60_000 });
+        const list = Array.isArray(data) ? data : data.results || [];
+        setConnectedGateways(list);
+        setAvailableGateways(list.length ? list : regionGatewayOptions.map((provider) => ({ provider, providerName: providerLabel(provider) })));
+      } catch (legacyErr) {
+        console.warn("Failed to fetch gateways", legacyErr);
+        setAvailableGateways(regionGatewayOptions.map((provider) => ({ provider, providerName: providerLabel(provider) })));
+      }
     }
   };
 
@@ -228,6 +243,34 @@ const ScreenRestaurantOrderList = () => {
   useEffect(() => {
     fetchOrders(ordersCurrentPage, debouncedSearchQuery);
   }, [ordersCurrentPage, debouncedSearchQuery, fetchOrders]);
+
+  const gatewayOptions = (
+    availableGateways.length
+      ? availableGateways.map((gateway) => (gateway.provider || gateway.code) as GatewayProvider)
+      : regionGatewayOptions
+  ).filter(Boolean);
+
+  const testGateway = async (provider: GatewayProvider) => {
+    try {
+      await axiosInstance.post(`/api/payment-providers/${provider}/test/`);
+      toast.success(`${providerLabel(provider)} connection verified`);
+      invalidateApiCache("api/payment-providers");
+      fetchGateways();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || `Failed to verify ${providerLabel(provider)}`);
+    }
+  };
+
+  const disconnectGateway = async (provider: GatewayProvider) => {
+    try {
+      await axiosInstance.delete(`/api/payment-providers/${provider}/`);
+      toast.success(`${providerLabel(provider)} disconnected`);
+      invalidateApiCache("api/payment-providers");
+      fetchGateways();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || `Failed to disconnect ${providerLabel(provider)}`);
+    }
+  };
 
   // --- LOGIC ---
 
@@ -381,12 +424,8 @@ const ScreenRestaurantOrderList = () => {
 
   const handleAddGateway = (provider: GatewayProvider) => {
     setShowDropdown(false);
-    if (provider === "stripe") {
-      setOpenStripe(true);
-    } else {
-      setSelectedProvider(provider);
-      setOpenGatewayModal(true);
-    }
+    setSelectedProvider(provider);
+    setOpenGatewayModal(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -613,8 +652,8 @@ const ScreenRestaurantOrderList = () => {
                 {/* Connected Chips */}
                 <div className="flex gap-2">
                   {connectedGateways.slice(0, 2).map((gw: any) => (
-                    <span key={gw.id} className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${gw.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                      {gw.provider}
+                    <span key={gw.id || gw.provider} className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${gw.is_active || gw.connectionStatus === "connected" ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                      {gw.providerName || gw.provider}
                     </span>
                   ))}
                 </div>
@@ -637,6 +676,63 @@ const ScreenRestaurantOrderList = () => {
             />
           </div>
         </div>
+
+        {(userRole === 'owner' || userRole === 'manager') && availableGateways.length > 0 && (
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/60">
+            <div className="flex items-center gap-2 mb-3">
+              <CreditCard size={16} className="text-[#0055FE]" />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Payment providers</p>
+                <p className="text-xs text-slate-500">Only Super Admin enabled providers appear here.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {availableGateways.map((gateway: any) => {
+                const provider = (gateway.provider || gateway.code) as GatewayProvider;
+                const connected = gateway.credentialsConfigured || gateway.connectionStatus === "connected";
+                const active = gateway.is_active || gateway.isActive;
+                return (
+                  <div key={provider} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                          {gateway.logoUrl ? (
+                            <img src={gateway.logoUrl} alt="" className="w-full h-full object-contain p-1" />
+                          ) : (
+                            <span className="text-xs font-bold text-slate-500">{providerLabel(provider).slice(0, 2).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{gateway.providerName || providerLabel(provider)}</p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {connected ? "Connected" : "Not connected"} {active ? "· Active" : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                        {connected ? "Connected" : "Setup"}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button onClick={() => handleAddGateway(provider)} className="h-8 rounded-lg bg-[#0055FE] text-white text-xs font-medium hover:bg-[#0047D1]">
+                        Configure
+                      </button>
+                      <button onClick={() => testGateway(provider)} disabled={!connected} className="h-8 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 disabled:opacity-50">
+                        Test
+                      </button>
+                      <button onClick={() => disconnectGateway(provider)} disabled={!connected} className="h-8 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 disabled:opacity-50">
+                        Disconnect
+                      </button>
+                      <button onClick={() => toast("Provider logs will show recent API and webhook failures when events exist.")} className="h-8 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 flex items-center justify-center gap-1">
+                        <Activity size={12} /> Logs
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Mobile cards */}
         <div className="divide-y divide-slate-100 md:hidden">
@@ -1034,11 +1130,11 @@ const ScreenRestaurantOrderList = () => {
       )}
 
       {/* Modals */}
-      <StripeConnectModal open={openStripe} onClose={() => setOpenStripe(false)} />
       <PaymentGatewayModal
         open={openGatewayModal}
         onClose={() => setOpenGatewayModal(false)}
         provider={selectedProvider}
+        onSuccess={fetchGateways}
       />
     </div>
   );

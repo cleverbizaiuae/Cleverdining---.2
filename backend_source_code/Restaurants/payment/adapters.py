@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urlencode, urlunparse
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from restaurant.region_config import get_region_config
+from .provider_registry import get_provider
 
 class PaymentAdapter(ABC):
     def __init__(self, gateway):
@@ -163,7 +164,7 @@ class CheckoutAdapter(PaymentAdapter):
         
         # Use sandbox for testing, production for live
         # You can add an is_sandbox flag to PaymentGateway model if needed
-        base_url = self.SANDBOX_URL  # Change to PRODUCTION_URL for live
+        base_url = self.SANDBOX_URL if getattr(self.gateway, "sandbox_mode", True) else self.PRODUCTION_URL
         
         secret_key = self.gateway.get_decrypted_secret()
         final_amount = int((amount if amount is not None else order.total_price) * 100)  # Checkout expects minor units
@@ -230,7 +231,8 @@ class CheckoutAdapter(PaymentAdapter):
         secret_key = self.gateway.get_decrypted_secret()
         
         # Get session details from Checkout.com
-        url = f"https://api.sandbox.checkout.com/hosted-payments/{session_id}"
+        api_base = "https://api.sandbox.checkout.com" if getattr(self.gateway, "sandbox_mode", True) else "https://api.checkout.com"
+        url = f"{api_base}/hosted-payments/{session_id}"
         headers = {"Authorization": f"Bearer {secret_key}"}
         
         try:
@@ -620,3 +622,43 @@ class PayTabsAdapter(PaymentAdapter):
              }
         
         return {'status': 'failed'}
+
+
+class ProviderFrameworkAdapter(PaymentAdapter):
+    """
+    Provider wrapper for newly registered gateways whose credentials and health
+    are managed by the platform but whose production checkout APIs are not wired
+    into the restaurant order flow yet. It fails closed for payment execution.
+    """
+    provider_code = ""
+
+    def _provider(self):
+        return get_provider(self.provider_code, self.gateway)
+
+    def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
+        provider = self._provider()
+        provider.validate_credentials()
+        return provider.create_payment(order, success_url, cancel_url, amount=amount, metadata=metadata)
+
+    def verify_payment(self, data):
+        transaction_id = data.get("transaction_id") or data.get("session_id") or data.get("id")
+        return {"status": "pending", "transaction_id": transaction_id}
+
+    def verify_webhook(self, request):
+        return self._provider().webhook(request)
+
+
+class AdyenAdapter(ProviderFrameworkAdapter):
+    provider_code = "adyen"
+
+
+class WorldpayAdapter(ProviderFrameworkAdapter):
+    provider_code = "worldpay"
+
+
+class SumUpAdapter(ProviderFrameworkAdapter):
+    provider_code = "sumup"
+
+
+class SquareAdapter(ProviderFrameworkAdapter):
+    provider_code = "square"

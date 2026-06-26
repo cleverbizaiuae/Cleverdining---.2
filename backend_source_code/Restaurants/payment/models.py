@@ -3,9 +3,11 @@ from device.models import Device
 from restaurant.models import Restaurant
 from order.models import Order
 import os
+import json
 
 from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
+from .provider_registry import get_provider_metadata, provider_choices
 
 # Create your models here.
 
@@ -107,6 +109,10 @@ class Payment(models.Model):
         ('checkout', 'Checkout.com'),
         ('paytabs', 'PayTabs'),
         ('payme', 'Payme'),
+        ('adyen', 'Adyen'),
+        ('worldpay', 'Worldpay'),
+        ('sumup', 'SumUp'),
+        ('square', 'Square'),
         ('cash', 'Cash'),
         ('apple_pay', 'Apple Pay'),
         ('google_pay', 'Google Pay'),
@@ -239,11 +245,17 @@ class StripeDetails(models.Model):
 
 
 class PaymentGateway(models.Model):
-    PROVIDER_CHOICES = [
-        ('stripe', 'Stripe'),
-        ('checkout', 'Checkout.com'),
-        ('paytabs', 'PayTabs'),
-        ('payme', 'Payme'),
+    PROVIDER_CHOICES = provider_choices(include_legacy=True)
+    CONNECTION_STATUS_CHOICES = [
+        ('not_configured', 'Not Configured'),
+        ('connected', 'Connected'),
+        ('error', 'Error'),
+        ('disabled', 'Disabled'),
+    ]
+    WEBHOOK_STATUS_CHOICES = [
+        ('unknown', 'Unknown'),
+        ('healthy', 'Healthy'),
+        ('failing', 'Failing'),
     ]
     
     GOOGLE_PAY_ENVIRONMENT_CHOICES = [
@@ -254,10 +266,19 @@ class PaymentGateway(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='payment_gateways')
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
     is_active = models.BooleanField(default=False)
+    is_enabled = models.BooleanField(default=True)
+    sandbox_mode = models.BooleanField(default=True)
+    connection_status = models.CharField(max_length=30, choices=CONNECTION_STATUS_CHOICES, default='not_configured')
+    webhook_status = models.CharField(max_length=30, choices=WEBHOOK_STATUS_CHOICES, default='unknown')
     
     # Common fields for keys
-    key_id = models.CharField(max_length=255) # Public Key (Stripe/Checkout) / Profile ID (PayTabs)
-    key_secret = models.CharField(max_length=255) # Secret Key (Stripe/Checkout) / Server Key (PayTabs)
+    key_id = models.CharField(max_length=255, blank=True, default="") # Compatibility alias for public/merchant key
+    key_secret = models.CharField(max_length=255, blank=True, default="") # Compatibility alias for primary secret
+    credentials_encrypted = models.TextField(blank=True, default="")
+    provider_metadata = models.JSONField(default=dict, blank=True)
+    last_validation_at = models.DateTimeField(null=True, blank=True)
+    last_health_check_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
     
     # Apple Pay Configuration
     apple_pay_enabled = models.BooleanField(default=False)
@@ -280,25 +301,121 @@ class PaymentGateway(models.Model):
         unique_together = ('restaurant', 'provider')
 
     def clean(self):
-        if not self.key_id or not self.key_secret:
-            raise ValidationError("Both Key ID and Key Secret are required.")
+        if not self.is_active:
+            return
+        try:
+            metadata = get_provider_metadata(self.provider)
+        except Exception:
+            return
+        credentials = self.get_credentials()
+        missing = [
+            field.label
+            for field in metadata.credentials
+            if field.required and not str(credentials.get(field.key, "")).strip()
+        ]
+        if missing:
+            raise ValidationError(f"Missing required credentials: {', '.join(missing)}")
 
     def save(self, *args, **kwargs):
         # Ensure only one gateway is active per restaurant
         if self.is_active:
+            self.is_enabled = True
             PaymentGateway.objects.filter(restaurant=self.restaurant).exclude(id=self.id).update(is_active=False)
             
         # Encrypt secret key if it's not already encrypted (basic check)
         # Note: In a real app, handle this more robustly to avoid double encryption
-        try:
-            fernet.decrypt(self.key_secret.encode())
-        except:
-            self.key_secret = fernet.encrypt(self.key_secret.encode()).decode()
+        if self.key_secret:
+            try:
+                fernet.decrypt(self.key_secret.encode())
+            except Exception:
+                self.key_secret = fernet.encrypt(self.key_secret.encode()).decode()
             
         super().save(*args, **kwargs)
 
     def get_decrypted_secret(self):
+        credentials = self.get_credentials()
+        for key in ("secret_key", "api_key", "service_key", "access_token", "key_secret", "server_key", "client_secret", "password"):
+            if credentials.get(key):
+                return str(credentials[key])
+        if not self.key_secret:
+            return ""
         return fernet.decrypt(self.key_secret.encode()).decode()
+
+    def _credential_aliases(self):
+        return {
+            "stripe": ("publishable_key", "secret_key"),
+            "checkout": ("public_key", "secret_key"),
+            "paytabs": ("profile_id", "server_key"),
+            "payme": ("merchant_id", "api_key"),
+            "adyen": ("merchant_account", "api_key"),
+            "worldpay": ("merchant_code", "service_key"),
+            "sumup": ("merchant_code", "api_key"),
+            "square": ("application_id", "access_token"),
+        }.get(self.provider, ("key_id", "key_secret"))
+
+    def set_credentials(self, credentials):
+        clean_credentials = {
+            str(key): value
+            for key, value in (credentials or {}).items()
+            if value is not None and str(value).strip() != ""
+        }
+        if not clean_credentials:
+            return
+        current = self.get_credentials()
+        current.update(clean_credentials)
+        self.credentials_encrypted = fernet.encrypt(json.dumps(current).encode("utf-8")).decode()
+        public_key, secret_key = self._credential_aliases()
+        if current.get(public_key):
+            self.key_id = str(current.get(public_key))
+        if current.get(secret_key):
+            self.key_secret = str(current.get(secret_key))
+
+    def get_credentials(self):
+        credentials = {}
+        if self.credentials_encrypted:
+            try:
+                credentials.update(json.loads(fernet.decrypt(self.credentials_encrypted.encode()).decode("utf-8")))
+            except Exception:
+                credentials = {}
+        public_key, secret_key = self._credential_aliases()
+        if self.key_id and public_key not in credentials:
+            credentials[public_key] = self.key_id
+        if self.key_secret and secret_key not in credentials:
+            try:
+                credentials[secret_key] = fernet.decrypt(self.key_secret.encode()).decode()
+            except Exception:
+                credentials[secret_key] = self.key_secret
+        return credentials
+
+    def has_credentials(self):
+        try:
+            metadata = get_provider_metadata(self.provider)
+        except Exception:
+            return bool(self.key_id and self.key_secret)
+        credentials = self.get_credentials()
+        return all(
+            bool(str(credentials.get(field.key, "")).strip())
+            for field in metadata.credentials
+            if field.required
+        )
+
+    def masked_credentials(self):
+        credentials = self.get_credentials()
+        masked = {}
+        try:
+            metadata = get_provider_metadata(self.provider)
+            fields = metadata.credentials
+        except Exception:
+            fields = []
+        for field in fields:
+            value = credentials.get(field.key)
+            if not value:
+                masked[field.key] = {"configured": False, "value": ""}
+            elif field.secret:
+                masked[field.key] = {"configured": True, "value": "••••••••"}
+            else:
+                masked[field.key] = {"configured": True, "value": value}
+        return masked
 
     def __str__(self):
         return f"{self.provider} - {self.restaurant.resturent_name}"
