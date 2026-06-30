@@ -12,10 +12,11 @@ from accounts.models import ChefStaff
 from order.models import Order
 from restaurant.models import Restaurant
 from restaurant.region_config import get_region_config
-from .models import Payment, PaymentGateway
+from .models import Payment, PaymentGateway, PaymentProviderEvent
 from .provider_registry import PAYMENT_PROVIDER_CODES, get_provider, provider_metadata_payload
+from .recovery import reconcile_legacy_stripe_gateway
 from .schema_guard import ensure_payment_schema
-from .serializers import PaymentGatewaySerializer
+from .serializers import PaymentGatewaySerializer, PaymentProviderEventSerializer
 from .services import PaymentService
 
 
@@ -134,10 +135,18 @@ class EnabledPaymentProvidersAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        ensure_payment_schema()
         restaurant = _restaurant_from_request(request)
+        reconcile_legacy_stripe_gateway(restaurant)
         assigned = list(PaymentGateway.objects.filter(restaurant=restaurant, is_enabled=True).order_by("provider"))
         if assigned:
-            return Response(PaymentGatewaySerializer(assigned, many=True).data)
+            return Response(
+                PaymentGatewaySerializer(
+                    assigned,
+                    many=True,
+                    context={"request": request},
+                ).data
+            )
 
         # Backward-compatible fallback for restaurants not yet assigned by Super Admin.
         providers = [p for p in get_region_config(getattr(restaurant, "region", "UAE")).get("payments", []) if p != "cash"]
@@ -145,7 +154,12 @@ class EnabledPaymentProvidersAPIView(APIView):
         for provider in providers:
             gateway = PaymentGateway.objects.filter(restaurant=restaurant, provider=provider).first()
             if gateway:
-                payload.append(PaymentGatewaySerializer(gateway).data)
+                payload.append(
+                    PaymentGatewaySerializer(
+                        gateway,
+                        context={"request": request},
+                    ).data
+                )
             else:
                 meta = _provider_payload(provider, restaurant=restaurant)
                 meta.update({"provider": provider, "isEnabled": True, "is_active": False})
@@ -183,9 +197,14 @@ class PaymentProviderConnectAPIView(APIView):
                 gateway.connection_status = "not_configured"
         elif credentials or gateway.has_credentials():
             try:
-                get_provider(provider, gateway).validate_credentials()
+                provider_client = get_provider(provider, gateway)
+                if provider in {"stripe", "checkout"}:
+                    provider_client.health_check()
+                else:
+                    provider_client.validate_credentials()
                 gateway.connection_status = "connected"
                 gateway.last_validation_at = timezone.now()
+                gateway.last_health_check_at = timezone.now() if provider in {"stripe", "checkout"} else gateway.last_health_check_at
                 gateway.last_error = ""
             except Exception as exc:
                 gateway.connection_status = "error"
@@ -272,6 +291,53 @@ class PaymentProviderWebhookAPIView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def post(self, request, provider):
+    def post(self, request, provider, gateway_id=None):
+        gateway_id = gateway_id or request.query_params.get("gatewayId") or request.query_params.get("gateway_id")
+        if gateway_id:
+            result = PaymentService.handle_gateway_webhook(provider.strip().lower(), gateway_id, request)
+            return Response({"status": "received", "result": result}, status=status.HTTP_200_OK)
         result = PaymentService.handle_webhook(provider.strip().lower(), request)
         return Response({"status": "received", "result": result}, status=status.HTTP_200_OK)
+
+
+class PaymentProviderPaymentOperationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, provider, payment_id, operation):
+        restaurant = _restaurant_from_request(request)
+        provider = provider.strip().lower()
+        operation = operation.strip().lower()
+        payment = Payment.objects.filter(
+            id=payment_id,
+            restaurant=restaurant,
+            provider=provider,
+        ).select_related("restaurant", "order", "device").first()
+        if not payment:
+            return Response({"error": "Payment not found for this provider and restaurant"}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            amount = request.data.get("amount")
+            reason = request.data.get("reason")
+            if operation == "capture":
+                result = PaymentService.capture_payment(payment, amount=amount)
+            elif operation == "refund":
+                result = PaymentService.refund_payment(payment, amount=amount, reason=reason)
+            elif operation == "void":
+                result = PaymentService.void_payment(payment)
+            else:
+                return Response({"error": "Unsupported payment operation"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"ok": True, "operation": operation, "result": result})
+        except ValidationError as exc:
+            return Response({"ok": False, "error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PaymentProviderEventsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, provider):
+        restaurant = _restaurant_from_request(request)
+        events = PaymentProviderEvent.objects.filter(
+            provider=provider.strip().lower(),
+            gateway__restaurant=restaurant,
+        ).select_related("gateway", "gateway__restaurant").order_by("-created_at")[:100]
+        return Response(PaymentProviderEventSerializer(events, many=True).data)

@@ -689,8 +689,30 @@ const ScreenRestaurantOrderList = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {availableGateways.map((gateway: any) => {
                 const provider = (gateway.provider || gateway.code) as GatewayProvider;
-                const connected = gateway.credentialsConfigured || gateway.connectionStatus === "connected";
+                const credentialsConfigured = Boolean(gateway.credentialsConfigured);
+                const connectionStatus = gateway.connectionStatus || "not_configured";
+                const connected = connectionStatus === "connected";
                 const active = gateway.is_active || gateway.isActive;
+                const statusLabel =
+                  connectionStatus === "error"
+                    ? "Validation failed"
+                    : connectionStatus === "disabled" || gateway.isEnabled === false
+                      ? "Disabled"
+                      : connected
+                        ? "Connected"
+                        : credentialsConfigured
+                          ? "Configured"
+                          : "Not configured";
+                const statusClass =
+                  connectionStatus === "error"
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : connectionStatus === "disabled" || gateway.isEnabled === false
+                      ? "bg-slate-100 text-slate-500 border-slate-200"
+                      : connected
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : credentialsConfigured
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200";
                 return (
                   <div key={provider} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
@@ -705,14 +727,19 @@ const ScreenRestaurantOrderList = () => {
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-900 truncate">{gateway.providerName || providerLabel(provider)}</p>
                           <p className="text-[11px] text-slate-500 truncate">
-                            {connected ? "Connected" : "Not connected"} {active ? "· Active" : ""}
+                            {statusLabel} {active ? "· Active" : ""}
                           </p>
                         </div>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
-                        {connected ? "Connected" : "Setup"}
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${statusClass}`}>
+                        {statusLabel}
                       </span>
                     </div>
+                    {gateway.lastError && connectionStatus === "error" && (
+                      <p className="mt-2 text-[11px] text-red-600 line-clamp-2" title={gateway.lastError}>
+                        {gateway.lastError}
+                      </p>
+                    )}
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <button onClick={() => handleAddGateway(provider)} className="h-8 rounded-lg bg-[#0055FE] text-white text-xs font-medium hover:bg-[#0047D1]">
                         Configure

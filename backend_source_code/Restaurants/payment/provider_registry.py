@@ -139,12 +139,12 @@ PROVIDER_METADATA: Dict[str, ProviderMetadata] = {
         code="sumup",
         name="SumUp",
         logo_url="",
-        description="Simple card and merchant checkout payments.",
+        description="Simple merchant checkout payments. Deferred until business demand justifies support.",
         documentation_url="https://developer.sumup.com/",
         supported_countries=["UK", "EU", "US"],
         supported_currencies=["GBP", "EUR", "USD"],
         supported_payment_methods=["card", "payment_link"],
-        status_label="beta",
+        status_label="coming_soon",
         credentials=[
             CredentialField("api_key", "API Key", secret=True),
             CredentialField("merchant_code", "Merchant Code", secret=False),
@@ -156,9 +156,9 @@ PROVIDER_METADATA: Dict[str, ProviderMetadata] = {
         code="square",
         name="Square",
         logo_url="",
-        description="Square online payments and payment links.",
+        description="Square online payments for supported markets only.",
         documentation_url="https://developer.squareup.com/docs/payments-api/overview",
-        supported_countries=["UK", "US", "EU"],
+        supported_countries=["US", "UK", "Canada", "Australia", "Japan", "Ireland", "France", "Spain"],
         supported_currencies=["GBP", "USD", "EUR"],
         supported_payment_methods=["card", "apple_pay", "google_pay", "cash_app_pay"],
         status_label="beta",
@@ -232,9 +232,61 @@ class PaymentProvider:
 class StripeProvider(PaymentProvider):
     code = "stripe"
 
+    def health_check(self):
+        credentials = self.gateway.get_credentials() if self.gateway else {}
+        self.validate_credentials(credentials)
+        try:
+            import stripe
+
+            stripe.api_key = credentials.get("secret_key")
+            account = stripe.Account.retrieve()
+            return {
+                "ok": True,
+                "provider": self.code,
+                "accountId": account.get("id"),
+                "chargesEnabled": bool(account.get("charges_enabled")),
+                "payoutsEnabled": bool(account.get("payouts_enabled")),
+                "checkedAt": timezone.now().isoformat(),
+            }
+        except Exception as exc:
+            raise ValidationError(f"Stripe health check failed: {str(exc)}")
+
 
 class CheckoutProvider(PaymentProvider):
     code = "checkout"
+
+    def health_check(self):
+        credentials = self.gateway.get_credentials() if self.gateway else {}
+        self.validate_credentials(credentials)
+        secret_key = credentials.get("secret_key")
+        sandbox = getattr(self.gateway, "sandbox_mode", True)
+        api_base = "https://api.sandbox.checkout.com" if sandbox else "https://api.checkout.com"
+        headers = {"Authorization": f"Bearer {secret_key}", "Content-Type": "application/json"}
+
+        try:
+            import requests
+
+            # Processing channels are merchant-scoped and validate that the key can
+            # reach Checkout.com APIs. Some accounts may not expose this endpoint,
+            # so use workflows as a conservative fallback before failing.
+            checked_url = None
+            for path in ("/processing-channels", "/workflows"):
+                checked_url = f"{api_base}{path}"
+                response = requests.get(checked_url, headers=headers, timeout=12)
+                if response.status_code in (200, 201):
+                    return {
+                        "ok": True,
+                        "provider": self.code,
+                        "endpoint": path,
+                        "checkedAt": timezone.now().isoformat(),
+                    }
+                if response.status_code in (401, 403):
+                    break
+            raise ValidationError(f"Checkout.com health check failed with HTTP {response.status_code} at {checked_url}")
+        except ValidationError:
+            raise
+        except Exception as exc:
+            raise ValidationError(f"Checkout.com health check failed: {str(exc)}")
 
 
 class PayMeProvider(PaymentProvider):
@@ -274,4 +326,3 @@ def get_provider(provider: str, gateway=None) -> PaymentProvider:
     if not cls:
         raise ValidationError(f"Unsupported payment provider: {provider}")
     return cls(gateway)
-

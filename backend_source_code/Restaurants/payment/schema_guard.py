@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db import connection
 
-from .models import OrderBill, OrderBillItem, Payment, PaymentAllocation, PaymentGateway
+from .models import OrderBill, OrderBillItem, Payment, PaymentAllocation, PaymentGateway, PaymentProviderEvent
 
 _PAYMENT_SCHEMA_READY = False
 
@@ -115,6 +115,14 @@ def ensure_payment_schema(force: bool = False) -> bool:
                 print(
                     f"[SCHEMA-HEAL] Failed adding column {gateway_table}.{field.column}: {field_exc}"
                 )
+
+        provider_event_table = PaymentProviderEvent._meta.db_table
+        if provider_event_table not in tables:
+            with connection.schema_editor() as schema_editor:
+                schema_editor.create_model(PaymentProviderEvent)
+            tables.add(provider_event_table)
+            created_any = True
+            print(f"[SCHEMA-HEAL] Created missing table: {provider_event_table}")
 
         if created_any:
             print("[SCHEMA-HEAL] Payment schema backfilled at runtime.")

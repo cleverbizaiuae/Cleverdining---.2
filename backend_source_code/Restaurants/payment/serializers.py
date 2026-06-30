@@ -1,6 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
-from .models import StripeDetails, PaymentGateway, Payment
+from .models import StripeDetails, PaymentGateway, Payment, PaymentProviderEvent
 from .provider_registry import get_provider_metadata, provider_metadata_payload
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -66,6 +66,7 @@ class PaymentGatewaySerializer(serializers.ModelSerializer):
     lastValidationAt = serializers.DateTimeField(source='last_validation_at', read_only=True)
     lastHealthCheckAt = serializers.DateTimeField(source='last_health_check_at', read_only=True)
     lastError = serializers.CharField(source='last_error', read_only=True)
+    webhookUrl = serializers.SerializerMethodField()
 
     def _metadata(self, obj):
         try:
@@ -115,6 +116,13 @@ class PaymentGatewaySerializer(serializers.ModelSerializer):
 
     def get_credentialFields(self, obj):
         return self._metadata(obj)["credentialFields"]
+
+    def get_webhookUrl(self, obj):
+        path = f"/api/payment-providers/{obj.provider}/webhook/{obj.id}/"
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(path)
+        return path
 
     def validate_provider(self, value):
         # PayTabs remains a legacy gateway even though it is not in the new registry.
@@ -179,7 +187,7 @@ class PaymentGatewaySerializer(serializers.ModelSerializer):
             'supportedCountries', 'supportedCurrencies', 'supportedPaymentMethods',
             'providerStatusLabel', 'credentialFields', 'credentialsMasked', 'credentialsConfigured',
             'is_active', 'isEnabled', 'sandboxMode', 'connectionStatus', 'webhookStatus',
-            'lastValidationAt', 'lastHealthCheckAt', 'lastError',
+            'lastValidationAt', 'lastHealthCheckAt', 'lastError', 'webhookUrl',
             'key_id', 'key_secret', 'credentials',
             'apple_pay_enabled', 'apple_merchant_id', 'apple_domain_verified',
             'google_pay_enabled', 'google_merchant_id', 'google_environment',
@@ -189,3 +197,25 @@ class PaymentGatewaySerializer(serializers.ModelSerializer):
             'key_secret': {'write_only': True},
         }
         read_only_fields = ['id', 'restaurant', 'apple_domain_verified']
+
+
+class PaymentProviderEventSerializer(serializers.ModelSerializer):
+    gatewayId = serializers.IntegerField(source="gateway_id", read_only=True)
+    restaurantId = serializers.IntegerField(source="gateway.restaurant_id", read_only=True)
+
+    class Meta:
+        model = PaymentProviderEvent
+        fields = [
+            "id",
+            "provider",
+            "gatewayId",
+            "restaurantId",
+            "provider_event_id",
+            "payload_hash",
+            "signature_hash",
+            "status",
+            "replay_detected",
+            "processed_at",
+            "created_at",
+        ]
+        read_only_fields = fields

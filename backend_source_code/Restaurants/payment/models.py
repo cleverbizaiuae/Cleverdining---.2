@@ -161,6 +161,41 @@ class Payment(models.Model):
         return f"Payment for Order #{self.order.id} by Device #{self.device.id}"
 
 
+class PaymentProviderEvent(models.Model):
+    STATUS_CHOICES = [
+        ("received", "Received"),
+        ("processed", "Processed"),
+        ("ignored", "Ignored"),
+        ("failed", "Failed"),
+        ("rejected", "Rejected"),
+    ]
+
+    provider = models.CharField(max_length=20)
+    gateway = models.ForeignKey(
+        "PaymentGateway",
+        on_delete=models.CASCADE,
+        related_name="provider_events",
+    )
+    provider_event_id = models.CharField(max_length=255)
+    payload_hash = models.CharField(max_length=64)
+    signature_hash = models.CharField(max_length=64, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="received")
+    replay_detected = models.BooleanField(default=False)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("provider", "gateway", "provider_event_id")
+        indexes = [
+            models.Index(fields=["provider", "provider_event_id"]),
+            models.Index(fields=["gateway", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.provider}:{self.provider_event_id}"
+
+
 class PaymentAllocation(models.Model):
     PARTICIPANT_STATUS_CHOICES = [
         ("unpaid", "Unpaid"),

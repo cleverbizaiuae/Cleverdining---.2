@@ -30,6 +30,18 @@ class PaymentAdapter(ABC):
         """
         pass
 
+    def capture_payment(self, transaction_id, amount=None):
+        raise ValidationError(f"{self.__class__.__name__} capture is not configured")
+
+    def refund_payment(self, transaction_id, amount=None, reason=None):
+        raise ValidationError(f"{self.__class__.__name__} refunds are not configured")
+
+    def void_payment(self, transaction_id):
+        raise ValidationError(f"{self.__class__.__name__} voids are not configured")
+
+    def health_check(self):
+        raise ValidationError(f"{self.__class__.__name__} health checks are not configured")
+
 
 def _order_region_settings(order):
     restaurant = getattr(order, "restaurant", None)
@@ -57,16 +69,40 @@ def _append_query(url, **params):
     return urlunparse(parsed._replace(query=urlencode(query)))
 
 class StripeAdapter(PaymentAdapter):
+    def _credentials(self):
+        return self.gateway.get_credentials() if hasattr(self.gateway, "get_credentials") else {}
+
+    def _secret_key(self):
+        return self.gateway.get_decrypted_secret()
+
+    def _webhook_secret(self):
+        return self._credentials().get("webhook_secret") or getattr(settings, "STRIPE_WEBHOOK_SECRET", "")
+
+    def _to_minor_units(self, amount):
+        if amount is None:
+            return None
+        return int(round(float(amount) * 100))
+
+    def _payment_intent_id(self, transaction_id):
+        stripe.api_key = self._secret_key()
+        transaction_id = str(transaction_id or "")
+        if transaction_id.startswith("pi_"):
+            return transaction_id
+        if transaction_id.startswith("cs_"):
+            session = stripe.checkout.Session.retrieve(transaction_id)
+            payment_intent = session.get("payment_intent")
+            if not payment_intent:
+                raise ValidationError("Stripe checkout session does not have a payment intent yet")
+            return payment_intent
+        return transaction_id
+
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
-        stripe.api_key = self.gateway.get_decrypted_secret()
-        
-        # Calculate Amount
+        stripe.api_key = self._secret_key()
         final_amount = amount if amount is not None else order.total_price
-        
-        # Merge Metadata
         final_metadata = {
             'order_id': order.id,
-            'restaurant_id': order.restaurant.id
+            'restaurant_id': order.restaurant.id,
+            'gateway_id': getattr(self.gateway, "id", ""),
         }
         if metadata:
             final_metadata.update(metadata)
@@ -99,11 +135,11 @@ class StripeAdapter(PaymentAdapter):
             raise ValidationError(str(e))
 
     def verify_payment(self, data):
-        stripe.api_key = self.gateway.get_decrypted_secret()
+        stripe.api_key = self._secret_key()
         session_id = data.get('session_id')
         if not session_id:
             raise ValidationError("Session ID is required")
-            
+
         try:
             session = stripe.checkout.Session.retrieve(session_id)
             if session.payment_status == 'paid':
@@ -119,36 +155,105 @@ class StripeAdapter(PaymentAdapter):
     def verify_webhook(self, request):
         payload = request.body
         sig_header = request.headers.get('Stripe-Signature')
-        # Note: In a real scenario, we need the webhook secret. 
-        # For now, we might rely on the event retrieval or just basic signature check if secret is stored.
-        # Assuming we store webhook_secret in PaymentGateway or similar.
-        # If not available, we can retrieve the event from Stripe to verify authenticity.
-        
-        stripe.api_key = self.gateway.get_decrypted_secret()
-        
+        webhook_secret = self._webhook_secret()
+        if not webhook_secret:
+            raise ValidationError("Stripe webhook secret is not configured for this gateway")
+
+        stripe.api_key = self._secret_key()
+
         try:
-            # If we had the webhook secret:
-            # event = stripe.Webhook.construct_event(payload, sig_header, self.gateway.webhook_secret)
-            
-            # Without webhook secret (or if dynamic), we can parse the event and retrieve it to verify
-            event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
-            
-            # To be extra safe without signing secret, retrieve it:
-            # event = stripe.Event.retrieve(event.id) 
-            
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+
             if event.type == 'checkout.session.completed':
                 session = event.data.object
                 return {
+                    'provider_event_id': event.id,
                     'transaction_id': session.id,
                     'status': 'completed',
                     'amount': session.amount_total / 100 if session.amount_total else 0,
                     'meta': session.metadata
                 }
-            return None
-        except ValueError as e:
-            raise ValidationError("Invalid payload")
-        except stripe.error.SignatureVerificationError as e:
-            raise ValidationError("Invalid signature")
+            if event.type in {'checkout.session.expired', 'payment_intent.payment_failed'}:
+                obj = event.data.object
+                return {
+                    'provider_event_id': event.id,
+                    'transaction_id': getattr(obj, 'id', None),
+                    'status': 'failed',
+                    'meta': getattr(obj, 'metadata', {}) or {},
+                }
+            return {'provider_event_id': event.id, 'status': 'ignored', 'event_type': event.type}
+        except ValueError:
+            raise ValidationError("Invalid Stripe webhook payload")
+        except stripe.error.SignatureVerificationError:
+            raise ValidationError("Invalid Stripe webhook signature")
+
+    def capture_payment(self, transaction_id, amount=None):
+        stripe.api_key = self._secret_key()
+        try:
+            intent_id = self._payment_intent_id(transaction_id)
+            kwargs = {}
+            minor_amount = self._to_minor_units(amount)
+            if minor_amount is not None:
+                kwargs["amount_to_capture"] = minor_amount
+            intent = stripe.PaymentIntent.capture(intent_id, **kwargs)
+            return {
+                "status": intent.get("status"),
+                "transaction_id": intent.get("id"),
+                "amount_received": (intent.get("amount_received") or 0) / 100,
+                "raw_response": intent,
+            }
+        except stripe.error.StripeError as e:
+            raise ValidationError(str(e))
+
+    def refund_payment(self, transaction_id, amount=None, reason=None):
+        stripe.api_key = self._secret_key()
+        try:
+            intent_id = self._payment_intent_id(transaction_id)
+            kwargs = {"payment_intent": intent_id}
+            minor_amount = self._to_minor_units(amount)
+            if minor_amount is not None:
+                kwargs["amount"] = minor_amount
+            if reason:
+                kwargs["reason"] = reason
+            refund = stripe.Refund.create(**kwargs)
+            return {
+                "status": refund.get("status"),
+                "refund_id": refund.get("id"),
+                "transaction_id": intent_id,
+                "amount": (refund.get("amount") or 0) / 100,
+                "raw_response": refund,
+            }
+        except stripe.error.StripeError as e:
+            raise ValidationError(str(e))
+
+    def void_payment(self, transaction_id):
+        stripe.api_key = self._secret_key()
+        try:
+            raw_id = str(transaction_id or "")
+            if raw_id.startswith("cs_"):
+                session = stripe.checkout.Session.retrieve(raw_id)
+                if session.get("status") == "open":
+                    expired = stripe.checkout.Session.expire(raw_id)
+                    return {"status": "voided", "transaction_id": raw_id, "raw_response": expired}
+            intent_id = self._payment_intent_id(raw_id)
+            intent = stripe.PaymentIntent.cancel(intent_id)
+            return {"status": intent.get("status"), "transaction_id": intent.get("id"), "raw_response": intent}
+        except stripe.error.StripeError as e:
+            raise ValidationError(str(e))
+
+    def health_check(self):
+        stripe.api_key = self._secret_key()
+        try:
+            account = stripe.Account.retrieve()
+            return {
+                "ok": True,
+                "provider": "stripe",
+                "accountId": account.get("id"),
+                "chargesEnabled": bool(account.get("charges_enabled")),
+                "payoutsEnabled": bool(account.get("payouts_enabled")),
+            }
+        except stripe.error.StripeError as e:
+            raise ValidationError(str(e))
 
 class CheckoutAdapter(PaymentAdapter):
     """
@@ -159,6 +264,45 @@ class CheckoutAdapter(PaymentAdapter):
     SANDBOX_URL = "https://api.sandbox.checkout.com/hosted-payments"
     PRODUCTION_URL = "https://api.checkout.com/hosted-payments"
 
+    def _credentials(self):
+        return self.gateway.get_credentials() if hasattr(self.gateway, "get_credentials") else {}
+
+    def _secret_key(self):
+        return self.gateway.get_decrypted_secret()
+
+    def _webhook_secret(self):
+        return self._credentials().get("webhook_secret") or getattr(settings, "CHECKOUT_WEBHOOK_SECRET", "")
+
+    def _api_base(self):
+        return "https://api.sandbox.checkout.com" if getattr(self.gateway, "sandbox_mode", True) else "https://api.checkout.com"
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {self._secret_key()}", "Content-Type": "application/json"}
+
+    def _to_minor_units(self, amount):
+        if amount is None:
+            return None
+        return int(round(float(amount) * 100))
+
+    def _verify_checkout_signature(self, request):
+        webhook_secret = self._webhook_secret()
+        if not webhook_secret:
+            raise ValidationError("Checkout.com webhook secret is not configured for this gateway")
+
+        signature = (
+            request.headers.get('Cko-Signature')
+            or request.headers.get('cko-signature')
+            or request.headers.get('Checkout-Signature')
+        )
+        if not signature:
+            raise ValidationError("Missing Checkout.com webhook signature")
+
+        expected_signature = hmac.new(webhook_secret.encode("utf-8"), request.body, hashlib.sha256).hexdigest()
+        normalized_signature = str(signature).strip()
+        normalized_without_prefix = normalized_signature.split("=", 1)[-1] if "=" in normalized_signature else normalized_signature
+        if not hmac.compare_digest(expected_signature.lower(), normalized_without_prefix.lower()):
+            raise ValidationError("Invalid Checkout.com webhook signature")
+
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         import requests
         
@@ -166,13 +310,14 @@ class CheckoutAdapter(PaymentAdapter):
         # You can add an is_sandbox flag to PaymentGateway model if needed
         base_url = self.SANDBOX_URL if getattr(self.gateway, "sandbox_mode", True) else self.PRODUCTION_URL
         
-        secret_key = self.gateway.get_decrypted_secret()
+        secret_key = self._secret_key()
         final_amount = int((amount if amount is not None else order.total_price) * 100)  # Checkout expects minor units
         
         # Build metadata
         final_metadata = {
             'order_id': str(order.id),
-            'restaurant_id': str(order.restaurant.id)
+            'restaurant_id': str(order.restaurant.id),
+            'gateway_id': str(getattr(self.gateway, "id", "")),
         }
         if metadata:
             final_metadata.update(metadata)
@@ -228,10 +373,10 @@ class CheckoutAdapter(PaymentAdapter):
         if not session_id:
             raise ValidationError("Session ID is required")
         
-        secret_key = self.gateway.get_decrypted_secret()
+        secret_key = self._secret_key()
         
         # Get session details from Checkout.com
-        api_base = "https://api.sandbox.checkout.com" if getattr(self.gateway, "sandbox_mode", True) else "https://api.checkout.com"
+        api_base = self._api_base()
         url = f"{api_base}/hosted-payments/{session_id}"
         headers = {"Authorization": f"Bearer {secret_key}"}
         
@@ -258,31 +403,134 @@ class CheckoutAdapter(PaymentAdapter):
         Checkout.com webhook verification
         Events: payment_approved, payment_declined, payment_captured
         """
-        import hmac
-        import hashlib
-        
-        # Get webhook signature (optional - for production you should verify)
-        signature = request.headers.get('Cko-Signature')
-        
         try:
+            self._verify_checkout_signature(request)
             data = request.data if hasattr(request, 'data') else json.loads(request.body)
             
             event_type = data.get('type', '')
+            event_id = (
+                data.get('id')
+                or request.headers.get('Cko-Event-Id')
+                or request.headers.get('cko-event-id')
+            )
             
             if event_type == 'payment_approved' or event_type == 'payment_captured':
                 payment_data = data.get('data', {})
                 return {
+                    'provider_event_id': event_id or payment_data.get('id'),
                     'status': 'completed',
                     'transaction_id': payment_data.get('id'),
                     'amount': payment_data.get('amount', 0) / 100 if payment_data.get('amount') else 0,
                     'meta': data.get('data', {}).get('metadata', {})
                 }
             elif event_type == 'payment_declined':
-                return {'status': 'failed'}
+                payment_data = data.get('data', {})
+                return {
+                    'provider_event_id': event_id or payment_data.get('id'),
+                    'status': 'failed',
+                    'transaction_id': payment_data.get('id'),
+                    'meta': payment_data.get('metadata', {}),
+                }
             
-            return None
+            return {
+                'provider_event_id': event_id or hashlib.sha256(request.body).hexdigest(),
+                'status': 'ignored',
+                'event_type': event_type,
+            }
         except Exception as e:
             raise ValidationError(f"Webhook verification failed: {str(e)}")
+
+    def _extract_payment_id_from_hosted_session(self, transaction_id):
+        transaction_id = str(transaction_id or "")
+        if not transaction_id:
+            raise ValidationError("Transaction ID is required")
+        if transaction_id.startswith("pay_"):
+            return transaction_id
+
+        response = requests.get(f"{self._api_base()}/hosted-payments/{transaction_id}", headers=self._headers(), timeout=12)
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+        if response.status_code not in (200, 201):
+            message = data.get("error_type") or data.get("message") or response.text
+            raise ValidationError(f"Checkout.com hosted payment lookup failed: {message}")
+
+        payment_value = data.get("payment") if isinstance(data, dict) else None
+        payment_id = (
+            data.get("payment_id")
+            or data.get("paymentId")
+            or (payment_value.get("id") if isinstance(payment_value, dict) else None)
+        )
+        if not payment_id:
+            links = data.get("_links") or {}
+            payment_link = links.get("payment") if isinstance(links, dict) else None
+            href = payment_link.get("href") if isinstance(payment_link, dict) else ""
+            if href:
+                payment_id = href.rstrip("/").split("/")[-1]
+        if not payment_id:
+            raise ValidationError("Checkout.com hosted payment has no captured payment id yet")
+        return payment_id
+
+    def capture_payment(self, transaction_id, amount=None):
+        payment_id = self._extract_payment_id_from_hosted_session(transaction_id)
+        payload = {}
+        minor_amount = self._to_minor_units(amount)
+        if minor_amount is not None:
+            payload["amount"] = minor_amount
+        response = requests.post(
+            f"{self._api_base()}/payments/{payment_id}/captures",
+            json=payload,
+            headers=self._headers(),
+            timeout=15,
+        )
+        data = response.json() if response.content else {}
+        if response.status_code not in (200, 201, 202):
+            raise ValidationError(f"Checkout.com capture failed: {data.get('error_type') or data.get('message') or response.text}")
+        return {"status": "capture_requested", "transaction_id": payment_id, "raw_response": data}
+
+    def refund_payment(self, transaction_id, amount=None, reason=None):
+        payment_id = self._extract_payment_id_from_hosted_session(transaction_id)
+        payload = {}
+        minor_amount = self._to_minor_units(amount)
+        if minor_amount is not None:
+            payload["amount"] = minor_amount
+        if reason:
+            payload["reference"] = str(reason)[:80]
+        response = requests.post(
+            f"{self._api_base()}/payments/{payment_id}/refunds",
+            json=payload,
+            headers=self._headers(),
+            timeout=15,
+        )
+        data = response.json() if response.content else {}
+        if response.status_code not in (200, 201, 202):
+            raise ValidationError(f"Checkout.com refund failed: {data.get('error_type') or data.get('message') or response.text}")
+        return {"status": "refund_requested", "transaction_id": payment_id, "raw_response": data}
+
+    def void_payment(self, transaction_id):
+        payment_id = self._extract_payment_id_from_hosted_session(transaction_id)
+        response = requests.post(
+            f"{self._api_base()}/payments/{payment_id}/voids",
+            json={},
+            headers=self._headers(),
+            timeout=15,
+        )
+        data = response.json() if response.content else {}
+        if response.status_code not in (200, 201, 202):
+            raise ValidationError(f"Checkout.com void failed: {data.get('error_type') or data.get('message') or response.text}")
+        return {"status": "void_requested", "transaction_id": payment_id, "raw_response": data}
+
+    def health_check(self):
+        response = None
+        for path in ("/processing-channels", "/workflows"):
+            response = requests.get(f"{self._api_base()}{path}", headers=self._headers(), timeout=12)
+            if response.status_code in (200, 201):
+                return {"ok": True, "provider": "checkout", "endpoint": path}
+            if response.status_code in (401, 403):
+                break
+        status_code = response.status_code if response is not None else "unknown"
+        raise ValidationError(f"Checkout.com health check failed with HTTP {status_code}")
 
 
 class PaymeAdapter(PaymentAdapter):

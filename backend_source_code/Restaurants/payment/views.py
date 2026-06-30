@@ -20,6 +20,7 @@ from message.models import ChatMessage
 from restaurant.region_config import get_region_config
 from .split_bill import build_bill_summary, mark_payment_failed
 from .schema_guard import ensure_payment_schema
+from .recovery import reconcile_legacy_stripe_gateway
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 channel_layer = get_channel_layer()
@@ -128,12 +129,13 @@ class StripeDetailsViewSet(ModelViewSet):
         user = self.request.user
         restaurant = user.restaurants.first()
 
+        if not restaurant:
+            raise ValidationError("User does not own any restaurants.")
         if StripeDetails.objects.filter(restaurant=restaurant).exists():
             raise ValidationError("You already have StripeDetails associated with this restaurant. Please update it instead.")
 
-        if not restaurant:
-            raise ValidationError("User does not own any restaurants.")
         serializer.save(restaurant=restaurant)
+        reconcile_legacy_stripe_gateway(restaurant, force=True)
 
     def perform_update(self, serializer):
         """Ensure that StripeDetails are updated with the user's restaurant."""
@@ -146,6 +148,7 @@ class StripeDetailsViewSet(ModelViewSet):
         if serializer.instance.restaurant != restaurant:
             raise ValidationError("You cannot update StripeDetails for a restaurant that you do not own.")
         serializer.save(restaurant=restaurant)
+        reconcile_legacy_stripe_gateway(restaurant, force=True)
 
 
 

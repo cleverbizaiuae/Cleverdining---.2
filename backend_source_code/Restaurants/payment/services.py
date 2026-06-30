@@ -1,4 +1,4 @@
-from .models import PaymentGateway, Payment, StripeDetails
+from .models import PaymentGateway, Payment, PaymentProviderEvent, StripeDetails
 from .adapters import (
     StripeAdapter,
     CheckoutAdapter,
@@ -14,6 +14,8 @@ from rest_framework.exceptions import ValidationError
 from decimal import Decimal
 import json
 from django.db import transaction
+from django.db import IntegrityError
+from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.serializers import OrderDetailSerializer
@@ -27,6 +29,8 @@ from .split_bill import (
     register_pending_allocations,
 )
 from .schema_guard import ensure_payment_schema
+from .recovery import reconcile_legacy_stripe_gateway
+import hashlib
 
 channel_layer = get_channel_layer()
 PAYMENT_EPSILON = Decimal("0.01")
@@ -150,6 +154,7 @@ class PaymentService:
 
     @staticmethod
     def _allowed_providers_for_restaurant(restaurant):
+        reconcile_legacy_stripe_gateway(restaurant)
         assigned = list(PaymentGateway.objects.filter(
             restaurant=restaurant,
             is_enabled=True,
@@ -616,7 +621,203 @@ class PaymentService:
         return verification_result
 
     @staticmethod
+    def _append_operation_response(payment, operation, result):
+        raw_response = payment.raw_response if isinstance(payment.raw_response, dict) else {}
+        operations = list(raw_response.get("provider_operations") or [])
+        operations.append({
+            "operation": operation,
+            "result": _json_safe(result),
+        })
+        raw_response["provider_operations"] = operations[-25:]
+        payment.raw_response = raw_response
+        payment.save(update_fields=["raw_response", "updated_at"])
+
+    @staticmethod
+    def _operation_adapter(payment, provider):
+        provider = (provider or payment.provider or "").strip().lower()
+        if provider != payment.provider:
+            raise ValidationError("Payment provider mismatch")
+        gateway = PaymentGateway.objects.filter(
+            restaurant=payment.restaurant,
+            provider=provider,
+            is_enabled=True,
+        ).first()
+        if not gateway:
+            raise ValidationError("Gateway configuration not found")
+        adapter_class = PaymentService.ADAPTERS.get(gateway.provider)
+        if not adapter_class:
+            raise ValidationError(f"Unsupported provider: {gateway.provider}")
+        return adapter_class(gateway)
+
+    @staticmethod
+    def capture_payment(payment, amount=None):
+        adapter = PaymentService._operation_adapter(payment, payment.provider)
+        result = adapter.capture_payment(payment.transaction_id, amount=amount)
+        PaymentService._append_operation_response(payment, "capture", result)
+        return _json_safe(result)
+
+    @staticmethod
+    def refund_payment(payment, amount=None, reason=None):
+        adapter = PaymentService._operation_adapter(payment, payment.provider)
+        result = adapter.refund_payment(payment.transaction_id, amount=amount, reason=reason)
+        PaymentService._append_operation_response(payment, "refund", result)
+        return _json_safe(result)
+
+    @staticmethod
+    def void_payment(payment):
+        adapter = PaymentService._operation_adapter(payment, payment.provider)
+        result = adapter.void_payment(payment.transaction_id)
+        PaymentService._append_operation_response(payment, "void", result)
+        return _json_safe(result)
+
+    @staticmethod
+    def _webhook_hashes(request):
+        body = request.body or b""
+        signature = (
+            request.headers.get("Stripe-Signature")
+            or request.headers.get("Cko-Signature")
+            or request.headers.get("cko-signature")
+            or request.headers.get("Checkout-Signature")
+            or ""
+        )
+        return (
+            hashlib.sha256(body).hexdigest(),
+            hashlib.sha256(str(signature).encode("utf-8")).hexdigest() if signature else "",
+        )
+
+    @staticmethod
+    def _record_provider_event(gateway, result, request, status_value="received"):
+        payload_hash, signature_hash = PaymentService._webhook_hashes(request)
+        provider_event_id = (
+            (result or {}).get("provider_event_id")
+            or (result or {}).get("event_id")
+            or (result or {}).get("transaction_id")
+            or payload_hash
+        )
+        try:
+            event, created = PaymentProviderEvent.objects.get_or_create(
+                provider=gateway.provider,
+                gateway=gateway,
+                provider_event_id=str(provider_event_id),
+                defaults={
+                    "payload_hash": payload_hash,
+                    "signature_hash": signature_hash,
+                    "status": status_value,
+                },
+            )
+        except IntegrityError:
+            event = PaymentProviderEvent.objects.get(
+                provider=gateway.provider,
+                gateway=gateway,
+                provider_event_id=str(provider_event_id),
+            )
+            created = False
+        if not created:
+            event.replay_detected = True
+            event.status = "rejected"
+            event.processed_at = timezone.now()
+            event.save(update_fields=["replay_detected", "status", "processed_at"])
+            return event, True
+        return event, False
+
+    @staticmethod
+    def _record_failed_provider_event(gateway, request, exc):
+        payload_hash, signature_hash = PaymentService._webhook_hashes(request)
+        provider_event_id = f"invalid:{payload_hash[:24]}"
+        event, _ = PaymentProviderEvent.objects.get_or_create(
+            provider=gateway.provider,
+            gateway=gateway,
+            provider_event_id=provider_event_id,
+            defaults={
+                "payload_hash": payload_hash,
+                "signature_hash": signature_hash,
+                "status": "failed",
+                "processed_at": timezone.now(),
+            },
+        )
+        gateway.webhook_status = "failing"
+        gateway.last_error = str(exc)
+        gateway.save(update_fields=["webhook_status", "last_error", "updated_at"])
+        return event
+
+    @staticmethod
+    def _apply_webhook_result(provider, restaurant_id, result):
+        if result and result.get('status') == 'completed':
+            transaction_id = result.get('transaction_id')
+            payment = Payment.objects.filter(transaction_id=transaction_id).first()
+            if not payment:
+                meta = result.get('meta') or {}
+                bill_id = meta.get('bill_id')
+                order_id = meta.get('primary_order_id') or meta.get('order_id')
+                guest_session_id = meta.get('guest_session_id')
+                candidates = Payment.objects.filter(
+                    restaurant_id=restaurant_id,
+                    provider=provider,
+                    status='pending',
+                ).order_by('-created_at')
+                if bill_id:
+                    payment = candidates.filter(bill_id=bill_id).first()
+                if not payment and order_id:
+                    payment = candidates.filter(order_id=order_id).first()
+                if not payment and guest_session_id:
+                    payment = candidates.filter(
+                        created_by__contains=f":{guest_session_id}:"
+                    ).first() or candidates.filter(created_by='guest_bulk').first()
+            if payment:
+                PaymentService._finalize_completed_payment(payment, result, already_verified=True)
+        elif result and str(result.get('status') or '').lower() in {'failed', 'declined', 'cancelled', 'canceled'}:
+            transaction_id = result.get('transaction_id')
+            payment = Payment.objects.filter(transaction_id=transaction_id).first() if transaction_id else None
+            if payment:
+                payment.status = "failed"
+                payment.raw_response = _json_safe(result)
+                payment.save(update_fields=["status", "raw_response", "updated_at"])
+                mark_payment_failed(payment)
+        return result
+
+    @staticmethod
+    def handle_gateway_webhook(provider, gateway_id, request):
+        ensure_payment_schema()
+        provider = (provider or "").strip().lower()
+        gateway = PaymentGateway.objects.select_related("restaurant").filter(
+            id=gateway_id,
+            provider=provider,
+            is_enabled=True,
+        ).first()
+        if not gateway:
+            raise ValidationError("Payment gateway not found for webhook")
+        adapter_class = PaymentService.ADAPTERS.get(gateway.provider)
+        if not adapter_class:
+            raise ValidationError(f"Unsupported provider: {gateway.provider}")
+        adapter = adapter_class(gateway)
+        try:
+            result = adapter.verify_webhook(request)
+            if not result:
+                result = {"status": "ignored"}
+            event, replay_detected = PaymentService._record_provider_event(gateway, result, request)
+            if replay_detected:
+                return {
+                    "status": "rejected",
+                    "replay_detected": True,
+                    "event_id": event.id,
+                }
+            PaymentService._apply_webhook_result(provider, gateway.restaurant_id, result)
+            event.status = "processed" if str(result.get("status") or "").lower() in {"completed", "failed", "declined", "cancelled", "canceled"} else "ignored"
+            event.processed_at = timezone.now()
+            event.save(update_fields=["status", "processed_at"])
+            gateway.webhook_status = "healthy"
+            gateway.last_error = ""
+            gateway.save(update_fields=["webhook_status", "last_error", "updated_at"])
+            return {**_json_safe(result), "event_id": event.id, "replay_detected": False}
+        except Exception as exc:
+            PaymentService._record_failed_provider_event(gateway, request, exc)
+            raise
+
+    @staticmethod
     def handle_webhook(provider, request):
+        provider = (provider or "").strip().lower()
+        if provider in {"stripe", "checkout"}:
+            raise ValidationError("Use the gateway-specific webhook URL: /api/payment-providers/{provider}/webhook/{gateway_id}/")
         # This is tricky because we need to know WHICH restaurant/gateway to use to verify the signature.
         # Usually webhooks are per-account or have a way to identify the account in the payload.
         # For Stripe Connect, it's easier. For separate keys, we might need to iterate or look up by some ID in payload.
@@ -687,35 +888,4 @@ class PaymentService:
         adapter = PaymentService.get_adapter(restaurant, provider)
         result = adapter.verify_webhook(request)
         
-        if result and result.get('status') == 'completed':
-            transaction_id = result.get('transaction_id')
-            payment = Payment.objects.filter(transaction_id=transaction_id).first()
-            if not payment:
-                meta = result.get('meta') or {}
-                bill_id = meta.get('bill_id')
-                order_id = meta.get('primary_order_id') or meta.get('order_id')
-                guest_session_id = meta.get('guest_session_id')
-                candidates = Payment.objects.filter(
-                    restaurant_id=restaurant_id,
-                    provider=provider,
-                    status='pending',
-                ).order_by('-created_at')
-                if bill_id:
-                    payment = candidates.filter(bill_id=bill_id).first()
-                if not payment and order_id:
-                    payment = candidates.filter(order_id=order_id).first()
-                if not payment and guest_session_id:
-                    payment = candidates.filter(
-                        created_by__contains=f":{guest_session_id}:"
-                    ).first() or candidates.filter(created_by='guest_bulk').first()
-            if payment:
-                PaymentService._finalize_completed_payment(payment, result, already_verified=True)
-        elif result and str(result.get('status') or '').lower() in {'failed', 'declined', 'cancelled', 'canceled'}:
-            transaction_id = result.get('transaction_id')
-            payment = Payment.objects.filter(transaction_id=transaction_id).first() if transaction_id else None
-            if payment:
-                payment.status = "failed"
-                payment.raw_response = _json_safe(result)
-                payment.save(update_fields=["status", "raw_response", "updated_at"])
-                mark_payment_failed(payment)
-        return result
+        return PaymentService._apply_webhook_result(provider, restaurant_id, result)

@@ -30,7 +30,7 @@ REGION_CONFIG: Dict[str, RegionSettings] = {
         "country_code": "+971",
         # Existing UAE default behavior remains Stripe unless explicitly changed
         "default_payment_provider": "stripe",
-        "payments": ["stripe", "checkout", "paytabs", "payme", "adyen", "worldpay", "sumup", "square", "cash"],
+        "payments": ["stripe", "checkout", "paytabs", "cash"],
     },
     "UK": {
         "currency": "GBP",
@@ -38,7 +38,7 @@ REGION_CONFIG: Dict[str, RegionSettings] = {
         "phone_format": "+44",
         "country_code": "+44",
         "default_payment_provider": "stripe",
-        "payments": ["stripe", "checkout", "payme", "adyen", "worldpay", "sumup", "square", "cash"],
+        "payments": ["stripe", "checkout", "payme", "cash"],
     },
 }
 

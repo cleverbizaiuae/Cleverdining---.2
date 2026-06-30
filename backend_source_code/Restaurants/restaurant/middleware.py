@@ -2,6 +2,8 @@ import logging
 import json
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
+from django.db.utils import OperationalError, ProgrammingError
+from .schema_guard import ensure_restaurant_runtime_schema
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +12,16 @@ class JSONExceptionMiddleware(MiddlewareMixin):
     Middleware to ensure ALL exceptions return JSON responses.
     This catches exceptions that happen before DRF's exception handler.
     """
+    def process_request(self, request):
+        if (
+            request.path.startswith('/api/') or
+            request.path.startswith('/owners/') or
+            request.path.startswith('/accounts/') or
+            '/login' in request.path or
+            '/register' in request.path
+        ):
+            ensure_restaurant_runtime_schema()
+
     def process_exception(self, request, exception):
         """
         BULLETPROOF EXCEPTION HANDLER - Catches ALL exceptions
@@ -68,6 +80,16 @@ class JSONExceptionMiddleware(MiddlewareMixin):
             logger.error(f"CRITICAL: Exception in {request.path}: {str(exception)}", exc_info=True)
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
+
+            if isinstance(exception, (OperationalError, ProgrammingError)):
+                return JsonResponse(
+                    {
+                        "error": "configuration_error",
+                        "detail": "Configuration error detected. A required system field is missing.",
+                        "message": "Please contact support.",
+                    },
+                    status=500,
+                )
             
             return JsonResponse(
                 {
