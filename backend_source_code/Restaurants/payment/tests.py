@@ -205,7 +205,36 @@ class PaymentProviderVisibilityTests(TestCase):
             "sk_test_legacy",
         )
 
-    def test_explicit_assignments_do_not_expose_unassigned_providers(self):
+    def test_selected_processor_is_visible_with_other_assigned_providers(self):
+        PaymentGateway.objects.create(
+            restaurant=self.restaurant,
+            provider="paytabs",
+            is_enabled=True,
+        )
+        PaymentGateway.objects.create(
+            restaurant=self.restaurant,
+            provider="checkout",
+            is_enabled=True,
+        )
+
+        response = self.client.get("/api/payment-providers/enabled/")
+
+        self.assertEqual(response.status_code, 200)
+        providers = {item["provider"]: item for item in response.json()}
+        self.assertEqual(set(providers), {"checkout", "paytabs", "stripe"})
+        self.assertFalse(providers["stripe"]["credentialsConfigured"])
+        self.assertEqual(providers["stripe"]["connectionStatus"], "not_configured")
+
+        stripe_gateway = PaymentGateway.objects.get(
+            restaurant=self.restaurant,
+            provider="stripe",
+        )
+        self.assertTrue(stripe_gateway.is_enabled)
+
+    def test_explicit_non_default_processor_does_not_expose_region_default(self):
+        self.restaurant.payment_processor = "paytabs"
+        self.restaurant.default_payment_provider = "paytabs"
+        self.restaurant.save(update_fields=["payment_processor", "default_payment_provider"])
         PaymentGateway.objects.create(
             restaurant=self.restaurant,
             provider="paytabs",
@@ -215,10 +244,7 @@ class PaymentProviderVisibilityTests(TestCase):
         response = self.client.get("/api/payment-providers/enabled/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            [item["provider"] for item in response.json()],
-            ["paytabs"],
-        )
+        self.assertEqual([item["provider"] for item in response.json()], ["paytabs"])
 
     def test_all_registered_providers_have_adapters(self):
         self.assertEqual(

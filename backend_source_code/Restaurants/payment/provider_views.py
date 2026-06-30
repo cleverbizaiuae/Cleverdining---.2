@@ -14,7 +14,7 @@ from restaurant.models import Restaurant
 from restaurant.region_config import get_region_config
 from .models import Payment, PaymentGateway, PaymentProviderEvent
 from .provider_registry import PAYMENT_PROVIDER_CODES, get_provider, provider_metadata_payload
-from .recovery import reconcile_legacy_stripe_gateway
+from .recovery import ensure_selected_payment_gateway
 from .schema_guard import ensure_payment_schema
 from .serializers import PaymentGatewaySerializer, PaymentProviderEventSerializer
 from .services import PaymentService
@@ -137,7 +137,7 @@ class EnabledPaymentProvidersAPIView(APIView):
     def get(self, request):
         ensure_payment_schema()
         restaurant = _restaurant_from_request(request)
-        reconcile_legacy_stripe_gateway(restaurant)
+        ensure_selected_payment_gateway(restaurant)
         assigned = list(PaymentGateway.objects.filter(restaurant=restaurant, is_enabled=True).order_by("provider"))
         if assigned:
             return Response(

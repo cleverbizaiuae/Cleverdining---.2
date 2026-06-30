@@ -29,7 +29,7 @@ from .split_bill import (
     register_pending_allocations,
 )
 from .schema_guard import ensure_payment_schema
-from .recovery import reconcile_legacy_stripe_gateway
+from .recovery import ensure_selected_payment_gateway
 import hashlib
 
 channel_layer = get_channel_layer()
@@ -154,7 +154,7 @@ class PaymentService:
 
     @staticmethod
     def _allowed_providers_for_restaurant(restaurant):
-        reconcile_legacy_stripe_gateway(restaurant)
+        ensure_selected_payment_gateway(restaurant)
         assigned = list(PaymentGateway.objects.filter(
             restaurant=restaurant,
             is_enabled=True,

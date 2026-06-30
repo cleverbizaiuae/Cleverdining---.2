@@ -322,6 +322,10 @@ class OwnerRegisterView(APIView):
                     owner.save(update_fields=['email'])
 
             restaurant.save()
+            if processor_value is not None or default_provider_value is not None:
+                from payment.recovery import ensure_selected_payment_gateway
+
+                ensure_selected_payment_gateway(restaurant)
             return Response({'message': 'Restaurant updated successfully'}, status=status.HTTP_200_OK)
         except Restaurant.DoesNotExist:
             return Response({'error': 'Restaurant not found'}, status=status.HTTP_404_NOT_FOUND)
