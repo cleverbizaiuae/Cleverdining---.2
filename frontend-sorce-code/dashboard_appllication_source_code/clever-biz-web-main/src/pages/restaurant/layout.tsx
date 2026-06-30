@@ -8,7 +8,6 @@ import {
   CalendarDays,
   MessageSquare,
   Users,
-  ContactRound,
   Wallet,
   LayoutGrid,
   Palette,
@@ -46,7 +45,6 @@ const SEGMENT_PRELOADERS: Record<string, () => Promise<unknown>> = {
   Payments: () => import("./Payments"),
   "AI Upsell": () => import("./screen_restaurant_upsell"),
   Branding: () => import("../multilocation/screen_multilocation_branding"),
-  Customers: () => import("./screen_restaurant_crm"),
   Leads: () => import("./screen_restaurant_leads"),
 };
 
@@ -70,7 +68,6 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Palette, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Sparkles, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
-  { icon: ContactRound, label: 'Customers', path: '/crm', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
 
 const ROLE_ALIASES: Record<string, DashboardRole> = {

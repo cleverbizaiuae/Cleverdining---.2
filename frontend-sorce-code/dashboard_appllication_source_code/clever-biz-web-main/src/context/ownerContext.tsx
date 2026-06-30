@@ -123,6 +123,7 @@ interface OwnerContextType {
   devicesSearchQuery: string;
   devicesCurrentPage: number;
   devicesCount: number;
+  devicesError: string | null;
   ordersStats: OrdersStats | null;
   deviceStats: DeviceStats | null;
   members: Member[];
@@ -218,6 +219,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   const [devicesCurrentPage, setDevicesCurrentPage] = useState(1);
   const [devicesCount, setDevicesCount] = useState(0);
   const [deviceStats, setDeviceStats] = useState<DeviceStats | null>(null);
+  const [devicesError, setDevicesError] = useState<string | null>(null);
   const [ordersStats, setOrdersStats] = useState<OrdersStats | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [membersSearchQuery, setMembersSearchQuery] = useState("");
@@ -668,16 +670,21 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           endpoint = `/owners/devices/?page=${page}&search=${encodeURIComponent(searchParam || "")}`;
         }
 
-        const response = await cachedGet(endpoint, {}, { ttlMs: LIST_CACHE_TTL_MS });
+        const response = await cachedGet(endpoint, {}, { ttlMs: 0, force: true });
         const devices = Array.isArray(response.data?.results)
           ? response.data?.results
           : [];
         setAllDevices(devices);
         setDevicesCount(response.data?.count || 0);
         setDevicesCurrentPage(page);
+        setDevicesError(null);
       } catch (error) {
         console.warn("Failed to load devices", error);
-        toast.error("Failed to load devices.");
+        const message =
+          (error as any)?.response?.data?.error ||
+          "Unable to load tables. Please retry.";
+        setDevicesError(message);
+        toast.error(message);
       }
     },
     [devicesCurrentPage, devicesSearchQuery, userRole, isLoading]
@@ -699,11 +706,15 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         endpoint = "/owners/devices/stats/";
       }
 
-      const response = await cachedGet(endpoint, {}, { ttlMs: SUMMARY_CACHE_TTL_MS });
+      const response = await cachedGet(endpoint, {}, { ttlMs: 0, force: true });
       setDeviceStats(response.data);
+      setDevicesError(null);
     } catch (error) {
       console.warn("Failed to load device stats", error);
-      toast.error("Failed to load device stats.");
+      const message =
+        (error as any)?.response?.data?.error ||
+        "Unable to load table statistics. Please retry.";
+      setDevicesError(message);
     }
   }, [userRole, isLoading]);
 
@@ -1142,6 +1153,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     devicesSearchQuery,
     devicesCurrentPage,
     devicesCount,
+    devicesError,
     deviceStats,
     members,
     membersSearchQuery,

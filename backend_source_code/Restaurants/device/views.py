@@ -2,6 +2,7 @@ import random
 import re
 import string
 import threading
+import logging
 from rest_framework import viewsets, permissions,filters
 from rest_framework.response import Response
 from rest_framework import status
@@ -33,6 +34,64 @@ import uuid
 from .models import Device, Reservation, GuestSession
 
 channel_layer = get_channel_layer()
+logger = logging.getLogger(__name__)
+
+
+def _resolve_user_restaurant_ids(user):
+    """Return restaurant ids this dashboard user can manage.
+
+    Older code checked ChefStaff.action='accepted', but ChefStaff only stores
+    active/hold. That made valid manager/staff users look unlinked and caused
+    table APIs to return empty success responses.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return []
+
+    restaurant_ids = []
+
+    try:
+        restaurant_ids.extend(
+            Restaurant.objects.filter(owner=user).values_list('id', flat=True)
+        )
+    except Exception:
+        pass
+
+    try:
+        restaurant_ids.extend(
+            ChefStaff.objects.filter(user=user)
+            .exclude(action='hold')
+            .values_list('restaurant_id', flat=True)
+        )
+    except Exception:
+        pass
+
+    try:
+        from staff.models import Staff
+
+        restaurant_ids.extend(
+            Staff.objects.filter(user=user, is_active=True).values_list('restaurant_id', flat=True)
+        )
+    except Exception:
+        pass
+
+    return list(dict.fromkeys([rid for rid in restaurant_ids if rid]))
+
+
+def _resolve_primary_restaurant(user):
+    restaurant_ids = _resolve_user_restaurant_ids(user)
+    if not restaurant_ids:
+        return None
+    return Restaurant.objects.filter(id__in=restaurant_ids).order_by('id').first()
+
+
+def _no_restaurant_response():
+    return Response(
+        {
+            "error": "No restaurant is linked to this account.",
+            "code": "restaurant_not_linked",
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 class ResolveTableView(APIView):
     permission_classes = [AllowAny]
@@ -214,15 +273,8 @@ class CloseTableSessionView(APIView):
              if restaurant.owner != user:
                  return Response({'error': 'Unauthorized'}, status=403)
         
-        # Explicit Staff Check
-        elif getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
-             is_authorized = ChefStaff.objects.filter(user=user, restaurant=restaurant, action='accepted').exists()
-             if not is_authorized:
-                  # Legacy fallback
-                  from staff.models import Staff
-                  is_legacy = Staff.objects.filter(user=user, restaurant=restaurant).exists()
-                  if not is_legacy:
-                       return Response({'error': 'Unauthorized: Not assigned to this restaurant'}, status=403)
+        elif restaurant.id not in _resolve_user_restaurant_ids(user):
+             return Response({'error': 'Unauthorized: Not assigned to this restaurant'}, status=403)
         
         # 2. Close Session
         if not session.is_active:
@@ -401,56 +453,20 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
         
         try:
-            if getattr(user, 'role', None) == 'owner':
-                return base_qs.filter(restaurant__owner=user).order_by('-id')
-            
-            # Staff/Chef/Manager Logic
-            # 1. Preferred: ChefStaff model
-            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-            if chef_staff:
-                # print(f"DEBUG_DEVICES: Found ChefStaff for rest {chef_staff.restaurant.id}")
-                return base_qs.filter(restaurant=chef_staff.restaurant).order_by('-id')
-            
-            # 2. Fallback: Legacy Staff model
-            from staff.models import Staff
-            legacy_staff = Staff.objects.filter(user=user).first()
-            if legacy_staff:
-                # print(f"DEBUG_DEVICES: Found Legacy Staff for rest {legacy_staff.restaurant.id}")
-                return base_qs.filter(restaurant=legacy_staff.restaurant).order_by('-id')
-                
-            # 3. Fallback: Owner check (in case role is mismatched but is actually owner)
-            if getattr(user, 'role', None) == 'owner': # Redundant check but safe
-                return base_qs.filter(restaurant__owner=user).order_by('-id')
-
+            restaurant_ids = _resolve_user_restaurant_ids(user)
+            if restaurant_ids:
+                return base_qs.filter(restaurant_id__in=restaurant_ids).order_by('-id')
         except Exception as e:
-             print(f"DEBUG_DEVICES: Queryset filtering failed: {e}")
-             return Device.objects.none()
+            print(f"DEBUG_DEVICES: Queryset filtering failed: {e}")
 
-        # print("DEBUG_DEVICES: No access found. Returning empty.")
         return Device.objects.none()
 
     def perform_create(self, serializer):
         user = self.request.user
         
-        restaurant = None
-        if getattr(user, 'role', None) == 'owner':
-            restaurant = Restaurant.objects.filter(owner=user).first()
-            if not restaurant:
-                raise serializers.ValidationError("Restaurant not found for this owner.")
-        else: # Manager/Staff/Chef
-            # Check ChefStaff
-            chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-            if chef_staff:
-                 restaurant = chef_staff.restaurant
-            else:
-                 # Check Legacy Staff
-                 from staff.models import Staff
-                 legacy_staff = Staff.objects.filter(user=user).first()
-                 if legacy_staff:
-                      restaurant = legacy_staff.restaurant
-            
-            if not restaurant:
-                raise serializers.ValidationError("You are not associated with any accepted restaurant.")
+        restaurant = _resolve_primary_restaurant(user)
+        if not restaurant:
+            raise serializers.ValidationError("No restaurant is linked to this account.")
 
         with transaction.atomic():
             # Lock restaurant row to avoid race conditions across concurrent creates.
@@ -567,32 +583,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def get_device_stats(self, request):
         try:
             user = request.user
-            
-            restaurant = None
-            
-            if getattr(user, 'role', None) == 'owner':
-                restaurant = Restaurant.objects.filter(owner=user).first()
-            else:
-                # Check ChefStaff
-                chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-                if chef_staff:
-                    restaurant = chef_staff.restaurant
-                else:
-                    # Check Legacy Staff
-                    from staff.models import Staff
-                    legacy_staff = Staff.objects.filter(user=user).first()
-                    if legacy_staff:
-                        restaurant = legacy_staff.restaurant
+            restaurant = _resolve_primary_restaurant(user)
             
             if not restaurant:
-                return Response({
-                    "restaurant": "N/A",
-                    "total_devices": 0,
-                    "active_devices": 0,
-                    "hold_devices": 0,
-                    "table_limit": 0,
-                    "can_create_table": False,
-                })
+                return _no_restaurant_response()
 
             from django.db.models import Count, Q
 
@@ -612,16 +606,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 "can_create_table": not (table_limit > 0 and current_tables >= table_limit),
             })
         except Exception as e:
-            print(f"DeviceStats Error: {e}")
+            logger.exception("Unable to load table statistics for user %s", request.user.pk)
             return Response({
-                "restaurant": "Error",
-                "total_devices": 0,
-                "active_devices": 0,
-                "hold_devices": 0,
-                "table_limit": 0,
-                "can_create_table": False,
-                "error": str(e)
-            }, status=200) # Return 200 with empty stats to prevent UI crash
+                "error": "Unable to load table statistics.",
+                "code": "table_stats_failed",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -684,14 +673,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     def _assert_reservation_access(self, reservation):
         user = self.request.user
-        if getattr(user, 'role', None) == 'owner' and reservation.restaurant and reservation.restaurant.owner == user:
+        if reservation.restaurant_id in _resolve_user_restaurant_ids(user):
             return
-        if getattr(user, 'role', None) in ['staff', 'chef', 'manager']:
-            if ChefStaff.objects.filter(user=user, restaurant=reservation.restaurant, action='accepted').exists():
-                return
-            from staff.models import Staff
-            if Staff.objects.filter(user=user, restaurant=reservation.restaurant).exists():
-                return
         raise PermissionDenied("You are not authorized to update this reservation.")
 
     def _parse_slot_datetime(self, start_value=None, date_value=None, time_value=None):
@@ -1142,38 +1125,10 @@ class SimpleDeviceListView(APIView):
         try:
             user = request.user
             search_query = (request.query_params.get('search') or '').strip()
-            
-            # Determine restaurant
-            restaurant = None
-            
-            if getattr(user, 'role', None) == 'owner':
-                restaurant = Restaurant.objects.filter(owner=user).first()
-            else:
-                # Check ChefStaff
-                try:
-                    chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-                    if chef_staff:
-                        restaurant = chef_staff.restaurant
-                except Exception:
-                    pass
-                
-                # Fallback: Legacy Staff
-                if not restaurant:
-                    try:
-                        from staff.models import Staff
-                        legacy_staff = Staff.objects.filter(user=user).first()
-                        if legacy_staff:
-                            restaurant = legacy_staff.restaurant
-                    except Exception:
-                        pass
+            restaurant = _resolve_primary_restaurant(user)
             
             if not restaurant:
-                return Response({
-                    "count": 0,
-                    "next": None,
-                    "previous": None,
-                    "results": []
-                })
+                return _no_restaurant_response()
             
             # Get devices - simple query, no annotations
             devices = Device.objects.filter(restaurant=restaurant).select_related('restaurant', 'user')
@@ -1260,44 +1215,21 @@ class SimpleDeviceListView(APIView):
             })
             
         except Exception as e:
-            print(f"SimpleDeviceListView GET Error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Unable to load tables for user %s", request.user.pk)
             return Response({
-                "count": 0,
-                "next": None,
-                "previous": None,
-                "results": [],
-                "error": str(e)
-            })
+                "error": "Unable to load tables.",
+                "code": "table_list_failed",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         """BULLETPROOF Device Creation - handles table/device creation."""
         try:
             user = request.user
             role = getattr(user, 'role', None)
-            
-            # Determine restaurant
-            restaurant = None
-            if role == 'owner':
-                restaurant = Restaurant.objects.filter(owner=user).first()
-            else:
-                # Check ChefStaff
-                chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-                if chef_staff:
-                    restaurant = chef_staff.restaurant
-                else:
-                    # Check Legacy Staff
-                    try:
-                        from staff.models import Staff
-                        legacy_staff = Staff.objects.filter(user=user).first()
-                        if legacy_staff:
-                            restaurant = legacy_staff.restaurant
-                    except Exception:
-                        pass
+            restaurant = _resolve_primary_restaurant(user)
             
             if not restaurant:
-                return Response({"error": "No restaurant found for this user"}, status=400)
+                return _no_restaurant_response()
             
             # Get and normalize device data from request
             table_name = _normalize_table_value(request.data.get('table_name'))
@@ -1402,35 +1334,10 @@ class SimpleDeviceListAllView(APIView):
     def get(self, request):
         try:
             user = request.user
-            
-            # Determine restaurant IDs
-            restaurant_ids = []
-            
-            if getattr(user, 'role', None) == 'owner':
-                restaurant = Restaurant.objects.filter(owner=user).first()
-                if restaurant:
-                    restaurant_ids = [restaurant.id]
-            else:
-                # Check ChefStaff
-                try:
-                    chef_staff = ChefStaff.objects.filter(user=user, action='accepted').first()
-                    if chef_staff:
-                        restaurant_ids = [chef_staff.restaurant_id]
-                except Exception:
-                    pass
-                
-                # Fallback: Legacy Staff
-                if not restaurant_ids:
-                    try:
-                        from staff.models import Staff
-                        legacy_staff = Staff.objects.filter(user=user).first()
-                        if legacy_staff and legacy_staff.restaurant:
-                            restaurant_ids = [legacy_staff.restaurant.id]
-                    except Exception:
-                        pass
+            restaurant_ids = _resolve_user_restaurant_ids(user)
             
             if not restaurant_ids:
-                return Response([])
+                return _no_restaurant_response()
             
             # Get devices - simple query
             devices = Device.objects.filter(restaurant_id__in=restaurant_ids).select_related('restaurant', 'user').order_by('-id')
@@ -1472,7 +1379,8 @@ class SimpleDeviceListAllView(APIView):
             return Response(results)
             
         except Exception as e:
-            print(f"SimpleDeviceListAllView Error: {e}")
-            import traceback
-            traceback.print_exc()
-            return Response([])
+            logger.exception("Unable to load all tables for user %s", request.user.pk)
+            return Response({
+                "error": "Unable to load tables.",
+                "code": "table_list_failed",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

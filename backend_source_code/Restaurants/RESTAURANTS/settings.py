@@ -110,6 +110,15 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5177",
 ]
 
+# Netlify preview/custom deploy URLs change over time. Keep the explicit
+# allowlist above for known production domains, and allow same-project Netlify
+# origins so deployed previews do not fail browser preflight requests.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://[a-z0-9-]+\.netlify\.app$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+
 # Allow credentials for authenticated requests
 CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400
@@ -177,6 +186,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'core.cors.PermanentCorsMiddleware',  # First: keep CORS headers on preflight and error responses
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.gzip.GZipMiddleware',  # Compress responses — 60-80% smaller JSON payloads
     'corsheaders.middleware.CorsMiddleware',  # CORS must be early, before CommonMiddleware

@@ -24,6 +24,12 @@ const updateSW = registerSW({
   },
 });
 
+if ("caches" in window) {
+  window.addEventListener("load", () => {
+    caches.delete("dashboard-static-assets").catch(() => undefined);
+  });
+}
+
 initSentry();
 
 createRoot(document.getElementById("root")!).render(

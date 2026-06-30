@@ -151,7 +151,7 @@ export default defineConfig({
             urlPattern: /\.(?:js|css)$/i,
             handler: "StaleWhileRevalidate",
             options: {
-              cacheName: "dashboard-static-assets",
+              cacheName: "dashboard-static-assets-v2",
               expiration: { maxEntries: 120, maxAgeSeconds: 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }

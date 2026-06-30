@@ -2,6 +2,7 @@
 
 echo "🔧 Running database migrations..."
 python manage.py migrate --noinput
+python manage.py verify_schema --skip-type-check
 
 echo "🗂️  Collecting static files..."
 python manage.py collectstatic --noinput --clear
@@ -11,4 +12,3 @@ ls -la staticfiles/admin/ 2>/dev/null | head -5 || echo "Static files directory 
 
 echo "🚀 Starting Daphne server..."
 daphne -b 0.0.0.0 -p $PORT RESTAURANTS.asgi:application
-

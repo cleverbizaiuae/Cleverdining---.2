@@ -70,6 +70,7 @@ export const ScreenRestaurantDevices = () => {
     devicesCurrentPage,
     devicesSearchQuery,
     deviceStats,
+    devicesError,
     fetchAllDevices,
     fetchDeviceStats,
     setDevicesCurrentPage,
@@ -372,6 +373,17 @@ export const ScreenRestaurantDevices = () => {
                 </div>
               </div>
             ))
+          ) : devicesError ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-sm font-medium text-red-600">{devicesError}</p>
+              <button
+                type="button"
+                onClick={() => Promise.all([fetchDeviceStats(), fetchAllDevices()])}
+                className="mt-3 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+              >
+                Retry
+              </button>
+            </div>
           ) : (
             <div className="px-6 py-12 text-center text-slate-400">No tables found</div>
           )}
@@ -429,6 +441,19 @@ export const ScreenRestaurantDevices = () => {
                     </td>
                   </tr>
                 ))
+              ) : devicesError ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center">
+                    <p className="text-sm font-medium text-red-600">{devicesError}</p>
+                    <button
+                      type="button"
+                      onClick={() => Promise.all([fetchDeviceStats(), fetchAllDevices()])}
+                      className="mt-3 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
               ) : (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center text-slate-400">

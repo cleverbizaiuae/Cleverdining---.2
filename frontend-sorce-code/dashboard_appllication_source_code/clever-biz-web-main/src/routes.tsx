@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 
 // ─── Lightweight inline spinner (no external dependency) ────────────────
 const PageLoader = () => (
@@ -40,7 +40,6 @@ const ScreenRestaurantDevices = lazy(() => import("./pages/restaurant/screen_res
 const Payments = lazy(() => import("./pages/restaurant/Payments").then(m => ({ default: m.Payments })));
 const ScreenRestaurantReviews = lazy(() => import("./pages/restaurant/screen_restaurant_reviews"));
 const ScreenRestaurantUpsell = lazy(() => import("./pages/restaurant/screen_restaurant_upsell"));
-const ScreenRestaurantCrm = lazy(() => import("./pages/restaurant/screen_restaurant_crm"));
 const ScreenRestaurantLeads = lazy(() => import("./pages/restaurant/screen_restaurant_leads"));
 
 // Chef pages
@@ -206,7 +205,7 @@ function App() {
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="branding" element={<ScreenMultiLocationBranding />} />
-        <Route path="crm" element={<ScreenRestaurantCrm />} />
+        <Route path="crm" element={<Navigate to="/restaurant" replace />} />
         <Route path="leads" element={<ScreenRestaurantLeads />} />
       </Route>
 
@@ -227,7 +226,7 @@ function App() {
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="branding" element={<ScreenMultiLocationBranding />} />
-        <Route path="crm" element={<ScreenRestaurantCrm />} />
+        <Route path="crm" element={<Navigate to="/manageradmindashboard" replace />} />
         <Route path="leads" element={<ScreenRestaurantLeads />} />
       </Route>
 
@@ -248,7 +247,7 @@ function App() {
         <Route path="ai-upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="upsell" element={<ScreenRestaurantUpsell />} />
         <Route path="branding" element={<ScreenMultiLocationBranding />} />
-        <Route path="crm" element={<ScreenRestaurantCrm />} />
+        <Route path="crm" element={<Navigate to="/admindashboard" replace />} />
         <Route path="leads" element={<ScreenRestaurantLeads />} />
       </Route>
 
