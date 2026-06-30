@@ -1,11 +1,14 @@
 from unittest.mock import patch
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.models import ChefStaff, User
 from restaurant.models import Restaurant
 
+from .models import Device
 from .views import SimpleDeviceListView, _resolve_user_restaurant_ids
 
 
@@ -84,3 +87,29 @@ class DeviceListErrorTests(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.data["code"], "table_list_failed")
         self.assertNotIn("database unavailable", str(response.data))
+
+    def test_owner_device_list_does_not_select_optional_restaurant_columns(self):
+        device_user = User.objects.create_user(
+            email="device@example.com",
+            username="deviceuser",
+            password="test-password",
+            role="customer",
+        )
+        restaurant = self.owner.restaurants.only("id").get()
+        Device.objects.create(
+            table_name="T1",
+            region="Primary",
+            table_number="1",
+            user=device_user,
+            restaurant=restaurant,
+        )
+        request = self.factory.get("/owners/devices/")
+        force_authenticate(request, user=self.owner)
+
+        with CaptureQueriesContext(connection) as captured:
+            response = SimpleDeviceListView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        sql = "\n".join(query["sql"] for query in captured.captured_queries).lower()
+        self.assertNotIn("whatsapp_provider", sql)
+        self.assertNotIn("whatsapp_360dialog_channel_id", sql)

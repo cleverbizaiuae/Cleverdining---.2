@@ -11,6 +11,7 @@ class DeviceSerializer(serializers.ModelSerializer):
     unread_count = serializers.SerializerMethodField()
     last_message_time = serializers.DateTimeField(read_only=True)
     qr_code_image = serializers.SerializerMethodField()
+    table_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Device
@@ -19,9 +20,25 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     def get_restaurant_name(self, obj):
         try:
-             # Safety check if restaurant exists
-             if hasattr(obj, 'restaurant') and obj.restaurant:
-                 return obj.restaurant.resturent_name
+            if hasattr(obj, 'restaurant_name_cached'):
+                return obj.restaurant_name_cached
+            if getattr(obj, 'restaurant_id', None):
+                from restaurant.models import Restaurant
+
+                restaurant = Restaurant.objects.only('id', 'resturent_name').get(pk=obj.restaurant_id)
+                return restaurant.resturent_name
+        except Exception:
+            pass
+        return None
+
+    def get_table_url(self, obj):
+        try:
+            if not getattr(obj, 'restaurant_id', None):
+                return None
+            base_url = "https://officialcleverdiningcustomer.netlify.app"
+            token = getattr(obj, 'table_token', None)
+            if token:
+                return f"{base_url}/t/{obj.restaurant_id}/{token}?id={obj.id}&table={obj.table_name}&restaurant_id={obj.restaurant_id}"
         except Exception:
             pass
         return None

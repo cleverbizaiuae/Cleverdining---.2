@@ -81,7 +81,13 @@ def _resolve_primary_restaurant(user):
     restaurant_ids = _resolve_user_restaurant_ids(user)
     if not restaurant_ids:
         return None
-    return Restaurant.objects.filter(id__in=restaurant_ids).order_by('id').first()
+    return (
+        Restaurant.objects
+        .only('id', 'resturent_name', 'owner_id', 'table_count')
+        .filter(id__in=restaurant_ids)
+        .order_by('id')
+        .first()
+    )
 
 
 def _no_restaurant_response():
@@ -337,7 +343,7 @@ def generate_password(length=10):
 
 def _table_capacity_info(restaurant):
     table_limit = int(getattr(restaurant, "table_count", 0) or 0)
-    current_tables = Device.objects.filter(restaurant=restaurant).count()
+    current_tables = Device.objects.filter(restaurant_id=restaurant.pk).count()
     return table_limit, current_tables
 
 
@@ -362,19 +368,28 @@ def _derive_table_number(table_name):
 
 
 def _device_response(device, username=None):
+    restaurant_id = getattr(device, "restaurant_id", None)
+    restaurant_name = getattr(device, "restaurant_name_cached", "")
+    table_token = getattr(device, "table_token", None)
+    table_url = (
+        f"https://officialcleverdiningcustomer.netlify.app/t/{restaurant_id}/{table_token}"
+        f"?id={device.id}&table={device.table_name}&restaurant_id={restaurant_id}"
+        if restaurant_id and table_token
+        else None
+    )
     return {
         "id": device.id,
         "table_name": device.table_name or "",
         "table_number": device.table_number or "",
         "region": device.region or "Primary",
-        "restaurant": device.restaurant.id if device.restaurant else None,
-        "restaurant_id": device.restaurant.id if device.restaurant else None,
-        "restaurant_name": device.restaurant.resturent_name if device.restaurant else "",
+        "restaurant": restaurant_id,
+        "restaurant_id": restaurant_id,
+        "restaurant_name": restaurant_name,
         "action": device.action or "active",
         "username": username or (device.user.username if device.user else ""),
         "user_id": device.user.id if device.user else None,
         "qr_code_image": None,
-        "table_url": getattr(device, "table_url", None),
+        "table_url": table_url,
         "active_session_id": None,
         "unread_count": 0,
         "last_message_time": None,
@@ -436,7 +451,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
             from .models import GuestSession
             
             base_qs = Device.objects.select_related(
-                'restaurant', 'user'
+                'user'
+            ).only(
+                'id', 'table_name', 'region', 'table_number', 'uuid',
+                'action', 'table_token', 'qr_code_image', 'restaurant_id',
+                'user_id', 'user__id', 'user__username',
             ).prefetch_related(
                 Prefetch(
                     'guest_sessions',
@@ -449,7 +468,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             print(f"DEBUG_DEVICES: Optimization failed, falling back. Error: {e}")
-            base_qs = Device.objects.select_related('restaurant', 'user')
+            base_qs = Device.objects.select_related('user')
 
         
         try:
@@ -470,7 +489,12 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             # Lock restaurant row to avoid race conditions across concurrent creates.
-            restaurant = Restaurant.objects.select_for_update().get(pk=restaurant.pk)
+            restaurant = (
+                Restaurant.objects
+                .select_for_update()
+                .only('id', 'resturent_name', 'owner_id', 'table_count')
+                .get(pk=restaurant.pk)
+            )
             _enforce_table_limit(restaurant)
 
             table_name = _normalize_table_value(serializer.validated_data.get("table_name"))
@@ -1046,7 +1070,11 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
             from .models import GuestSession
 
             base_qs = Device.objects.select_related(
-                'restaurant', 'user'
+                'user'
+            ).only(
+                'id', 'table_name', 'region', 'table_number', 'uuid',
+                'action', 'table_token', 'qr_code_image', 'restaurant_id',
+                'user_id', 'user__id', 'user__username',
             ).prefetch_related(
                 Prefetch(
                     'guest_sessions',
@@ -1059,7 +1087,7 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
             )
         except Exception as e:
             print(f"DeviceViewSetall optimization failed, falling back. Error: {e}")
-            base_qs = Device.objects.select_related('restaurant', 'user')
+            base_qs = Device.objects.select_related('user')
 
         if getattr(user, 'role', None) == 'owner':
             return base_qs.filter(restaurant__owner=user)
@@ -1131,7 +1159,19 @@ class SimpleDeviceListView(APIView):
                 return _no_restaurant_response()
             
             # Get devices - simple query, no annotations
-            devices = Device.objects.filter(restaurant=restaurant).select_related('restaurant', 'user')
+            restaurant_id = restaurant.pk
+            restaurant_name = restaurant.resturent_name or ""
+
+            devices = (
+                Device.objects
+                .filter(restaurant_id=restaurant_id)
+                .select_related('user')
+                .only(
+                    'id', 'table_name', 'region', 'table_number', 'uuid',
+                    'action', 'table_token', 'qr_code_image', 'restaurant_id',
+                    'user_id', 'user__id', 'user__username',
+                )
+            )
 
             # Apply owner table search (table name primarily, plus number/region fallback)
             if search_query:
@@ -1162,14 +1202,19 @@ class SimpleDeviceListView(APIView):
                         "table_name": device.table_name or "",
                         "region": device.region or "",
                         "table_number": device.table_number or "",
-                        "restaurant": device.restaurant.id if device.restaurant else None,
-                        "restaurant_id": device.restaurant.id if device.restaurant else None,
+                        "restaurant": restaurant_id,
+                        "restaurant_id": restaurant_id,
                         "action": device.action or "active",
-                        "restaurant_name": device.restaurant.resturent_name if device.restaurant else "",
+                        "restaurant_name": restaurant_name,
                         "username": device.user.username if device.user else "",
                         "user_id": device.user.id if device.user else None,
                         "qr_code_image": None,  # Skip file access to avoid crashes
-                        "table_url": getattr(device, 'table_url', None),
+                        "table_url": (
+                            f"https://officialcleverdiningcustomer.netlify.app/t/{restaurant_id}/{device.table_token}"
+                            f"?id={device.id}&table={device.table_name}&restaurant_id={restaurant_id}"
+                            if getattr(device, 'table_token', None)
+                            else None
+                        ),
                         "active_session_id": None,
                         "unread_count": 0,
                         "last_message_time": None
@@ -1241,7 +1286,12 @@ class SimpleDeviceListView(APIView):
 
             with transaction.atomic():
                 # Lock restaurant row to avoid race conditions across concurrent creates.
-                restaurant = Restaurant.objects.select_for_update().get(pk=restaurant.pk)
+                restaurant = (
+                    Restaurant.objects
+                    .select_for_update()
+                    .only('id', 'resturent_name', 'owner_id', 'table_count')
+                    .get(pk=restaurant.pk)
+                )
                 try:
                     _enforce_table_limit(restaurant)
                 except serializers.ValidationError as exc:
@@ -1309,6 +1359,7 @@ class SimpleDeviceListView(APIView):
             except Exception as ws_err:
                 print(f"WebSocket notification failed (non-blocking): {ws_err}")
             
+            device.restaurant_name_cached = restaurant.resturent_name or ""
             data = _device_response(device, username=username)
             data["message"] = "Device created successfully"
             return Response(data, status=201)
@@ -1340,7 +1391,22 @@ class SimpleDeviceListAllView(APIView):
                 return _no_restaurant_response()
             
             # Get devices - simple query
-            devices = Device.objects.filter(restaurant_id__in=restaurant_ids).select_related('restaurant', 'user').order_by('-id')
+            restaurants = {
+                row['id']: row['resturent_name'] or ''
+                for row in Restaurant.objects.filter(id__in=restaurant_ids).values('id', 'resturent_name')
+            }
+
+            devices = (
+                Device.objects
+                .filter(restaurant_id__in=restaurant_ids)
+                .select_related('user')
+                .only(
+                    'id', 'table_name', 'region', 'table_number', 'uuid',
+                    'action', 'table_token', 'qr_code_image', 'restaurant_id',
+                    'user_id', 'user__id', 'user__username',
+                )
+                .order_by('-id')
+            )
             
             # Manual serialization - bulletproof
             results = []
@@ -1351,14 +1417,19 @@ class SimpleDeviceListAllView(APIView):
                         "table_name": device.table_name or "",
                         "region": device.region or "",
                         "table_number": device.table_number or "",
-                        "restaurant": device.restaurant.id if device.restaurant else None,
-                        "restaurant_id": device.restaurant.id if device.restaurant else None,
+                        "restaurant": device.restaurant_id,
+                        "restaurant_id": device.restaurant_id,
                         "action": device.action or "active",
-                        "restaurant_name": device.restaurant.resturent_name if device.restaurant else "",
+                        "restaurant_name": restaurants.get(device.restaurant_id, ""),
                         "username": device.user.username if device.user else "",
                         "user_id": device.user.id if device.user else None,
                         "qr_code_image": None,
-                        "table_url": getattr(device, 'table_url', None),
+                        "table_url": (
+                            f"https://officialcleverdiningcustomer.netlify.app/t/{device.restaurant_id}/{device.table_token}"
+                            f"?id={device.id}&table={device.table_name}&restaurant_id={device.restaurant_id}"
+                            if getattr(device, 'table_token', None)
+                            else None
+                        ),
                         "active_session_id": None,
                         "unread_count": 0,
                         "last_message_time": None
