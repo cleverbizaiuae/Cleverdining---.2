@@ -70,6 +70,7 @@ type UpsellAnalytics = {
   top_items: Array<{
     item_id: number | null;
     item_name: string;
+    image_url?: string;
     shown: number;
     accepted: number;
     rejected: number;
@@ -996,7 +997,10 @@ const ScreenRestaurantUpsell = () => {
                           const isWin = (row.accepted || 0) >= (row.rejected || 0);
                           const acceptRate = Number(row.acceptance_rate || 0);
                           const rateClass = acceptRate >= 50 ? "text-[#0055FE]" : acceptRate >= 25 ? "text-slate-600" : "text-red-500";
-                          const imageUrl = row.item_id ? itemLookup.get(row.item_id)?.image_url : "";
+                          const imageUrl =
+                            row.image_url ||
+                            (row.item_id ? itemLookup.get(row.item_id)?.image_url : "") ||
+                            "";
                           return (
                             <tr key={`${row.item_id}-${row.item_name}`} className="border-b border-slate-100">
                               <td className="py-2 pr-3">

@@ -790,10 +790,27 @@ class UpsellAnalyticsAPIView(APIView):
             )
             .order_by("-accepted", "-revenue")[:25]
         )
+        top_items_rows = list(top_items_rows)
+        top_item_ids = {
+            int(row["upsell_item_id"])
+            for row in top_items_rows
+            if row.get("upsell_item_id") is not None
+        }
+        top_item_image_urls: dict[int, str] = {}
+        for item in Item.objects.filter(restaurant=restaurant, id__in=top_item_ids).only("id", "image1"):
+            try:
+                if item.image1:
+                    top_item_image_urls[item.id] = request.build_absolute_uri(item.image1.url)
+            except (ValueError, OSError):
+                # Historical analytics should still render when an uploaded file
+                # has been removed from storage.
+                top_item_image_urls[item.id] = ""
+
         top_items = [
             {
                 "item_id": row["upsell_item_id"],
                 "item_name": row["upsell_item_name"],
+                "image_url": top_item_image_urls.get(row["upsell_item_id"], ""),
                 "shown": row["shown"],
                 "accepted": row["accepted"],
                 "rejected": row["rejected"],
