@@ -49,7 +49,7 @@ export const BottomNav = () => {
     };
 
     return (
-        <div className="fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 border-t border-border/30 bg-background/80 px-2 pt-2 pb-[max(env(safe-area-inset-bottom),8px)] shadow-[0_-10px_30px_rgba(0,0,0,0.28)] backdrop-blur-lg">
+        <div className="fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 border-t border-gray-100 bg-white/90 px-2 pt-2 pb-[max(env(safe-area-inset-bottom),8px)] shadow-[0_-4px_20px_rgba(0,0,0,0.03)] backdrop-blur-lg">
             <div className="flex justify-around items-center w-full">
                 {tabs.map((tab) => {
                     const isActive = location.pathname === tab.path || (tab.id === "call" && false);
@@ -61,24 +61,24 @@ export const BottomNav = () => {
                             onClick={() => handleTabClick(tab)}
                             onPointerDown={() => prefetchRoute(tab.id)}
                             onFocus={() => prefetchRoute(tab.id)}
-                            className="group relative flex min-h-12 w-16 flex-col items-center justify-center py-1 active:scale-95 transition-transform"
+                            className="group relative flex min-h-12 w-16 flex-col items-center justify-center rounded-xl px-3 py-1.5 active:scale-95 transition-transform"
                         >
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-bubble"
-                                    className="absolute inset-x-2 inset-y-0 -z-10 rounded-full bg-primary/15"
+                                    className="absolute inset-0 -z-10 rounded-xl bg-primary/10"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
 
                             <div className="relative mb-0.5">
                                 <Icon
-                                    size={24}
+                                    size={20}
                                     className={cn(
                                         "transition-colors duration-300",
-                                        isActive ? "text-primary fill-primary/20" : "text-muted-foreground group-hover:text-foreground"
+                                        isActive ? "text-primary" : "text-gray-400 group-hover:text-foreground"
                                     )}
-                                    strokeWidth={1.8}
+                                    strokeWidth={isActive ? 2 : 1.8}
                                 />
 
                                 {tab.id === "cart" && cart.length > 0 && (
@@ -102,11 +102,10 @@ export const BottomNav = () => {
 
                             <span className={cn(
                                 "text-[10px] font-medium transition-colors duration-300",
-                                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                isActive ? "text-primary" : "text-gray-400 group-hover:text-foreground"
                             )}>
                                 {tab.label}
                             </span>
-                            {isActive ? <span className="mt-0.5 w-1 h-1 rounded-full bg-primary" /> : <span className="mt-0.5 w-1 h-1 rounded-full bg-transparent" />}
                         </button>
                     );
                 })}

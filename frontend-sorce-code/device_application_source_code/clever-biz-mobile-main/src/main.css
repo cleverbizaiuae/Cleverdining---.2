@@ -19,14 +19,14 @@ select {
   --color-accent: hsl(221 83% 53%);
   --color-sidebar: #0F172A;
   --color-primary-text: hsl(var(--primary-foreground));
-  --color-background: #0F172A;
-  --color-card: #1E293B;
-  --color-foreground: #F8FAFC;
-  --color-secondary: #334155;
-  --color-secondary-foreground: #E2E8F0;
-  --color-muted: #475569;
-  --color-muted-foreground: #94A3B8;
-  --color-border: rgb(255 255 255 / 0.10);
+  --color-background: #F8FAFC;
+  --color-card: #FFFFFF;
+  --color-foreground: #0F172A;
+  --color-secondary: #F1F5F9;
+  --color-secondary-foreground: #334155;
+  --color-muted: #E2E8F0;
+  --color-muted-foreground: #64748B;
+  --color-border: #E2E8F0;
   --color-icon-active: #3e4f7e;
   --color-icon-active-bg: #f1f5ff;
   --color-icon-inactive: #b2b5be;
@@ -47,8 +47,8 @@ select {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #0F172A !important;
-    color-scheme: dark;
+    background-color: #F8FAFC !important;
+    color-scheme: light;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     /* Prevent iOS rubber-band bounce that reveals black areas */
@@ -62,7 +62,7 @@ select {
   body,
   #root {
     @apply h-full;
-    background-color: #0F172A !important;
+    background-color: #F8FAFC !important;
     margin: 0;
     padding: 0;
     overscroll-behavior: none;

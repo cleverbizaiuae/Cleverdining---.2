@@ -1,3 +1,4 @@
+import { ImageIcon } from "lucide-react";
 import { cn } from "clsx-for-tailwind";
 import { resolveMediaUrl } from "../../lib/media";
 
@@ -22,8 +23,8 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
         "group relative flex min-w-16 flex-col items-center justify-center gap-2 overflow-hidden px-1 transition-all duration-300",
         "h-16 w-auto shrink-0 rounded-2xl border sm:h-20 sm:w-20",
         isActive
-          ? "scale-105 border-primary shadow-lg shadow-primary/30"
-          : "border-transparent opacity-75 hover:border-primary/30 hover:opacity-100",
+          ? "scale-105 border-primary shadow-lg shadow-primary/25"
+          : "border-border/40 opacity-90 hover:border-primary/30 hover:opacity-100",
       )}
     >
       {cat.image ? (
@@ -46,21 +47,21 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
         </div>
       ) : (
         <div className="absolute inset-0 z-0 flex items-center justify-center bg-secondary">
-          <span className="text-xl">📁</span>
+          <ImageIcon className="h-5 w-5 text-muted-foreground" strokeWidth={1.8} />
         </div>
       )}
 
       <span
         className={cn(
-          "relative z-10 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm backdrop-blur-md transition-colors duration-200 sm:text-xs",
+          "relative z-10 px-1 text-[11px] font-semibold text-white transition-colors duration-200",
           "max-w-[90%] text-center leading-[1.1] whitespace-normal break-words",
-          isActive ? "bg-primary text-white" : "bg-black/45 text-white",
         )}
         style={{
           display: "-webkit-box",
           WebkitLineClamp: 2,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
+          textShadow: "0 1px 8px rgba(0,0,0,0.65)",
         }}
       >
         {cat.Category_name}

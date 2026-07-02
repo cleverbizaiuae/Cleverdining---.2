@@ -27,7 +27,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                 onAdd();
             }}
             className={cn(
-                "group relative grid min-h-[7rem] grid-cols-[auto_1fr] gap-3 overflow-hidden rounded-3xl border border-border/70 bg-card p-3 text-foreground shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition-all duration-300 hover:border-white/20 active:scale-[0.98] sm:gap-4",
+                "group relative grid min-h-[7rem] grid-cols-[auto_1fr] gap-3 overflow-hidden rounded-2xl border border-gray-100 bg-white p-3 text-foreground shadow-sm transition-all duration-300 hover:border-primary/20 hover:shadow-md active:scale-[0.98] sm:gap-4",
                 !isAvailable ? "opacity-65" : ""
             )}
         >
@@ -39,7 +39,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             )}
 
             {!isAvailable && (
-                <div className="absolute inset-0 bg-background/60 z-20 pointer-events-none">
+                <div className="absolute inset-0 bg-white/70 z-20 pointer-events-none backdrop-blur-[1px]">
                     <span className="absolute left-3 top-3 rounded-full bg-slate-700 text-white text-[10px] font-bold px-2.5 py-1">
                         Sold out
                     </span>
@@ -47,7 +47,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             )}
 
             {/* Image/Video Section - Fixed Width */}
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-secondary flex items-center justify-center self-center shadow-lg shadow-black/20">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-secondary flex items-center justify-center self-center">
 
                 {/* Video Player Overlay */}
                 {showVideo && item.video ? (
@@ -137,18 +137,18 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             {/* Content Section */}
             <div className="flex flex-col justify-between h-full py-1">
                 <div>
-                    <h3 className="font-bold text-foreground truncate text-base sm:text-lg leading-tight">
+                    <h3 className="truncate text-sm font-bold leading-tight text-foreground sm:text-[15px]">
                         {item.item_name}
                     </h3>
 
-                    <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground sm:text-xs">
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                         {item.description || "No description available."}
                     </p>
                 </div>
 
                 <div className="flex items-center justify-between mt-2">
                     <div className="flex flex-col">
-                        <span className="text-base sm:text-lg font-bold text-primary">
+                        <span className="text-sm font-bold text-primary">
                             {currencyCode} {discountedPrice.toFixed(2)}
                         </span>
                         {discount > 0 && (

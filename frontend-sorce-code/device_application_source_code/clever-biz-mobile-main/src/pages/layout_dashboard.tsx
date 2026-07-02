@@ -15,7 +15,7 @@ import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
 import { BottomNav } from "@/components/BottomNav";
-import { Facebook, Globe, Instagram, Music2, Search, Twitter } from "lucide-react";
+import { Facebook, Globe, Instagram, Loader2, Music2, Search, Twitter, UtensilsCrossed } from "lucide-react";
 import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
@@ -79,6 +79,7 @@ const LayoutDashboard = () => {
 
   const [categories, setCategories] = useState<CategoryItemType[]>([]);
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
   const [isDetailOpen, setDetailOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [isAssistanceOpen, setAssistanceOpen] = useState(false);
@@ -286,6 +287,7 @@ const LayoutDashboard = () => {
   }, [lastUpdate]);
 
   const fetchItems = async () => {
+    setItemsLoaded(false);
     try {
       let url = "/api/customer/items/";
       const params = [];
@@ -312,9 +314,12 @@ const LayoutDashboard = () => {
       }
 
       const response = await cachedGet(url, {}, { ttlMs: 8_000 });
-      setItems(response.data.results || []);
+      const payload = response.data;
+      setItems(Array.isArray(payload) ? payload : payload.results || []);
     } catch (error) {
       console.warn("Failed to fetch items", error);
+    } finally {
+      setItemsLoaded(true);
     }
   };
   useEffect(() => {
@@ -359,21 +364,13 @@ const LayoutDashboard = () => {
       const mainCatId = categories[activeCategoryIndex].id;
       const subCats = categories.filter(c => c.parent_category === mainCatId);
 
-      // 2. Filter by Subcategory
-      let activeSubCatId = selectedSubCategory;
-      if (activeSubCatId === null && subCats.length > 0) {
-        activeSubCatId = subCats[0].id;
-      }
-
-      if (activeSubCatId !== null) {
-        result = result.filter(item => item.sub_category === activeSubCatId);
+      if (selectedSubCategory !== null) {
+        result = result.filter(item => item.sub_category === selectedSubCategory);
       } else {
-        result = result.filter(item =>
-          item.category === mainCatId && !item.sub_category
+        const subCatIds = new Set(subCats.map((sub) => sub.id));
+        result = result.filter(
+          item => item.category === mainCatId || (item.sub_category ? subCatIds.has(item.sub_category) : false)
         );
-        if (subCats.length === 0) {
-          result = items.filter(item => item.category === mainCatId);
-        }
       }
     } else {
       return [];
@@ -446,7 +443,7 @@ const LayoutDashboard = () => {
   return (
     <CartProvider>
       <div
-        className="flex min-h-screen justify-center overflow-hidden bg-[linear-gradient(180deg,#020617_0%,#0F172A_46%,#111827_100%)] text-foreground"
+        className="flex min-h-screen justify-center overflow-hidden bg-slate-100 text-foreground"
         style={hasBranding ? ({ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties) : undefined}
       >
         <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-2xl">
@@ -553,7 +550,23 @@ const LayoutDashboard = () => {
                     </div>
                   </div>
                 </section>
-              ) : null}
+              ) : (
+                <section className="relative h-36 w-full overflow-hidden bg-[linear-gradient(160deg,#0055FE_0%,#2563EB_100%)]">
+                  <div className="absolute inset-0 bg-black/20" />
+                  <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-4 pb-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Welcome</p>
+                      <h1 className="truncate text-2xl font-bold leading-tight text-white">Clever Dining</h1>
+                    </div>
+                    {tableName ? (
+                      <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-white backdrop-blur-sm">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Table</span>
+                        <span className="text-xs font-bold leading-none">{tableName}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              )}
 
               {/* Sticky Header */}
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
@@ -568,7 +581,7 @@ const LayoutDashboard = () => {
                 {hasBranding ? (
                   null
                 ) : (
-                  <div className="px-4 py-3 flex items-center justify-between">
+                    <div className="px-4 py-3 flex items-center justify-between">
                     <div className="block shrink-0">
                       <Logo />
                     </div>
@@ -585,18 +598,18 @@ const LayoutDashboard = () => {
                 <div className="px-4 mt-0 mb-3">
                   <div className="relative flex items-center gap-3">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                       <input
                         type="text"
                         placeholder="Search for food..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full rounded-xl bg-secondary/70 py-2.5 pl-10 pr-4 text-sm font-medium text-foreground ring-1 ring-border placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 transition-all"
+                        className="h-10 w-full rounded-xl border-none bg-secondary/50 py-2.5 pl-9 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground/70 ring-0 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20"
                       />
                     </div>
                     {hasBranding ? (
                       <div className="flex shrink-0 flex-col items-end">
-                        <span className="text-[9px] font-bold text-primary uppercase tracking-wider">Table</span>
+                          <span className="text-[9px] font-bold text-primary uppercase tracking-wider">Table</span>
                         <span className="text-sm font-bold leading-none">{tableName || "–"}</span>
                       </div>
                     ) : null}
@@ -624,14 +637,14 @@ const LayoutDashboard = () => {
                 {subCategories.length > 0 && (
                           <div className="relative w-full overflow-x-auto hide-scrollbar py-2 pl-4 bg-background/50 mt-2">
                     <div className="flex gap-2 pr-4 min-w-max">
-                      {subCategories.map((sub, idx) => (
+                      {subCategories.map((sub) => (
                         <button
                           key={sub.id}
                           onClick={() => setSelectedSubCategory(sub.id)}
                           className={cn(
                             "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-300",
-                            selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                              ? "bg-foreground text-background border-foreground"
+                            selectedSubCategory === sub.id
+                              ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
                               : "bg-secondary text-secondary-foreground border-transparent hover:bg-secondary/80"
                           )}
                         >
@@ -646,9 +659,18 @@ const LayoutDashboard = () => {
 
               {/* Main Content (Menu Feed) */}
               <main className="px-4 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain">
-                {filteredItems.length === 0 ? (
+                {!categoriesLoaded || !itemsLoaded ? (
                   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                    <p>No items found.</p>
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" strokeWidth={1.8} />
+                    <p className="mt-3 text-sm">Loading menu</p>
+                  </div>
+                ) : filteredItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
+                      <UtensilsCrossed className="h-6 w-6 text-slate-400" strokeWidth={1.8} />
+                    </div>
+                    <p className="text-sm text-slate-400">No items found.</p>
+                    <p className="mt-1 max-w-56 text-xs text-slate-400">Try another category or search term.</p>
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
@@ -670,31 +692,6 @@ const LayoutDashboard = () => {
                     ))}
                   </AnimatePresence>
                 )}
-                {socialLinks.length > 0 ? (
-                  <div className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm shadow-black/20">
-                    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Follow Us</p>
-                    <div className="flex items-center justify-center gap-3">
-                      {socialLinks.map(({ key, href, Icon, label }) => (
-                        <a
-                          key={key}
-                          href={href || undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={label}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white/80 backdrop-blur-sm transition-colors hover:text-primary"
-                        >
-                          {key === "tiktok" ? (
-                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
-                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.95a8.27 8.27 0 0 0 4.83 1.55V7.05a4.84 4.84 0 0 1-1.06-.36z" />
-                            </svg>
-                          ) : (
-                            <Icon className="h-4 w-4" strokeWidth={1.8} />
-                          )}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
                 <Footer />
               </main>
             </div>
