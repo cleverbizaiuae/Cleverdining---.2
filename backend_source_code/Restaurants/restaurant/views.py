@@ -32,6 +32,7 @@ def _brand_default_payload():
         "restaurantName": "My Restaurant",
         "logoUrl": None,
         "coverImageUrl": None,
+        "coverPosition": "50% 50%",
         "primaryColor": "#0055FE",
         "secondaryColor": None,
         "accentColor": None,

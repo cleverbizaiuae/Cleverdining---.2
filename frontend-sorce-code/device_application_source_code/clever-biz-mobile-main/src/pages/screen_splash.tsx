@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
-import { FONT_PRESETS, useActiveBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
 
 type SplashState = "splash" | "collapsing" | "done";
 
@@ -45,15 +45,17 @@ export default function ScreenSplash({
     }
   }, []);
 
-  const hasBranding = brand.brandingEnabled;
+  const hasBranding = shouldRenderBrandExperience(brand);
 
   const restaurantName =
     hasBranding && brand.restaurantName
       ? brand.restaurantName
-      : fallbackRestaurantName || "Welcome";
+      : hasBranding
+        ? fallbackRestaurantName || "My Restaurant"
+        : "Welcome";
   const brandLogoUrl = hasBranding ? brand.logoUrl : null;
   const brandCoverUrl = hasBranding ? brand.coverImageUrl : null;
-  const brandFontFamily = getFontFamily(brand.fontPreset);
+  const brandFontFamily = brand.brandingEnabled ? getFontFamily(brand.fontPreset) : undefined;
 
   const splashGradient = useMemo(() => {
     if (brand.themePreset === "luxury_dark") {
@@ -190,7 +192,7 @@ export default function ScreenSplash({
             transition={{ duration: 0.34, delay: 0.12 }}
             className="mt-5 text-white font-bold leading-tight"
             style={{
-              fontFamily: brandFontFamily,
+              ...(brandFontFamily ? { fontFamily: brandFontFamily } : {}),
               fontSize: "clamp(1.75rem, 6vw, 2.5rem)",
               letterSpacing: "-0.02em",
             }}

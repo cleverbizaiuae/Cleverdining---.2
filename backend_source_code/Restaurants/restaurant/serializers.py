@@ -19,6 +19,7 @@ class BrandConfigSerializer(serializers.ModelSerializer):
     restaurantName = serializers.CharField(source='restaurant_name', required=False)
     logoUrl = serializers.CharField(source='logo_url', allow_null=True, allow_blank=True, required=False)
     coverImageUrl = serializers.CharField(source='cover_image_url', allow_null=True, allow_blank=True, required=False)
+    coverPosition = serializers.CharField(source='cover_position', allow_blank=True, required=False, max_length=20)
     primaryColor = serializers.CharField(source='primary_color', required=False)
     secondaryColor = serializers.CharField(source='secondary_color', allow_null=True, allow_blank=True, required=False)
     accentColor = serializers.CharField(source='accent_color', allow_null=True, allow_blank=True, required=False)
@@ -41,6 +42,7 @@ class BrandConfigSerializer(serializers.ModelSerializer):
             'restaurantName',
             'logoUrl',
             'coverImageUrl',
+            'coverPosition',
             'primaryColor',
             'secondaryColor',
             'accentColor',

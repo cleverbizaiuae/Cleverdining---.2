@@ -8,6 +8,7 @@ export interface BrandConfig {
   restaurantName: string;
   logoUrl: string | null;
   coverImageUrl: string | null;
+  coverPosition: string;
   primaryColor: string;
   secondaryColor: string | null;
   accentColor: string | null;
@@ -29,6 +30,7 @@ export const DEFAULT_BRAND: BrandConfig = {
   restaurantName: "My Restaurant",
   logoUrl: null,
   coverImageUrl: null,
+  coverPosition: "50% 50%",
   primaryColor: "#0055FE",
   secondaryColor: null,
   accentColor: null,

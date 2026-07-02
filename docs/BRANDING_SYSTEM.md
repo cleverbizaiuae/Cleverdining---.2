@@ -20,6 +20,7 @@ Key fields:
 | `restaurant_name` | Restaurant name shown in branded customer UI. |
 | `logo_url` | Logo image data URL or URL. |
 | `cover_image_url` | Cover/hero image data URL or URL. |
+| `cover_position` | CSS object-position for the customer menu hero image. Defaults to `50% 50%`. |
 | `primary_color` | Main customer-facing brand color. Defaults to `#0055FE`. |
 | `secondary_color` | Stored for future use. Not broadly applied in customer UI yet. |
 | `accent_color` | Stored for future use. Not broadly applied in customer UI yet. |
@@ -105,9 +106,9 @@ frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main/src/l
 
 Important behavior:
 
-- Save always sends `brandingEnabled: true` so an owner who edits and saves sees the branding applied.
+- Save sends the current explicit `brandingEnabled` toggle value. It does not force branding back on when an owner turns it off.
 - The preview updates from local React state immediately, before save.
-- The dashboard brand query uses React Query with a 60-second stale/refetch interval and refetches on window focus.
+- The dashboard brand query uses React Query with a 4-second refetch interval and refetches on window focus.
 
 ## Image Upload Flow
 
@@ -136,7 +137,7 @@ The wrapper reads the current restaurant's brand config and sets these CSS varia
 - `--primary`: HSL value derived from `primaryColor`, used by Tailwind/Radix-style primary utilities.
 - `--brand-primary`: raw hex brand color for inline styles.
 
-When branding is enabled, or when meaningful branding content exists, the wrapper also applies the configured font family to the document root.
+When `brandingEnabled` is explicitly true, the wrapper also applies the configured font family to the document root. Meaningful logo/cover/name content can still render the branded hero through the customer fallback rule, but it does not apply a custom font unless the toggle is on.
 
 ## Customer Mobile App Data Flow
 
@@ -151,11 +152,11 @@ Current behavior:
 - Reads `cb_brand_config_cache` from localStorage for immediate first paint.
 - Reads `customer_branding` as a local bridge fallback.
 - Fetches `GET /api/brand-config/?restaurant_id=<id>` when a restaurant id is known.
-- Refreshes remote brand config every 60 seconds only while the document is visible.
+- Refreshes remote brand config every 4 seconds only while the document is visible.
 - Refreshes immediately on browser focus, `visibilitychange`, `storage`, and `branding-updated` events.
 - Writes successful remote responses back to `cb_brand_config_cache`.
 
-This replaced the older 4-second polling behavior to reduce background network load while still updating on focus and active sessions.
+This keeps customer screens in sync with dashboard changes without a reload while still refreshing immediately on focus and active-session events.
 
 ## Smart Branding Fallback
 
@@ -174,7 +175,7 @@ This prevents a common failure mode where a restaurant uploads a logo or cover b
 | File | Brand fields used |
 | --- | --- |
 | `frontend-sorce-code/device_application_source_code/clever-biz-mobile-main/src/pages/screen_splash.tsx` | `restaurantName`, `logoUrl`, `coverImageUrl`, `primaryColor`, `themePreset`, `fontPreset`, `brandingEnabled` |
-| `frontend-sorce-code/device_application_source_code/clever-biz-mobile-main/src/pages/layout_dashboard.tsx` | `restaurantName`, `tagline`, `logoUrl`, `coverImageUrl`, `primaryColor`, `themePreset`, `fontPreset`, `brandingEnabled`, social URLs |
+| `frontend-sorce-code/device_application_source_code/clever-biz-mobile-main/src/pages/layout_dashboard.tsx` | `restaurantName`, `tagline`, `logoUrl`, `coverImageUrl`, `coverPosition`, `primaryColor`, `themePreset`, `fontPreset`, `brandingEnabled`, social URLs |
 | `frontend-sorce-code/device_application_source_code/clever-biz-mobile-main/src/pages/SuccessPage.tsx` | `restaurantName`, `tagline`, `logoUrl`, `coverImageUrl`, `primaryColor`, `themePreset`, `fontPreset`, `googleReviewUrl`, social URLs |
 | `frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main/src/pages/multilocation/screen_multilocation_branding.tsx` | All editable brand fields and live-preview state |
 
@@ -192,6 +193,8 @@ When `coverImageUrl` is present, it is used for:
 - Dashboard phone preview
 
 The splash and thank-you/success screens use a full-bleed, immersive treatment with a dark overlay for contrast. If the cover image is missing or fails, the app falls back to a theme-based gradient.
+
+`coverPosition` controls only the mobile menu hero image crop through CSS `object-position`. It does not affect the splash or thank-you background crop.
 
 ### Logo
 
@@ -262,4 +265,4 @@ These include static titles, favicon links, PWA metadata, and preconnect hints. 
 - Static metadata and favicon are not derived from brand config.
 - Website URL is not rendered on the thank-you/success page.
 - Branding images are stored in PostgreSQL text columns; object storage/CDN would be better for larger production scale.
-- Brand-config updates now refresh within 60 seconds on visible mobile sessions, or immediately on focus/local branding events. They no longer use constant 4-second polling.
+- Brand-config updates refresh within 4 seconds on visible mobile sessions, or immediately on focus/local branding events.

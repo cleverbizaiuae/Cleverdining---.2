@@ -8,6 +8,7 @@ export interface BrandConfig {
   restaurantName: string;
   logoUrl: string | null;
   coverImageUrl: string | null;
+  coverPosition: string;
   primaryColor: string;
   secondaryColor: string | null;
   accentColor: string | null;
@@ -42,6 +43,7 @@ export const DEFAULT_BRAND: BrandConfig = {
   restaurantName: "My Restaurant",
   logoUrl: null,
   coverImageUrl: null,
+  coverPosition: "50% 50%",
   primaryColor: "#0055FE",
   secondaryColor: null,
   accentColor: null,
@@ -123,6 +125,7 @@ function mapBrandConfig(payload: unknown): BrandConfig {
     restaurantName: cleanText(src.restaurantName) || DEFAULT_BRAND.restaurantName,
     logoUrl: cleanText(src.logoUrl),
     coverImageUrl: cleanText(src.coverImageUrl),
+    coverPosition: cleanText(src.coverPosition) || DEFAULT_BRAND.coverPosition,
     primaryColor: normalizeHexColor(src.primaryColor, DEFAULT_BRAND.primaryColor),
     secondaryColor: cleanText(src.secondaryColor),
     accentColor: cleanText(src.accentColor),
@@ -139,6 +142,19 @@ function mapBrandConfig(payload: unknown): BrandConfig {
     wifiPassword: cleanText(src.wifiPassword),
     googleReviewUrl: cleanText(src.googleReviewUrl),
   };
+}
+
+export function hasMeaningfulBrandContent(brand: Pick<BrandConfig, "restaurantName" | "logoUrl" | "coverImageUrl">): boolean {
+  const restaurantName = (brand.restaurantName || "").trim();
+  return Boolean(
+    brand.logoUrl ||
+      brand.coverImageUrl ||
+      (restaurantName && restaurantName !== DEFAULT_BRAND.restaurantName),
+  );
+}
+
+export function shouldRenderBrandExperience(brand: BrandConfig): boolean {
+  return brand.brandingEnabled || hasMeaningfulBrandContent(brand);
 }
 
 function normalizeRestaurantId(restaurantId?: string | number | null): string | null {

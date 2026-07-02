@@ -98,6 +98,7 @@ class BrandConfig(models.Model):
     restaurant_name = models.TextField(default='My Restaurant')
     logo_url = models.TextField(null=True, blank=True)
     cover_image_url = models.TextField(null=True, blank=True)
+    cover_position = models.CharField(max_length=20, default='50% 50%')
     primary_color = models.CharField(max_length=7, default='#0055FE')
     secondary_color = models.CharField(max_length=7, null=True, blank=True)
     accent_color = models.CharField(max_length=7, null=True, blank=True)

@@ -747,7 +747,12 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
 
               <div className="h-24 shrink-0 relative overflow-hidden">
                 {previewBrand.coverImageUrl ? (
-                  <img src={previewBrand.coverImageUrl} alt="Menu hero" className="absolute inset-0 w-full h-full object-cover" />
+                  <img
+                    src={previewBrand.coverImageUrl}
+                    alt="Menu hero"
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ objectPosition: previewBrand.coverPosition || "50% 50%" }}
+                  />
                 ) : (
                   <div
                     className="absolute inset-0"
@@ -895,6 +900,7 @@ export default function ScreenMultiLocationBranding() {
         restaurantName: brand.restaurantName,
         logoUrl: brand.logoUrl,
         coverImageUrl: brand.coverImageUrl,
+        coverPosition: brand.coverPosition,
         primaryColor: brand.primaryColor,
         secondaryColor: brand.secondaryColor,
         accentColor: brand.accentColor,
@@ -1197,6 +1203,20 @@ export default function ScreenMultiLocationBranding() {
                 onFile={async (file) => handleUploadImage(file, "cover")}
               />
             </div>
+
+            <label className="mt-4 block space-y-1.5">
+              <span className="text-xs text-slate-600">Menu Cover Focus Point</span>
+              <input
+                className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm"
+                placeholder="50% 50%"
+                maxLength={20}
+                value={form.coverPosition || "50% 50%"}
+                onChange={(event) => setField("coverPosition", event.target.value || "50% 50%")}
+              />
+              <span className="text-[11px] text-slate-400">
+                Controls the narrow customer menu hero crop only. Example: 50% 20% or center top.
+              </span>
+            </label>
           </section>
 
           <section className={CARD_SHELL}>

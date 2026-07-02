@@ -134,6 +134,7 @@ def ensure_brand_config_schema(force: bool = False) -> bool:
             "restaurant_name",
             "logo_url",
             "cover_image_url",
+            "cover_position",
             "primary_color",
             "secondary_color",
             "accent_color",

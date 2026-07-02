@@ -19,7 +19,7 @@ import { Facebook, Globe, Instagram, Loader2, Music2, Search, Twitter, UtensilsC
 import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import { trackUpsellCategoryView } from "../lib/upsellSession";
-import { FONT_PRESETS, useActiveBrandConfig } from "@/lib/useBrandConfig";
+import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -169,14 +169,14 @@ const LayoutDashboard = () => {
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
   const brand = useActiveBrandConfig();
 
-  const hasBranding = brand.brandingEnabled;
+  const hasBranding = shouldRenderBrandExperience(brand);
   const restaurantName =
     hasBranding && brand.restaurantName
       ? brand.restaurantName
       : "Welcome";
   const brandLogoUrl = hasBranding ? brand.logoUrl : null;
   const brandCoverUrl = hasBranding ? brand.coverImageUrl : null;
-  const brandFontFamily = getFontFamily(brand.fontPreset);
+  const brandFontFamily = brand.brandingEnabled ? getFontFamily(brand.fontPreset) : undefined;
   const brandPrimaryHsl = useMemo(() => hexToHsl(brand.primaryColor), [brand.primaryColor]);
 
   const socialLinks = useMemo(
@@ -444,7 +444,7 @@ const LayoutDashboard = () => {
     <CartProvider>
       <div
         className="flex min-h-screen justify-center overflow-hidden bg-[linear-gradient(180deg,#0F172A_0%,#111827_52%,#1E293B_100%)] text-foreground"
-        style={hasBranding ? ({ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties) : undefined}
+        style={{ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties}
       >
         <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-[0_0_60px_rgba(0,0,0,0.45)]">
 
@@ -460,7 +460,7 @@ const LayoutDashboard = () => {
                       src={brandCoverUrl}
                       alt={`${restaurantName} cover`}
                       className="absolute inset-0 h-full w-full object-cover"
-                      style={{ objectPosition: "center top" }}
+                      style={{ objectPosition: brand.coverPosition || "50% 50%" }}
                       loading="eager"
                       decoding="async"
                       fetchPriority="high"
@@ -535,7 +535,7 @@ const LayoutDashboard = () => {
                       <div className="min-w-0">
                         <h1
                           className="truncate text-lg font-bold leading-tight text-white drop-shadow-sm"
-                          style={{ fontFamily: brandFontFamily }}
+                          style={brandFontFamily ? { fontFamily: brandFontFamily } : undefined}
                         >
                           {restaurantName}
                         </h1>
@@ -550,23 +550,7 @@ const LayoutDashboard = () => {
                     </div>
                   </div>
                 </section>
-              ) : (
-                <section className="relative h-44 w-full overflow-hidden bg-[radial-gradient(circle_at_18%_0%,rgba(0,85,254,0.52),transparent_44%),linear-gradient(160deg,#0F172A_0%,#1E293B_100%)]">
-                  <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(15,23,42,0.18),rgba(15,23,42,0.82))]" />
-                  <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-4 pb-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Welcome</p>
-                      <h1 className="truncate text-2xl font-bold leading-tight text-white">Clever Dining</h1>
-                    </div>
-                    {tableName ? (
-                      <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-white backdrop-blur-sm">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Table</span>
-                        <span className="text-xs font-bold leading-none">{tableName}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                </section>
-              )}
+              ) : null}
 
               {/* Sticky Header */}
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
