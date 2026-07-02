@@ -188,6 +188,7 @@ const ScreenRestaurantOrderList = () => {
   const [selectedProvider, setSelectedProvider] = useState<GatewayProvider>("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
+  const [markingPaidOrderId, setMarkingPaidOrderId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -394,6 +395,8 @@ const ScreenRestaurantOrderList = () => {
 
   // Keep backward compatible single order confirm
   const handleConfirmCash = async (orderId: number) => {
+    if (markingPaidOrderId !== null) return;
+    setMarkingPaidOrderId(orderId);
     try {
       const response = await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
       invalidateApiCache("orders");
@@ -404,21 +407,16 @@ const ScreenRestaurantOrderList = () => {
           ? "Cash received. The order is fully paid."
           : `Cash share confirmed. Remaining balance: ${currencyCode} ${remainingAmount.toFixed(2)}`,
       );
-      // Refresh list
-      fetchOrders(ordersCurrentPage, debouncedSearchQuery);
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to confirm cash payment");
-    }
-  };
-
-  const handleMarkDelivered = async (orderId: number) => {
-    try {
-      await updateOrderStatus(orderId, 'delivered', false);
-      toast.success(`Order #${orderId} marked as delivered/completed`);
-    } catch (error) {
-      console.error("Failed to update status", error);
-      toast.error("Failed to update order status");
+      await fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+    } catch (error: any) {
+      console.error("Failed to mark order as paid", error);
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.detail ||
+        "Failed to mark order as paid";
+      toast.error(message);
+    } finally {
+      setMarkingPaidOrderId(null);
     }
   };
 
@@ -560,10 +558,11 @@ const ScreenRestaurantOrderList = () => {
                   <p className="text-[10px] text-slate-500">{currencyCode} {order.total_price}</p>
                 </div>
                 <button
-                  onClick={() => handleMarkDelivered(order.id)}
-                  className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white text-[10px] font-medium rounded transition-colors"
+                  onClick={() => handleConfirmCash(order.id)}
+                  disabled={markingPaidOrderId !== null}
+                  className="h-7 px-3 bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 text-white text-[10px] font-medium rounded transition-colors"
                 >
-                  Mark
+                  {markingPaidOrderId === order.id ? "Saving..." : "Mark as Paid"}
                 </button>
               </div>
             ))}
