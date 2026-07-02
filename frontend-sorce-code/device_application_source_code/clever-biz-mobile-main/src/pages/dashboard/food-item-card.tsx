@@ -27,7 +27,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                 onAdd();
             }}
             className={cn(
-                "group relative grid min-h-[7rem] grid-cols-[auto_1fr] gap-3 overflow-hidden rounded-2xl border border-gray-100 bg-white p-3 text-foreground shadow-sm transition-all duration-300 hover:border-primary/20 hover:shadow-md active:scale-[0.98] sm:gap-4",
+                "group relative grid min-h-[7rem] grid-cols-[auto_1fr] gap-3 overflow-hidden rounded-3xl border border-white/10 bg-card/95 p-3 text-foreground shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition-all duration-300 hover:border-primary/40 hover:shadow-[0_18px_42px_rgba(0,0,0,0.30)] active:scale-[0.98] sm:gap-4",
                 !isAvailable ? "opacity-65" : ""
             )}
         >
@@ -39,15 +39,15 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             )}
 
             {!isAvailable && (
-                <div className="absolute inset-0 bg-white/70 z-20 pointer-events-none backdrop-blur-[1px]">
-                    <span className="absolute left-3 top-3 rounded-full bg-slate-700 text-white text-[10px] font-bold px-2.5 py-1">
+                <div className="absolute inset-0 bg-slate-950/70 z-20 pointer-events-none backdrop-blur-[1px]">
+                    <span className="absolute left-3 top-3 rounded-full bg-white/10 text-white text-[10px] font-bold px-2.5 py-1 border border-white/10">
                         Sold out
                     </span>
                 </div>
             )}
 
             {/* Image/Video Section - Fixed Width */}
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-secondary flex items-center justify-center self-center">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-secondary flex items-center justify-center self-center shadow-[0_10px_24px_rgba(0,0,0,0.25)]">
 
                 {/* Video Player Overlay */}
                 {showVideo && item.video ? (
@@ -111,7 +111,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
 
                             {/* Fallback Placeholder */}
                             <div className={cn("absolute inset-0 bg-secondary flex items-center justify-center", item.image1 && !imageFailed ? "hidden" : "")}>
-                                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/10">
                                     <UtensilsCrossed className="w-5 h-5 text-muted-foreground" strokeWidth={1.8} />
                                 </div>
                             </div>
@@ -169,7 +169,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                             "w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-90 shadow-sm",
                             isAvailable
                                 ? "bg-primary text-white hover:bg-primary/90"
-                                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                : "bg-white/10 text-slate-500 cursor-not-allowed"
                         )}
                     >
                         <Plus size={18} strokeWidth={1.8} />

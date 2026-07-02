@@ -24,7 +24,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
         "h-16 w-auto shrink-0 rounded-2xl border sm:h-20 sm:w-20",
         isActive
           ? "scale-105 border-primary shadow-lg shadow-primary/25"
-          : "border-border/40 opacity-90 hover:border-primary/30 hover:opacity-100",
+          : "border-white/10 opacity-90 hover:border-primary/30 hover:opacity-100",
       )}
     >
       {cat.image ? (
@@ -46,7 +46,7 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
           <div className={cn("absolute inset-0 transition-colors", isActive ? "bg-primary/25" : "bg-black/20 group-hover:bg-black/5")} />
         </div>
       ) : (
-        <div className="absolute inset-0 z-0 flex items-center justify-center bg-secondary">
+        <div className="absolute inset-0 z-0 flex items-center justify-center bg-white/10">
           <ImageIcon className="h-5 w-5 text-muted-foreground" strokeWidth={1.8} />
         </div>
       )}

@@ -443,10 +443,10 @@ const LayoutDashboard = () => {
   return (
     <CartProvider>
       <div
-        className="flex min-h-screen justify-center overflow-hidden bg-slate-100 text-foreground"
+        className="flex min-h-screen justify-center overflow-hidden bg-[linear-gradient(180deg,#0F172A_0%,#111827_52%,#1E293B_100%)] text-foreground"
         style={hasBranding ? ({ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties) : undefined}
       >
-        <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-2xl">
+        <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-[0_0_60px_rgba(0,0,0,0.45)]">
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">
@@ -551,8 +551,8 @@ const LayoutDashboard = () => {
                   </div>
                 </section>
               ) : (
-                <section className="relative h-36 w-full overflow-hidden bg-[linear-gradient(160deg,#0055FE_0%,#2563EB_100%)]">
-                  <div className="absolute inset-0 bg-black/20" />
+                <section className="relative h-44 w-full overflow-hidden bg-[radial-gradient(circle_at_18%_0%,rgba(0,85,254,0.52),transparent_44%),linear-gradient(160deg,#0F172A_0%,#1E293B_100%)]">
+                  <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(15,23,42,0.18),rgba(15,23,42,0.82))]" />
                   <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-4 pb-3">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Welcome</p>
@@ -572,10 +572,10 @@ const LayoutDashboard = () => {
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
               <header
                 className={cn(
-                  "sticky top-0 z-40 border-b border-border/30 pb-2 backdrop-blur-md transition-all duration-300",
+                  "sticky top-0 z-40 border-b border-white/10 pb-2 backdrop-blur-xl transition-all duration-300",
                   hasBranding
-                    ? "bg-background/80 pt-3"
-                    : "bg-background/90 pt-safe-top"
+                    ? "bg-background/78 pt-3"
+                    : "bg-background/82 pt-safe-top"
                 )}
               >
                 {hasBranding ? (
@@ -587,7 +587,7 @@ const LayoutDashboard = () => {
                     </div>
 
                     {tableName ? (
-                      <div className="rounded-full border border-border bg-secondary/70 px-3 py-1">
+                      <div className="rounded-full border border-white/10 bg-white/10 px-3 py-1 backdrop-blur-md">
                         <span className="text-xs font-bold text-foreground">Table {tableName}</span>
                       </div>
                     ) : null}
@@ -604,7 +604,7 @@ const LayoutDashboard = () => {
                         placeholder="Search for food..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="h-10 w-full rounded-xl border-none bg-secondary/50 py-2.5 pl-9 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground/70 ring-0 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20"
+                        className="h-10 w-full rounded-xl border border-white/10 bg-white/10 py-2.5 pl-9 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground/70 ring-0 transition-all focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/25"
                       />
                     </div>
                     {hasBranding ? (
@@ -635,7 +635,7 @@ const LayoutDashboard = () => {
 
                 {/* Sub-categories */}
                 {subCategories.length > 0 && (
-                          <div className="relative w-full overflow-x-auto hide-scrollbar py-2 pl-4 bg-background/50 mt-2">
+                          <div className="relative mt-2 w-full overflow-x-auto hide-scrollbar bg-background/50 py-2 pl-4">
                     <div className="flex gap-2 pr-4 min-w-max">
                       {subCategories.map((sub) => (
                         <button
@@ -644,8 +644,8 @@ const LayoutDashboard = () => {
                           className={cn(
                             "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-300",
                             selectedSubCategory === sub.id
-                              ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
-                              : "bg-secondary text-secondary-foreground border-transparent hover:bg-secondary/80"
+                              ? "border-white bg-white text-slate-950 shadow-sm shadow-black/20"
+                              : "border-white/10 bg-white/10 text-slate-300 hover:bg-white/15"
                           )}
                         >
                           {sub.Category_name}
@@ -666,11 +666,11 @@ const LayoutDashboard = () => {
                   </div>
                 ) : filteredItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
-                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
-                      <UtensilsCrossed className="h-6 w-6 text-slate-400" strokeWidth={1.8} />
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/10">
+                      <UtensilsCrossed className="h-6 w-6 text-muted-foreground" strokeWidth={1.8} />
                     </div>
-                    <p className="text-sm text-slate-400">No items found.</p>
-                    <p className="mt-1 max-w-56 text-xs text-slate-400">Try another category or search term.</p>
+                    <p className="text-sm text-muted-foreground">No items found.</p>
+                    <p className="mt-1 max-w-56 text-xs text-muted-foreground">Try another category or search term.</p>
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
