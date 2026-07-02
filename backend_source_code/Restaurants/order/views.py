@@ -1344,12 +1344,12 @@ class CartViewSet(viewsets.ModelViewSet):
                 if ':' in value:
                     category_id_raw, count_raw = value.split(':', 1)
                     try:
-                        parsed[int(category_id_raw)] = int(count_raw)
+                            parsed[int(category_id_raw)] = max(0.0, float(count_raw))
                     except (TypeError, ValueError):
                         continue
                 else:
                     try:
-                        parsed[int(value)] = 1
+                        parsed[int(value)] = 1.0
                     except (TypeError, ValueError):
                         continue
             return parsed

@@ -135,37 +135,18 @@ export async function fetchUpsellSuggestions(params: {
   stage?: string;
 }) {
   const signalParams = getUpsellSignalsQueryParams();
-  const sessionToken = localStorage.getItem("guest_session_token");
-  const primaryPromise = cachedGet("/api/customer/cart/upsell_suggestions/", {
+  const response = await cachedGet("/api/customer/cart/upsell_suggestions/", {
     params: {
       trigger_point: params.triggerPoint,
       limit: params.limit ?? 2,
       source_item_id: params.sourceItemId,
       ...signalParams,
     },
-  }, { ttlMs: 2_000 })
-    .then((response) => (Array.isArray(response.data?.suggestions) ? response.data.suggestions : []))
-    .catch(() => [] as UpsellSuggestion[]);
-  const historicalPromise =
-    params.cartItemIds && params.cartItemIds.length > 0
-      ? cachedGet("/api/upsell/smart-suggestions", {
-            params: {
-              cartItemIds: params.cartItemIds.join(","),
-              excludeItemIds: (params.excludeItemIds || []).join(","),
-              triggerPoint: params.triggerPoint,
-              stage: params.stage || "",
-              limit: params.limit ?? 2,
-            },
-            headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
-          }, { ttlMs: 2_000 })
-          .then((response) => (Array.isArray(response.data?.results) ? response.data.results : []))
-          .catch(() => [] as UpsellSuggestion[])
-      : Promise.resolve([] as UpsellSuggestion[]);
-
-  const [primarySuggestions, historicalSuggestions] = await Promise.all([primaryPromise, historicalPromise]);
+  }, { ttlMs: 2_000 }).catch(() => ({ data: { suggestions: [] } }));
+  const primarySuggestions = Array.isArray(response.data?.suggestions) ? response.data.suggestions : [];
 
   const mergedById = new Map<number, UpsellSuggestion>();
-  for (const rawItem of [...primarySuggestions, ...historicalSuggestions]) {
+  for (const rawItem of primarySuggestions) {
     const item = normalizeUpsellSuggestion(rawItem);
     if (item) mergedById.set(item.id, item);
   }

@@ -22,6 +22,9 @@ import {
 } from "../lib/upsellApi";
 import {
   canShowUpsellTouchpoint,
+  getEffectiveUpsellAggressiveness,
+  getUpsellSessionCap,
+  getUpsellTriggerLimit,
   incrementUpsellTouchpointCount,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
@@ -138,22 +141,25 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       setIsAddingToCart(false);
 
       try {
-        if (upsellActiveRef.current || !canShowUpsellTouchpoint("add_to_cart", 2)) {
-          return;
-        }
         const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
         if (settingsSnapshot) setUpsellSettings(settingsSnapshot);
+        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(settingsSnapshot?.aggressiveness || "moderate");
+        const triggerLimit = getUpsellTriggerLimit("add_to_cart", effectiveAggressiveness);
+        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
+
+        if (upsellActiveRef.current || !canShowUpsellTouchpoint("add_to_cart", triggerLimit, sessionLimit)) {
+          return;
+        }
 
         const shouldRender =
           (settingsSnapshot?.enabled ?? upsellSettings?.enabled ?? true) &&
           (settingsSnapshot?.show_after_add_to_cart ?? upsellSettings?.show_after_add_to_cart ?? true);
 
         if (!shouldRender) return;
-        const suggestionLimit = settingsSnapshot?.aggressiveness === "subtle" ? 1 : 2;
         const suggestions = await fetchUpsellSuggestions({
           triggerPoint: "add_to_cart",
           sourceItemId: Number(item.id),
-          limit: suggestionLimit,
+          limit: triggerLimit,
           cartItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
           excludeItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
         });
@@ -221,19 +227,19 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     };
   };
 
-  const dismissSingleSuggestion = async (suggestion: UpsellSuggestion) => {
+  const declineSingleSuggestion = async (suggestion: UpsellSuggestion) => {
     setUpsellOpen(false);
     pendingUpsellActionRef.current = async () => {
       if (suggestion.id) {
         markUpsellItemDismissed(suggestion.id);
       }
       if (suggestion.category) {
-        trackUpsellCategoryDecline(suggestion.category);
+        trackUpsellCategoryDecline(suggestion.category, 1);
       }
       await Promise.allSettled([
         logUpsellEvent({
           triggerPoint: "add_to_cart",
-          action: "dismissed",
+          action: "declined",
           suggestion,
           cartValueAtTime: upsellCartMetrics.cartValueAtTime,
           cartItemCount: upsellCartMetrics.cartItemCount,
@@ -254,7 +260,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       markUpsellItemDismissed(suggestion.id);
     }
     if (suggestion.category) {
-      trackUpsellCategoryDecline(suggestion.category);
+      trackUpsellCategoryDecline(suggestion.category, 0.5);
     }
     setUpsellSuggestions((prev) => {
       const next = prev.filter((row) => row.id !== suggestion.id);
@@ -290,7 +296,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           markUpsellItemDismissed(suggestion.id);
         }
         if (suggestion.category) {
-          trackUpsellCategoryDecline(suggestion.category);
+          trackUpsellCategoryDecline(suggestion.category, 0.5);
         }
         tasks.push(
           logUpsellEvent({
@@ -520,7 +526,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         suggestions={upsellSuggestions}
         currencyCode={currencyCode}
         onAccept={acceptUpsellSuggestion}
-        onDeclineSingle={dismissSingleSuggestion}
+        onDeclineSingle={declineSingleSuggestion}
         onDismissSingle={dismissCardSuggestion}
         onDismissMany={dismissManySuggestions}
         onExited={handleUpsellExited}

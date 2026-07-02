@@ -5,8 +5,11 @@ const ACCEPTED_ITEMS_KEY = "upsell_accepted_items";
 const AFTER_ADD_COUNT_KEY = "cb_suggest_after_add";
 const CART_COUNT_KEY = "cb_suggest_cart";
 const PREPAY_COUNT_KEY = "cb_suggest_prepay";
+const TOTAL_COUNT_KEY = "cb_suggest_total";
+const TOTAL_DECLINE_SCORE_KEY = "cb_suggest_decline_score";
 
 export type UpsellTouchpoint = "add_to_cart" | "cart" | "before_payment";
+export type UpsellAggressiveness = "subtle" | "moderate" | "aggressive";
 
 const TOUCHPOINT_COUNTER_KEYS: Record<UpsellTouchpoint, string> = {
   add_to_cart: AFTER_ADD_COUNT_KEY,
@@ -61,6 +64,8 @@ export function resetUpsellSession(): void {
     Object.values(TOUCHPOINT_COUNTER_KEYS).forEach((key) => {
       sessionStorage.removeItem(key);
     });
+    sessionStorage.removeItem(TOTAL_COUNT_KEY);
+    sessionStorage.removeItem(TOTAL_DECLINE_SCORE_KEY);
   } catch {
     // Non-blocking
   }
@@ -90,11 +95,19 @@ export function trackUpsellCategoryView(categoryId: number | string): void {
   saveSignalState(state);
 }
 
-export function trackUpsellCategoryDecline(categoryId: number | string): void {
+export function trackUpsellCategoryDecline(categoryId: number | string, weight = 1): void {
   const state = getSignalState();
   const key = toKey(categoryId);
-  state.categoryDeclines[key] = (state.categoryDeclines[key] || 0) + 1;
+  const normalizedWeight = Number.isFinite(Number(weight)) ? Math.max(0, Number(weight)) : 1;
+  state.categoryDeclines[key] = Number(((state.categoryDeclines[key] || 0) + normalizedWeight).toFixed(2));
   saveSignalState(state);
+  try {
+    const current = Number(sessionStorage.getItem(TOTAL_DECLINE_SCORE_KEY) || "0");
+    const next = Number.isFinite(current) ? current + normalizedWeight : normalizedWeight;
+    sessionStorage.setItem(TOTAL_DECLINE_SCORE_KEY, String(Number(next.toFixed(2))));
+  } catch {
+    // Non-blocking
+  }
 }
 
 export function trackUpsellCategoryRemoved(categoryId: number | string): void {
@@ -156,11 +169,39 @@ export function canShowAfterAddUpsell(limit = 2): boolean {
   return canShowUpsellTouchpoint("add_to_cart", limit);
 }
 
-export function canShowUpsellTouchpoint(triggerPoint: UpsellTouchpoint, limit = 1): boolean {
+export function getUpsellSessionCap(aggressiveness: UpsellAggressiveness = "moderate"): number {
+  if (aggressiveness === "subtle") return 2;
+  if (aggressiveness === "aggressive") return 6;
+  return 4;
+}
+
+export function getEffectiveUpsellAggressiveness(aggressiveness: UpsellAggressiveness = "moderate"): UpsellAggressiveness {
+  try {
+    const declineScore = Number(sessionStorage.getItem(TOTAL_DECLINE_SCORE_KEY) || "0");
+    if (declineScore < 3) return aggressiveness;
+  } catch {
+    return aggressiveness;
+  }
+  if (aggressiveness === "aggressive") return "moderate";
+  if (aggressiveness === "moderate") return "subtle";
+  return "subtle";
+}
+
+export function getUpsellTriggerLimit(triggerPoint: UpsellTouchpoint, aggressiveness: UpsellAggressiveness = "moderate"): number {
+  if (triggerPoint === "add_to_cart" || triggerPoint === "before_payment") return 1;
+  return aggressiveness === "subtle" ? 1 : 2;
+}
+
+export function canShowUpsellTouchpoint(
+  triggerPoint: UpsellTouchpoint,
+  limit = 1,
+  sessionLimit = Number.POSITIVE_INFINITY,
+): boolean {
   try {
     const storageKey = TOUCHPOINT_COUNTER_KEYS[triggerPoint];
     const current = Number(sessionStorage.getItem(storageKey) || "0");
-    return current < Math.max(1, limit);
+    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
+    return current < Math.max(1, limit) && total < Math.max(1, sessionLimit);
   } catch {
     return true;
   }
@@ -176,6 +217,9 @@ export function incrementUpsellTouchpointCount(triggerPoint: UpsellTouchpoint): 
     const current = Number(sessionStorage.getItem(storageKey) || "0");
     const next = Number.isFinite(current) ? current + 1 : 1;
     sessionStorage.setItem(storageKey, String(next));
+    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
+    const nextTotal = Number.isFinite(total) ? total + 1 : 1;
+    sessionStorage.setItem(TOTAL_COUNT_KEY, String(nextTotal));
     return next;
   } catch {
     return 0;

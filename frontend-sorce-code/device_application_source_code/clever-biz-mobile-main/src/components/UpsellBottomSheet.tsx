@@ -53,7 +53,7 @@ export default function UpsellBottomSheet({
 
   const isMulti = shownItems.length > 1;
   const primaryItem = shownItems[0];
-  const label = "PERFECT WITH YOUR ORDER";
+  const label = primaryItem?.upsell_rule || "Pairs well with your order";
 
   const handleDeclineSingle = (item: UpsellSuggestion) => {
     setLocalDismissed((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));

@@ -71,11 +71,13 @@ class CartItem(models.Model):
 class UpsellSetting(models.Model):
     STRATEGY_CHOICES = [
         ("balanced", "Balanced"),
+        ("max_revenue", "Maximise Revenue"),
+        ("move_stock", "Move Stock"),
+        # Legacy aliases kept for backward compatibility with existing stored values.
         ("highest_margin", "Highest Margin"),
         ("highest_conversion", "Highest Conversion"),
         ("premium_experience", "Premium Experience"),
         ("inventory_movement", "Inventory Movement"),
-        # Legacy aliases kept for backward compatibility with existing stored values.
         ("margin", "Margin (Legacy)"),
         ("volume", "Volume (Legacy)"),
     ]

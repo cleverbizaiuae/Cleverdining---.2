@@ -20,6 +20,9 @@ import {
 } from "../lib/upsellApi";
 import {
   canShowUpsellTouchpoint,
+  getEffectiveUpsellAggressiveness,
+  getUpsellSessionCap,
+  getUpsellTriggerLimit,
   incrementUpsellTouchpointCount,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
@@ -215,11 +218,13 @@ const ScreenCart = () => {
           show_before_payment: true,
         };
 
+        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(effectiveSettings.aggressiveness || "moderate");
+        const triggerLimit = getUpsellTriggerLimit("cart", effectiveAggressiveness);
+        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
         const shouldRenderCart =
           effectiveSettings.enabled &&
           effectiveSettings.show_in_cart &&
-          effectiveSettings.aggressiveness !== "subtle" &&
-          canShowUpsellTouchpoint("cart", 3);
+          canShowUpsellTouchpoint("cart", triggerLimit, sessionLimit);
 
         if (!shouldRenderCart) {
           setUpsellSuggestions([]);
@@ -229,7 +234,7 @@ const ScreenCart = () => {
 
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "cart",
-          limit: 2,
+          limit: triggerLimit,
           cartItemIds: validCartItemIds,
           excludeItemIds: validCartItemIds,
         });
@@ -238,7 +243,7 @@ const ScreenCart = () => {
         const cartIds = new Set(validCartItems.map((item) => item.id));
         const suggestions = rawSuggestions
           .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
-          .slice(0, 2);
+          .slice(0, triggerLimit);
 
         setUpsellSuggestions(suggestions);
 
@@ -322,11 +327,13 @@ const ScreenCart = () => {
           show_before_payment: true,
         };
 
+        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(effectiveSettings.aggressiveness || "moderate");
+        const triggerLimit = getUpsellTriggerLimit("before_payment", effectiveAggressiveness);
+        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
         const shouldRender =
           effectiveSettings.enabled &&
           effectiveSettings.show_before_payment &&
-          effectiveSettings.aggressiveness === "aggressive" &&
-          canShowUpsellTouchpoint("before_payment", 1);
+          canShowUpsellTouchpoint("before_payment", triggerLimit, sessionLimit);
 
         if (!shouldRender) {
           setBeforePaymentSuggestions([]);
@@ -336,7 +343,7 @@ const ScreenCart = () => {
 
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "before_payment",
-          limit: 1,
+          limit: triggerLimit,
           cartItemIds: validCartItemIds,
           excludeItemIds: validCartItemIds,
         });
@@ -345,7 +352,7 @@ const ScreenCart = () => {
         const cartIds = new Set(validCartItems.map((item) => item.id));
         const suggestions = rawSuggestions
           .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
-          .slice(0, 1);
+          .slice(0, triggerLimit);
 
         setBeforePaymentSuggestions(suggestions);
         if (suggestions.length > 0) {
@@ -453,7 +460,7 @@ const ScreenCart = () => {
       markUpsellItemDismissed(item.id);
     }
     if (item.category) {
-      trackUpsellCategoryDecline(item.category);
+      trackUpsellCategoryDecline(item.category, action === "dismissed" ? 0.5 : 1);
     }
     setUpsellSuggestions((prev) => prev.filter((candidate) => candidate.id !== item.id));
     setBeforePaymentSuggestions((prev) => prev.filter((candidate) => candidate.id !== item.id));

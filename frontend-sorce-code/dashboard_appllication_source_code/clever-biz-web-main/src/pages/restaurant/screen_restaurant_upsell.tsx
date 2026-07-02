@@ -32,17 +32,13 @@ type UpsellSettings = {
   enabled: boolean;
   strategy:
     | "balanced"
-    | "highest_margin"
-    | "highest_conversion"
-    | "premium_experience"
-    | "inventory_movement"
-    | "margin"
-    | "volume";
+    | "max_revenue"
+    | "move_stock";
   aggressiveness: "subtle" | "moderate" | "aggressive";
   show_after_add_to_cart: boolean;
   show_in_cart: boolean;
   show_before_payment: boolean;
-  tone: "friendly" | "premium" | "minimal" | "luxury_casual" | "professional" | "playful";
+  tone: "friendly" | "premium" | "minimal";
   prioritized_categories: string;
   prioritized_categories_list?: number[];
   category_role_map: Record<string, number[]>;
@@ -154,32 +150,23 @@ const TABS: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "settings", label: "Settings & Rules", description: "Strategy, triggers, manual overrides" },
 ];
 
-const STRATEGY_OPTIONS: Array<{ value: UpsellSettings["strategy"]; label: string }> = [
-  { value: "balanced", label: "Balanced" },
-  { value: "highest_margin", label: "Highest Margin" },
-  { value: "highest_conversion", label: "Highest Conversion" },
-  { value: "premium_experience", label: "Premium Experience" },
-  { value: "inventory_movement", label: "Inventory Movement" },
-  { value: "margin", label: "Margin (Legacy)" },
-  { value: "volume", label: "Volume (Legacy)" },
+const STRATEGY_OPTIONS: Array<{ value: UpsellSettings["strategy"]; label: string; description: string }> = [
+  { value: "balanced", label: "Balanced", description: "Uses cart gaps, learned pairings, value, and timing together." },
+  { value: "max_revenue", label: "Maximise Revenue", description: "Within the right category, prefers higher-value items." },
+  { value: "move_stock", label: "Move Stock", description: "Within the right category, prefers low-order or priority items." },
 ];
 
-const AGGRESSIVENESS_OPTIONS: Array<{ value: UpsellSettings["aggressiveness"]; label: string }> = [
-  { value: "subtle", label: "Subtle (1 suggestion)" },
-  { value: "moderate", label: "Moderate (1-2 suggestions)" },
-  { value: "aggressive", label: "Aggressive (max touchpoints)" },
+const AGGRESSIVENESS_OPTIONS: Array<{ value: UpsellSettings["aggressiveness"]; label: string; description: string }> = [
+  { value: "subtle", label: "Subtle", description: "Max 2 suggestions per session. One per trigger." },
+  { value: "moderate", label: "Moderate", description: "Max 4 suggestions per session. Cart may show 2." },
+  { value: "aggressive", label: "Aggressive", description: "Max 6 suggestions per session. Cart may show 2." },
 ];
 
-const TONE_OPTIONS: Array<{ value: UpsellSettings["tone"]; label: string }> = [
-  { value: "friendly", label: "Friendly" },
-  { value: "premium", label: "Premium" },
-  { value: "minimal", label: "Minimal" },
-  { value: "luxury_casual", label: "Luxury Casual" },
-  { value: "professional", label: "Professional (Legacy)" },
-  { value: "playful", label: "Playful (Legacy)" },
+const TONE_OPTIONS: Array<{ value: UpsellSettings["tone"]; label: string; example: string }> = [
+  { value: "friendly", label: "Friendly", example: "Guests often pair these together." },
+  { value: "premium", label: "Premium", example: "Recommended to complete this order." },
+  { value: "minimal", label: "Minimal", example: "Add this?" },
 ];
-
-const ROLE_KEYS = ["main", "drinks", "desserts", "starters"] as const;
 
 const TRIGGER_LABELS: Record<string, string> = {
   add_to_cart: "After Add To Cart",
@@ -188,6 +175,21 @@ const TRIGGER_LABELS: Record<string, string> = {
 };
 
 const classNames = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
+
+const normalizeStrategyValue = (value: unknown): UpsellSettings["strategy"] => {
+  const raw = String(value || "balanced");
+  if (["highest_margin", "premium_experience", "margin"].includes(raw)) return "max_revenue";
+  if (["inventory_movement", "volume"].includes(raw)) return "move_stock";
+  if (raw === "max_revenue" || raw === "move_stock" || raw === "balanced") return raw;
+  return "balanced";
+};
+
+const normalizeToneValue = (value: unknown): UpsellSettings["tone"] => {
+  const raw = String(value || "friendly");
+  if (raw === "professional") return "premium";
+  if (raw === "minimal" || raw === "premium" || raw === "friendly") return raw;
+  return "friendly";
+};
 
 const formatHour = (hour: number) => {
   const h = hour % 24;
@@ -422,6 +424,8 @@ const ScreenRestaurantUpsell = () => {
     return {
       ...DEFAULT_SETTINGS,
       ...incoming,
+      strategy: normalizeStrategyValue(incoming?.strategy),
+      tone: normalizeToneValue(incoming?.tone),
       prioritized_categories_list: prioritizedList,
       category_role_map: {
         main: incoming?.category_role_map?.main || [],
@@ -628,18 +632,6 @@ const ScreenRestaurantUpsell = () => {
     if (active.has(categoryId)) active.delete(categoryId);
     else active.add(categoryId);
     patchSettings({ prioritized_categories_list: Array.from(active) });
-  };
-
-  const handleToggleRoleCategory = (role: (typeof ROLE_KEYS)[number], categoryId: number) => {
-    const active = new Set(settings.category_role_map?.[role] || []);
-    if (active.has(categoryId)) active.delete(categoryId);
-    else active.add(categoryId);
-    patchSettings({
-      category_role_map: {
-        ...settings.category_role_map,
-        [role]: Array.from(active),
-      },
-    });
   };
 
   const addRule = async () => {
@@ -994,8 +986,9 @@ const ScreenRestaurantUpsell = () => {
                         </tr>
                       ) : (
                         analytics.top_items.slice(0, 20).map((row) => {
-                          const isWin = (row.accepted || 0) >= (row.rejected || 0);
                           const acceptRate = Number(row.acceptance_rate || 0);
+                          const isWin = acceptRate > 15;
+                          const isLose = Number(row.shown || 0) > 10 && Number(row.accepted || 0) === 0;
                           const rateClass = acceptRate >= 50 ? "text-[#0055FE]" : acceptRate >= 25 ? "text-slate-600" : "text-red-500";
                           const imageUrl =
                             row.image_url ||
@@ -1014,14 +1007,16 @@ const ScreenRestaurantUpsell = () => {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="truncate text-slate-800 font-medium max-w-[190px]">{row.item_name || "Unknown"}</p>
-                                    <span
-                                      className={classNames(
-                                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold mt-0.5",
-                                        isWin ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700",
-                                      )}
-                                    >
-                                      {isWin ? "Win" : "Lose"}
-                                    </span>
+                                    {(isWin || isLose) ? (
+                                      <span
+                                        className={classNames(
+                                          "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold mt-0.5",
+                                          isWin ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700",
+                                        )}
+                                      >
+                                        {isWin ? "Win" : "Lose"}
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </div>
                               </td>
@@ -1270,7 +1265,7 @@ const ScreenRestaurantUpsell = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs text-slate-500 mb-1">Strategy</p>
                 <select
                   value={settings.strategy}
@@ -1281,9 +1276,12 @@ const ScreenRestaurantUpsell = () => {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  {STRATEGY_OPTIONS.find((opt) => opt.value === settings.strategy)?.description}
+                </p>
               </div>
 
-              <div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs text-slate-500 mb-1">Aggressiveness</p>
                 <select
                   value={settings.aggressiveness}
@@ -1294,9 +1292,12 @@ const ScreenRestaurantUpsell = () => {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  {AGGRESSIVENESS_OPTIONS.find((opt) => opt.value === settings.aggressiveness)?.description}
+                </p>
               </div>
 
-              <div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs text-slate-500 mb-1">Tone</p>
                 <select
                   value={settings.tone}
@@ -1307,6 +1308,9 @@ const ScreenRestaurantUpsell = () => {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  Example: {TONE_OPTIONS.find((opt) => opt.value === settings.tone)?.example}
+                </p>
               </div>
             </div>
 
@@ -1390,40 +1394,21 @@ const ScreenRestaurantUpsell = () => {
               ))}
             </div>
 
-            <div className="space-y-3 mt-5">
-              <p className="text-xs text-slate-500">Category Role Mapping</p>
-              {ROLE_KEYS.map((role) => (
-                <div key={role}>
-                  <p className="text-sm font-medium text-slate-700 capitalize mb-1">{role}</p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {categoryOptions.map((category) => {
-                      const active = (settings.category_role_map?.[role] || []).includes(category.id);
-                      return (
-                        <button
-                          key={`${role}-${category.id}`}
-                          onClick={() => handleToggleRoleCategory(role, category.id)}
-                          className={classNames(
-                            "rounded-lg border px-3 py-1.5 text-left text-xs",
-                            active
-                              ? "border-[#0055FE] bg-blue-50 text-[#0055FE]"
-                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                          )}
-                        >
-                          {category.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">How Smart Suggestions Work</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                The engine reads the customer cart first. Main-only carts get drinks first, then dessert, then starters.
+                Main + drink carts get dessert next. Drink-only or starter-only carts get a main. Already represented
+                categories and disabled items are excluded automatically before learned pairings and strategy scoring run.
+              </p>
             </div>
           </section>
 
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
             <div className="flex items-center justify-between gap-2 mb-4">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Manual Pairings & Blocks</h3>
-                <p className="text-sm text-slate-500 mt-1">Define item combinations to always pair or never suggest together.</p>
+                <h3 className="text-base font-semibold text-slate-900">Smart Rules</h3>
+                <p className="text-sm text-slate-500 mt-1">Add explicit Always Suggest or Never Suggest rules on top of the automatic engine.</p>
               </div>
               <button
                 onClick={() => setAddingRule((prev) => !prev)}
@@ -1442,8 +1427,8 @@ const ScreenRestaurantUpsell = () => {
                     onChange={(e) => setNewRule((prev) => ({ ...prev, type: e.target.value as "pair" | "block" }))}
                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   >
-                    <option value="pair">Pair Rule</option>
-                    <option value="block">Block Rule</option>
+                    <option value="pair">Always Suggest</option>
+                    <option value="block">Never Suggest</option>
                   </select>
 
                   <select
@@ -1462,7 +1447,7 @@ const ScreenRestaurantUpsell = () => {
                     onChange={(e) => setNewRule((prev) => ({ ...prev, target_item: Number(e.target.value) }))}
                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   >
-                    <option value="">Suggest / Block this item...</option>
+                    <option value="">Choose target item...</option>
                     {items.filter((item) => item.id !== newRule.source_item).slice(0, 40).map((item) => (
                       <option key={`tgt-${item.id}`} value={item.id}>{item.item_name}</option>
                     ))}
@@ -1499,7 +1484,7 @@ const ScreenRestaurantUpsell = () => {
                 <tbody>
                   {rules.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-3 text-slate-500">No manual rules configured.</td>
+                      <td colSpan={4} className="py-3 text-slate-500">No custom rules yet. The engine uses smart suggestions automatically.</td>
                     </tr>
                   ) : (
                     rules.map((rule) => (
@@ -1512,7 +1497,7 @@ const ScreenRestaurantUpsell = () => {
                             )}
                           >
                             {rule.type === "pair" ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                            {rule.type}
+                            {rule.type === "pair" ? "Always Suggest" : "Never Suggest"}
                           </span>
                         </td>
                         <td className="py-2 pr-3 text-slate-600">{rule.source_item_name || itemLookup.get(rule.source_item)?.item_name || rule.source_item}</td>
@@ -1536,7 +1521,8 @@ const ScreenRestaurantUpsell = () => {
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
               <Eye className="w-4 h-4 mt-0.5 text-slate-400" />
               <p>
-                Pair rule = always prioritize item Y when item X is added. Block rule = suppress item Y when item X is added.
+                Always Suggest prioritizes item Y when item X is added, as long as the target item is valid for the cart.
+                Never Suggest suppresses item Y when item X is added.
               </p>
             </div>
           </section>

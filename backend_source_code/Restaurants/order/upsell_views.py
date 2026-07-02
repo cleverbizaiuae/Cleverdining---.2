@@ -337,6 +337,13 @@ class UpsellRulesAPIView(APIView):
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Clean historical invalid self-pairing rules so the Settings tab never
+        # shows or applies "Burger -> Burger" style overrides.
+        UpsellRule.objects.filter(
+            restaurant=restaurant,
+            source_item_id__isnull=False,
+            source_item_id=F("target_item_id"),
+        ).delete()
         rules = UpsellRule.objects.filter(restaurant=restaurant).select_related("source_item", "target_item").order_by("-id")
         serializer = UpsellRuleSerializer(rules, many=True)
         return Response(serializer.data)
@@ -797,7 +804,9 @@ class UpsellAnalyticsAPIView(APIView):
             if row.get("upsell_item_id") is not None
         }
         top_item_image_urls: dict[int, str] = {}
-        for item in Item.objects.filter(restaurant=restaurant, id__in=top_item_ids).only("id", "image1"):
+        top_item_names: dict[int, str] = {}
+        for item in Item.objects.filter(restaurant=restaurant, id__in=top_item_ids).only("id", "item_name", "image1"):
+            top_item_names[item.id] = item.item_name or ""
             try:
                 if item.image1:
                     top_item_image_urls[item.id] = request.build_absolute_uri(item.image1.url)
@@ -806,19 +815,48 @@ class UpsellAnalyticsAPIView(APIView):
                 # has been removed from storage.
                 top_item_image_urls[item.id] = ""
 
-        top_items = [
-            {
-                "item_id": row["upsell_item_id"],
-                "item_name": row["upsell_item_name"],
-                "image_url": top_item_image_urls.get(row["upsell_item_id"], ""),
-                "shown": row["shown"],
-                "accepted": row["accepted"],
-                "rejected": row["rejected"],
-                "acceptance_rate": (row["accepted"] / row["shown"] * 100.0) if row["shown"] else 0.0,
-                "revenue": str(row["revenue"] or Decimal("0")),
-            }
-            for row in top_items_rows
-        ]
+        merged_top_items: dict[str, dict] = {}
+        for row in top_items_rows:
+            item_id = row.get("upsell_item_id")
+            item_name = (top_item_names.get(item_id) if item_id else None) or row.get("upsell_item_name") or "Unknown"
+            key = f"id:{item_id}" if item_id is not None else f"name:{str(item_name).strip().lower()}"
+            bucket = merged_top_items.setdefault(
+                key,
+                {
+                    "item_id": item_id,
+                    "item_name": item_name,
+                    "image_url": top_item_image_urls.get(item_id, "") if item_id is not None else "",
+                    "shown": 0,
+                    "accepted": 0,
+                    "rejected": 0,
+                    "revenue": Decimal("0"),
+                },
+            )
+            bucket["shown"] += int(row.get("shown") or 0)
+            bucket["accepted"] += int(row.get("accepted") or 0)
+            bucket["rejected"] += int(row.get("rejected") or 0)
+            bucket["revenue"] += row.get("revenue") or Decimal("0")
+
+        top_items = []
+        for row in sorted(
+            merged_top_items.values(),
+            key=lambda item: (int(item["accepted"]), Decimal(item["revenue"]), int(item["shown"])),
+            reverse=True,
+        )[:25]:
+            shown = int(row["shown"] or 0)
+            accepted = int(row["accepted"] or 0)
+            top_items.append(
+                {
+                    "item_id": row["item_id"],
+                    "item_name": row["item_name"],
+                    "image_url": row["image_url"],
+                    "shown": shown,
+                    "accepted": accepted,
+                    "rejected": int(row["rejected"] or 0),
+                    "acceptance_rate": (accepted / shown * 100.0) if shown else 0.0,
+                    "revenue": str(row["revenue"] or Decimal("0")),
+                }
+            )
 
         by_hour_rows = (
             events.values("hour_of_day")
