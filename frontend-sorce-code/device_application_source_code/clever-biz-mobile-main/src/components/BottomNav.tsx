@@ -1,4 +1,4 @@
-import { Home, Phone, MessageSquare, ShoppingCart, ClipboardList } from "lucide-react";
+import { Home, Phone, MessageSquare, ShoppingBag, ClipboardList } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
@@ -32,7 +32,7 @@ export const BottomNav = () => {
         { id: "home", icon: Home, label: "Home", path: "/dashboard" },
         { id: "call", icon: Phone, label: "Call", path: "#call" }, // Special handler for call
         { id: "message", icon: MessageSquare, label: "Message", path: "/dashboard/message" },
-        { id: "cart", icon: ShoppingCart, label: "Cart", path: "/dashboard/cart" },
+        { id: "cart", icon: ShoppingBag, label: "Cart", path: "/dashboard/cart" },
         { id: "orders", icon: ClipboardList, label: "Orders", path: "/dashboard/orders" },
     ];
 
@@ -49,7 +49,7 @@ export const BottomNav = () => {
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] pt-2 px-2 pb-[max(env(safe-area-inset-bottom),8px)]">
+        <div className="fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 border-t border-border/30 bg-background/80 px-2 pt-2 pb-[max(env(safe-area-inset-bottom),8px)] shadow-[0_-10px_30px_rgba(0,0,0,0.28)] backdrop-blur-lg">
             <div className="flex justify-around items-center w-full">
                 {tabs.map((tab) => {
                     const isActive = location.pathname === tab.path || (tab.id === "call" && false);
@@ -61,12 +61,12 @@ export const BottomNav = () => {
                             onClick={() => handleTabClick(tab)}
                             onPointerDown={() => prefetchRoute(tab.id)}
                             onFocus={() => prefetchRoute(tab.id)}
-                            className="group relative flex flex-col items-center justify-center w-16 py-1"
+                            className="group relative flex min-h-12 w-16 flex-col items-center justify-center py-1 active:scale-95 transition-transform"
                         >
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-bubble"
-                                    className="absolute inset-0 bg-primary/10 rounded-xl -z-10"
+                                    className="absolute inset-x-2 inset-y-0 -z-10 rounded-full bg-primary/15"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
@@ -76,16 +76,16 @@ export const BottomNav = () => {
                                     size={24}
                                     className={cn(
                                         "transition-colors duration-300",
-                                        isActive ? "text-primary fill-primary/20" : "text-gray-400 group-hover:text-gray-600"
+                                        isActive ? "text-primary fill-primary/20" : "text-muted-foreground group-hover:text-foreground"
                                     )}
-                                    strokeWidth={isActive ? 2.5 : 2}
+                                    strokeWidth={1.8}
                                 />
 
                                 {tab.id === "cart" && cart.length > 0 && (
                                     <motion.span
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
-                                        className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm"
+                                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm"
                                     >
                                         {cart.length}
                                     </motion.span>
@@ -101,8 +101,8 @@ export const BottomNav = () => {
                             </div>
 
                             <span className={cn(
-                                "text-[11px] font-medium transition-colors duration-300",
-                                isActive ? "text-primary" : "text-gray-400 group-hover:text-gray-600"
+                                "text-[10px] font-medium transition-colors duration-300",
+                                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                             )}>
                                 {tab.label}
                             </span>

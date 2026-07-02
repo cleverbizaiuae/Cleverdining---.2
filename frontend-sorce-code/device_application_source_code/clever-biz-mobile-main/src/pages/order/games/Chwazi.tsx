@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowLeft, Fingerprint } from "lucide-react";
+import { motion } from "motion/react";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 
-type ChwaziPhase = "intro" | "waiting" | "counting" | "chosen";
+type ChwaziPhase = "waiting" | "countdown" | "result";
 
 type TouchPoint = {
   id: number;
@@ -15,189 +16,202 @@ interface ChwaziProps {
   onChosen: (name: string) => void;
 }
 
-const COLORS = ["#ef4444", "#22c55e", "#3b82f6", "#eab308", "#a855f7", "#f97316", "#14b8a6", "#ec4899"];
-
-const COLOR_NAMES: Record<string, string> = {
-  "#ef4444": "Red",
-  "#22c55e": "Green",
-  "#3b82f6": "Blue",
-  "#eab308": "Yellow",
-  "#a855f7": "Purple",
-  "#f97316": "Orange",
-  "#14b8a6": "Teal",
-  "#ec4899": "Pink",
-};
+const COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FED766", "#FF8C42", "#A78BFA", "#34D399", "#F472B6", "#60A5FA", "#FBBF24"];
 
 export const Chwazi = ({ onBack, onChosen }: ChwaziProps) => {
+  const areaRef = useRef<HTMLDivElement | null>(null);
   const pointersRef = useRef<Map<number, TouchPoint>>(new Map());
-  const timerRef = useRef<number | null>(null);
-  const pickTimerRef = useRef<number | null>(null);
-
-  const [phase, setPhase] = useState<ChwaziPhase>("intro");
-  const [seconds, setSeconds] = useState(3);
+  const countdownTimerRef = useRef<number | null>(null);
+  const delayTimerRef = useRef<number | null>(null);
+  const chosenNotifiedRef = useRef(false);
+  const [phase, setPhase] = useState<ChwaziPhase>("waiting");
+  const [countdown, setCountdown] = useState(3);
   const [points, setPoints] = useState<TouchPoint[]>([]);
-  const [chosenId, setChosenId] = useState<number | null>(null);
+  const [winnerId, setWinnerId] = useState<number | null>(null);
 
-  const chosenPoint = useMemo(() => points.find((point) => point.id === chosenId) || null, [points, chosenId]);
+  const winner = useMemo(() => points.find((point) => point.id === winnerId) || null, [points, winnerId]);
 
   const clearTimers = () => {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (countdownTimerRef.current) {
+      window.clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
-    if (pickTimerRef.current) {
-      window.clearTimeout(pickTimerRef.current);
-      pickTimerRef.current = null;
+    if (delayTimerRef.current) {
+      window.clearTimeout(delayTimerRef.current);
+      delayTimerRef.current = null;
     }
   };
 
-  const syncFromPointers = () => {
-    const current = Array.from(pointersRef.current.values());
-    setPoints(current);
-    return current;
+  const syncPoints = () => {
+    const nextPoints = Array.from(pointersRef.current.values());
+    setPoints(nextPoints);
+    return nextPoints;
+  };
+
+  const resetGame = () => {
+    clearTimers();
+    pointersRef.current.clear();
+    setPoints([]);
+    setPhase("waiting");
+    setCountdown(3);
+    setWinnerId(null);
+    chosenNotifiedRef.current = false;
   };
 
   const pickWinner = () => {
     const current = Array.from(pointersRef.current.values());
     if (current.length < 2) {
       setPhase("waiting");
+      setCountdown(3);
       return;
     }
-    const winner = current[Math.floor(Math.random() * current.length)];
-    setChosenId(winner.id);
-    setPhase("chosen");
-
-    pickTimerRef.current = window.setTimeout(() => {
-      const name = COLOR_NAMES[winner.color] || "Lucky";
-      onChosen(name);
-      setPhase("waiting");
-      setChosenId(null);
-    }, 2500);
+    const selected = current[Math.floor(Math.random() * current.length)];
+    setWinnerId(selected.id);
+    setPhase("result");
+    if (!chosenNotifiedRef.current) {
+      chosenNotifiedRef.current = true;
+      onChosen("This person");
+    }
   };
 
   const startCountdown = () => {
     clearTimers();
-    setSeconds(3);
-    timerRef.current = window.setInterval(() => {
-      setSeconds((previous) => {
-        if (previous <= 1) {
+    setCountdown(3);
+    setPhase("countdown");
+    countdownTimerRef.current = window.setInterval(() => {
+      setCountdown((current) => {
+        if (current <= 1) {
           clearTimers();
           pickWinner();
           return 0;
         }
-        return previous - 1;
+        return current - 1;
       });
     }, 1000);
   };
 
-  useEffect(() => {
-    return () => clearTimers();
-  }, []);
+  const scheduleCountdown = () => {
+    clearTimers();
+    delayTimerRef.current = window.setTimeout(startCountdown, 600);
+  };
+
+  useEffect(() => () => clearTimers(), []);
+
+  const getRelativePoint = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = areaRef.current?.getBoundingClientRect();
+    if (!rect) return { x: event.clientX, y: event.clientY };
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (phase === "intro") setPhase("waiting");
+    if (phase === "result") return;
+    const position = getRelativePoint(event);
     const color = COLORS[pointersRef.current.size % COLORS.length];
-    pointersRef.current.set(event.pointerId, {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      color,
-    });
-
-    const current = syncFromPointers();
+    pointersRef.current.set(event.pointerId, { id: event.pointerId, ...position, color });
+    const current = syncPoints();
     event.currentTarget.setPointerCapture(event.pointerId);
-
-    if (current.length >= 2 && phase !== "counting" && phase !== "chosen") {
-      setPhase("counting");
-      startCountdown();
-    }
+    if (current.length >= 2) scheduleCountdown();
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const existing = pointersRef.current.get(event.pointerId);
-    if (!existing) return;
-    pointersRef.current.set(event.pointerId, {
-      ...existing,
-      x: event.clientX,
-      y: event.clientY,
-    });
-    syncFromPointers();
+    if (!existing || phase === "result") return;
+    pointersRef.current.set(event.pointerId, { ...existing, ...getRelativePoint(event) });
+    syncPoints();
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (phase === "result") return;
     pointersRef.current.delete(event.pointerId);
-    const current = syncFromPointers();
-
+    const current = syncPoints();
     if (current.length < 2) {
       clearTimers();
       setPhase("waiting");
-      setSeconds(3);
-      setChosenId(null);
+      setCountdown(3);
+    } else {
+      scheduleCountdown();
     }
-
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
-      // no-op
+      // Pointer capture can already be released on some mobile browsers.
     }
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-950 text-white">
-      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-200 hover:text-white"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
+    <div className="h-full bg-gray-950 text-white flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-4 pt-8 pb-3 shrink-0">
+        <button onClick={onBack} className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-semibold">
+          <ArrowLeft className="w-5 h-5" strokeWidth={1.8} /> Back
         </button>
-        <span className="text-sm font-semibold">Chwazi: Who Pays?</span>
-        <span className="w-10" />
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-white">Swajie</h2>
+          <p className="text-xs text-gray-400">Who pays the bill?</p>
+        </div>
+        <button onClick={resetGame} className="p-2 rounded-full hover:bg-white/10 text-white/60 hover:text-white">
+          <RotateCcw className="w-4 h-4" strokeWidth={1.8} />
+        </button>
       </div>
 
       <div
-        className="relative flex-1 touch-none"
+        ref={areaRef}
+        className="flex-1 relative overflow-hidden mx-3 mb-3 rounded-3xl border border-white/10 bg-gray-900/80 touch-none"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        {points.map((point) => (
-          <div
-            key={point.id}
-            className="absolute w-16 h-16 rounded-full border-4 border-white/70 shadow-lg flex items-center justify-center transition-transform"
-            style={{
-              left: point.x - 32,
-              top: point.y - 32,
-              backgroundColor: point.color,
-              transform: point.id === chosenId ? "scale(1.2)" : "scale(1)",
-              zIndex: point.id === chosenId ? 20 : 10,
-            }}
-          >
-            <Fingerprint className="w-6 h-6 text-white" />
-          </div>
-        ))}
+        {points.map((point) => {
+          const isWinner = point.id === winnerId;
+          return (
+            <motion.div
+              key={point.id}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={phase === "result" ? { scale: isWinner ? [1, 1.5, 1.3] : 0.5, opacity: isWinner ? 1 : 0.2 } : { scale: 1, opacity: 1 }}
+              className="absolute w-20 h-20 rounded-full border-4 border-white/80 shadow-xl flex items-center justify-center"
+              style={{ left: point.x - 40, top: point.y - 40, backgroundColor: point.color, zIndex: isWinner ? 30 : 10 }}
+            >
+              {phase === "countdown" && <span className="absolute -bottom-5 w-5 h-5 rounded-full border-2 animate-ping" style={{ borderColor: point.color }} />}
+              {isWinner && <span className="text-2xl text-white">💸</span>}
+            </motion.div>
+          );
+        })}
 
-        <div className="absolute inset-x-0 top-8 px-4 text-center z-30 pointer-events-none">
-          {phase === "intro" && (
-            <p className="text-sm text-slate-200">Put at least two fingers on the screen to start.</p>
-          )}
-          {phase === "waiting" && (
-            <p className="text-sm text-slate-300">Waiting for players. Keep fingers pressed.</p>
-          )}
-          {phase === "counting" && (
-            <div className="inline-flex items-center gap-3 bg-white/10 border border-white/20 rounded-full px-4 py-2">
-              <span className="text-xs uppercase tracking-wide text-slate-300">Picking in</span>
-              <span className="text-lg font-bold">{seconds}</span>
-            </div>
-          )}
-          {phase === "chosen" && chosenPoint && (
-            <div className="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-300/30 rounded-full px-4 py-2 text-emerald-100">
-              <span className="text-sm font-semibold">{COLOR_NAMES[chosenPoint.color] || "Lucky"} finger treats! 🎉</span>
-            </div>
-          )}
-        </div>
+        {phase === "waiting" && points.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8 pointer-events-none">
+            <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 2, repeat: Infinity }} className="text-6xl mb-5">☝️</motion.div>
+            <h3 className="text-white text-xl font-bold mb-2">Everyone place a finger</h3>
+            <p className="text-gray-400 text-sm">Place 2+ fingers on the screen...</p>
+          </div>
+        )}
+
+        {phase === "waiting" && points.length === 1 && (
+          <div className="absolute inset-x-0 top-8 text-center pointer-events-none">
+            <span className="bg-white/10 backdrop-blur-sm rounded-full px-5 py-2 text-white text-sm font-semibold">Waiting for more fingers…</span>
+          </div>
+        )}
+
+        {phase === "countdown" && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <motion.div key={countdown} initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-16 h-16 rounded-full bg-primary shadow-lg shadow-primary/40 flex items-center justify-center">
+              <span className="text-white text-3xl font-black">{countdown}</span>
+            </motion.div>
+          </div>
+        )}
+
+        {phase === "result" && winner && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-center px-6">
+            <div className="w-20 h-20 rounded-full border-4 border-white shadow-2xl mb-5" style={{ backgroundColor: winner.color }} />
+            <h3 className="text-white text-3xl font-black mb-1">This person pays!</h3>
+            <p className="text-gray-300 text-sm mb-6">The highlighted finger is the one 🎯</p>
+            <button onClick={resetGame} className="px-8 py-3 bg-white text-gray-900 rounded-full font-bold text-sm shadow-lg active:scale-95">
+              Play Again
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

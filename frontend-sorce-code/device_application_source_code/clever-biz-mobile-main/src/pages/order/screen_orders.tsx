@@ -33,6 +33,7 @@ import {
   normalizePaymentStatus,
   shouldRemoveFromActiveOrders,
 } from "./order-lifecycle";
+import { GameHub } from "@/components/Games";
 
 type BackendOrderItem = {
   id?: number;
@@ -278,6 +279,7 @@ const ScreenOrders = () => {
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const sessionClearedRef = useRef(false);
   const [highlightedOrderIds, setHighlightedOrderIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"list" | "games">("list");
 
   const chwaziPointersRef = useRef<Map<number, ChwaziPointer>>(new Map());
   const chwaziIntervalRef = useRef<number | null>(null);
@@ -917,15 +919,23 @@ const ScreenOrders = () => {
   const totalLabel =
     splitMode === "count" ? `Your share (÷${Math.max(splitCount, 1)})` : splitMode === "items" ? "Your share" : "Total";
 
+  if (viewMode === "games") {
+    return (
+      <div className="fixed top-0 bottom-[80px] left-1/2 w-full max-w-[430px] -translate-x-1/2 bg-gray-950">
+        <GameHub onBack={() => setViewMode("list")} onChosenTreater={setTreater} />
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 mb-[80px] bg-gray-50 flex flex-col">
-      <div className="bg-white px-5 pt-5 pb-4 shadow-sm z-20 rounded-b-3xl mb-3 shrink-0">
+    <div className="fixed top-0 bottom-[80px] left-1/2 w-full max-w-[430px] -translate-x-1/2 bg-background text-foreground flex flex-col">
+      <div className="border-b border-border/30 bg-background/80 px-5 pt-5 pb-4 shadow-sm shadow-black/20 backdrop-blur-md z-20 rounded-b-3xl mb-3 shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">My Orders</h1>
+          <h1 className="text-2xl font-black tracking-tight text-foreground">My Orders</h1>
 
           <button
-            onClick={openChwazi}
-            className="rounded-full px-3 py-1.5 h-auto text-xs font-semibold gap-1.5 bg-slate-900 hover:bg-slate-800 text-white inline-flex items-center"
+            onClick={() => setViewMode("games")}
+            className="rounded-full px-3 py-1.5 h-auto text-xs font-semibold gap-1.5 bg-primary/15 hover:bg-primary/25 text-primary inline-flex items-center"
           >
             <Zap className="w-3.5 h-3.5" />
             <span>Wait &amp; Play</span>
@@ -954,21 +964,21 @@ const ScreenOrders = () => {
 
       <div className="flex-1 overflow-y-auto px-4 pb-3">
         {loading && (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-2" />
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />
             <p>Loading orders...</p>
           </div>
         )}
 
-        {err && !loading && <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-center">{err}</div>}
+        {err && !loading && <div className="bg-red-500/10 text-red-300 border border-red-500/20 p-4 rounded-2xl text-center">{err}</div>}
 
         {!loading && !err && orders.length === 0 && (
           <div className="flex flex-col items-center justify-center h-[52vh] text-center">
-            <div className="w-24 h-24 rounded-full bg-slate-50 flex items-center justify-center mb-5">
-              <UtensilsCrossed className="w-16 h-16 text-slate-200" />
+            <div className="w-24 h-24 rounded-3xl bg-secondary flex items-center justify-center mb-5">
+              <UtensilsCrossed className="w-16 h-16 text-muted-foreground" />
             </div>
-            <h3 className="text-xl font-bold text-slate-700 mb-2">Nothing ordered yet</h3>
-            <p className="text-slate-400 max-w-[240px] text-sm">Head back to the menu to get started.</p>
+            <h3 className="text-xl font-bold text-foreground mb-2">Nothing ordered yet</h3>
+            <p className="text-muted-foreground max-w-[240px] text-sm">Head back to the menu to get started.</p>
             <div className="mt-5 flex items-center gap-2">
               <button
                 onClick={() => navigate("/dashboard")}
@@ -977,8 +987,8 @@ const ScreenOrders = () => {
                 Browse Menu <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={openChwazi}
-                className="h-10 px-4 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50"
+                onClick={() => setViewMode("games")}
+                className="h-10 px-4 rounded-xl border border-border text-secondary-foreground text-sm font-semibold hover:bg-secondary"
               >
                 Play Games
               </button>
@@ -1003,7 +1013,7 @@ const ScreenOrders = () => {
       </div>
 
       {hasPayableOrders && (
-        <div className="bg-white border-t border-gray-100 px-4 pt-3 pb-3 shrink-0">
+        <div className="bg-card/95 border-t border-border px-4 pt-3 pb-3 shrink-0 backdrop-blur-lg shadow-[0_-14px_34px_rgba(0,0,0,0.34)]">
           <button
             onClick={openCheckoutDialog}
             className="w-full h-[52px] rounded-2xl text-base font-bold shadow-lg shadow-primary/25 flex items-center justify-between px-5 py-4 bg-primary text-white transition-colors hover:bg-primary/90"
@@ -1012,7 +1022,7 @@ const ScreenOrders = () => {
             <span>{fmt(fullSubtotal)}</span>
           </button>
           {hasPartialPayments && (
-            <p className="mt-2 text-center text-[11px] font-medium text-slate-500">
+            <p className="mt-2 text-center text-[11px] font-medium text-muted-foreground">
               {fmt(totalAlreadyPaid)} already paid · {fmt(fullSubtotal)} left
             </p>
           )}
@@ -1123,7 +1133,7 @@ const ScreenOrders = () => {
                                 onClick={() => setSplitCount(count)}
                                 className={`py-2.5 rounded-xl text-sm font-bold border-2 ${
                                   splitCount === count
-                                    ? "border-primary bg-primary/8 text-primary"
+                                    ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
                                     : "border-slate-200 bg-white text-slate-500"
                                 }`}
                               >
@@ -1166,9 +1176,9 @@ const ScreenOrders = () => {
                                   key={item.key}
                                   type="button"
                                   onClick={() => toggleItem(item.key)}
-                                  className={`w-full flex items-center gap-3 px-4 py-3 text-left ${
+                                    className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-colors ${
                                     idx > 0 ? "border-t border-slate-50" : ""
-                                  } ${isChecked ? "bg-primary/5" : "bg-white hover:bg-slate-50"}`}
+                                  } ${isChecked ? "bg-primary/5 border border-primary/20" : "bg-slate-50 border border-transparent hover:bg-slate-100"}`}
                                 >
                                   <span
                                     className={`w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center ${
@@ -1221,7 +1231,7 @@ const ScreenOrders = () => {
                             onClick={() => setTipType(tip.id as TipOption)}
                             className={`py-2 rounded-xl text-xs font-bold border-2 ${
                               tipType === tip.id
-                                ? "border-primary bg-primary/8 text-primary"
+                                ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
                                 : "border-slate-200 bg-white text-slate-500"
                             }`}
                           >
@@ -1236,7 +1246,7 @@ const ScreenOrders = () => {
                         onClick={() => setTipType("custom")}
                         className={`w-full py-2 rounded-xl text-xs font-bold border-2 ${
                           tipType === "custom"
-                            ? "border-primary bg-primary/8 text-primary"
+                            ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
                             : "border-slate-200 bg-white text-slate-500"
                         }`}
                       >
@@ -1272,7 +1282,7 @@ const ScreenOrders = () => {
                               onClick={() => setPaymentMethod(method.id as PaymentMethod)}
                               className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
                                 isActive
-                                  ? "border-primary text-primary bg-primary/5 shadow-sm shadow-primary/15"
+                                  ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
                                   : "border-slate-200 bg-white text-slate-400"
                               }`}
                             >
@@ -1331,7 +1341,7 @@ const ScreenOrders = () => {
         <AnimatePresence>
           {isChwaziOpen && (
           <motion.div
-            className="fixed inset-0 z-[2147483647] bg-slate-900"
+            className="fixed inset-y-0 left-1/2 z-[2147483647] w-full max-w-[430px] -translate-x-1/2 bg-slate-900"
             style={{ touchAction: "none", userSelect: "none" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

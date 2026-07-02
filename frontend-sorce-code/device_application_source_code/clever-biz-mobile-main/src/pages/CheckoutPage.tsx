@@ -364,25 +364,25 @@ export default function CheckoutPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] p-4 text-center">
         <p className="text-lg font-semibold text-red-500 mb-2">Order ID missing</p>
-        <p className="text-gray-500">Redirecting to cart...</p>
+        <p className="text-muted-foreground">Redirecting to cart...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 max-w-lg mx-auto w-full shadow-lg">
+    <div className="flex flex-col h-screen bg-background text-foreground max-w-lg mx-auto w-full shadow-lg">
       {/* 1. FIXED HEADER */}
-      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-100 z-10">
+      <div className="flex items-center justify-between p-4 bg-background/80 border-b border-border/30 backdrop-blur-md z-10">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
           <span className="text-sm font-medium">Back</span>
         </button>
-        <h1 className="text-xl font-bold text-center flex-1 text-gray-900">Checkout</h1>
+        <h1 className="text-xl font-bold text-center flex-1 text-foreground">Checkout</h1>
         <div className="w-12"></div>
       </div>
 
@@ -390,8 +390,8 @@ export default function CheckoutPage() {
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
         {/* ORDER SUMMARY */}
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-xs font-bold text-gray-500 uppercase mb-2">
+        <div className="bg-card p-3 rounded-xl shadow-sm shadow-black/20 border border-border">
+          <h2 className="text-xs font-bold text-muted-foreground uppercase mb-2">
             Order Summary {isBulkCheckout && allOrders.length > 1 && `(${allOrders.length} orders)`}
           </h2>
           <div className="space-y-1 mb-2 max-h-32 overflow-y-auto">
@@ -402,12 +402,12 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
-          <div className="border-t border-dashed border-gray-200 pt-1 space-y-0.5">
-            <div className="flex justify-between text-sm text-gray-600">
+          <div className="border-t border-dashed border-border pt-1 space-y-0.5">
+            <div className="flex justify-between text-sm text-secondary-foreground">
               <span>Subtotal</span>
               <span>{currencyCode} {subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-base font-bold text-gray-900 mt-1">
+            <div className="flex justify-between text-base font-bold text-foreground mt-1">
               <span>Total</span>
               <span>{currencyCode} {finalTotal}</span>
             </div>
@@ -415,8 +415,8 @@ export default function CheckoutPage() {
         </div>
 
         {!isBulkCheckout && billSummary && (
-          <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Split Bill</h2>
+          <div className="bg-card p-3 rounded-xl shadow-sm shadow-black/20 border border-border space-y-3">
+            <h2 className="text-base font-semibold text-foreground">Split Bill</h2>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { key: "full_bill", label: "Full Bill" },
@@ -430,7 +430,7 @@ export default function CheckoutPage() {
                   className={`rounded-lg px-2 py-2 text-xs font-semibold border transition-colors ${
                     splitType === mode.key
                       ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-primary/40"
+                      : "bg-secondary text-secondary-foreground border-border hover:border-primary/40"
                   }`}
                 >
                   {mode.label}
@@ -439,27 +439,27 @@ export default function CheckoutPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-gray-50 rounded-md p-2">
-                <div className="text-gray-500">Paid</div>
-                <div className="font-semibold text-gray-900">{currencyCode} {toSafeNumber(billSummary.paid_amount).toFixed(2)}</div>
+              <div className="bg-secondary rounded-md p-2">
+                <div className="text-muted-foreground">Paid</div>
+                <div className="font-semibold text-foreground">{currencyCode} {toSafeNumber(billSummary.paid_amount).toFixed(2)}</div>
               </div>
-              <div className="bg-gray-50 rounded-md p-2">
-                <div className="text-gray-500">Remaining</div>
-                <div className="font-semibold text-gray-900">{currencyCode} {toSafeNumber(billSummary.remaining_amount).toFixed(2)}</div>
+              <div className="bg-secondary rounded-md p-2">
+                <div className="text-muted-foreground">Remaining</div>
+                <div className="font-semibold text-foreground">{currencyCode} {toSafeNumber(billSummary.remaining_amount).toFixed(2)}</div>
               </div>
             </div>
 
             {splitType === "evenly" && (
               <div className="space-y-2">
-                <label className="text-xs text-gray-600 block">Split Count</label>
+                <label className="text-xs text-secondary-foreground block">Split Count</label>
                 <input
                   type="number"
                   min={1}
                   value={splitCount}
                   onChange={(e) => setSplitCount(Math.max(1, Number(e.target.value || 1)))}
-                  className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                  className="w-full p-2 border border-border rounded-md text-sm"
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Shares paid: {billSummary.paid_shares_count} | Shares remaining: {billSummary.unpaid_shares_count}
                 </p>
               </div>
@@ -473,11 +473,11 @@ export default function CheckoutPage() {
                     const unpaidQty = Math.max(0, toSafeNumber(item.unpaid_quantity));
                     const selectedQty = selectedItemQuantities[item.bill_item_id] || 0;
                     return (
-                      <div key={item.bill_item_id} className="border border-gray-200 rounded-md p-2">
+                      <div key={item.bill_item_id} className="border border-border rounded-md p-2">
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-sm font-medium text-foreground">{item.item_name}</div>
+                            <div className="text-xs text-muted-foreground">
                               Unpaid: {unpaidQty} | {currencyCode} {toSafeNumber(item.unpaid_amount).toFixed(2)}
                             </div>
                           </div>
@@ -488,7 +488,7 @@ export default function CheckoutPage() {
                             max={unpaidQty}
                             value={selectedQty || ""}
                             onChange={(e) => updateSelectedItemQuantity(item.bill_item_id, unpaidQty, e.target.value)}
-                            className="w-20 p-1.5 border border-gray-300 rounded-md text-sm"
+                            className="w-20 p-1.5 border border-border rounded-md text-sm"
                             placeholder="Qty"
                           />
                         </div>
@@ -503,18 +503,18 @@ export default function CheckoutPage() {
               value={payerIdOrName}
               onChange={(e) => setPayerIdOrName(e.target.value)}
               placeholder="Your name (optional)"
-              className="w-full p-2 border border-gray-300 rounded-md text-sm"
+              className="w-full p-2 border border-border rounded-md text-sm"
             />
           </div>
         )}
 
         {/* TIP SECTION */}
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 transition-all duration-300">
+        <div className="bg-card p-3 rounded-xl shadow-sm shadow-black/20 border border-border transition-all duration-300">
           <h2 className="text-base font-semibold mb-2 text-primary flex items-center gap-2">
-            Add a Tip for the Staff 💛 <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+            Add a Tip for the Staff 💛 <span className="text-xs text-muted-foreground font-normal">(Optional)</span>
           </h2>
           {!tipApplicable && !isBulkCheckout && (
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Tip is available only for Full Bill mode in this version.
             </p>
           )}
@@ -528,7 +528,7 @@ export default function CheckoutPage() {
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                           ${tipType === 'percentage' && tipValue === pct
                     ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 transform scale-105'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
+                    : 'bg-secondary text-secondary-foreground border-border hover:border-primary/40'
                   } ${(tipApplicable || isBulkCheckout) ? "" : "opacity-50 cursor-not-allowed"}`}
               >
                 {pct}%
@@ -540,7 +540,7 @@ export default function CheckoutPage() {
               className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                       ${(tipType === 'custom_amount' || tipType === 'custom_percentage')
                   ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
+                  : 'bg-secondary text-secondary-foreground border-border hover:border-primary/40'
                 } ${(tipApplicable || isBulkCheckout) ? "" : "opacity-50 cursor-not-allowed"}`}
             >
               Custom
@@ -549,13 +549,13 @@ export default function CheckoutPage() {
 
           {(tipType === 'custom_amount' || tipType === 'custom_percentage') && (tipApplicable || isBulkCheckout) && (
             <div className="mb-4 animate-in fade-in slide-in-from-top-1">
-              <label className="block text-xs text-gray-500 mb-1">Enter amount or % (e.g. 10 or 10%)</label>
+              <label className="block text-xs text-muted-foreground mb-1">Enter amount or % (e.g. 10 or 10%)</label>
               <input
                 type="text"
                 value={customInput}
                 onChange={(e) => handleCustomInput(e.target.value)}
                 placeholder={`${currencyCode} 0.00`}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-primary font-semibold text-gray-800"
+                className="w-full p-3 border border-border rounded-lg focus:outline-none focus:border-primary font-semibold text-foreground"
               />
               {(customInput && tipAmount === 0 && customInput !== '') && (
                 <p className="text-xs text-red-500 mt-1">Invalid amount (Max 50% of subtotal)</p>
@@ -572,13 +572,13 @@ export default function CheckoutPage() {
         </div>
 
         {/* PAYMENT METHOD SELECTION */}
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-base font-semibold mb-2 text-gray-800">Payment Method</h2>
+        <div className="bg-card p-3 rounded-xl shadow-sm shadow-black/20 border border-border">
+          <h2 className="text-base font-semibold mb-2 text-foreground">Payment Method</h2>
 
           <div className="space-y-2">
             <label
               className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-              ${paymentMethod === 'card' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
+              ${paymentMethod === 'card' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
             `}
             >
               <input
@@ -590,8 +590,8 @@ export default function CheckoutPage() {
                 className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
               />
               <div className="flex-1">
-                <span className="font-semibold block text-gray-800">Pay by Card</span>
-                <span className="text-sm text-gray-500">Secure online payment</span>
+                <span className="font-semibold block text-foreground">Pay by Card</span>
+                <span className="text-sm text-muted-foreground">Secure online payment</span>
               </div>
               <span className="text-2xl">💳</span>
             </label>
@@ -599,7 +599,7 @@ export default function CheckoutPage() {
             {isUkRestaurant && (
               <label
                 className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-                ${paymentMethod === 'payme' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
+                ${paymentMethod === 'payme' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
               `}
               >
                 <input
@@ -611,8 +611,8 @@ export default function CheckoutPage() {
                   className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
                 />
                 <div className="flex-1">
-                  <span className="font-semibold block text-gray-800">Pay by Bank</span>
-                  <span className="text-sm text-gray-500">Secure UK open-banking checkout</span>
+                  <span className="font-semibold block text-foreground">Pay by Bank</span>
+                  <span className="text-sm text-muted-foreground">Secure UK open-banking checkout</span>
                 </div>
                 <span className="text-2xl">🏦</span>
               </label>
@@ -620,13 +620,13 @@ export default function CheckoutPage() {
 
             {/* WALLET PAYMENT OPTIONS */}
             {!walletLoading && (isBulkCheckout || splitType === "full_bill") && (walletAvailability.apple_pay_available || walletAvailability.google_pay_available) && (
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-xs text-gray-400 uppercase font-medium mb-2">Express Checkout</p>
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs text-muted-foreground uppercase font-medium mb-2">Express Checkout</p>
                 <div className="space-y-2">
                   {walletAvailability.apple_pay_available && (
                     <label
                       className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-                      ${paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
+                      ${paymentMethod === 'apple_pay' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
                     `}
                     >
                       <input
@@ -638,8 +638,8 @@ export default function CheckoutPage() {
                         className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
                       />
                       <div className="flex-1">
-                        <span className="font-semibold block text-gray-800">Apple Pay</span>
-                        <span className="text-sm text-gray-500">Fast & secure</span>
+                        <span className="font-semibold block text-foreground">Apple Pay</span>
+                        <span className="text-sm text-muted-foreground">Fast & secure</span>
                       </div>
                       <span className="text-2xl"></span>
                     </label>
@@ -647,7 +647,7 @@ export default function CheckoutPage() {
                   {walletAvailability.google_pay_available && (
                     <label
                       className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-                      ${paymentMethod === 'google_pay' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
+                      ${paymentMethod === 'google_pay' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
                     `}
                     >
                       <input
@@ -659,8 +659,8 @@ export default function CheckoutPage() {
                         className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
                       />
                       <div className="flex-1">
-                        <span className="font-semibold block text-gray-800">Google Pay</span>
-                        <span className="text-sm text-gray-500">Fast & secure</span>
+                        <span className="font-semibold block text-foreground">Google Pay</span>
+                        <span className="text-sm text-muted-foreground">Fast & secure</span>
                       </div>
                       <span className="text-xl">G Pay</span>
                     </label>
@@ -671,7 +671,7 @@ export default function CheckoutPage() {
 
             <label
               className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-              ${paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-gray-200 hover:border-primary/40'}
+              ${paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
               ${(!isBulkCheckout && splitType !== 'full_bill') ? 'opacity-50 cursor-not-allowed' : ''}
             `}
             >
@@ -685,8 +685,8 @@ export default function CheckoutPage() {
                 className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
               />
               <div className="flex-1">
-                <span className="font-semibold block text-gray-800">Pay by Cash</span>
-                <span className="text-sm text-gray-500">Pay directly to staff</span>
+                <span className="font-semibold block text-foreground">Pay by Cash</span>
+                <span className="text-sm text-muted-foreground">Pay directly to staff</span>
               </div>
               <span className="text-2xl">💵</span>
             </label>
@@ -695,10 +695,10 @@ export default function CheckoutPage() {
       </div>
 
       {/* 3. FIXED FOOTER */}
-      <div className="bg-white border-t border-gray-200 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
+      <div className="bg-card/95 border-t border-border p-3 shadow-[0_-14px_34px_rgba(0,0,0,0.34)] w-full backdrop-blur-lg">
         <div className="mb-2 flex justify-between items-center px-1">
-          <span className="text-gray-500 text-sm font-medium">Grand Total</span>
-          <span className="text-2xl font-bold text-gray-900">{currencyCode} {finalTotal}</span>
+          <span className="text-muted-foreground text-sm font-medium">Grand Total</span>
+          <span className="text-2xl font-bold text-foreground">{currencyCode} {finalTotal}</span>
         </div>
 
         {/* Card or Cash Payment */}
@@ -772,7 +772,7 @@ export default function CheckoutPage() {
         )}
 
         {paymentMethod === 'cash' && (
-          <p className="text-center text-xs text-gray-500 mt-2">
+          <p className="text-center text-xs text-muted-foreground mt-2">
             A staff member will come to your table.
           </p>
         )}

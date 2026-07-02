@@ -107,12 +107,7 @@ function BrandWrapper({
   restaurantId: string | number | null;
 }) {
   const brand = useBrandConfig(restaurantId);
-  const hasConfiguredContent = Boolean(
-    brand.logoUrl ||
-    brand.coverImageUrl ||
-    (brand.restaurantName && brand.restaurantName !== "My Restaurant")
-  );
-  const hasBranding = brand.brandingEnabled || hasConfiguredContent;
+  const hasBranding = brand.brandingEnabled;
   const primaryHsl = useMemo(() => hexToHsl(brand.primaryColor || "#0055FE"), [brand.primaryColor]);
   const fontFamily = useMemo(
     () => FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family,

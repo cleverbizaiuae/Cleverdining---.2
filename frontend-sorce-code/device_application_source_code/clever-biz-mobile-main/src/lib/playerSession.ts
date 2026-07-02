@@ -7,6 +7,7 @@ export type PlayerSession = {
 };
 
 const PLAYER_SESSION_KEY = `cb_player_t${TABLE_NUMBER}`;
+const LEGACY_KEYS = ["cb_player_session", "playerSession"];
 
 const parseSession = (raw: string | null): PlayerSession | null => {
   if (!raw) return null;
@@ -26,15 +27,29 @@ const parseSession = (raw: string | null): PlayerSession | null => {
   }
 };
 
-export const getPlayerSession = (): PlayerSession | null => {
-  const current = parseSession(sessionStorage.getItem(PLAYER_SESSION_KEY));
-  if (current) return current;
+const persistSession = (session: PlayerSession) => {
+  const serialized = JSON.stringify(session);
+  localStorage.setItem(PLAYER_SESSION_KEY, serialized);
+  sessionStorage.setItem(PLAYER_SESSION_KEY, serialized);
+};
 
-  // One-time compatibility read for tabs opened before the session-based fix.
-  const legacy = parseSession(localStorage.getItem("cb_player_session") || localStorage.getItem("playerSession"));
-  if (!legacy) return null;
-  sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify(legacy));
-  return legacy;
+export const getPlayerSession = (): PlayerSession | null => {
+  const current = parseSession(localStorage.getItem(PLAYER_SESSION_KEY)) || parseSession(sessionStorage.getItem(PLAYER_SESSION_KEY));
+  if (current) {
+    persistSession(current);
+    return current;
+  }
+
+  // One-time compatibility read for older unscoped arcade sessions.
+  for (const key of LEGACY_KEYS) {
+    const legacy = parseSession(localStorage.getItem(key) || sessionStorage.getItem(key));
+    if (legacy) {
+      persistSession(legacy);
+      return legacy;
+    }
+  }
+
+  return null;
 };
 
 export const setPlayerSession = (session: PlayerSession) => {
@@ -45,9 +60,10 @@ export const setPlayerSession = (session: PlayerSession) => {
     ...(session.phone ? { phone: String(session.phone).trim() } : {}),
     ...(session.customerId ? { customerId: String(session.customerId).trim() } : {}),
   };
-  sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify(normalized));
+  persistSession(normalized);
 };
 
 export const clearPlayerSession = () => {
+  localStorage.removeItem(PLAYER_SESSION_KEY);
   sessionStorage.removeItem(PLAYER_SESSION_KEY);
 };

@@ -6,26 +6,27 @@
   --brand-primary: #0055FE;
 }
 
-/* Force Input Color Visibility */
 input,
 textarea,
 select {
-  color: #000000 !important;
-  -webkit-text-fill-color: #000000 !important;
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
 }
 
 
 @theme {
   --color-primary: hsl(var(--primary));
   --color-accent: hsl(221 83% 53%);
-  --color-sidebar: #fdfdff;
+  --color-sidebar: #0F172A;
   --color-primary-text: hsl(var(--primary-foreground));
-  --color-background: hsl(210 20% 98%);
-  --color-foreground: hsl(222 47% 11%);
-  --color-secondary: hsl(210 40% 96.1%);
-  --color-muted: hsl(215.4 16.3% 46.9%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-  --color-border: hsl(214.3 31.8% 91.4%);
+  --color-background: #0F172A;
+  --color-card: #1E293B;
+  --color-foreground: #F8FAFC;
+  --color-secondary: #334155;
+  --color-secondary-foreground: #E2E8F0;
+  --color-muted: #475569;
+  --color-muted-foreground: #94A3B8;
+  --color-border: rgb(255 255 255 / 0.10);
   --color-icon-active: #3e4f7e;
   --color-icon-active-bg: #f1f5ff;
   --color-icon-inactive: #b2b5be;
@@ -46,7 +47,8 @@ select {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #ffffff !important;
+    background-color: #0F172A !important;
+    color-scheme: dark;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     /* Prevent iOS rubber-band bounce that reveals black areas */
@@ -60,7 +62,7 @@ select {
   body,
   #root {
     @apply h-full;
-    background-color: #ffffff !important;
+    background-color: #0F172A !important;
     margin: 0;
     padding: 0;
     overscroll-behavior: none;
@@ -100,6 +102,7 @@ select {
   /* Prevent double-tap zoom on all touch targets (iPad/iPhone) */
   * {
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .pb-safe-bottom {
@@ -107,6 +110,14 @@ select {
   }
 
   .pt-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
 
@@ -118,7 +129,8 @@ select {
 @layer components {
 
   .scrollbar-hide,
-  .no-scrollbar {
+  .no-scrollbar,
+  .hide-scrollbar {
     scrollbar-width: none;
     /* Firefox */
     -ms-overflow-style: none;

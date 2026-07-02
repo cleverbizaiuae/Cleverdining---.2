@@ -1062,7 +1062,7 @@ export default function ScreenMultiLocationBranding() {
   const handleSave = async () => {
     const payload: BrandConfig = {
       ...form,
-      brandingEnabled: true,
+      brandingEnabled: form.brandingEnabled,
       tagline: form.tagline?.trim() ? form.tagline.trim() : null,
       instagramUrl: form.instagramUrl?.trim() ? form.instagramUrl.trim() : null,
       facebookUrl: form.facebookUrl?.trim() ? form.facebookUrl.trim() : null,
@@ -1079,6 +1079,7 @@ export default function ScreenMultiLocationBranding() {
       setForm(saved);
       setIsDirty(false);
       saveBrandingSettings({
+        brandingEnabled: saved.brandingEnabled,
         restaurantName: saved.restaurantName,
         logoDataUrl: saved.logoUrl ?? "",
         coverImageDataUrl: saved.coverImageUrl ?? "",

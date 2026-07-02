@@ -81,15 +81,15 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders }) 
     if (totalAmount <= 0) return null;
 
     return (
-        <div className="fixed bottom-24 left-4 right-4 z-50 max-w-2xl mx-auto">
+        <div className="fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-[398px] -translate-x-1/2">
             <motion.div
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                className="bg-white p-4 shadow-xl rounded-2xl border border-gray-100"
+                className="bg-card/95 p-4 shadow-xl shadow-black/30 rounded-2xl border border-border backdrop-blur-lg"
             >
                 <div className="flex justify-between items-center mb-4">
-                    <span className="text-gray-600 text-sm">Total Orders: <span className="font-bold text-primary">{unpaidOrders.length}</span></span>
-                    <span className="text-gray-600 text-sm">Total Cost: <span className="font-bold text-primary">{currencyCode} {totalAmount.toFixed(2)}</span></span>
+                    <span className="text-muted-foreground text-sm">Total Orders: <span className="font-bold text-primary">{unpaidOrders.length}</span></span>
+                    <span className="text-muted-foreground text-sm">Total Cost: <span className="font-bold text-primary">{currencyCode} {totalAmount.toFixed(2)}</span></span>
                 </div>
 
                 {allAwaitingCash ? (

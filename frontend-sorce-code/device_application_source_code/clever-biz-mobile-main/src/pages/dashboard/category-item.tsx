@@ -19,9 +19,11 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
     <button
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center justify-center p-1 transition-all duration-200 overflow-hidden",
-        "w-[72px] h-[72px] shrink-0 rounded-2xl",
-        isActive ? "border-2 border-primary shadow-sm shadow-primary/15" : "border border-gray-200 hover:border-primary/40",
+        "group relative flex min-w-16 flex-col items-center justify-center gap-2 overflow-hidden px-1 transition-all duration-300",
+        "h-16 w-auto shrink-0 rounded-2xl border sm:h-20 sm:w-20",
+        isActive
+          ? "scale-105 border-primary shadow-lg shadow-primary/30"
+          : "border-transparent opacity-75 hover:border-primary/30 hover:opacity-100",
       )}
     >
       {cat.image ? (
@@ -34,25 +36,25 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
             loading="lazy"
             decoding="async"
             fetchPriority="low"
-            className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-105"
+            className="w-full h-full object-cover object-center opacity-90 transition-transform duration-500 group-hover:scale-110"
             onError={(e) => {
               e.currentTarget.style.display = "none";
-              e.currentTarget.parentElement?.classList.add("bg-slate-200");
+              e.currentTarget.parentElement?.classList.add("bg-secondary");
             }}
           />
-          <div className="absolute inset-0 bg-black/10" />
+          <div className={cn("absolute inset-0 transition-colors", isActive ? "bg-primary/25" : "bg-black/20 group-hover:bg-black/5")} />
         </div>
       ) : (
-        <div className="absolute inset-0 z-0 flex items-center justify-center bg-slate-100">
+        <div className="absolute inset-0 z-0 flex items-center justify-center bg-secondary">
           <span className="text-xl">📁</span>
         </div>
       )}
 
       <span
         className={cn(
-          "relative z-10 text-xs font-bold px-1.5 py-1 rounded-lg shadow-sm backdrop-blur-md transition-colors duration-200",
-          "w-[90%] text-center leading-[1.1] whitespace-normal break-words",
-          isActive ? "bg-primary/95 text-white" : "bg-white/90 text-gray-800",
+          "relative z-10 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm backdrop-blur-md transition-colors duration-200 sm:text-xs",
+          "max-w-[90%] text-center leading-[1.1] whitespace-normal break-words",
+          isActive ? "bg-primary text-white" : "bg-black/45 text-white",
         )}
         style={{
           display: "-webkit-box",
@@ -63,8 +65,6 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
       >
         {cat.Category_name}
       </span>
-
-      {isActive ? <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-primary" /> : null}
     </button>
   );
 };

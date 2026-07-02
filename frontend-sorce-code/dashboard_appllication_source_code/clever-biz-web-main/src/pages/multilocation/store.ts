@@ -749,7 +749,6 @@ export function saveBrandingSettings(payload: Partial<BrandingSettings>): Brandi
   const next: BrandingSettings = {
     ...store.branding,
     ...payload,
-    brandingEnabled: true, // auto-enable on save
     updatedAt: new Date().toISOString(),
   };
 

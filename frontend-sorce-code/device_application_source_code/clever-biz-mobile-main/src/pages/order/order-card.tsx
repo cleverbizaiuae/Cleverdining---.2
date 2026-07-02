@@ -101,9 +101,9 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
   };
 
   return (
-    <div className={cn("bg-white rounded-2xl shadow-sm border overflow-hidden transition-colors duration-700", isNew ? "border-primary shadow-primary/20" : "border-gray-100")}>
-      <div className="px-4 pt-3.5 pb-3 border-b border-gray-50">
-        <p className="text-xs text-slate-400 font-medium">Ordered {relativeTime(orderTime)}</p>
+    <div className={cn("bg-card rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.18)] border overflow-hidden transition-colors duration-700", isNew ? "border-primary shadow-primary/20" : "border-border")}>
+      <div className="px-4 pt-3.5 pb-3 border-b border-border">
+        <p className="text-xs text-muted-foreground font-medium">Ordered {relativeTime(orderTime)}</p>
       </div>
 
       <div className="px-4 py-3 space-y-2">
@@ -116,35 +116,35 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
               <span
                 className={cn(
                   "w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0",
-                  Math.max(1, quantity) > 1 ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-600",
+                  Math.max(1, quantity) > 1 ? "bg-primary/10 text-primary" : "bg-secondary text-secondary-foreground",
                 )}
               >
                 {Math.max(1, quantity)}
               </span>
-              <span className="text-sm text-slate-700 font-medium truncate flex-1">{itemName}</span>
-              <span className="text-sm text-slate-500 shrink-0">{fmt(lineTotal)}</span>
+              <span className="text-sm text-foreground font-medium truncate flex-1">{itemName}</span>
+              <span className="text-sm text-muted-foreground shrink-0">{fmt(lineTotal)}</span>
             </div>
           );
         })}
 
-        {items.length === 0 && <p className="text-sm text-slate-400">No items in this order.</p>}
+        {items.length === 0 && <p className="text-sm text-muted-foreground">No items in this order.</p>}
 
         {(isPartiallyPaid || resolvedPaidAmount > 0.001) && (
           <div className="rounded-xl border border-primary/10 bg-primary/5 px-3 py-2 space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-semibold">
               <span className="text-primary">{isFullyPaid ? "Paid" : "Partially paid"}</span>
-              <span className="text-slate-500">
+              <span className="text-muted-foreground">
                 {fmt(resolvedPaidAmount)} paid · {fmt(remainingAmount)} left
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-white overflow-hidden">
+            <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
               <div className="h-full rounded-full bg-primary" style={{ width: `${paymentProgress}%` }} />
             </div>
           </div>
         )}
       </div>
 
-      <div className="px-4 pb-4 pt-2 flex items-center justify-between border-t border-gray-50">
+      <div className="px-4 pb-4 pt-2 flex items-center justify-between border-t border-border">
         <div className="flex items-center gap-2">
           <div className="flex items-center">
             {steps.map((step, idx) => {
@@ -155,22 +155,22 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
                   <span
                     className={cn(
                       "w-2 h-2 rounded-full transition-all",
-                      reached ? "bg-primary" : "bg-slate-200",
+                      reached ? "bg-primary" : "bg-muted",
                       isCurrent ? "ring-2 ring-primary/20 animate-pulse" : "",
                     )}
                   />
                   {idx < steps.length - 1 && (
-                    <span className={cn("w-5 h-[2px] mx-1", idx < currentStepIndex ? "bg-primary" : "bg-slate-200")} />
+                    <span className={cn("w-5 h-[2px] mx-1", idx < currentStepIndex ? "bg-primary" : "bg-muted")} />
                   )}
                 </div>
               );
             })}
           </div>
-          <span className="text-[11px] text-slate-500 ml-1">
+          <span className="text-[11px] text-muted-foreground ml-1">
             {statusMeta.icon} {statusMeta.label}
           </span>
         </div>
-        <span className="text-sm font-bold text-slate-900">{fmt(total)}</span>
+        <span className="text-sm font-bold text-foreground">{fmt(total)}</span>
       </div>
     </div>
   );

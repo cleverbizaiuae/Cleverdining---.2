@@ -1,10 +1,8 @@
 import { FormEvent, useState, useEffect, useMemo, useRef } from "react";
-import { Bot, Send, Wifi, Instagram, Star, ChevronLeft, User, Phone } from "lucide-react";
+import { Bot, Mic, Send, Wifi, Instagram, Star, User } from "lucide-react";
 import { Footer } from "../components/Footer";
 import axiosInstance from "../lib/axios";
 import toast from "react-hot-toast";
-import { useMediaQuery } from "@uidotdev/usehooks";
-import { useNavigate } from "react-router-dom";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion } from "motion/react";
@@ -12,27 +10,15 @@ import { useBrandConfig } from "@/lib/useBrandConfig";
 import { getTableIdentity } from "@/lib/tableIdentity";
 import { cachedGet } from "@/lib/requestCache";
 
-type Message = {
-  id: number;
-  is_from_device: boolean;
-  text: string;
-  timestamp?: string;
-  hasActions?: boolean;
-};
-
 const ScreenMessage = () => {
   return <MessagingUI />;
 };
 
 function MessagingUI() {
-  const navigate = useNavigate();
   // Consume global state from Context
-  const { ws, sendMessage, hasNewMessage: contextHasNewMessage, setNewMessageFlag, messages, setMessages, connectionStatus, retryConnection } = useWebSocket();
+  const { ws, sendMessage, setNewMessageFlag, messages, setMessages, connectionStatus, retryConnection } = useWebSocket();
 
   const [inputValue, setInputValue] = useState("");
-  // Removed local messages state
-  const [hasNewMessage, setHasNewMessage] = useState(false);
-  const isLargeDevice = useMediaQuery("only screen and (min-width : 993px)");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const userInfo = localStorage.getItem("userInfo");
@@ -61,7 +47,7 @@ function MessagingUI() {
         const guestToken = localStorage.getItem("guest_session_token");
         console.log(`DEBUG: Fetching messages. Device: ${device_id}, Rest: ${restaurant_id}, Token: ${guestToken ? 'Present' : 'MISSING'}`);
 
-        const headers: any = {};
+        const headers: Record<string, string> = {};
         if (guestToken) {
           headers["X-Guest-Session-Token"] = guestToken;
         }
@@ -156,29 +142,22 @@ function MessagingUI() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-gray-50 relative overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
       {/* 1. Header Section (Static in Flex) */}
-      <div className="shrink-0 bg-white border-b border-gray-200 h-[80px] flex items-center z-30">
-        <div className="flex items-center justify-between px-4 w-full max-w-3xl mx-auto">
+      <div className="z-30 flex shrink-0 items-center gap-3 border-b border-border/30 bg-background/80 p-4 shadow-sm shadow-black/20 backdrop-blur-md">
+        <div className="flex w-full items-center gap-3">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-1 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
-            >
-              <ChevronLeft size={24} />
-            </button>
-
             <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Bot size={20} className="text-blue-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
+                <Bot size={24} className="text-muted-foreground" strokeWidth={1.8} />
               </div>
               <div className={cn(
-                "absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full transition-colors duration-300",
+                "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white transition-colors duration-300",
                 ws?.readyState === WebSocket.OPEN ? "bg-green-500" : "bg-red-500"
               )}></div>
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-bold text-gray-900 leading-tight">Staff</span>
+              <span className="text-lg font-bold text-foreground leading-none">Assistant</span>
               <div className="flex items-center gap-2">
                 <span className={cn(
                   "text-xs font-medium transition-colors duration-300",
@@ -189,7 +168,7 @@ function MessagingUI() {
                 {connectionStatus !== "connected" && (
                   <button
                     onClick={retryConnection}
-                    className="text-[10px] bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded text-gray-600 border border-gray-300"
+                    className="text-[10px] bg-secondary hover:bg-white/10 px-2 py-0.5 rounded text-secondary-foreground border border-border"
                   >
                     Retry
                   </button>
@@ -197,30 +176,31 @@ function MessagingUI() {
               </div>
             </div>
           </div>
+          <span className="ml-auto text-xs text-muted-foreground">{tableIdentity.tableName || tableIdentity.tableNumber || ""}</span>
         </div>
       </div>
 
       {/* 2. Message Area (Flex Grow) */}
-      <div className="flex-1 overflow-y-auto w-full mx-auto bg-gray-50 px-4 scroll-smooth">
-        <div className="flex flex-col space-y-4 max-w-3xl mx-auto py-4">
+      <div className="flex-1 overflow-y-auto bg-background p-4 scroll-smooth">
+        <div className="flex flex-col space-y-4">
           {hasWifiDetails && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-sm shadow-black/20">
               <div className="mb-2 flex items-center gap-2">
-                <Wifi className="h-4 w-4 text-slate-400" strokeWidth={1.8} />
-                <span className="text-sm font-semibold text-slate-900">Guest WiFi</span>
+                <Wifi className="h-4 w-4 text-muted-foreground" strokeWidth={1.8} />
+                <span className="text-sm font-semibold text-foreground">Guest WiFi</span>
               </div>
               {brand.wifiName && (
                 <div className="flex items-center justify-between gap-3 py-1">
-                  <span className="text-xs text-slate-500">Network</span>
-                  <span className="truncate text-xs font-semibold font-mono text-slate-800">
+                  <span className="text-xs text-muted-foreground">Network</span>
+                  <span className="truncate text-xs font-semibold font-mono text-foreground">
                     {brand.wifiName}
                   </span>
                 </div>
               )}
               {brand.wifiPassword && (
                 <div className="flex items-center justify-between gap-3 py-1">
-                  <span className="text-xs text-slate-500">Password</span>
-                  <span className="truncate text-xs font-semibold font-mono text-slate-800">
+                  <span className="text-xs text-muted-foreground">Password</span>
+                  <span className="truncate text-xs font-semibold font-mono text-foreground">
                     {brand.wifiPassword}
                   </span>
                 </div>
@@ -230,15 +210,15 @@ function MessagingUI() {
 
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center opacity-50 mt-10">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Send size={24} className="text-gray-400" />
+              <div className="w-16 h-16 bg-secondary rounded-2xl flex items-center justify-center mb-4">
+                <Send size={24} className="text-muted-foreground" />
               </div>
-              <p className="text-gray-500 text-sm">No messages yet.<br />Start the conversation!</p>
+              <p className="text-muted-foreground text-sm">No messages yet.<br />Start the conversation!</p>
             </div>
           ) : (
             messages
               .filter((message) => message.text && message.text.trim() !== "")
-              .map((message, index) => (
+              .map((message) => (
                 <motion.div
                   key={message.id}
                   className="flex flex-col w-full gap-2"
@@ -253,14 +233,11 @@ function MessagingUI() {
                     )}
                   >
                     {/* Avatar */}
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1",
-                      message.is_from_device ? "bg-gray-200" : "bg-blue-100"
-                    )}>
+                    <div className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center">
                       {message.is_from_device ? (
-                        <User size={16} className="text-gray-600" />
+                        <User size={16} className="text-muted-foreground" strokeWidth={1.8} />
                       ) : (
-                        <Bot size={16} className="text-blue-600" />
+                        <Bot size={16} className="text-muted-foreground" strokeWidth={1.8} />
                       )}
                     </div>
 
@@ -271,10 +248,10 @@ function MessagingUI() {
                     )}>
                       {/* Text Bubble */}
                       <div className={cn(
-                        "px-4 py-3 text-sm shadow-sm",
+                        "whitespace-pre-wrap rounded-2xl p-3 text-sm leading-relaxed shadow-sm",
                         message.is_from_device
-                          ? "bg-blue-600 text-white rounded-2xl rounded-tr-none"
-                          : "bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm"
+                          ? "bg-primary text-white rounded-tr-sm"
+                          : "bg-card text-foreground border border-border rounded-2xl rounded-tl-sm"
                       )}>
                         {message.text}
                       </div>
@@ -283,13 +260,13 @@ function MessagingUI() {
                       {!message.is_from_device && message.hasActions && (
                         <div className="flex flex-col gap-2 w-full">
                           {hasWifiDetails && (
-                            <div className="bg-blue-50 rounded-xl p-2 flex items-center gap-2 border border-blue-100">
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                            <div className="bg-primary/10 rounded-xl p-2 flex items-center gap-2 border border-primary/20">
+                              <div className="w-8 h-8 rounded-full bg-card flex items-center justify-center text-primary shadow-sm shrink-0">
                                 <Wifi size={16} />
                               </div>
                               <div className="min-w-0">
-                                <span className="text-blue-600 font-medium text-xs">WiFi</span>
-                                <div className="font-mono font-bold text-gray-800 text-xs truncate">
+                                <span className="text-primary font-medium text-xs">WiFi</span>
+                                <div className="font-mono font-bold text-foreground text-xs truncate">
                                   {[brand.wifiName, brand.wifiPassword].filter(Boolean).join(" / ")}
                                 </div>
                               </div>
@@ -298,13 +275,13 @@ function MessagingUI() {
 
                           {/* Social & Rating Buttons */}
                           <div className="flex gap-2 w-full">
-                            <button className="flex-1 bg-white rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-gray-200 shadow-sm hover:border-pink-500 hover:text-pink-600 transition-colors">
+                            <button className="flex-1 bg-card rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-border shadow-sm hover:border-pink-500 hover:text-pink-400 transition-colors">
                               <Instagram size={14} />
-                              <span className="text-xs font-bold text-gray-600 group-hover:text-pink-600">Instagram</span>
+                              <span className="text-xs font-bold text-secondary-foreground group-hover:text-pink-400">Instagram</span>
                             </button>
-                            <button className="flex-1 bg-white rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-gray-200 shadow-sm hover:border-yellow-500 hover:text-yellow-600 transition-colors">
+                            <button className="flex-1 bg-card rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-border shadow-sm hover:border-yellow-500 hover:text-yellow-400 transition-colors">
                               <Star size={14} />
-                              <span className="text-xs font-bold text-gray-600 group-hover:text-yellow-600">Rate Us</span>
+                              <span className="text-xs font-bold text-secondary-foreground group-hover:text-yellow-400">Rate Us</span>
                             </button>
                           </div>
                         </div>
@@ -319,16 +296,16 @@ function MessagingUI() {
       </div>
 
       {/* 3. Footer / Input Area (Static in Flex - No Fixed) */}
-      <div className="shrink-0 w-full bg-white border-t border-gray-200 z-40">
-        <div className="max-w-3xl mx-auto w-full flex flex-col">
+      <div className="z-40 w-full shrink-0 border-t border-border bg-background/90 pb-[max(env(safe-area-inset-bottom),0px)] backdrop-blur-md">
+        <div className="flex w-full flex-col">
           {/* Preset Messages */}
-          <div className="w-full py-3 px-4 border-b border-gray-50">
-            <div className="flex flex-wrap gap-2">
-              {presetMessages.map((msg, idx) => (
+          <div className="w-full overflow-x-auto hide-scrollbar border-b border-border p-3">
+            <div className="flex min-w-max gap-2">
+              {presetMessages.map((msg) => (
                 <button
-                  key={idx}
+                  key={msg}
                   onClick={() => handlePresetClick(msg)}
-                  className="px-4 py-2 rounded-full bg-gray-50 text-gray-600 text-xs font-medium hover:bg-blue-50 hover:text-blue-600 transition-colors whitespace-nowrap border border-gray-100"
+                  className="whitespace-nowrap rounded-full border border-border bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                 >
                   {msg}
                 </button>
@@ -337,32 +314,39 @@ function MessagingUI() {
           </div>
 
           {/* Input Field Group */}
-          <div className="p-4 pt-2 pb-6">
+          <div className="p-4 pt-3">
             <form
               onSubmit={handleSubmit}
-              className="flex items-center gap-2 w-full bg-gray-50 rounded-full border border-gray-200 p-1 pr-2"
+              className="flex w-full items-center gap-2 rounded-full border border-border bg-secondary p-1 transition-all focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20"
             >
 
 
               <input
                 type="text"
                 placeholder="Type a message..."
-                className="flex-1 bg-transparent border-none focus:ring-0 text-base px-2 py-2 placeholder:text-gray-400"
+                className="h-10 flex-1 border-none bg-transparent px-4 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
               />
 
               <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10"
+              >
+                <Mic size={16} strokeWidth={1.8} />
+              </button>
+
+              <button
                 type="submit"
                 disabled={!inputValue.trim()}
                 className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200",
+                  "flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200",
                   inputValue.trim()
-                    ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    ? "bg-primary text-white shadow-md hover:bg-primary/90"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >
-                <Send size={14} className={inputValue.trim() ? "ml-0.5" : ""} />
+                <Send size={16} strokeWidth={1.8} className={inputValue.trim() ? "ml-0.5" : ""} />
               </button>
             </form>
             <Footer />

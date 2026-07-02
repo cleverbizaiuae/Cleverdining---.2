@@ -168,10 +168,7 @@ const LayoutDashboard = () => {
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
   const brand = useActiveBrandConfig();
 
-  const hasConfiguredContent = Boolean(
-    brand.logoUrl || brand.coverImageUrl || (brand.restaurantName && brand.restaurantName !== "My Restaurant")
-  );
-  const hasBranding = brand.brandingEnabled || hasConfiguredContent;
+  const hasBranding = brand.brandingEnabled;
   const restaurantName =
     hasBranding && brand.restaurantName
       ? brand.restaurantName
@@ -449,16 +446,17 @@ const LayoutDashboard = () => {
   return (
     <CartProvider>
       <div
-        className="h-[100dvh] flex flex-col bg-background overflow-hidden"
+        className="flex min-h-screen justify-center overflow-hidden bg-[linear-gradient(180deg,#020617_0%,#0F172A_46%,#111827_100%)] text-foreground"
         style={hasBranding ? ({ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties) : undefined}
       >
+        <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-2xl">
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
               {hasBranding ? (
-                <section className="relative min-h-40 w-full overflow-hidden">
+                <section className="relative h-48 w-full overflow-hidden">
                   <div className="absolute inset-0" style={{ background: splashGradient }} />
                   {brandCoverUrl && !coverImgFailed ? (
                     <img
@@ -493,7 +491,7 @@ const LayoutDashboard = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={label}
-                          className="text-white/90 hover:text-white transition-colors"
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white/90 backdrop-blur-sm transition-colors hover:text-white"
                         >
                           {key === "tiktok" ? (
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
@@ -510,7 +508,7 @@ const LayoutDashboard = () => {
                   <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between px-4 pb-3">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <div
-                        className="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
+                        className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
                         style={{
                           background: "rgba(255,255,255,0.14)",
                           backdropFilter: "blur(8px)",
@@ -549,9 +547,9 @@ const LayoutDashboard = () => {
                         ) : null}
                       </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end pb-0.5 pl-2">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/60">Table</span>
-                      <span className="text-base font-bold leading-none text-white">{tableName || "–"}</span>
+                    <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-white backdrop-blur-sm">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Table</span>
+                      <span className="text-xs font-bold leading-none">{tableName || "–"}</span>
                     </div>
                   </div>
                 </section>
@@ -561,7 +559,7 @@ const LayoutDashboard = () => {
               {/* Sticky Header Group - Single container for Logo, Search, Categories */}
               <header
                 className={cn(
-                  "sticky top-0 z-40 backdrop-blur-md border-b border-gray-200/70 pb-2 transition-all duration-300 shadow-md shadow-slate-200/40",
+                  "sticky top-0 z-40 border-b border-border/30 pb-2 backdrop-blur-md transition-all duration-300",
                   hasBranding
                     ? "bg-background/80 pt-3"
                     : "bg-background/90 pt-safe-top"
@@ -576,8 +574,8 @@ const LayoutDashboard = () => {
                     </div>
 
                     {tableName ? (
-                      <div className="bg-slate-100 rounded-full px-3 py-1 border border-slate-200">
-                        <span className="text-xs font-bold text-slate-700">Table {tableName}</span>
+                      <div className="rounded-full border border-border bg-secondary/70 px-3 py-1">
+                        <span className="text-xs font-bold text-foreground">Table {tableName}</span>
                       </div>
                     ) : null}
                   </div>
@@ -587,13 +585,13 @@ const LayoutDashboard = () => {
                 <div className="px-4 mt-0 mb-3">
                   <div className="relative flex items-center gap-3">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                       <input
                         type="text"
                         placeholder="Search for food..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full bg-slate-50 ring-1 ring-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        className="w-full rounded-xl bg-secondary/70 py-2.5 pl-10 pr-4 text-sm font-medium text-foreground ring-1 ring-border placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 transition-all"
                       />
                     </div>
                     {hasBranding ? (
@@ -606,7 +604,7 @@ const LayoutDashboard = () => {
                 </div>
 
                 {/* Categories */}
-                <div className="w-full overflow-x-auto no-scrollbar py-2 pl-4 snap-x snap-mandatory touch-pan-x">
+                <div className="w-full overflow-x-auto hide-scrollbar py-2 pl-4 snap-x snap-mandatory touch-pan-x">
                   <div className="flex gap-3 pr-4 min-w-max">
                     {categories.filter(c => !c.parent_category).map((category) => (
                       <CategoryItem
@@ -624,17 +622,17 @@ const LayoutDashboard = () => {
 
                 {/* Sub-categories */}
                 {subCategories.length > 0 && (
-                  <div className="relative w-full overflow-x-auto no-scrollbar py-2 pl-4 bg-gray-50/50 mt-2">
-                    <div className="flex gap-2.5 pr-5 min-w-max">
+                          <div className="relative w-full overflow-x-auto hide-scrollbar py-2 pl-4 bg-background/50 mt-2">
+                    <div className="flex gap-2 pr-4 min-w-max">
                       {subCategories.map((sub, idx) => (
                         <button
                           key={sub.id}
                           onClick={() => setSelectedSubCategory(sub.id)}
                           className={cn(
-                            "shrink-0 px-5 py-2 rounded-full text-xs font-semibold transition-all duration-300 border",
+                            "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-300",
                             selectedSubCategory === sub.id || (selectedSubCategory === null && idx === 0)
-                              ? "bg-primary/10 text-primary border-primary/30"
-                              : "bg-secondary/50 text-muted-foreground border-transparent hover:bg-secondary"
+                              ? "bg-foreground text-background border-foreground"
+                              : "bg-secondary text-secondary-foreground border-transparent hover:bg-secondary/80"
                           )}
                         >
                           {sub.Category_name}
@@ -649,7 +647,7 @@ const LayoutDashboard = () => {
               {/* Main Content (Menu Feed) */}
               <main className="px-4 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain">
                 {filteredItems.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                     <p>No items found.</p>
                   </div>
                 ) : (
@@ -673,7 +671,7 @@ const LayoutDashboard = () => {
                   </AnimatePresence>
                 )}
                 {socialLinks.length > 0 ? (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+                  <div className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm shadow-black/20">
                     <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Follow Us</p>
                     <div className="flex items-center justify-center gap-3">
                       {socialLinks.map(({ key, href, Icon, label }) => (
@@ -683,7 +681,7 @@ const LayoutDashboard = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={label}
-                          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:text-primary"
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white/80 backdrop-blur-sm transition-colors hover:text-primary"
                         >
                           {key === "tiktok" ? (
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -709,6 +707,7 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation - Hide on success/checkout pages */}
         {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
+        </div>
       </div>
 
       {/* Detail modal */}

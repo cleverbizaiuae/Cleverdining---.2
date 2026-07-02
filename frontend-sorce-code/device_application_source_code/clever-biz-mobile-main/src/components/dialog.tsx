@@ -9,7 +9,7 @@ import { resolveMediaUrl } from "../lib/media";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import UpsellBottomSheet from "./UpsellBottomSheet";
 import { OptimizedImage } from "./OptimizedImage";
-import { ChevronLeft, CheckCircle2, Minus, Plus } from "lucide-react";
+import { CheckCircle2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
@@ -99,13 +99,13 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       (t) => (
         <div
           className={cn(
-            "pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-white border border-slate-200 shadow-xl px-4 py-3",
+            "pointer-events-auto w-[calc(100vw-24px)] max-w-[360px] rounded-2xl bg-card border border-border shadow-xl shadow-black/30 px-4 py-3",
             "transition-all duration-250",
             t.visible ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
           )}
         >
-          <p className="text-sm font-semibold text-slate-900">Added to cart</p>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-sm font-semibold text-foreground">Added to cart</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {qty}x {name} added.
           </p>
         </div>
@@ -118,7 +118,12 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     if (!item || isAddingToCart) return;
 
     setIsAddingToCart(true);
-    addToCart(item, quantity);
+    const added = await addToCart(item, quantity);
+    if (!added) {
+      toast.error("Could not add this item. Please try again.");
+      setIsAddingToCart(false);
+      return;
+    }
     showAddedToCartToast(quantity, item.item_name || "Item");
 
     const nextCart = [...cart, { ...item, quantity }];
@@ -185,7 +190,11 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   };
 
   const acceptUpsellSuggestion = async (suggestion: UpsellSuggestion) => {
-    addToCart(toCartItemFromUpsell(suggestion), 1);
+    const added = await addToCart(toCartItemFromUpsell(suggestion), 1);
+    if (!added) {
+      toast.error("Could not add this suggestion. Please try again.");
+      return;
+    }
     setUpsellOpen(false);
     toast.success(`${suggestion.item_name} added to cart`);
     pendingUpsellActionRef.current = async () => {
@@ -319,19 +328,20 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onClose={() => close()} className="relative z-50">
-      <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-md transition-opacity duration-300" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-6">
-        <DialogPanel className="bg-white p-0 rounded-3xl shadow-2xl w-full max-w-sm h-auto max-h-[80vh] overflow-hidden relative flex flex-col animate-in zoom-in-95 duration-200 mx-auto">
+      <DialogBackdrop className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300" />
+      <div className="fixed inset-0 flex w-screen items-center justify-center sm:p-6">
+        <DialogPanel className="relative mx-auto flex h-full w-full max-w-lg flex-col overflow-hidden border-none bg-background p-0 text-foreground shadow-2xl animate-in slide-in-from-bottom-8 duration-300 sm:h-auto sm:max-h-[90vh] sm:rounded-3xl">
 
           {/* Hero Media Area */}
-          <div className="relative w-full h-72 shrink-0 bg-black">
+          <div className="relative h-[40vh] w-full shrink-0 bg-black sm:h-80">
             {/* Back Button */}
             <button
               onClick={close}
-              className="absolute top-4 left-4 z-30 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+              className="absolute top-4 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/20 text-white backdrop-blur-md transition-colors hover:bg-black/40"
             >
-              <ChevronLeft className="w-5 h-5" strokeWidth={2.2} />
+              <X className="h-5 w-5" strokeWidth={1.8} />
             </button>
 
             {showVideo && item?.video ? (
@@ -369,8 +379,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                     <div className="relative w-full h-full">
                       {/* Loading Spinner */}
                       {isImageLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
-                          <div className="w-10 h-10 border-4 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-secondary">
+                          <div className="w-10 h-10 border-4 border-white/10 border-t-primary rounded-full animate-spin"></div>
                         </div>
                       )}
 
@@ -392,7 +402,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                   </>
                 )}
                 {/* Fallback Div (Hidden by default, shown on error) */}
-                <div className="fallback-placeholder hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-50 text-gray-400">
+                <div className="fallback-placeholder hidden absolute inset-0 flex flex-col items-center justify-center bg-secondary text-muted-foreground">
                   <svg className="w-12 h-12 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
@@ -423,7 +433,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Content Body */}
-          <div className="flex-1 flex flex-col px-6 pt-6 pb-6 overflow-y-auto">
+          <div className="relative z-10 -mt-4 flex flex-1 flex-col overflow-y-auto rounded-t-3xl bg-background px-6 pb-6 pt-6">
+            <div className="mx-auto mb-2 h-1 w-12 rounded-full bg-white/15" />
             <div className="flex flex-col items-center text-center space-y-4">
               <h3 className="text-3xl font-bold text-foreground tracking-tight leading-tight">
                 {truncatedName}
@@ -431,10 +442,10 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
               {/* Meta Info Row */}
               <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md font-medium">
+                <span className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                   Popular
                 </span>
-                <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                <span className="w-1 h-1 bg-muted-foreground/40 rounded-full" />
                 <span className="flex items-center gap-1">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   20-30 min
@@ -448,26 +459,26 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
           </div>
 
           {/* Sticky Action Bar */}
-          <div className="bg-white border-t border-gray-100 p-4 sm:p-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="border-t border-border bg-background p-4 sm:p-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center gap-2">
               {/* Quantity Selector - Compact for Mobile */}
-              <div className="flex items-center bg-gray-50 p-1 rounded-full border border-gray-100 shrink-0">
+              <div className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-secondary/70 p-1.5 sm:gap-3">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   disabled={quantity <= 1}
                   className={cn(
-                    "w-10 h-10 flex items-center justify-center rounded-full shadow-sm transition-colors",
+                    "flex h-10 w-10 items-center justify-center rounded-full shadow-sm transition-colors active:scale-90 sm:h-12 sm:w-12",
                     quantity <= 1
-                      ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 active:scale-95"
+                      ? "bg-white/5 text-muted-foreground/40 cursor-not-allowed"
+                      : "bg-card text-foreground hover:bg-white/10 active:scale-95"
                   )}
                 >
                   <Minus className="w-4 h-4" strokeWidth={2.4} />
                 </button>
-                <span className="w-8 text-center font-bold text-lg tabular-nums text-foreground">{quantity}</span>
+                <span className="w-6 text-center text-lg font-bold tabular-nums text-foreground sm:w-8 sm:text-xl">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-10 h-10 flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-black/90 transition-colors active:scale-95"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-md transition-colors hover:bg-primary/90 active:scale-90 sm:h-12 sm:w-12"
                 >
                   <Plus className="w-4 h-4" strokeWidth={2.4} />
                 </button>
@@ -477,7 +488,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 onClick={handleAddToCart}
                 disabled={isAddingToCart}
                 className={cn(
-                  "flex-1 h-12 sm:h-14 px-3 text-white font-bold rounded-full flex items-center justify-center gap-2 transition-all active:scale-[0.98] min-w-0",
+                  "flex h-14 min-w-0 flex-1 items-center justify-center gap-2 truncate rounded-full px-4 text-sm font-bold text-white shadow-xl transition-transform active:scale-[0.98] sm:h-16 sm:text-base",
                   isAddingToCart
                     ? "bg-emerald-500 shadow-xl shadow-emerald-500/25 scale-[1.01]"
                     : "bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
@@ -490,7 +501,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                   </>
                 ) : (
                   <>
-                    <span className="text-sm sm:text-base font-semibold whitespace-nowrap truncate px-1">Add to Cart</span>
+                    <ShoppingBag className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={1.8} />
+                    <span className="truncate px-1 font-semibold whitespace-nowrap">Add</span>
                     <span className="text-sm sm:text-base font-bold whitespace-nowrap">
                       {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
                     </span>
@@ -502,7 +514,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
         </DialogPanel>
       </div>
-      <UpsellBottomSheet
+    </Dialog>
+    <UpsellBottomSheet
         open={upsellOpen}
         suggestions={upsellSuggestions}
         currencyCode={currencyCode}
@@ -512,7 +525,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         onDismissMany={dismissManySuggestions}
         onExited={handleUpsellExited}
       />
-    </Dialog>
+    </>
   );
 };
 
@@ -534,12 +547,12 @@ export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
       className="relative z-50 transition duration-300 ease-out data-[closed]:opacity-0"
       transition={true}
     >
-      <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+      <DialogBackdrop className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
 
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-in zoom-in-95 duration-200">
+        <DialogPanel className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-foreground shadow-2xl shadow-black/40 animate-in zoom-in-95 duration-200">
           <div className="flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="32"
@@ -559,30 +572,30 @@ export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
               </svg>
             </div>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              Need assistance?
+            <h3 className="text-xl font-bold text-foreground mb-2">
+              Need Assistance?
             </h3>
-            <p className="text-gray-500 text-sm mb-1">
+            <p className="text-muted-foreground text-sm mb-1">
               Do you want a staff member to come to your table?
             </p>
             {tableName && (
-              <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-6">
+              <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider mb-6">
                 Table {tableName}
               </p>
             )}
 
-            <div className="flex gap-3 w-full">
-              <button
-                onClick={close}
-                className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
+            <div className="flex w-full flex-col gap-3">
               <button
                 onClick={confirm}
-                className="flex-1 py-3 px-4 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+                className="h-12 w-full rounded-xl bg-primary px-4 text-white font-bold transition-colors hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-[0.98]"
               >
-                Confirm
+                Call Waiter
+              </button>
+              <button
+                onClick={close}
+                className="h-12 w-full rounded-xl border border-border px-4 text-secondary-foreground font-medium transition-colors hover:bg-secondary"
+              >
+                Cancel
               </button>
             </div>
           </div>

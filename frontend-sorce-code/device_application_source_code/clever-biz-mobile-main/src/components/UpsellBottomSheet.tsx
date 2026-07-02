@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, X } from "lucide-react";
+import { Plus, Sparkles, X } from "lucide-react";
 import type { UpsellSuggestion } from "../lib/upsellApi";
 import { OptimizedImage } from "./OptimizedImage";
 
@@ -8,7 +8,7 @@ type Props = {
   open: boolean;
   suggestions: UpsellSuggestion[];
   currencyCode: string;
-  onAccept: (suggestion: UpsellSuggestion) => void;
+  onAccept: (suggestion: UpsellSuggestion) => void | Promise<void>;
   onDeclineSingle: (suggestion: UpsellSuggestion) => void;
   onDismissSingle: (suggestion: UpsellSuggestion) => void;
   onDismissMany: (suggestions: UpsellSuggestion[]) => void;
@@ -35,11 +35,13 @@ export default function UpsellBottomSheet({
   onExited,
 }: Props) {
   const [localDismissed, setLocalDismissed] = useState<number[]>([]);
+  const [addingItemId, setAddingItemId] = useState<number | null>(null);
   const displayRef = useRef<UpsellSuggestion[]>([]);
 
   useEffect(() => {
     if (open) {
       setLocalDismissed([]);
+      setAddingItemId(null);
       displayRef.current = suggestions.slice(0, 2);
     }
   }, [open, suggestions]);
@@ -69,12 +71,22 @@ export default function UpsellBottomSheet({
     onDismissMany(shownItems);
   };
 
+  const handleAccept = async (item: UpsellSuggestion) => {
+    if (addingItemId !== null) return;
+    setAddingItemId(item.id);
+    try {
+      await onAccept(item);
+    } finally {
+      setAddingItemId(null);
+    }
+  };
+
   return (
     <AnimatePresence onExitComplete={onExited}>
       {open && shownItems.length > 0 ? (
         <>
           <motion.div
-            className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -82,17 +94,17 @@ export default function UpsellBottomSheet({
           />
 
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl border border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl"
+            className="fixed bottom-0 left-1/2 z-[70] w-full max-w-[430px] -translate-x-1/2 rounded-t-3xl border-t border-border bg-card px-5 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 text-foreground shadow-2xl shadow-black/50"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
           >
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-200" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
 
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#7A5B36]">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </span>
                 {label}
@@ -100,7 +112,7 @@ export default function UpsellBottomSheet({
 
               <button
                 onClick={handleDismissAll}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
                 type="button"
               >
                 <X className="h-4 w-4" />
@@ -111,12 +123,12 @@ export default function UpsellBottomSheet({
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {shownItems.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm">
-                      <div className="relative overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+                    <div key={item.id} className="relative flex flex-col gap-2 rounded-2xl bg-secondary p-3">
+                      <div className="relative overflow-hidden rounded-xl bg-background">
                         <button
                           type="button"
                           onClick={() => handleDismissSingle(item)}
-                          className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow"
+                          className="absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/45 text-white/70 shadow hover:text-white"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -129,17 +141,18 @@ export default function UpsellBottomSheet({
                         />
                       </div>
 
-                      <p className="mt-2 truncate text-sm font-semibold text-slate-900">{item.item_name}</p>
-                      <p className="mt-0.5 text-sm font-bold text-primary">
+                      <p className="line-clamp-2 pr-4 text-sm font-bold leading-tight text-foreground">{item.item_name}</p>
+                      <p className="mt-1 text-sm font-bold text-primary">
                         {currencyCode} {toSafePrice(item.price).toFixed(2)}
                       </p>
 
                       <button
                         type="button"
-                        onClick={() => onAccept(item)}
-                        className="mt-2 h-9 w-full rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary/90"
+                        onClick={() => void handleAccept(item)}
+                        disabled={addingItemId !== null}
+                        className="mt-auto h-10 w-full rounded-xl bg-primary text-sm font-bold text-white hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                       >
-                        Add
+                        {addingItemId === item.id ? "Adding..." : "Add"}
                       </button>
                     </div>
                   ))}
@@ -148,15 +161,15 @@ export default function UpsellBottomSheet({
                 <button
                   type="button"
                   onClick={handleDismissAll}
-                  className="mt-3 w-full text-center text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  className="mt-4 w-full py-1 text-center text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   No thanks
                 </button>
               </>
             ) : primaryItem ? (
               <>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-2.5">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-4">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                     <OptimizedImage
                       src={primaryItem.image1}
                       alt={primaryItem.item_name}
@@ -166,31 +179,39 @@ export default function UpsellBottomSheet({
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">{primaryItem.item_name}</p>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                    <p className="truncate text-base font-bold text-foreground">{primaryItem.item_name}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                       {primaryItem.upsell_message || "A smart add-on for this order."}
                     </p>
-                    <p className="line-clamp-1 text-xs text-slate-400">{primaryItem.description || "Popular with this meal."}</p>
-                    <p className="mt-1 text-lg font-black text-primary">
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{primaryItem.description || "Popular with this meal."}</p>
+                    <p className="mt-1.5 text-sm font-bold text-primary">
                       {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-4 flex gap-2">
                   <button
                     type="button"
                     onClick={() => handleDeclineSingle(primaryItem)}
-                    className="h-10 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    className="h-12 flex-1 rounded-xl border border-border px-4 text-sm font-medium text-muted-foreground hover:bg-secondary"
                   >
                     No thanks
                   </button>
                   <button
                     type="button"
-                    onClick={() => onAccept(primaryItem)}
-                    className="h-10 flex-[1.9] rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
+                    onClick={() => void handleAccept(primaryItem)}
+                    disabled={addingItemId !== null}
+                    className="inline-flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                   >
-                    Add · {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
+                    {addingItemId === primaryItem.id
+                      ? "Adding..."
+                      : (
+                        <>
+                          <Plus className="h-4 w-4" strokeWidth={1.8} />
+                          Add · {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
+                        </>
+                      )}
                   </button>
                 </div>
               </>

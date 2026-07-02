@@ -27,7 +27,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                 onAdd();
             }}
             className={cn(
-                "group relative grid grid-cols-[auto_1fr] gap-3 sm:gap-4 p-3 bg-white rounded-3xl shadow-sm border border-border/40 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden min-h-[7rem] active:scale-[0.98] transition-transform duration-100",
+                "group relative grid min-h-[7rem] grid-cols-[auto_1fr] gap-3 overflow-hidden rounded-3xl border border-border/70 bg-card p-3 text-foreground shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition-all duration-300 hover:border-white/20 active:scale-[0.98] sm:gap-4",
                 !isAvailable ? "opacity-65" : ""
             )}
         >
@@ -39,7 +39,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             )}
 
             {!isAvailable && (
-                <div className="absolute inset-0 bg-white/40 z-20 pointer-events-none">
+                <div className="absolute inset-0 bg-background/60 z-20 pointer-events-none">
                     <span className="absolute left-3 top-3 rounded-full bg-slate-700 text-white text-[10px] font-bold px-2.5 py-1">
                         Sold out
                     </span>
@@ -47,7 +47,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
             )}
 
             {/* Image/Video Section - Fixed Width */}
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-gray-50 flex items-center justify-center self-center">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden bg-secondary flex items-center justify-center self-center shadow-lg shadow-black/20">
 
                 {/* Video Player Overlay */}
                 {showVideo && item.video ? (
@@ -110,9 +110,9 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                             ) : null}
 
                             {/* Fallback Placeholder */}
-                            <div className={cn("absolute inset-0 bg-slate-100 flex items-center justify-center", item.image1 && !imageFailed ? "hidden" : "")}>
-                                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
-                                    <UtensilsCrossed className="w-5 h-5 text-slate-500" strokeWidth={1.8} />
+                            <div className={cn("absolute inset-0 bg-secondary flex items-center justify-center", item.image1 && !imageFailed ? "hidden" : "")}>
+                                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                                    <UtensilsCrossed className="w-5 h-5 text-muted-foreground" strokeWidth={1.8} />
                                 </div>
                             </div>
                         </>
@@ -141,7 +141,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                         {item.item_name}
                     </h3>
 
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground sm:text-xs">
                         {item.description || "No description available."}
                     </p>
                 </div>
@@ -152,7 +152,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                             {currencyCode} {discountedPrice.toFixed(2)}
                         </span>
                         {discount > 0 && (
-                            <span className="text-[10px] sm:text-xs text-gray-400 line-through">
+                            <span className="text-[10px] sm:text-xs text-muted-foreground line-through">
                                 {currencyCode} {price.toFixed(2)}
                             </span>
                         )}
@@ -166,13 +166,13 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                         }}
                         disabled={!isAvailable}
                         className={cn(
-                            "w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors active:scale-90 shadow-sm",
+                            "w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-90 shadow-sm",
                             isAvailable
                                 ? "bg-primary text-white hover:bg-primary/90"
                                 : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         )}
                     >
-                        <Plus size={20} strokeWidth={2.5} />
+                        <Plus size={18} strokeWidth={1.8} />
                     </button>
                 </div>
             </div>

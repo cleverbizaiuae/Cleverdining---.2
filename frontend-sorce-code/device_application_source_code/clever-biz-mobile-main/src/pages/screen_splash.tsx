@@ -45,10 +45,7 @@ export default function ScreenSplash({
     }
   }, []);
 
-  const hasConfiguredContent = Boolean(
-    brand.logoUrl || brand.coverImageUrl || (brand.restaurantName && brand.restaurantName !== "My Restaurant")
-  );
-  const hasBranding = brand.brandingEnabled || hasConfiguredContent;
+  const hasBranding = brand.brandingEnabled;
 
   const restaurantName =
     hasBranding && brand.restaurantName

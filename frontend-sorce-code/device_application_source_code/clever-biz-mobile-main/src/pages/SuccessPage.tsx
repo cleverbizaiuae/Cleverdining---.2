@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
   Facebook,
+  CheckCircle2,
   Instagram,
   Music2,
   Star,
@@ -341,17 +342,21 @@ const SuccessPage = () => {
             )}
           </div>
 
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+            <CheckCircle2 className="h-10 w-10 text-green-400" strokeWidth={1.8} />
+          </div>
+
           {/* Main Title */}
           <h1
             className="text-4xl font-bold mb-3 text-center text-white"
             style={{ fontFamily, letterSpacing: "-0.02em" }}
           >
-            Thank You
+            Order Placed!
           </h1>
 
           {/* Supporting Text */}
           <p className="text-white/72 text-sm mb-6 text-center leading-relaxed max-w-sm italic">
-            {brand.tagline || "We hope you enjoyed your meal. See you again soon!"}
+            {brand.tagline || "Your food is on its way. We hope you enjoy your meal."}
           </p>
 
           {/* Google Review Section */}

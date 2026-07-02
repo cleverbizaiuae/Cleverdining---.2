@@ -23,7 +23,7 @@ export type CartItem = {
 
 type CartContextType = {
   cart: CartItem[];
-  addToCart: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
+  addToCart: (item: Omit<CartItem, "quantity">, quantity?: number) => Promise<boolean>;
   removeFromCart: (id: number) => void;
   incrementQuantity: (id: number) => void;
   decrementQuantity: (id: number) => void;
@@ -156,7 +156,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       parsedPrice < 0
     ) {
       console.warn("Invalid cart item rejected:", item);
-      return;
+      return false;
     }
 
     const safeQuantity = Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
@@ -188,8 +188,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         });
       } catch (error) {
         console.error("Failed to add item to server cart", error);
+        setCart((prev) => {
+          const target = prev.find((entry) => entry.id === normalizedItem.id);
+          if (!target) return prev;
+          if (target.quantity <= safeQuantity) {
+            return prev.filter((entry) => entry.id !== normalizedItem.id);
+          }
+          return prev.map((entry) =>
+            entry.id === normalizedItem.id
+              ? { ...entry, quantity: entry.quantity - safeQuantity }
+              : entry
+          );
+        });
+        return false;
       }
     }
+    return true;
   }, []);
 
   const removeFromCart = React.useCallback(async (id: number) => {

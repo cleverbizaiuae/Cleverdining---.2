@@ -26,6 +26,8 @@ export type UpsellSuggestion = {
   upsell_message?: string;
   upsell_score?: number;
   upsell_stage?: string;
+  association_strength?: number;
+  co_order_frequency?: number;
 };
 
 export type UpsellTriggerPoint = "add_to_cart" | "cart" | "before_payment";
@@ -56,6 +58,47 @@ const safeNumber = (value: unknown): number => {
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
+};
+
+const normalizeUpsellSuggestion = (raw: unknown): UpsellSuggestion | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const rawRecord = raw as Record<string, unknown>;
+  const nestedItem =
+    rawRecord.item && typeof rawRecord.item === "object"
+      ? (rawRecord.item as Record<string, unknown>)
+      : {};
+  const source = { ...rawRecord, ...nestedItem };
+  const id = Number(source.id ?? source.item_id);
+  const itemName = String(source.item_name ?? source.name ?? "").trim();
+  const price = safeNumber(source.price);
+
+  if (!Number.isInteger(id) || id <= 0 || !itemName || !Number.isFinite(price) || price < 0) {
+    return null;
+  }
+
+  return {
+    id,
+    item_name: itemName,
+    price: String(price),
+    description: String(source.description || ""),
+    slug: String(source.slug || ""),
+    category: Number(source.category ?? source.category_id ?? 0) || 0,
+    sub_category: Number(source.sub_category ?? source.sub_category_id ?? 0) || 0,
+    restaurant: Number(source.restaurant ?? source.restaurant_id ?? 0) || 0,
+    category_name: String(source.category_name || ""),
+    image1: String(source.image1 ?? source.image_url ?? ""),
+    availability: source.availability !== false,
+    video: String(source.video || ""),
+    restaurant_name: String(source.restaurant_name || ""),
+    upsell_rule: source.upsell_rule ? String(source.upsell_rule) : undefined,
+    upsell_message: source.upsell_message ? String(source.upsell_message) : undefined,
+    upsell_score: source.upsell_score === undefined ? undefined : safeNumber(source.upsell_score),
+    upsell_stage: source.upsell_stage ? String(source.upsell_stage) : undefined,
+    association_strength:
+      source.association_strength === undefined ? undefined : safeNumber(source.association_strength),
+    co_order_frequency:
+      source.co_order_frequency === undefined ? undefined : safeNumber(source.co_order_frequency),
+  };
 };
 
 const getDisabledUpsellItems = (): Set<number> => {
@@ -100,7 +143,9 @@ export async function fetchUpsellSuggestions(params: {
       source_item_id: params.sourceItemId,
       ...signalParams,
     },
-  }, { ttlMs: 2_000 });
+  }, { ttlMs: 2_000 })
+    .then((response) => (Array.isArray(response.data?.suggestions) ? response.data.suggestions : []))
+    .catch(() => [] as UpsellSuggestion[]);
   const historicalPromise =
     params.cartItemIds && params.cartItemIds.length > 0
       ? cachedGet("/api/upsell/smart-suggestions", {
@@ -117,21 +162,24 @@ export async function fetchUpsellSuggestions(params: {
           .catch(() => [] as UpsellSuggestion[])
       : Promise.resolve([] as UpsellSuggestion[]);
 
-  const [primaryResponse, historicalSuggestions] = await Promise.all([primaryPromise, historicalPromise]);
-  const primarySuggestions = Array.isArray(primaryResponse.data?.suggestions) ? primaryResponse.data.suggestions : [];
+  const [primarySuggestions, historicalSuggestions] = await Promise.all([primaryPromise, historicalPromise]);
 
   const mergedById = new Map<number, UpsellSuggestion>();
-  for (const item of [...primarySuggestions, ...historicalSuggestions]) {
-    if (item && Number.isInteger(item.id)) {
-      mergedById.set(item.id, item as UpsellSuggestion);
-    }
+  for (const rawItem of [...primarySuggestions, ...historicalSuggestions]) {
+    const item = normalizeUpsellSuggestion(rawItem);
+    if (item) mergedById.set(item.id, item);
   }
 
   const merged = Array.from(mergedById.values());
   const disabledItems = getDisabledUpsellItems();
-  const strongHistorical = historicalSuggestions
-    .filter((item: any) => Number(item?.association_strength || 0) >= 0.5 && Number(item?.co_order_frequency || 0) >= 10)
-    .sort((a: any, b: any) => Number(b.association_strength || 0) - Number(a.association_strength || 0));
+  const excludedItems = new Set(
+    [...(params.cartItemIds || []), ...(params.excludeItemIds || [])]
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  );
+  const strongHistorical = merged
+    .filter((item) => Number(item.association_strength || 0) >= 0.5 && Number(item.co_order_frequency || 0) >= 10)
+    .sort((a, b) => Number(b.association_strength || 0) - Number(a.association_strength || 0));
   if (strongHistorical.length > 0) {
     const topHistorical = strongHistorical[0] as UpsellSuggestion;
     const remaining = merged.filter((item) => item.id !== topHistorical.id);
@@ -141,6 +189,7 @@ export async function fetchUpsellSuggestions(params: {
   return merged.filter((item: UpsellSuggestion) => {
     if (!item || !Number.isInteger(item.id)) return false;
     if (item.availability === false) return false;
+    if (excludedItems.has(item.id)) return false;
     if (disabledItems.has(item.id)) return false;
     if (isUpsellItemDismissed(item.id)) return false;
     if (isUpsellItemAccepted(item.id)) return false;
