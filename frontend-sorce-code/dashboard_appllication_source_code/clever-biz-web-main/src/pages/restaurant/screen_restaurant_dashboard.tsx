@@ -17,9 +17,9 @@ import {
   CalendarCheck,
   Ban,
   Table2,
-  Utensils,
   UserCheck,
   Receipt,
+  QrCode,
   FolderPlus,
   Layers,
   Pencil,
@@ -124,7 +124,6 @@ const ScreenRestaurantDashboard = () => {
   const { fmt } = useRestaurantContext();
   const {
     foodItems,
-    foodItemsCount,
     allDevices,
     members,
     fetchAllDevices,
@@ -170,6 +169,7 @@ const ScreenRestaurantDashboard = () => {
   const [dailyStatsLoading, setDailyStatsLoading] = useState(false);
   const [salesAnalytics, setSalesAnalytics] = useState<{ labels: string[]; revenue: number[]; orders: number[] } | null>(null);
   const [salesAnalyticsLoading, setSalesAnalyticsLoading] = useState(false);
+  const [dashboardUpsellStats, setDashboardUpsellStats] = useState<any>(null);
   const [reservationsToday, setReservationsToday] = useState(0);
   const [noShowsToday, setNoShowsToday] = useState(0);
 
@@ -212,6 +212,16 @@ const ScreenRestaurantDashboard = () => {
       console.warn("Failed to load daily stats", err);
     } finally {
       setDailyStatsLoading(false);
+    }
+  }, [userRole]);
+
+  const fetchDashboardUpsellStats = useCallback(async (force = false) => {
+    if (userRole !== "owner" && userRole !== "manager") return;
+    try {
+      const response = await cachedGet("/api/upsell/analytics", {}, { ttlMs: 20_000, force });
+      setDashboardUpsellStats(response.data?.data || response.data || null);
+    } catch (err) {
+      console.warn("Failed to load dashboard upsell summary", err);
     }
   }, [userRole]);
 
@@ -260,11 +270,12 @@ const ScreenRestaurantDashboard = () => {
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
       fetchDailyStats();
+      fetchDashboardUpsellStats();
       fetchReservationStats();
       fetchAllDevices();
       fetchMembers();
     }
-  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchReservationStats, fetchAllDevices, fetchMembers, userRole]);
+  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchReservationStats, fetchAllDevices, fetchMembers, userRole]);
 
   useEffect(() => {
     fetchSalesAnalytics();
@@ -289,10 +300,11 @@ const ScreenRestaurantDashboard = () => {
         fetchAnalytics(timeRange, compareEnabled, true);
         fetchMostSellingItems(true);
         fetchDailyStats(true);
+        fetchDashboardUpsellStats(true);
         fetchSalesAnalytics(true);
       }, 2000);
     }
-  }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchSalesAnalytics, timeRange, compareEnabled]);
+  }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchSalesAnalytics, timeRange, compareEnabled]);
 
   // GUARANTEED POLLING FALLBACK — 60s refresh for analytics (heavier queries)
   useEffect(() => {
@@ -302,9 +314,10 @@ const ScreenRestaurantDashboard = () => {
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
       fetchDailyStats();
+      fetchDashboardUpsellStats();
     }, 60000);
     return () => clearInterval(poll);
-  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, timeRange, compareEnabled, userRole]);
+  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, timeRange, compareEnabled, userRole]);
 
   // NOTE: Initial Fetch is now handled by OwnerContext (Background Fetch)
   // We DO NOT fetch here on mount to avoid waterfall.
@@ -372,8 +385,12 @@ const ScreenRestaurantDashboard = () => {
   const averageOrderValue = toNumber(dailyStats?.averageOrderValue || dailyStats?.average_order_value || dailyStats?.aov || (totalOrders > 0 ? totalRevenue / totalOrders : 0));
   const occupiedTables = (allDevices || []).filter((table: any) => ["occupied", "seated", "active", "in_use"].includes(String(table.status || table.table_status || "").toLowerCase())).length;
   const activeTables = occupiedTables || toNumber(dailyStats?.activeTables || dailyStats?.active_tables || dailyStats?.occupiedTables || dailyStats?.occupied_tables) || (allDevices?.length || 0);
-  const menuItemsCount = toNumber(foodItemsCount || foodItems?.length || dailyStats?.menuItems || dailyStats?.menu_items);
   const teamMembersCount = toNumber(members?.length || dailyStats?.teamMembers || dailyStats?.team_members || activeStaff);
+  const qrScansToday = toNumber(dailyStats?.qrScans || dailyStats?.qr_scans || dailyStats?.qrScansToday || dailyStats?.qr_scans_today);
+  const dashboardUpsellShown = toNumber(dashboardUpsellStats?.total_shown || dashboardUpsellStats?.shown || dashboardUpsellStats?.offers_shown);
+  const dashboardUpsellAccepted = toNumber(dashboardUpsellStats?.total_accepted || dashboardUpsellStats?.accepted || dashboardUpsellStats?.add_to_cart);
+  const dashboardUpsellAcceptance = toNumber(dashboardUpsellStats?.acceptance_rate || (dashboardUpsellShown > 0 ? (dashboardUpsellAccepted / dashboardUpsellShown) * 100 : 0));
+  const dashboardUpsellRevenue = toNumber(dashboardUpsellStats?.upsell_revenue || dashboardUpsellStats?.revenue);
   const chartSource = salesAnalytics && salesAnalytics.labels.length > 0
     ? salesAnalytics
     : {
@@ -481,10 +498,10 @@ const ScreenRestaurantDashboard = () => {
           <MetricCard title="Total Orders" value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders} subtext="Today" trend="12%" isPositive={true} icon={ShoppingBag} />
           <MetricCard title="Avg Order Value" value={statsLoading ? <div className="h-8 w-20 bg-slate-100 animate-pulse rounded" /> : fmt(averageOrderValue)} subtext="Revenue ÷ orders" trend="4.8%" isPositive={true} icon={Receipt} />
           <MetricCard title="Active Tables" value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeTables} subtext="Occupied now" trend="0%" isPositive={true} icon={Table2} />
-          <MetricCard title="Reservations Today" value={reservationsToday} subtext="Scheduled today" trend="8%" isPositive={true} icon={CalendarCheck} />
-          <MetricCard title="No-Shows Today" value={noShowsToday} subtext="Today" trend={noShowsToday > 0 ? `${noShowsToday}` : "0"} isPositive={noShowsToday === 0} icon={Ban} />
-          <MetricCard title="Menu Items" value={menuItemsCount} subtext="Live catalog" trend="0%" isPositive={true} icon={Utensils} />
-          <MetricCard title="Team Members" value={teamMembersCount} subtext="Staff directory" trend="0%" isPositive={true} icon={UserCheck} />
+          <MetricCard title="Team Members" value={teamMembersCount} subtext="Staff" trend="Active" isPositive={true} icon={UserCheck} />
+          <MetricCard title="Reservations" value={reservationsToday} subtext="Today" trend="Booked" isPositive={true} icon={CalendarCheck} />
+          <MetricCard title="No-Shows" value={noShowsToday} subtext="Today" trend={noShowsToday > 0 ? `${noShowsToday}` : "All good"} isPositive={noShowsToday === 0} icon={Ban} />
+          <MetricCard title="QR Scans" value={qrScansToday} subtext="Today" trend={qrScansToday > 0 ? `${qrScansToday}` : "Not tracked"} isPositive={true} icon={QrCode} />
         </div>
       )}
 
@@ -539,6 +556,47 @@ const ScreenRestaurantDashboard = () => {
                 showComparison={compareEnabled}
               />
             )}
+          </div>
+        </div>
+      )}
+
+
+      {/* AI UPSELL PERFORMANCE STRIP */}
+      {(userRole === 'owner' || userRole === 'manager') && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <TrendingUp size={16} strokeWidth={1.8} className="text-slate-400" />
+              AI Upsell Performance
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                const base = window.location.pathname.replace(/\/$/, "");
+                window.location.assign(`${base}/ai-upsell`);
+              }}
+              className="text-sm font-medium text-[#0055FE] hover:text-[#0047D1] transition-colors"
+            >
+              View full analytics →
+            </button>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+            <div className="px-5 py-5">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Suggestions Shown</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{dashboardUpsellShown}</p>
+            </div>
+            <div className="px-5 py-5">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Add To Cart</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{dashboardUpsellAccepted}</p>
+            </div>
+            <div className="px-5 py-5">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Acceptance Rate</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{Math.round(dashboardUpsellAcceptance)}%</p>
+            </div>
+            <div className="px-5 py-5">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Upsell Revenue</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{fmt(dashboardUpsellRevenue)}</p>
+            </div>
           </div>
         </div>
       )}
