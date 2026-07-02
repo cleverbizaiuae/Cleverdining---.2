@@ -61,24 +61,24 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
 // --- COMPONENTS ---
 
 // 1. METRIC CARDS
-// Spec: Left: Title (slate-500), Value (slate-900), Change (green/red). Right: Icon (Royal Blue) in container (bg-[#0055FE]/10)
-const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = true, featured = false }: any) => (
-  <div className={`bg-white ${featured ? "p-7 min-h-[132px]" : "p-5"} rounded-2xl border border-slate-200 shadow-sm flex justify-between items-start`}>
+// Spec: Left: Title (slate-500), Value (slate-900), Change (green/red). Right: subtle line icon.
+const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = true }: any) => (
+  <div className="min-h-[140px] bg-white p-6 rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex justify-between items-start">
     <div>
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{title}</p>
-      <h3 className="text-2xl font-semibold text-slate-900 mb-1">{value}</h3>
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">{title}</p>
+      <h3 className="text-2xl font-semibold text-slate-900 mb-2 leading-none">{value}</h3>
       <div className="flex items-center gap-2">
         {trend && (
           <span className={`text-xs font-medium flex items-center ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-            {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {isPositive ? <ArrowUpRight size={13} strokeWidth={1.8} /> : <ArrowDownRight size={13} strokeWidth={1.8} />}
             {trend}
           </span>
         )}
         <span className="text-xs text-slate-400">{subtext}</span>
       </div>
     </div>
-    <div className="w-10 h-10 rounded-lg bg-[#0055FE]/10 flex items-center justify-center text-[#0055FE]">
-      <Icon size={20} />
+    <div className="pt-1 text-slate-300">
+      <Icon size={20} strokeWidth={1.8} />
     </div>
   </div>
 );
