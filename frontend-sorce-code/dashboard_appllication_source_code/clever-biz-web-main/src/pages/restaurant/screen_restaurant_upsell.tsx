@@ -15,7 +15,6 @@ import {
   GitFork,
   Loader2,
   Plus,
-  RefreshCcw,
   ShoppingCart,
   Sparkles,
   Tag,
@@ -724,15 +723,6 @@ const ScreenRestaurantUpsell = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={refreshAll}
-              disabled={refreshing}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}
-              Refresh
-            </button>
-
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <span className="text-sm font-semibold text-slate-700">AI Upsell {settings.enabled ? "On" : "Off"}</span>
               {masterToggleSaving ? (
@@ -832,43 +822,41 @@ const ScreenRestaurantUpsell = () => {
             </div>
           ) : (
             <>
-              <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <section className="space-y-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-none">
                   <h3 className="text-base font-semibold text-slate-900">Performance by Trigger Point</h3>
-                  <p className="text-xs text-slate-500 mt-1 mb-4">Where customers are most likely to accept suggestions.</p>
-                  <div className="space-y-3">
+                  <p className="text-sm text-slate-500 mt-1 mb-5">Where in the ordering journey upsells convert best</p>
+                  <div className="space-y-4">
                     {(analytics.by_trigger || []).map((row) => {
                       const pct = Math.max(0, Math.min(100, row.acceptance_rate));
                       return (
-                        <div key={row.trigger_point} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-sm gap-2">
-                            <span className="text-slate-700 font-medium truncate">{TRIGGER_LABELS[row.trigger_point] || row.trigger_point}</span>
-                            <span className="text-slate-500 text-xs sm:text-sm shrink-0">{row.accepted}/{row.shown} ({pct.toFixed(1)}%)</span>
-                          </div>
+                        <div key={row.trigger_point} className="grid grid-cols-[150px_minmax(0,1fr)_56px_54px] items-center gap-5 text-sm">
+                          <span className="text-slate-700 font-medium truncate">{TRIGGER_LABELS[row.trigger_point] || row.trigger_point}</span>
                           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                             <div className="h-full bg-[#0055FE] rounded-full" style={{ width: `${pct}%` }} />
                           </div>
+                          <span className="text-right font-semibold text-slate-600">{pct.toFixed(0)}%</span>
+                          <span className="text-right text-slate-400">{row.accepted}/{row.shown}</span>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-none">
                   <h3 className="text-base font-semibold text-slate-900">Performance by Category</h3>
-                  <p className="text-xs text-slate-500 mt-1 mb-4">Categories ordered by upsell revenue impact.</p>
-                  <div className="space-y-3">
+                  <p className="text-sm text-slate-500 mt-1 mb-5">Which types of items convert best as upsells</p>
+                  <div className="space-y-4">
                     {(analytics.by_category || []).slice(0, 8).map((row) => {
                       const pct = Math.max(0, Math.min(100, row.acceptance_rate));
                       return (
-                        <div key={row.category} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-sm gap-2 mb-0.5">
-                            <span className="text-slate-700 font-medium">{row.category}</span>
-                            <span className="text-slate-500 text-xs sm:text-sm">{row.accepted}/{row.shown} ({pct.toFixed(1)}%)</span>
-                          </div>
+                        <div key={row.category} className="grid grid-cols-[150px_minmax(0,1fr)_56px_54px] items-center gap-5 text-sm">
+                          <span className="text-slate-700 font-medium truncate">{row.category}</span>
                           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div className="h-full bg-[#0055FE]/70 rounded-full" style={{ width: `${pct}%` }} />
+                            <div className="h-full bg-[#0055FE] rounded-full" style={{ width: `${pct}%` }} />
                           </div>
+                          <span className="text-right font-semibold text-slate-600">{pct.toFixed(0)}%</span>
+                          <span className="text-right text-slate-400">{row.accepted}/{row.shown}</span>
                         </div>
                       );
                     })}

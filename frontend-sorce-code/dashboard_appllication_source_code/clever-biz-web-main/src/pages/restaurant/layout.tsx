@@ -69,8 +69,8 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: LayoutGrid, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Wallet, label: 'Payments', path: '/payments', matchType: 'startsWith', roles: ['owner', 'manager'] },
-  { icon: Palette, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: Sparkles, label: 'AI Upsell', path: '/ai-upsell', matchType: 'startsWith', roles: ['owner', 'manager'] },
+  { icon: Palette, label: 'Branding', path: '/branding', matchType: 'startsWith', roles: ['owner', 'manager'] },
 ];
 
 const ROLE_ALIASES: Record<string, DashboardRole> = {
