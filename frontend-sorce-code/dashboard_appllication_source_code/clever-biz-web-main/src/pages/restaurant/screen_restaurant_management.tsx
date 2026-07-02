@@ -25,9 +25,9 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-md" }: any)
       aria-modal="true"
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 py-8 backdrop-blur-sm animate-fadeIn overflow-y-auto"
     >
-      <div className={`bg-white rounded-xl w-full ${maxWidth} p-6 shadow-2xl scale-100 animate-scaleIn my-auto max-h-[90vh] overflow-y-auto`}>
+      <div className={`bg-white rounded-2xl w-full ${maxWidth} p-7 shadow-2xl scale-100 animate-scaleIn my-auto max-h-[90vh] overflow-y-auto`}>
         <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-xl font-bold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
@@ -199,9 +199,9 @@ const ScreenRestaurantManagement = () => {
 
 
   return (
-    <div className="flex flex-col gap-4 font-inter">
+    <div className="flex flex-col gap-6 font-inter">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="text-[#0055FE]" size={24} />
@@ -214,7 +214,7 @@ const ScreenRestaurantManagement = () => {
               <input
                 type="text"
                 placeholder="Search by name or username"
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
+                className="w-full h-9 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
                 value={membersSearchQuery}
                 onChange={handleSearch}
               />
@@ -224,7 +224,7 @@ const ScreenRestaurantManagement = () => {
                 setFormData({ name: "", email: "", password: "", role: "staff" });
                 setIsAddModalOpen(true);
               }}
-              className="bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
+              className="h-9 bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
             >
               <Plus size={16} />
               Add Member
@@ -336,7 +336,7 @@ const ScreenRestaurantManagement = () => {
             <input
               type="text"
               placeholder="Full Name"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
@@ -346,7 +346,7 @@ const ScreenRestaurantManagement = () => {
             <input
               type="email"
               placeholder="user@restaurant.com"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.email}
               onChange={e => setFormData({ ...formData, email: e.target.value })}
             />
@@ -357,7 +357,7 @@ const ScreenRestaurantManagement = () => {
             <input
               type="password"
               placeholder="••••••••"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.password}
               onChange={e => setFormData({ ...formData, password: e.target.value })}
             />
@@ -365,7 +365,7 @@ const ScreenRestaurantManagement = () => {
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
             <select
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
               value={formData.role}
               onChange={e => setFormData({ ...formData, role: e.target.value })}
             >
@@ -378,7 +378,7 @@ const ScreenRestaurantManagement = () => {
             data-testid="submit-btn"
             onClick={handleCreateSubmit}
             disabled={loading}
-            className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
+            className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
           >
             {loading ? "Creating..." : "Create Member"}
           </button>
@@ -392,7 +392,7 @@ const ScreenRestaurantManagement = () => {
             <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
             <input
               type="text"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
             />
@@ -401,7 +401,7 @@ const ScreenRestaurantManagement = () => {
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
             <select
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none bg-white"
               value={formData.role}
               onChange={e => setFormData({ ...formData, role: e.target.value })}
             >
@@ -414,7 +414,7 @@ const ScreenRestaurantManagement = () => {
             data-testid="submit-btn"
             onClick={handleEditSubmit}
             disabled={loading}
-            className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
+            className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
           >
             {loading ? "Saving..." : "Save Changes"}
           </button>

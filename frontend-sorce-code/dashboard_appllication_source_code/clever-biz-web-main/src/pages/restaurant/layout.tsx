@@ -17,6 +17,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  UserCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -38,7 +39,9 @@ type DashboardRole = "owner" | "manager" | "staff" | "chef" | "admin";
 const SEGMENT_PRELOADERS: Record<string, () => Promise<unknown>> = {
   Dashboard: () => import("./screen_restaurant_dashboard"),
   Orders: () => import("./screen_restaurant_order_list"),
+  OrderList: () => import("./screen_restaurant_order_list"),
   Reservations: () => import("./screen_restaurant_reservations"),
+  Reservation: () => import("./screen_restaurant_reservations"),
   Messages: () => import("./screen_restaurant_chat"),
   Management: () => import("./screen_restaurant_management"),
   Tables: () => import("./screen_restaurant_devices"),
@@ -60,8 +63,8 @@ const prefetchSegment = (label: string) => {
 
 const MENU_ITEMS: MenuItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '', matchType: 'exact', roles: ['owner', 'manager'] },
-  { icon: ClipboardList, label: 'Orders', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
-  { icon: CalendarDays, label: 'Reservations', path: '/reservations', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
+  { icon: ClipboardList, label: 'OrderList', path: '/orders', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
+  { icon: CalendarDays, label: 'Reservation', path: '/reservations', matchType: 'startsWith', roles: ['owner', 'manager', 'staff'] },
   { icon: MessageSquare, label: 'Messages', path: '/messages', matchType: 'startsWith', roles: ['owner', 'manager', 'staff', 'chef'] },
   { icon: Users, label: 'Management', path: '/management', matchType: 'startsWith', roles: ['owner', 'manager'] },
   { icon: LayoutGrid, label: 'Tables', path: '/devices', matchType: 'startsWith', roles: ['owner', 'manager'] },
@@ -125,6 +128,7 @@ const RestaurantLayout = () => {
   const currentRole = resolveSidebarRole(user, location.pathname);
   const displayUser = user?.user || user || {};
   const username = String(displayUser?.username || user?.username || "Manager");
+  const roleLabel = currentRole === "owner" ? "Manager" : currentRole;
 
   // Determine Base Path based on current URL
   const isStaffAliasDashboard = location.pathname.startsWith('/staffadmindashboard');
@@ -160,7 +164,7 @@ const RestaurantLayout = () => {
     if (item.path === '' && location.pathname === basePath) return true;
     if (item.path === '/ai-upsell' && location.pathname.startsWith(legacyUpsellPath)) return true;
 
-    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath && item.label === 'Orders') {
+    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath && item.label === 'OrderList') {
       return true;
     }
 
@@ -182,7 +186,7 @@ const RestaurantLayout = () => {
     if (activeItem) return activeItem.label;
 
     // Fallback for staff/chef index
-    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath) return "Orders";
+    if ((isStaffDashboard || isChefDashboard) && location.pathname === basePath) return "OrderList";
 
     return "Dashboard";
   };
@@ -232,7 +236,7 @@ const RestaurantLayout = () => {
       {/* SIDEBAR */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 shadow-xl transition-all duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 shadow-xl transition-all duration-300 ease-in-out lg:shadow-none
           ${sidebarCollapsed ? "lg:w-20" : "lg:w-64"}
           w-64
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
@@ -322,11 +326,11 @@ const RestaurantLayout = () => {
         <div className={`${sidebarCollapsed ? "p-3" : "p-4"} absolute bottom-0 left-0 right-0 border-t border-slate-100 bg-white`}>
           <button
             onClick={handleLogout}
-            title={sidebarCollapsed ? "Log Out" : undefined}
+            title={sidebarCollapsed ? "Logout" : undefined}
             className={`flex items-center ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-4"} w-full py-3 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors duration-200`}
           >
             <LogOut size={20} />
-            {!sidebarCollapsed && <span className="text-sm font-medium">Log Out</span>}
+            {!sidebarCollapsed && <span className="text-sm font-medium">Logout</span>}
           </button>
         </div>
       </aside>
@@ -357,14 +361,12 @@ const RestaurantLayout = () => {
           {/* Right: Profile */}
           <div className="flex items-center gap-4 h-full">
             <div className="hidden sm:flex flex-col items-end pr-4 border-r border-slate-200 h-10 justify-center">
-              <p className="text-sm font-bold text-slate-900 leading-tight">Welcome, {username}</p>
-              <p className="text-xs font-medium text-[#0055FE] capitalize">{currentRole}</p>
+              <p className="text-base font-bold text-slate-900 leading-tight">Welcome</p>
+              <p className="text-xs font-semibold text-[#0055FE] capitalize">{roleLabel}</p>
             </div>
 
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#0055FE] to-cyan-400 p-[2px]">
-              <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-                <span className="text-[#0055FE] font-bold text-lg uppercase">{username[0]}</span>
-              </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-400 shadow-sm">
+              <UserCircle size={26} strokeWidth={1.8} />
             </div>
           </div>
         </header>

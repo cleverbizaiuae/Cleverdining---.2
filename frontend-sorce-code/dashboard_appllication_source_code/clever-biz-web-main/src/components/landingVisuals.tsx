@@ -41,8 +41,17 @@ export const SocialContactButtons = ({ className }: VisualProps) => (
         path: "M0 1.934C0 0.866 0.888 0 1.983 0H25.017C26.112 0 27 0.866 27 1.934V25.066C27 26.134 26.112 27 25.017 27H1.983C0.888 27 0 26.134 0 25.066V1.934ZM6.315 22.602C7.434 22.602 8.341 21.695 8.341 20.577V12.436C8.341 11.317 7.434 10.41 6.315 10.41C5.197 10.41 4.29 11.317 4.29 12.436V20.577C4.29 21.695 5.197 22.602 6.315 22.602ZM6.316 8.745C7.729 8.745 8.608 7.81 8.608 6.639C8.583 5.442 7.73 4.533 6.343 4.533C4.956 4.533 4.05 5.444 4.05 6.639C4.05 7.81 4.929 8.745 6.289 8.745H6.316ZM12.578 22.602C13.694 22.602 14.599 21.698 14.599 20.582V15.793C14.599 15.429 14.626 15.064 14.734 14.804C15.026 14.077 15.692 13.323 16.813 13.323C18.279 13.323 18.865 14.44 18.865 16.08V20.577C18.865 21.695 19.772 22.602 20.89 22.602C22.009 22.602 22.916 21.695 22.916 20.577V15.609C22.916 11.863 20.918 10.122 18.252 10.122C16.102 10.122 15.139 11.303 14.599 12.135C14.599 11.182 13.826 10.41 12.874 10.41H12.618C11.49 10.41 10.566 11.349 10.569 12.477C10.575 14.763 10.565 18.343 10.557 20.576C10.553 21.696 11.459 22.602 12.578 22.602Z",
         viewBox: "0 0 27 27",
       },
-    ].map(({ label, path, viewBox }) => (
-      <a key={label} href="#" aria-label={label} className="text-current transition-colors hover:text-[#0055FE]">
+    ]
+      .filter(({ label }) => label === "Instagram")
+      .map(({ label, path, viewBox }) => (
+      <a
+        key={label}
+        href="https://instagram.com/cleverbiz.ai"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={label}
+        className="text-current transition-colors hover:text-[#0055FE]"
+      >
         <svg width="28" height="28" viewBox={viewBox} className="fill-current" aria-hidden="true">
           <path d={path} />
         </svg>

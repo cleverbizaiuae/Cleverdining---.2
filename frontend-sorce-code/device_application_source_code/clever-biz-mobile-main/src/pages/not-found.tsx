@@ -107,12 +107,6 @@ export const NotFoundPage = () => {
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-            {/* <button className="group bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 px-8 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex items-center gap-3 min-w-[200px]">
-              <Home size={20} />
-              <span>Back to Home</span>
-              <div className="w-0 group-hover:w-6 h-0.5 bg-white transition-all duration-300" />
-            </button> */}
-
             <Link
               onClick={handlegoBack}
               to={"/dashboard"}

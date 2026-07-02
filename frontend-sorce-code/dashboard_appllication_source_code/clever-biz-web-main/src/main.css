@@ -235,17 +235,17 @@
 
 .admin-typography :where(h1),
 .admin-page-title {
-  font-size: 1.125rem !important;
+  font-size: 1.25rem !important;
   line-height: 1.75rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   letter-spacing: -0.015em;
 }
 
 @media (min-width: 640px) {
   .admin-typography :where(h1),
   .admin-page-title {
-    font-size: 1.25rem !important;
-    line-height: 1.75rem !important;
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
   }
 }
 
@@ -253,7 +253,7 @@
 .admin-section-title {
   font-size: 1rem !important;
   line-height: 1.5rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
 }
 
 .admin-dialog-title {
@@ -409,6 +409,28 @@
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 400;
+}
+
+.admin-surface {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.admin-control {
+  min-height: 2.25rem;
+  border-radius: 0.625rem;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.admin-control:focus,
+.admin-control:focus-visible {
+  border-color: #0055fe;
+  box-shadow: 0 0 0 3px rgb(0 85 254 / 0.10);
 }
 
 .admin-sidebar-item {

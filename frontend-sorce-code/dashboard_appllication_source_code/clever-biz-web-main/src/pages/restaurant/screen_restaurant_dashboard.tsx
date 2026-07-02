@@ -20,7 +20,6 @@ import {
   Utensils,
   UserCheck,
   Receipt,
-  MoreVertical,
   FolderPlus,
   Layers,
   Pencil,
@@ -46,9 +45,9 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
       aria-modal="true"
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 py-8 backdrop-blur-sm animate-fadeIn overflow-y-auto"
     >
-      <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl animate-scaleIn my-auto max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-md p-7 shadow-2xl animate-scaleIn my-auto max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2 border-b border-transparent">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-xl font-bold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
@@ -64,7 +63,7 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
 // 1. METRIC CARDS
 // Spec: Left: Title (slate-500), Value (slate-900), Change (green/red). Right: Icon (Royal Blue) in container (bg-[#0055FE]/10)
 const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = true, featured = false }: any) => (
-  <div className={`bg-white ${featured ? "p-7 min-h-[132px]" : "p-5"} rounded-lg border border-slate-200 flex justify-between items-start`}>
+  <div className={`bg-white ${featured ? "p-7 min-h-[132px]" : "p-5"} rounded-2xl border border-slate-200 shadow-sm flex justify-between items-start`}>
     <div>
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{title}</p>
       <h3 className="text-2xl font-semibold text-slate-900 mb-1">{value}</h3>
@@ -550,7 +549,7 @@ const ScreenRestaurantDashboard = () => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         {/* FOOD ITEMS TABLE (Left, 2 cols) */}
-        <div className="xl:col-span-2 bg-white rounded-lg border border-slate-200 overflow-hidden">
+        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Header Bar */}
           <div className="px-4 sm:px-5 py-4 border-b border-slate-200 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
             <h3 className="text-sm font-semibold text-slate-900">Food Items</h3>
@@ -560,20 +559,20 @@ const ScreenRestaurantDashboard = () => {
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg outline-none focus:border-[#0055FE] w-full sm:w-48"
+                  className="h-9 pl-8 pr-3 text-xs border border-slate-200 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 w-full sm:w-48"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
               {(userRole === 'owner' || userRole === 'manager') && (
                 <div className="grid grid-cols-1 min-[420px]:grid-cols-3 sm:flex sm:items-center gap-2">
-                  <button data-testid="add-category-btn" className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddCategory(true)}>
+                  <button data-testid="add-category-btn" className="h-9 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddCategory(true)}>
                     <FolderPlus size={14} /> Add Category
                   </button>
-                  <button data-testid="add-sub-category-btn" className="h-8 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddSubCategory(true)}>
+                  <button data-testid="add-sub-category-btn" className="h-9 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddSubCategory(true)}>
                     <Layers size={14} /> Add Sub-Category
                   </button>
-                  <button className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddItem(true)}>
+                  <button className="h-9 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddItem(true)}>
                     <Plus size={14} /> Add Item
                   </button>
                 </div>
@@ -586,10 +585,10 @@ const ScreenRestaurantDashboard = () => {
             <table className="w-full text-left">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Item Name</th>
-                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Price</th>
-                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Status</th>
-                  <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Actions</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Item Name</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Price</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -702,12 +701,9 @@ const ScreenRestaurantDashboard = () => {
 
         {/* MOST SELLING ITEMS - OWNER & MANAGER */}
         {(userRole === 'owner' || userRole === 'manager') && (
-          <div className="bg-white p-5 rounded-lg border border-slate-200 h-fit">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm h-fit">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-semibold text-slate-900">Most Selling</h3>
-              <button className="p-1 rounded hover:bg-slate-50 text-slate-400">
-                <MoreVertical size={14} />
-              </button>
+              <h3 className="text-sm font-semibold text-slate-900">Most Selling Items</h3>
             </div>
 
             <div className="space-y-4">
@@ -748,7 +744,7 @@ const ScreenRestaurantDashboard = () => {
       {/* CATEGORY & SUB-CATEGORY MANAGEMENT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ALL CATEGORY TABLE */}
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200">
             <h3 className="text-sm font-semibold text-slate-900">All Category</h3>
           </div>
@@ -756,8 +752,8 @@ const ScreenRestaurantDashboard = () => {
             <table className="w-full text-left">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-medium text-slate-600">Category</th>
-                  {(userRole === 'owner' || userRole === 'manager') && <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>}
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Category</th>
+                  {(userRole === 'owner' || userRole === 'manager') && <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

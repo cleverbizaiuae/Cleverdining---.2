@@ -12,6 +12,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { faqs } from "@/data";
 
+const TRIAL_URL = "https://cleverbiz.ai";
+
 const ChevronUpCircleIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
     <path
@@ -354,9 +356,14 @@ const PricingSection = () => {
           ))}
         </ul>
 
-        <button className="w-full py-3.5 rounded-xl bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold shadow-lg shadow-blue-500/20 transition-all duration-300 hover:-translate-y-0.5">
+        <a
+          href={TRIAL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full py-3.5 rounded-xl bg-[#0055FE] hover:bg-[#0047D1] text-center text-white font-semibold shadow-lg shadow-blue-500/20 transition-all duration-300 hover:-translate-y-0.5"
+        >
           Start free trial
-        </button>
+        </a>
       </div>
 
       {/* Plus Plan (Highligted) */}
@@ -405,9 +412,14 @@ const PricingSection = () => {
             ))}
           </ul>
 
-          <button className="w-full py-3.5 rounded-xl bg-white hover:bg-blue-50 text-[#0055FE] font-bold shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+          <a
+            href={TRIAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full py-3.5 rounded-xl bg-white hover:bg-blue-50 text-center text-[#0055FE] font-bold shadow-lg transition-all duration-300 hover:-translate-y-0.5"
+          >
             Start free trial
-          </button>
+          </a>
         </div>
       </div>
 
@@ -449,9 +461,14 @@ const PricingSection = () => {
           ))}
         </ul>
 
-        <button className="w-full py-3.5 rounded-xl bg-[#0055FE] hover:bg-[#0047D1] text-white font-semibold shadow-lg shadow-blue-500/20 transition-all duration-300 hover:-translate-y-0.5">
+        <a
+          href={TRIAL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full py-3.5 rounded-xl bg-[#0055FE] hover:bg-[#0047D1] text-center text-white font-semibold shadow-lg shadow-blue-500/20 transition-all duration-300 hover:-translate-y-0.5"
+        >
           Start free trial
-        </button>
+        </a>
       </div>
     </div>
   );

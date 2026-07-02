@@ -599,14 +599,15 @@ const ScreenRestaurantOrderList = () => {
       </div>
 
       {/* TABLE SECTION */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
         {/* Header Bar */}
-        <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="p-5 border-b border-slate-200 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <h2 className="text-base font-bold text-slate-900">List of Orders</h2>
+          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
             <button
               onClick={() => setShowCloseDayConfirm(true)}
-              className="h-8 px-3 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+              className="h-9 px-4 bg-[#0055FE] hover:bg-[#0047D1] text-white text-xs font-medium rounded-lg flex items-center gap-2 transition-colors shadow-sm"
             >
               <Moon size={14} /> Close Day
             </button>
@@ -629,7 +630,7 @@ const ScreenRestaurantOrderList = () => {
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setShowDropdown(!showDropdown)}
-                    className="h-8 px-3 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+                    className="h-9 px-4 border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors shadow-sm"
                   >
                     Add Payment Account <ChevronDown size={14} />
                   </button>
@@ -658,21 +659,19 @@ const ScreenRestaurantOrderList = () => {
                 </div>
               </>
             )}
-          </div>
-
-          {/* Search */}
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#0055FE]" size={16} />
-            <input
-              type="text"
-              placeholder="Search by Order ID..."
-              className="w-full h-9 pl-10 pr-4 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-[#0055FE]"
-              value={ordersSearchQuery}
-              onChange={(e) => {
-                setOrdersSearchQuery(e.target.value);
-                setOrdersCurrentPage(1);
-              }}
-            />
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#0055FE]" size={16} />
+              <input
+                type="text"
+                placeholder="Search by Order ID..."
+                className="w-full h-9 pl-10 pr-4 text-xs bg-white border border-slate-200 rounded-lg outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
+                value={ordersSearchQuery}
+                onChange={(e) => {
+                  setOrdersSearchQuery(e.target.value);
+                  setOrdersCurrentPage(1);
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -827,13 +826,13 @@ const ScreenRestaurantOrderList = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600">Order ID</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600">Table No</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600">Payment</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600">Date/Time</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600">Amount</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600">Status</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-600 text-right">Action</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Order ID</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Table No</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Payment</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Date/Time</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Amount</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Status</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

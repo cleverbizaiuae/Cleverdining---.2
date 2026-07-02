@@ -10,9 +10,6 @@ import {
   Bell,
   CheckCircle2,
   Clock,
-  MoreVertical,
-  Phone,
-  Video,
   ArrowLeft
 } from "lucide-react";
 import { cn, getActiveRestaurantLocale, getActiveRestaurantTimezone } from "@/lib/utils";
@@ -243,17 +240,6 @@ const ScreenChefChat = () => {
                       <span className="text-xs text-slate-500">Online</span>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="p-2 text-slate-400 hover:text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors">
-                    <Phone size={18} />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors">
-                    <Video size={18} />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
-                    <MoreVertical size={18} />
-                  </button>
                 </div>
               </div>
 

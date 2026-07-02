@@ -713,7 +713,7 @@ const ScreenRestaurantUpsell = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
+      <div className="bg-transparent p-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
@@ -744,23 +744,20 @@ const ScreenRestaurantUpsell = () => {
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-1">
-          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+          <div className="flex flex-wrap gap-1">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={classNames(
-                  "rounded-lg border px-4 py-3 text-left transition",
+                  "rounded-xl border px-4 py-2.5 text-left transition",
                   activeTab === tab.key
                     ? "border-[#0055FE] bg-[#0055FE] text-white shadow"
                     : "border-transparent bg-white text-slate-700 hover:bg-slate-50",
                 )}
               >
-                <p className="text-sm font-semibold">{tab.label}</p>
-                <p className={classNames("text-xs mt-1", activeTab === tab.key ? "text-white/85" : "text-slate-500")}>
-                  {tab.description}
-                </p>
+                <p className="text-sm font-semibold whitespace-nowrap">{tab.label}</p>
               </button>
             ))}
           </div>
@@ -814,7 +811,7 @@ const ScreenRestaurantUpsell = () => {
                 sub: "Per accepted upsell",
               },
             ].map((kpi) => (
-              <div key={kpi.label} className="bg-white border border-slate-200 rounded-2xl p-5">
+              <div key={kpi.label} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{kpi.label}</p>
                   <kpi.icon className={classNames("h-4 w-4 shrink-0", kpi.iconClass)} strokeWidth={1.8} />
@@ -836,7 +833,7 @@ const ScreenRestaurantUpsell = () => {
           ) : (
             <>
               <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-slate-900">Performance by Trigger Point</h3>
                   <p className="text-xs text-slate-500 mt-1 mb-4">Where customers are most likely to accept suggestions.</p>
                   <div className="space-y-3">
@@ -857,7 +854,7 @@ const ScreenRestaurantUpsell = () => {
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-slate-900">Performance by Category</h3>
                   <p className="text-xs text-slate-500 mt-1 mb-4">Categories ordered by upsell revenue impact.</p>
                   <div className="space-y-3">
@@ -880,7 +877,7 @@ const ScreenRestaurantUpsell = () => {
               </section>
 
               <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-slate-900 mb-4">No Thanks vs Add to Cart</h3>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
                     <div className="grid grid-cols-2 gap-2 mb-3">
@@ -914,7 +911,7 @@ const ScreenRestaurantUpsell = () => {
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-slate-900 mb-4">Performance by Time of Day</h3>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
@@ -966,7 +963,7 @@ const ScreenRestaurantUpsell = () => {
                 </div>
               </section>
 
-              <section className="bg-white border border-slate-200 rounded-2xl p-5">
+              <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-slate-900 mb-4">Item Performance</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1040,7 +1037,7 @@ const ScreenRestaurantUpsell = () => {
                 </div>
               </section>
 
-              <section className="bg-white border border-slate-200 rounded-2xl p-5">
+              <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-slate-900 mb-2">Revenue Trend (Last 14 Days)</h3>
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs text-[#0055FE]">
@@ -1079,24 +1076,26 @@ const ScreenRestaurantUpsell = () => {
 
       {activeTab === "pairing" && (
         <div className="space-y-4">
-          <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <GitFork className="h-4 w-4 text-slate-400" strokeWidth={1.8} />
-                Top Pairing Intelligence
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Learned from real completed orders - which items customers actually buy together. Stronger associations rise to the top and influence upsell rankings.
-              </p>
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <GitFork className="h-4 w-4 text-slate-400" strokeWidth={1.8} />
+                  Top Pairing Intelligence
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Learned from real completed orders - which items customers actually buy together. Stronger associations rise to the top and influence upsell rankings.
+                </p>
+              </div>
+              <button
+                onClick={() => fetchPairingIntelligence(true)}
+                disabled={runningIntelligence}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#0055FE] bg-white px-4 text-sm font-semibold text-[#0055FE] hover:bg-blue-50 disabled:opacity-60"
+              >
+                {runningIntelligence ? <Loader2 size={14} className="animate-spin" /> : <WandSparkles size={14} />}
+                Run Intelligence
+              </button>
             </div>
-            <button
-              onClick={() => fetchPairingIntelligence(true)}
-              disabled={runningIntelligence}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#0055FE] bg-white px-4 py-2 text-sm font-semibold text-[#0055FE] hover:bg-blue-50 disabled:opacity-60"
-            >
-              {runningIntelligence ? <Loader2 size={14} className="animate-spin" /> : <WandSparkles size={14} />}
-              Run Intelligence
-            </button>
           </section>
 
           <section className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-700 flex gap-3">
@@ -1124,18 +1123,18 @@ const ScreenRestaurantUpsell = () => {
               </button>
             </section>
           ) : (
-            <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-left text-slate-500 border-b border-slate-200">
-                      <th className="py-2.5 px-4">When Customer Adds</th>
-                      <th className="py-2.5 pr-3">Suggest</th>
-                      <th className="py-2.5 pr-3 text-right">Co-orders</th>
-                      <th className="py-2.5 pr-3 text-right">Strength</th>
-                      <th className="py-2.5 pr-3 text-right">Accepted</th>
-                      <th className="py-2.5 pr-3 text-right">Shown</th>
-                      <th className="py-2.5 pr-4 text-right">Accept %</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wide">When Customer Adds</th>
+                      <th className="py-3 pr-3 text-xs font-semibold uppercase tracking-wide">Suggest</th>
+                      <th className="py-3 pr-3 text-right text-xs font-semibold uppercase tracking-wide">Co-orders</th>
+                      <th className="py-3 pr-3 text-right text-xs font-semibold uppercase tracking-wide">Strength</th>
+                      <th className="py-3 pr-3 text-right text-xs font-semibold uppercase tracking-wide text-[#0055FE]">Accepted</th>
+                      <th className="py-3 pr-3 text-right text-xs font-semibold uppercase tracking-wide">Shown</th>
+                      <th className="py-3 pr-4 text-right text-xs font-semibold uppercase tracking-wide">Accept %</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1177,7 +1176,7 @@ const ScreenRestaurantUpsell = () => {
 
       {activeTab === "items" && (
         <div className="space-y-4">
-          <section className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <section className="bg-transparent p-0 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-900">All Items</h3>
               <p className="text-sm text-slate-500 mt-1">Toggle items on/off for suggestions. Off means never shown to customers.</p>
@@ -1197,7 +1196,7 @@ const ScreenRestaurantUpsell = () => {
           </section>
 
           {groupedItems.map((group) => (
-            <section key={group.name} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <section key={group.name} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
                 <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-700">{group.name}</h4>
                 <span className="text-xs text-slate-500">{group.rows.length} items</span>
@@ -1255,7 +1254,7 @@ const ScreenRestaurantUpsell = () => {
 
       {activeTab === "settings" && (
         <div className="space-y-4">
-          <section className="bg-white border border-slate-200 rounded-2xl p-5">
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4 gap-2">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Upsell Strategy</h3>
@@ -1264,40 +1263,44 @@ const ScreenRestaurantUpsell = () => {
               {savingSettings ? <Loader2 className="h-4 w-4 animate-spin text-[#0055FE]" /> : null}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs text-slate-500 mb-1">Strategy</p>
-                <select
-                  value={settings.strategy}
-                  onChange={(e) => patchSettings({ strategy: e.target.value as UpsellSettings["strategy"] })}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                >
-                  {STRATEGY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                  {STRATEGY_OPTIONS.find((opt) => opt.value === settings.strategy)?.description}
-                </p>
-              </div>
+            <div className="space-y-3">
+              {STRATEGY_OPTIONS.map((opt) => {
+                const selected = settings.strategy === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => patchSettings({ strategy: opt.value })}
+                    className={classNames(
+                      "w-full rounded-2xl border p-4 text-left transition-colors",
+                      selected
+                        ? "border-[#0055FE] bg-blue-50/60 text-[#0055FE]"
+                        : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50",
+                    )}
+                  >
+                    <span className="flex items-start gap-3">
+                      <span
+                        className={classNames(
+                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                          selected ? "border-[#0055FE]" : "border-slate-300",
+                        )}
+                      >
+                        {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#0055FE]" /> : null}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-bold">{opt.label}</span>
+                        <span className={classNames("mt-1 block text-sm leading-relaxed", selected ? "text-slate-600" : "text-slate-500")}>
+                          {opt.description}
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs text-slate-500 mb-1">Aggressiveness</p>
-                <select
-                  value={settings.aggressiveness}
-                  onChange={(e) => patchSettings({ aggressiveness: e.target.value as UpsellSettings["aggressiveness"] })}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                >
-                  {AGGRESSIVENESS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                  {AGGRESSIVENESS_OPTIONS.find((opt) => opt.value === settings.aggressiveness)?.description}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs text-slate-500 mb-1">Tone</p>
                 <select
                   value={settings.tone}
@@ -1349,7 +1352,56 @@ const ScreenRestaurantUpsell = () => {
             </div>
           </section>
 
-          <section className="bg-white border border-slate-200 rounded-2xl p-5">
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Aggressiveness</h3>
+                <p className="text-sm text-slate-500 mt-1">Controls the maximum number of suggestions shown to a customer in one session.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {AGGRESSIVENESS_OPTIONS.map((opt) => {
+                const selected = settings.aggressiveness === opt.value;
+                const maxLabel = opt.value === "subtle" ? "Max 2 per session" : opt.value === "moderate" ? "Max 4 per session" : "Max 6 per session";
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => patchSettings({ aggressiveness: opt.value })}
+                    className={classNames(
+                      "w-full rounded-2xl border p-4 text-left transition-colors",
+                      selected
+                        ? "border-[#0055FE] bg-blue-50/60 text-[#0055FE]"
+                        : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50",
+                    )}
+                  >
+                    <span className="flex items-start gap-3">
+                      <span
+                        className={classNames(
+                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                          selected ? "border-[#0055FE]" : "border-slate-300",
+                        )}
+                      >
+                        {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#0055FE]" /> : null}
+                      </span>
+                      <span>
+                        <span className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                          {opt.label}
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{maxLabel}</span>
+                        </span>
+                        <span className={classNames("mt-1 block text-sm leading-relaxed", selected ? "text-slate-600" : "text-slate-500")}>
+                          {opt.description}
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
             <h3 className="text-base font-semibold text-slate-900">Trigger Points</h3>
             <p className="text-sm text-slate-500 mt-1 mb-4">Choose where upsell suggestions appear in the customer journey.</p>
             <div className="space-y-2">
@@ -1404,7 +1456,7 @@ const ScreenRestaurantUpsell = () => {
             </div>
           </section>
 
-          <section className="bg-white border border-slate-200 rounded-2xl p-5">
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2 mb-4">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Smart Rules</h3>

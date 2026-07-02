@@ -417,9 +417,13 @@ export const TableTeamManagement: React.FC<TableTeamManagementProps> = ({
               {item.email}
               {item.email ? (
                 <TooltipTop tip="Send password via mail">
-                  <button className="bg-transparent">
+                  <a
+                    href={`mailto:${item.email}`}
+                    aria-label={`Email ${item.username}`}
+                    className="bg-transparent"
+                  >
                     <BiMailSend className="w-6 h-6" />
-                  </button>
+                  </a>
                 </TooltipTop>
               ) : (
                 "N/A"

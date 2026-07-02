@@ -41,7 +41,7 @@ const Layout = () => {
             <span className="hidden lg:inline-block text-md font-medium text-primary leading-none uppercase">
               Follow us on
             </span>
-            <a href="#" className="text-white hover:text-accent">
+            <span className="text-white">
               <svg
                 width="30"
                 height="30"
@@ -54,8 +54,8 @@ const Layout = () => {
                   fill="#162141"
                 />
               </svg>
-            </a>
-            <a href="#" className="text-white hover:text-accent">
+            </span>
+            <span className="text-white">
               <svg
                 width="30"
                 height="30"
@@ -68,8 +68,8 @@ const Layout = () => {
                   fill="#162141"
                 />
               </svg>
-            </a>
-            <a href="#" className="text-white hover:text-accent">
+            </span>
+            <span className="text-white">
               <svg
                 width="30"
                 height="30"
@@ -89,8 +89,8 @@ const Layout = () => {
                   </clipPath>
                 </defs>
               </svg>
-            </a>
-            <a href="#" className="text-white hover:text-accent">
+            </span>
+            <span className="text-white">
               <svg
                 width="27"
                 height="27"
@@ -110,7 +110,7 @@ const Layout = () => {
                   </clipPath>
                 </defs>
               </svg>
-            </a>
+            </span>
           </div>
         </div>
       </footer>

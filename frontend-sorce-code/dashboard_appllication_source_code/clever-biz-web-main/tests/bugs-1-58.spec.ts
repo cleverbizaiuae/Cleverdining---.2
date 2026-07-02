@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 import {
   loginAsAdmin,
   loginAsChef,
@@ -32,6 +34,24 @@ test.setTimeout(30_000);
 test.beforeEach(async ({ request }) => {
   // Keep server-side baseline deterministic so each test is independent.
   await seedTestData(request);
+});
+
+test.describe("Payment action contracts", () => {
+  test("Ready-order Mark as Paid uses payment confirmation endpoint", () => {
+    const source = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "src/pages/restaurant/screen_restaurant_order_list.tsx"
+      ),
+      "utf8"
+    );
+
+    expect(source).toContain(
+      "axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`)"
+    );
+    expect(source).toContain("onClick={() => handleConfirmCash(order.id)}");
+    expect(source).not.toContain("handleMarkDelivered");
+  });
 });
 
 test.describe("Admin", () => {
@@ -404,8 +424,11 @@ test.describe("Orders", () => {
 
   test("Bug 30: Calendar fully visible", async ({ page }) => {
     await page.goto("/restaurant/reservations");
-    await clickFirst(page, ["input[placeholder*='dd/mm/yyyy' i]", ".react-datepicker__input-container input"]);
-    await expect(page.locator("input[placeholder*='dd/mm/yyyy' i], .react-datepicker__input-container input").first()).toBeVisible();
+    const calendarInput = page.locator(
+      "input[type='date'], input[placeholder*='dd/mm/yyyy' i], .react-datepicker__input-container input"
+    ).first();
+    await expect(calendarInput).toBeVisible();
+    await calendarInput.click();
   });
 
   test("Bug 31: First login loads data without visiting Orders", async ({ page, request }) => {

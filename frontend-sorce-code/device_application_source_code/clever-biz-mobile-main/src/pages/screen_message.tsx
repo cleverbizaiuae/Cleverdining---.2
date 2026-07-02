@@ -28,6 +28,61 @@ function MessagingUI() {
   const brand = useBrandConfig(restaurant_id);
   const hasWifiDetails = Boolean(brand.wifiName || brand.wifiPassword);
   const tableIdentity = useMemo(() => getTableIdentity(), []);
+  const openExternalLink = (url: string | null, label: string) => {
+    if (!url) {
+      toast.error(`${label} link is not configured`);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const startVoiceInput = () => {
+    const SpeechRecognition =
+      (window as typeof window & {
+        SpeechRecognition?: new () => {
+          lang: string;
+          interimResults: boolean;
+          maxAlternatives: number;
+          onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+          onerror: (() => void) | null;
+          start: () => void;
+        };
+        webkitSpeechRecognition?: new () => {
+          lang: string;
+          interimResults: boolean;
+          maxAlternatives: number;
+          onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+          onerror: (() => void) | null;
+          start: () => void;
+        };
+      }).SpeechRecognition ||
+      (window as typeof window & {
+        webkitSpeechRecognition?: new () => {
+          lang: string;
+          interimResults: boolean;
+          maxAlternatives: number;
+          onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+          onerror: (() => void) | null;
+          start: () => void;
+        };
+      }).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast.error("Voice input is not supported by this browser");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) setInputValue(transcript);
+    };
+    recognition.onerror = () => toast.error("Could not capture voice input");
+    recognition.start();
+  };
 
   // Removed local WebSocket event listener because Context handles it now.
 
@@ -275,11 +330,19 @@ function MessagingUI() {
 
                           {/* Social & Rating Buttons */}
                           <div className="flex gap-2 w-full">
-                            <button className="flex-1 bg-card rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-border shadow-sm hover:border-pink-500 hover:text-pink-400 transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => openExternalLink(brand.instagramUrl, "Instagram")}
+                              className="flex-1 bg-card rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-border shadow-sm hover:border-pink-500 hover:text-pink-400 transition-colors"
+                            >
                               <Instagram size={14} />
                               <span className="text-xs font-bold text-secondary-foreground group-hover:text-pink-400">Instagram</span>
                             </button>
-                            <button className="flex-1 bg-card rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-border shadow-sm hover:border-yellow-500 hover:text-yellow-400 transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => openExternalLink(brand.googleReviewUrl, "Google review")}
+                              className="flex-1 bg-card rounded-xl px-3 py-2 flex items-center justify-center gap-2 border border-border shadow-sm hover:border-yellow-500 hover:text-yellow-400 transition-colors"
+                            >
                               <Star size={14} />
                               <span className="text-xs font-bold text-secondary-foreground group-hover:text-yellow-400">Rate Us</span>
                             </button>
@@ -331,6 +394,8 @@ function MessagingUI() {
 
               <button
                 type="button"
+                onClick={startVoiceInput}
+                aria-label="Start voice input"
                 className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10"
               >
                 <Mic size={16} strokeWidth={1.8} />

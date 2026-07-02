@@ -18,7 +18,7 @@ import toast from "react-hot-toast";
 // --- COMPONENTS ---
 
 const MetricCard = ({ title, value, subtext }: any) => (
-  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between">
+  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-start justify-between">
     <div>
       <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
       <h3 className="text-2xl font-semibold text-slate-900">{value}</h3>
@@ -50,9 +50,9 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-md" }: any)
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 py-8 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      <div className={`bg-white rounded-xl w-full ${maxWidth} p-6 shadow-2xl scale-100 animate-scaleIn my-auto max-h-[90vh] overflow-y-auto`}>
+      <div className={`bg-white rounded-2xl w-full ${maxWidth} p-7 shadow-2xl scale-100 animate-scaleIn my-auto max-h-[90vh] overflow-y-auto`}>
         <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-xl font-bold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
@@ -275,7 +275,7 @@ export const ScreenRestaurantDevices = () => {
   return (
     <div className="min-h-screen font-inter">
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 w-full md:w-2/3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 w-full md:w-2/3 xl:w-1/2">
         <MetricCard
           title="Total Tables"
           value={deviceStats?.total_devices || 0}
@@ -287,7 +287,7 @@ export const ScreenRestaurantDevices = () => {
       </div>
 
       {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h2 className="text-base font-semibold text-slate-900">Registered Table List</h2>
 
@@ -303,7 +303,7 @@ export const ScreenRestaurantDevices = () => {
                 setIsAddModalOpen(true);
               }}
               disabled={tableLimitReached}
-              className="bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+              className="h-9 bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Plus size={16} />
               Add Table
@@ -319,7 +319,7 @@ export const ScreenRestaurantDevices = () => {
               <input
                 type="text"
                 placeholder="Search by table name"
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
+                className="w-full h-9 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
                 value={devicesSearchQuery}
                 onChange={handleSearch}
               />
@@ -486,11 +486,11 @@ export const ScreenRestaurantDevices = () => {
       >
         <div className="space-y-4">
 	          <div>
-	            <label className="block text-xs font-medium text-slate-700 mb-1">Table Name</label>
+	            <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
 	            <input
 	              type="text"
 	              placeholder="e.g. Table 1"
-	              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+	              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
 	              value={formData.name}
 	              onChange={e => {
 	                setFormData({ ...formData, name: e.target.value });
@@ -514,11 +514,11 @@ export const ScreenRestaurantDevices = () => {
 	            )}
 	          </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Area</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Area (Optional)</label>
 	            <input
 	              type="text"
-	              placeholder="e.g. Main Hall"
-	              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+	              placeholder="e.g. Patio"
+	              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
 	              value={formData.area}
 	              onChange={e => setFormData({ ...formData, area: e.target.value })}
 	              onKeyDown={e => {
@@ -555,7 +555,7 @@ export const ScreenRestaurantDevices = () => {
           <button
             onClick={isEditModalOpen ? handleEditSubmit : handleCreateSubmit}
             disabled={loading || (!isEditModalOpen && tableLimitReached)}
-            className="w-full h-10 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
+            className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
           >
             {loading ? "Saving..." : (isEditModalOpen ? "Save Changes" : "Create Table")}
           </button>
