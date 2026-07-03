@@ -39,6 +39,7 @@ def _brand_default_payload():
         "themePreset": "classic_clean",
         "fontPreset": "modern",
         "tagline": None,
+        "payBeforeOrder": False,
         "instagramUrl": None,
         "facebookUrl": None,
         "tiktokUrl": None,

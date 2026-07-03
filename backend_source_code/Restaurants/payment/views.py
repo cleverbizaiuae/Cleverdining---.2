@@ -486,12 +486,14 @@ class CreateCheckoutSessionView(APIView):
             }
 
         try:
+            created_by = 'pre_order' if order.status == 'awaiting_payment' else None
             result = PaymentService.create_payment(
                 order,
                 success_url,
                 cancel_url,
                 provider=provider,
                 split_data=split_data,
+                created_by=created_by,
             )
             return Response(result)
         except ValidationError as e:

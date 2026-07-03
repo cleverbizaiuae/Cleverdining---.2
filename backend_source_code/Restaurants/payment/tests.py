@@ -2,6 +2,7 @@ import json
 import time
 import hmac
 import hashlib
+from unittest.mock import patch
 
 import stripe
 from django.test import TestCase
@@ -12,8 +13,48 @@ from accounts.models import User
 from payment.models import PaymentGateway, PaymentProviderEvent
 from payment.models import StripeDetails
 from payment.provider_registry import PAYMENT_PROVIDER_CODES, PROVIDER_CLASSES
-from payment.services import PaymentService
+from payment.services import PaymentService, _mark_order_payment_progress
 from restaurant.models import Restaurant
+from device.models import Device
+from order.models import Order
+
+
+class PreOrderPaymentSettlementTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="preorder-settlement@example.com",
+            username="Preorder Settlement",
+            password="password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Preorder Settlement",
+            location="Dubai",
+            phone_number="+971500004321",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table P",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+
+    def test_fully_paid_preorder_enters_pending_kitchen_state(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="awaiting_payment",
+            payment_status="unpaid",
+            total_price="50.00",
+        )
+
+        _mark_order_payment_progress(order, "50.00")
+
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, "paid")
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(str(order.amount_paid), "50.00")
 
 
 class PaymentProviderWebhookTests(TestCase):

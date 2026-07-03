@@ -106,6 +106,7 @@ class BrandConfig(models.Model):
     font_preset = models.TextField(default='modern')
     tagline = models.TextField(null=True, blank=True)
     branding_enabled = models.BooleanField(default=False)
+    pay_before_order = models.BooleanField(default=False)
     instagram_url = models.TextField(null=True, blank=True)
     facebook_url = models.TextField(null=True, blank=True)
     tiktok_url = models.TextField(null=True, blank=True)

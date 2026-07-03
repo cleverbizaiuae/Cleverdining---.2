@@ -16,6 +16,7 @@ export interface BrandConfig {
   fontPreset: FontPreset;
   tagline: string | null;
   brandingEnabled: boolean;
+  payBeforeOrder: boolean;
   instagramUrl: string | null;
   facebookUrl: string | null;
   tiktokUrl: string | null;
@@ -38,6 +39,7 @@ export const DEFAULT_BRAND: BrandConfig = {
   fontPreset: "modern",
   tagline: null,
   brandingEnabled: false,
+  payBeforeOrder: false,
   instagramUrl: null,
   facebookUrl: null,
   tiktokUrl: null,

@@ -72,7 +72,9 @@ def _mark_order_payment_progress(order, paid_amount):
     order.amount_paid = paid
     if remaining <= PAYMENT_EPSILON:
         order.payment_status = 'paid'
-        if order.status not in {'cancelled', 'completed'}:
+        if order.status == 'awaiting_payment':
+            order.status = 'pending'
+        elif order.status not in {'cancelled', 'completed'}:
             order.status = 'delivered'
     elif paid > PAYMENT_EPSILON:
         order.payment_status = 'partially_paid'
@@ -122,7 +124,9 @@ def settle_bulk_split_payment(payment):
         if fully_paid or order.payment_status == 'paid':
             order.amount_paid = order_total
             order.payment_status = 'paid'
-            if order.status not in {'cancelled', 'completed'}:
+            if order.status == 'awaiting_payment':
+                order.status = 'pending'
+            elif order.status not in {'cancelled', 'completed'}:
                 order.status = 'delivered'
         else:
             order.amount_paid = min(order_total, _q_money(order_total * paid_ratio))
@@ -540,7 +544,7 @@ class PaymentService:
                     bulk_orders = Order.objects.filter(
                         Q(guest_session=main_order.guest_session) | Q(device=main_order.device),
                         restaurant=main_order.restaurant,
-                        status__in=['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
+                        status__in=['awaiting_payment', 'pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash'],
                     ).exclude(id=main_order.id).exclude(payment_status='paid').order_by('created_time', 'id')
                     orders_to_update.extend(list(bulk_orders))
 
@@ -558,7 +562,10 @@ class PaymentService:
 
         for order in affected_orders:
             try:
-                PaymentService._emit_order_update(order)
+                PaymentService._emit_order_update(
+                    order,
+                    event_type='order_created' if payment.created_by == 'pre_order' else 'order_paid',
+                )
             except Exception as e:
                 print(f"Failed to send order payment notification: {e}")
 
@@ -568,7 +575,11 @@ class PaymentService:
         except Exception as e:
             print(f"Failed to send payment update notification: {e}")
 
-        if payload.get('fully_paid') and payment.order.guest_session:
+        if (
+            payload.get('fully_paid')
+            and payment.order.guest_session
+            and payment.created_by != 'pre_order'
+        ):
             from order.models import Cart
             Cart.objects.filter(guest_session=payment.order.guest_session).delete()
             PaymentService._close_session_and_clear_chat_if_settled(payment.order)

@@ -50,7 +50,7 @@ def _sync_order_from_bill(order: Order, bill: OrderBill) -> None:
     order.amount_paid = min(_q(bill.total_amount), _q(bill.paid_amount))
     order.payment_status = _order_payment_status_from_bill(bill)
     if bill.payment_status == "fully_paid" and order.status not in {"cancelled", "completed"}:
-        order.status = "delivered"
+        order.status = "pending" if order.status == "awaiting_payment" else "delivered"
         order.save(update_fields=["amount_paid", "payment_status", "status", "updated_time"])
         return
     order.save(update_fields=["amount_paid", "payment_status", "updated_time"])

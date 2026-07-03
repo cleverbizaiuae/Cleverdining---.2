@@ -30,6 +30,7 @@ import {
 } from "../lib/upsellSession";
 import { getTableIdentity, setLocalStorageSynced } from "../lib/tableIdentity";
 import { OptimizedImage } from "../components/OptimizedImage";
+import { useActiveBrandConfig } from "../lib/useBrandConfig";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -90,6 +91,8 @@ const ScreenCart = () => {
   const cartShownSignatureRef = useRef("");
   const beforePaymentShownSignatureRef = useRef("");
   const tableInfo = useMemo(() => getTableIdentity(), []);
+  const brandConfig = useActiveBrandConfig();
+  const payBeforeOrder = brandConfig.payBeforeOrder;
   const toSafeNumber = (value: unknown): number => {
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
     if (typeof value === "string") {
@@ -529,6 +532,7 @@ const ScreenCart = () => {
         device,
         order_items: orderItems,
         guest_session_token: guestSessionToken,
+        payment_method: paymentMethod,
       };
 
       if (mergedNotes) {
@@ -588,7 +592,11 @@ const ScreenCart = () => {
         price: toSafeNumber(item.price),
       }));
 
-      toast.success("Order placed successfully!");
+      toast.success(
+        payBeforeOrder && paymentMethod === "card"
+          ? "Order saved. Redirecting to secure payment..."
+          : "Order placed successfully!"
+      );
 
       try {
         const { getPlayerSession } = await import("../lib/playerSession");
@@ -653,7 +661,48 @@ const ScreenCart = () => {
 
         // Robust Persistence
         setLocalStorageSynced("pending_order_id", String(response.data.id));
-        // Navigate to Orders Page (User requests this flow)
+
+        if (payBeforeOrder && paymentMethod === "card") {
+          try {
+            const checkoutResponse = await axiosInstance.post(
+              `/api/customer/create-checkout-session/${response.data.id}/?guest_token=${guestSessionToken}`,
+              { provider: "card" },
+              {
+                headers: {
+                  "X-Guest-Session-Token": guestSessionToken,
+                },
+              }
+            );
+            const checkoutUrl = checkoutResponse?.data?.url;
+            const stripeSessionId =
+              checkoutResponse?.data?.sessionId || checkoutResponse?.data?.session_id;
+
+            if (checkoutUrl) {
+              window.location.assign(checkoutUrl);
+              return;
+            }
+
+            if (stripeSessionId && import.meta.env.VITE_STRIPE_PK) {
+              const { loadStripe } = await import("@stripe/stripe-js");
+              const stripe = await loadStripe(import.meta.env.VITE_STRIPE_PK);
+              const result = await stripe?.redirectToCheckout({ sessionId: stripeSessionId });
+              if (result?.error) throw result.error;
+              return;
+            }
+
+            throw new Error("The payment provider did not return a checkout link.");
+          } catch (checkoutError: any) {
+            console.error("Order created but checkout could not start:", checkoutError);
+            toast.error(
+              checkoutError?.response?.data?.error ||
+                checkoutError?.message ||
+                "Payment could not start. Retry from My Orders."
+            );
+            navigate("/dashboard/orders");
+            return;
+          }
+        }
+
         navigate(`/dashboard/orders`);
       } else {
         // Fallback if ID is missing (should not happen with backend fix)
@@ -1046,34 +1095,36 @@ const ScreenCart = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment</p>
-                <div className="flex gap-2">
-                  {(["card", "cash"] as const).map((method) => (
-                    <button
-                      key={method}
-                      onClick={() => setPaymentMethod(method)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-bold transition-all ${
-                        paymentMethod === method
-                          ? "bg-primary text-white border-primary shadow-sm"
-                          : "bg-secondary text-secondary-foreground border-border hover:border-primary/40"
-                      }`}
-                    >
-                      {method === "card" ? (
-                        <>
-                          <CreditCard className="w-4 h-4" strokeWidth={1.8} />
-                          Card
-                        </>
-                      ) : (
-                        <>
-                          <Banknote className="w-4 h-4" strokeWidth={1.8} />
-                          Cash
-                        </>
-                      )}
-                    </button>
-                  ))}
+              {payBeforeOrder && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Method</p>
+                  <div className="flex gap-2">
+                    {(["card", "cash"] as const).map((method) => (
+                      <button
+                        key={method}
+                        onClick={() => setPaymentMethod(method)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                          paymentMethod === method
+                            ? "bg-primary text-white border-primary shadow-sm"
+                            : "bg-secondary text-secondary-foreground border-border hover:border-primary/40"
+                        }`}
+                      >
+                        {method === "card" ? (
+                          <>
+                            <CreditCard className="w-4 h-4" strokeWidth={1.8} />
+                            Card
+                          </>
+                        ) : (
+                          <>
+                            <Banknote className="w-4 h-4" strokeWidth={1.8} />
+                            Cash
+                          </>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-muted-foreground font-bold text-[10px] uppercase tracking-widest">
@@ -1141,8 +1192,10 @@ const ScreenCart = () => {
                 className="w-full h-14 rounded-xl text-base font-bold shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white disabled:opacity-70 transition-colors"
               >
                 {isSubmittingOrder
-                  ? "Placing Order..."
-                  : paymentMethod === "card"
+                  ? payBeforeOrder && paymentMethod === "card"
+                    ? "Starting Secure Payment..."
+                    : "Placing Order..."
+                  : payBeforeOrder && paymentMethod === "card"
                   ? `Pay ${currencyCode} ${totalCost.toFixed(2)} · Card`
                   : `Place Order · ${currencyCode} ${totalCost.toFixed(2)}`}
               </button>

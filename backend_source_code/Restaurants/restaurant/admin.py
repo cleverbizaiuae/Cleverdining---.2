@@ -22,6 +22,7 @@ class BrandConfigAdmin(admin.ModelAdmin):
     list_display = (
         'restaurant',
         'branding_enabled',
+        'pay_before_order',
         'primary_color',
         'theme_preset',
         'updated_at',

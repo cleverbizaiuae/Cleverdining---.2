@@ -142,6 +142,7 @@ def ensure_brand_config_schema(force: bool = False) -> bool:
             "font_preset",
             "tagline",
             "branding_enabled",
+            "pay_before_order",
             "instagram_url",
             "facebook_url",
             "tiktok_url",

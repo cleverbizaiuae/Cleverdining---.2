@@ -443,10 +443,10 @@ const LayoutDashboard = () => {
   return (
     <CartProvider>
       <div
-        className="flex min-h-screen justify-center overflow-hidden bg-[linear-gradient(180deg,#0F172A_0%,#111827_52%,#1E293B_100%)] text-foreground"
+        className="flex min-h-screen justify-center overflow-hidden bg-slate-100 text-foreground"
         style={{ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties}
       >
-        <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-[0_0_60px_rgba(0,0,0,0.45)]">
+        <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-2xl">
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">

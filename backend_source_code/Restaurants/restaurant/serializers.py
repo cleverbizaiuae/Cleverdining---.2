@@ -26,6 +26,7 @@ class BrandConfigSerializer(serializers.ModelSerializer):
     themePreset = serializers.CharField(source='theme_preset', required=False)
     fontPreset = serializers.CharField(source='font_preset', required=False)
     brandingEnabled = serializers.BooleanField(source='branding_enabled', required=False)
+    payBeforeOrder = serializers.BooleanField(source='pay_before_order', required=False)
     instagramUrl = serializers.CharField(source='instagram_url', allow_null=True, allow_blank=True, required=False)
     facebookUrl = serializers.CharField(source='facebook_url', allow_null=True, allow_blank=True, required=False)
     tiktokUrl = serializers.CharField(source='tiktok_url', allow_null=True, allow_blank=True, required=False)
@@ -50,6 +51,7 @@ class BrandConfigSerializer(serializers.ModelSerializer):
             'fontPreset',
             'tagline',
             'brandingEnabled',
+            'payBeforeOrder',
             'instagramUrl',
             'facebookUrl',
             'tiktokUrl',

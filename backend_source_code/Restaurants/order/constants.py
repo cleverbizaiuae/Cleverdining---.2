@@ -1,5 +1,6 @@
 STATUS =(
     ('pending', 'Pending'),
+    ('awaiting_payment', 'Awaiting Payment'),
     ('preparing', 'Preparing'),
     ('served', 'Served'),
     ('delivered', 'Delivered'), # Added Delivered

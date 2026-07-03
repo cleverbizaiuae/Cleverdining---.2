@@ -14,7 +14,7 @@ from accounts.models import ChefStaff
 from django.utils.timezone import now
 from django.db.models import Sum, Count, Q
 from calendar import month_name
-from restaurant.models import Restaurant
+from restaurant.models import BrandConfig, Restaurant
 from accounts.models import ChefStaff
 from asgiref.sync import async_to_sync
 # date 
@@ -154,22 +154,37 @@ class OrderCreateAPIView(generics.CreateAPIView):
 
         # Save via serializer
         order = serializer.save(device=device, restaurant=restaurant, guest_session=session, business_day=business_day)
+
+        payment_method = str(self.request.data.get('payment_method') or 'card').strip().lower()
+        try:
+            pay_before_order = bool(restaurant.brand_config.pay_before_order)
+        except BrandConfig.DoesNotExist:
+            pay_before_order = False
+
+        # Card orders requiring prepayment stay outside the kitchen queue until
+        # the configured gateway confirms payment.
+        requires_gateway_payment = pay_before_order and payment_method != 'cash'
+        if requires_gateway_payment:
+            order.status = 'awaiting_payment'
+            order.save(update_fields=['status', 'updated_time'])
         
         # Serialize Response
         headers = self.get_success_headers(serializer.data)
         data = OrderDetailSerializer(order).data
         
-        # Notify Restaurant
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{order.restaurant.id}",
-                {
-                    "type": "order_created",
-                    "order": data
-                }
-            )
-        except Exception as e:
-            print(f"Error sending restaurant notification: {e}")
+        # Do not send unpaid pre-orders to the kitchen. Payment verification
+        # emits the order update after moving the order to pending.
+        if not requires_gateway_payment:
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{order.restaurant.id}",
+                    {
+                        "type": "order_created",
+                        "order": data
+                    }
+                )
+            except Exception as e:
+                print(f"Error sending restaurant notification: {e}")
         
         if order.guest_session:
             try:
@@ -194,7 +209,6 @@ class OrderCreateAPIView(generics.CreateAPIView):
                 print(f"Error clearing cart: {e}")
         
         # Handle Cash Payment Logic
-        payment_method = self.request.data.get('payment_method')
         if payment_method == 'cash':
             order.status = 'awaiting_cash'
             order.payment_status = 'pending_cash'
@@ -518,7 +532,7 @@ class MyOrdersAPIView(generics.ListAPIView):
         if user.is_authenticated:
             return base_qs.filter(
                 device__user=user,
-                status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
+                status__in=['awaiting_payment', 'pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
             ).exclude(
                 payment_status__in=['paid', 'completed']
             ).order_by('-created_time')
@@ -531,7 +545,7 @@ class MyOrdersAPIView(generics.ListAPIView):
                 if session:
                     return base_qs.filter(
                         guest_session=session,
-                        status__in=['pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
+                        status__in=['awaiting_payment', 'pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
                     ).exclude(
                         payment_status='paid'
                     ).order_by('-created_time')
@@ -615,10 +629,10 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
                 is_active=True
             )
             if active_days.exists():
-                return queryset.filter(business_day__in=active_days).order_by('-created_time')
+                return queryset.filter(business_day__in=active_days).exclude(status='awaiting_payment').order_by('-created_time')
             else:
                 # No active business day — show all orders (don't hide everything)
-                return queryset.order_by('-created_time')
+                return queryset.exclude(status='awaiting_payment').order_by('-created_time')
         except Exception as e:
             print(f"OwnerRestaurantOrdersAPIView.get_queryset error: {e}")
             import traceback
