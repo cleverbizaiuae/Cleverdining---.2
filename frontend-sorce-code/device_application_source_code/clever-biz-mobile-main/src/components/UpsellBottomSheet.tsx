@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Sparkles, X } from "lucide-react";
+import { Gem, Plus, X } from "lucide-react";
 import type { UpsellSuggestion } from "../lib/upsellApi";
 import { OptimizedImage } from "./OptimizedImage";
 
 type Props = {
   open: boolean;
   suggestions: UpsellSuggestion[];
+  triggerItem?: {
+    item_name?: string;
+    name?: string;
+    category_name?: string;
+    category?: number | string;
+  } | null;
   currencyCode: string;
   onAccept: (suggestion: UpsellSuggestion) => void | Promise<void>;
   onDeclineSingle: (suggestion: UpsellSuggestion) => void;
@@ -24,9 +30,78 @@ const toSafePrice = (value: unknown): number => {
   return 0;
 };
 
+const normalizeText = (value: unknown) => String(value || "").toLowerCase();
+
+const itemLooksLike = (item: Partial<UpsellSuggestion> | undefined, keywords: string[]) => {
+  if (!item) return false;
+  const haystack = `${normalizeText(item.category_name)} ${normalizeText(item.item_name)} ${normalizeText(item.description)}`;
+  return keywords.some((keyword) => haystack.includes(keyword));
+};
+
+const getContextualUpsellCopy = (
+  suggestion: UpsellSuggestion | undefined,
+  triggerItem: Props["triggerItem"],
+) => {
+  if (!suggestion) {
+    return {
+      label: "Recommended",
+      reason: "A smart add-on for this order.",
+    };
+  }
+
+  const triggerName = String(triggerItem?.item_name || triggerItem?.name || "your order").trim();
+  const suggestionName = String(suggestion.item_name || "this").trim();
+  const suggestedIsDessert = itemLooksLike(suggestion, ["dessert", "sweet", "cake", "ice", "crepe", "chocolate"]);
+  const suggestedIsDrink = itemLooksLike(suggestion, ["drink", "juice", "mojito", "cola", "water", "coffee", "tea", "shake"]);
+  const suggestedIsStarter = itemLooksLike(suggestion, ["starter", "side", "fries", "salad", "appetizer"]);
+  const triggerIsMain = normalizeText(triggerItem?.category_name).includes("main")
+    || itemLooksLike(
+      {
+        item_name: triggerName,
+        category_name: String(triggerItem?.category_name || ""),
+      },
+      ["burger", "pizza", "pasta", "steak", "main", "chicken", "beef", "rice"]
+    );
+
+  const explicitLabel = (suggestion as UpsellSuggestion & { label?: string }).label;
+  if (explicitLabel) {
+    return {
+      label: String(explicitLabel),
+      reason: suggestion.upsell_message || "Customers often add this to complete the order.",
+    };
+  }
+
+  if (suggestedIsDessert && triggerIsMain) {
+    return {
+      label: "Save room for this",
+      reason: "Most complete meals end with dessert. Don't miss out.",
+    };
+  }
+
+  if (suggestedIsDrink && triggerIsMain) {
+    return {
+      label: "Perfect with your order",
+      reason: `${suggestionName} is a natural match with ${triggerName}.`,
+    };
+  }
+
+  if (suggestedIsStarter) {
+    return {
+      label: "Also worth adding",
+      reason: "A small add-on to make the meal feel complete.",
+    };
+  }
+
+  return {
+    label: suggestion.upsell_rule || "Recommended",
+    reason: suggestion.upsell_message || "Customers often add this to complete the order.",
+  };
+};
+
 export default function UpsellBottomSheet({
   open,
   suggestions,
+  triggerItem,
   currencyCode,
   onAccept,
   onDeclineSingle,
@@ -53,7 +128,8 @@ export default function UpsellBottomSheet({
 
   const isMulti = shownItems.length > 1;
   const primaryItem = shownItems[0];
-  const label = primaryItem?.upsell_rule || "Pairs well with your order";
+  const contextualCopy = getContextualUpsellCopy(primaryItem, triggerItem);
+  const label = contextualCopy.label;
 
   const handleDeclineSingle = (item: UpsellSuggestion) => {
     setLocalDismissed((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
@@ -86,7 +162,7 @@ export default function UpsellBottomSheet({
       {open && shownItems.length > 0 ? (
         <>
           <motion.div
-            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[60] bg-black/35 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -94,25 +170,25 @@ export default function UpsellBottomSheet({
           />
 
           <motion.div
-            className="fixed bottom-0 left-1/2 z-[70] w-full max-w-[430px] -translate-x-1/2 rounded-t-3xl border-t border-border bg-card px-5 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 text-foreground shadow-2xl shadow-black/50"
+            className="fixed bottom-0 left-1/2 z-[70] w-full max-w-[430px] -translate-x-1/2 rounded-t-[28px] border-t border-slate-100 bg-white px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 text-slate-900 shadow-[0_-22px_55px_rgba(15,23,42,0.18)]"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
           >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200" />
 
             <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
+              <p className="inline-flex min-w-0 items-center gap-2 text-[12px] font-bold uppercase tracking-[0.08em] text-[#4b2a12]">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#4b2a12]/10 text-[#4b2a12]">
+                  <Gem className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </span>
                 {label}
               </p>
 
               <button
                 onClick={handleDismissAll}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-300 hover:bg-slate-100 hover:text-slate-500"
                 type="button"
               >
                 <X className="h-4 w-4" />
@@ -123,8 +199,8 @@ export default function UpsellBottomSheet({
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {shownItems.map((item) => (
-                    <div key={item.id} className="relative flex flex-col gap-2 rounded-2xl bg-secondary p-3">
-                      <div className="relative overflow-hidden rounded-xl bg-background">
+                    <div key={item.id} className="relative flex flex-col gap-2 rounded-2xl bg-slate-50 p-3">
+                      <div className="relative overflow-hidden rounded-xl bg-white">
                         <button
                           type="button"
                           onClick={() => handleDismissSingle(item)}
@@ -141,8 +217,8 @@ export default function UpsellBottomSheet({
                         />
                       </div>
 
-                      <p className="line-clamp-2 pr-4 text-sm font-bold leading-tight text-foreground">{item.item_name}</p>
-                      <p className="mt-1 text-sm font-bold text-primary">
+                      <p className="line-clamp-2 pr-4 text-sm font-bold leading-tight text-slate-900">{item.item_name}</p>
+                      <p className="mt-1 text-sm font-bold text-[#552500]">
                         {currencyCode} {toSafePrice(item.price).toFixed(2)}
                       </p>
 
@@ -150,7 +226,7 @@ export default function UpsellBottomSheet({
                         type="button"
                         onClick={() => void handleAccept(item)}
                         disabled={addingItemId !== null}
-                        className="mt-auto h-10 w-full rounded-xl bg-primary text-sm font-bold text-white hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                        className="mt-auto h-10 w-full rounded-xl bg-[#552500] text-sm font-bold text-white hover:bg-[#442000] disabled:cursor-wait disabled:opacity-60"
                       >
                         {addingItemId === item.id ? "Adding..." : "Add"}
                       </button>
@@ -161,7 +237,7 @@ export default function UpsellBottomSheet({
                 <button
                   type="button"
                   onClick={handleDismissAll}
-                  className="mt-4 w-full py-1 text-center text-sm font-medium text-muted-foreground hover:text-foreground"
+                  className="mt-4 w-full py-1 text-center text-sm font-medium text-slate-400 hover:text-slate-600"
                 >
                   No thanks
                 </button>
@@ -169,7 +245,7 @@ export default function UpsellBottomSheet({
             ) : primaryItem ? (
               <>
                 <div className="flex items-center gap-4">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-secondary">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-slate-100">
                     <OptimizedImage
                       src={primaryItem.image1}
                       alt={primaryItem.item_name}
@@ -179,12 +255,10 @@ export default function UpsellBottomSheet({
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-bold text-foreground">{primaryItem.item_name}</p>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                      {primaryItem.upsell_message || "A smart add-on for this order."}
-                    </p>
-                    <p className="line-clamp-1 text-xs text-muted-foreground">{primaryItem.description || "Popular with this meal."}</p>
-                    <p className="mt-1.5 text-sm font-bold text-primary">
+                    <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-400">{contextualCopy.reason}</p>
+                    <p className="truncate text-base font-bold text-slate-900">{primaryItem.item_name}</p>
+                    <p className="line-clamp-1 text-xs text-slate-500">{primaryItem.description || "Popular with this meal."}</p>
+                    <p className="mt-1.5 text-sm font-bold text-[#552500]">
                       {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
                     </p>
                   </div>
@@ -194,7 +268,7 @@ export default function UpsellBottomSheet({
                   <button
                     type="button"
                     onClick={() => handleDeclineSingle(primaryItem)}
-                    className="h-12 flex-1 rounded-xl border border-border px-4 text-sm font-medium text-muted-foreground hover:bg-secondary"
+                    className="h-12 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-500 shadow-sm hover:bg-slate-50"
                   >
                     No thanks
                   </button>
@@ -202,7 +276,7 @@ export default function UpsellBottomSheet({
                     type="button"
                     onClick={() => void handleAccept(primaryItem)}
                     disabled={addingItemId !== null}
-                    className="inline-flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                    className="inline-flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#552500] px-4 text-sm font-bold text-white shadow-lg shadow-[#552500]/20 hover:bg-[#442000] disabled:cursor-wait disabled:opacity-60"
                   >
                     {addingItemId === primaryItem.id
                       ? "Adding..."

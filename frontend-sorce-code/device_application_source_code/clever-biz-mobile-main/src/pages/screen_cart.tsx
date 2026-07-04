@@ -934,7 +934,7 @@ const ScreenCart = () => {
         {validCartItems.length > 0 && upsellUiEnabled && (upsellLoading || activeCartUpsells.length > 0) && (
           <div className="mt-2">
             <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              You might also like
+              Also worth adding
             </p>
             <div className="mt-1.5 bg-card border border-border rounded-2xl p-3 shadow-[0_16px_36px_rgba(0,0,0,0.18)]">
               {upsellLoading && activeCartUpsells.length === 0 ? (
