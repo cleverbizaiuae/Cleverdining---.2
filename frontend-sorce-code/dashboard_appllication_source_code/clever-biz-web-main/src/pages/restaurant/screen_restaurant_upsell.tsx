@@ -264,7 +264,8 @@ const TRIGGER_OPTIONS: Array<{
 const SMART_SUGGESTION_ROWS = [
   ["Has a main dish only", "Suggests a drink next"],
   ["Has a main + drink", "Suggests a dessert or starter next"],
-  ["Has a full meal", "Suggests a premium add-on"],
+  ["Has a main + dessert", "Suggests a drink next"],
+  ["Has a main + drink + dessert", "Suggests a starter or premium add-on"],
   ["Has a drink only", "Suggests a main dish first"],
   ["Has a dessert only", "Suggests a hot drink or juice"],
   ["Has a starter only", "Suggests a main dish"],
@@ -1035,8 +1036,17 @@ const ScreenRestaurantUpsell = () => {
                 <tbody>
                   {(performanceItems.length ? performanceItems : []).map((row) => {
                     const acceptRate = Number(row.acceptance_rate || 0);
+                    const shown = Number(row.shown || 0);
+                    const accepted = Number(row.accepted || 0);
                     const imageUrl = row.image_url || (row.item_id ? itemLookup.get(row.item_id)?.image_url : "") || "";
-                    const isWin = acceptRate > 0;
+                    const isWin = acceptRate > 15;
+                    const isLose = shown > 10 && accepted === 0;
+                    const badgeLabel = isWin ? "Win" : isLose ? "Lose" : "New";
+                    const badgeClass = isWin
+                      ? "bg-blue-50 text-[#0055FE]"
+                      : isLose
+                        ? "bg-red-50 text-red-500"
+                        : "bg-slate-100 text-slate-500";
                     return (
                       <tr key={`${row.item_id}-${row.item_name}`} className="border-b border-slate-50 last:border-none">
                         <td className="px-4 py-3">
@@ -1048,7 +1058,7 @@ const ScreenRestaurantUpsell = () => {
                                 <UtensilsCrossed className="h-4 w-4 text-slate-300" strokeWidth={1.8} />
                               )}
                             </div>
-                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-[#0055FE]">{isWin ? "Win" : "New"}</span>
+                            <span className={classNames("rounded-full px-2 py-0.5 text-[10px] font-bold", badgeClass)}>{badgeLabel}</span>
                             <span className="truncate font-semibold text-slate-700">{row.item_name || "Unknown"}</span>
                           </div>
                         </td>

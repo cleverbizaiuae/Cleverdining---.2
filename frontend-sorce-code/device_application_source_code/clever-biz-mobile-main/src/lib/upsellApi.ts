@@ -101,6 +101,23 @@ const normalizeUpsellSuggestion = (raw: unknown): UpsellSuggestion | null => {
   };
 };
 
+const extractSuggestionArray = (data: unknown): unknown[] => {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return [];
+  const record = data as Record<string, unknown>;
+  if (Array.isArray(record.suggestions)) return record.suggestions;
+  if (Array.isArray(record.results)) return record.results;
+  if (Array.isArray(record.data)) return record.data;
+  return [];
+};
+
+const toCsv = (values?: number[]): string | undefined => {
+  const normalized = (values || [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  return normalized.length ? Array.from(new Set(normalized)).join(",") : undefined;
+};
+
 const getDisabledUpsellItems = (): Set<number> => {
   try {
     const raw = localStorage.getItem("upsell_disabled_items");
@@ -135,18 +152,56 @@ export async function fetchUpsellSuggestions(params: {
   stage?: string;
 }) {
   const signalParams = getUpsellSignalsQueryParams();
-  const response = await cachedGet("/api/customer/cart/upsell_suggestions/", {
-    params: {
-      trigger_point: params.triggerPoint,
-      limit: params.limit ?? 2,
-      source_item_id: params.sourceItemId,
-      ...signalParams,
-    },
-  }, { ttlMs: 2_000 }).catch(() => ({ data: { suggestions: [] } }));
-  const primarySuggestions = Array.isArray(response.data?.suggestions) ? response.data.suggestions : [];
+  const sessionToken = localStorage.getItem("guest_session_token");
+  const cartItemIds = toCsv(params.cartItemIds);
+  const excludeItemIds = toCsv(params.excludeItemIds);
+  const commonParams = {
+    trigger_point: params.triggerPoint,
+    triggerPoint: params.triggerPoint,
+    limit: params.limit ?? 2,
+    source_item_id: params.sourceItemId,
+    sourceItemId: params.sourceItemId,
+    cart_item_ids: cartItemIds,
+    cartItemIds,
+    exclude_item_ids: excludeItemIds,
+    excludeItemIds,
+    guest_session_token: sessionToken || undefined,
+    ...signalParams,
+  };
+
+  let rawSuggestions: unknown[] = [];
+  try {
+    const response = await cachedGet(
+      "/api/customer/cart/upsell_suggestions/",
+      {
+        params: commonParams,
+        headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
+      },
+      { ttlMs: 2_000 }
+    );
+    rawSuggestions = extractSuggestionArray(response.data);
+  } catch {
+    rawSuggestions = [];
+  }
+
+  if (rawSuggestions.length === 0 && cartItemIds) {
+    try {
+      const response = await cachedGet(
+        "/api/upsell/smart-suggestions",
+        {
+          params: commonParams,
+          headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
+        },
+        { ttlMs: 2_000 }
+      );
+      rawSuggestions = extractSuggestionArray(response.data);
+    } catch {
+      rawSuggestions = [];
+    }
+  }
 
   const mergedById = new Map<number, UpsellSuggestion>();
-  for (const rawItem of primarySuggestions) {
+  for (const rawItem of rawSuggestions) {
     const item = normalizeUpsellSuggestion(rawItem);
     if (item) mergedById.set(item.id, item);
   }

@@ -617,8 +617,11 @@ def _historical_signals_by_target(
     return result
 
 
-def build_cart_upsell_suggestions(
-    cart: Cart,
+def _build_upsell_suggestions_for_items(
+    restaurant,
+    cart_source_items: List[Item],
+    cart_item_ids: Set[int],
+    cart_total: Decimal,
     *,
     limit: int = 4,
     trigger_point: str = "cart",
@@ -626,10 +629,14 @@ def build_cart_upsell_suggestions(
     session_signals: Optional[Dict] = None,
 ) -> List[Dict]:
     """
-    Production scoring engine that adapts to region, session behavior, and manual rules.
+    Shared AI upsell engine.
+
+    The redesign brief requires suggestions to be driven by the current cart's
+    meal roles first, then ranked by pairing intelligence, session signals, and
+    restaurant rules. This helper accepts plain item context so mobile flows do
+    not depend on a persisted backend Cart row being in sync.
     """
     limit = max(1, min(limit, 10))
-    restaurant = cart.device.restaurant
     setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
 
     trigger_setting_field = TRIGGER_TO_SETTING_FIELD.get(trigger_point)
@@ -637,9 +644,7 @@ def build_cart_upsell_suggestions(
         return []
     if trigger_setting_field and not getattr(setting, trigger_setting_field, True):
         return []
-
-    cart_items = list(cart.items.select_related("item__category", "item__sub_category").all())
-    if not cart_items:
+    if not cart_source_items:
         return []
 
     signals = _parse_signals(session_signals)
@@ -647,8 +652,6 @@ def build_cart_upsell_suggestions(
     prioritized_categories = _parse_prioritized_category_ids(setting)
     pair_rules, block_rules, global_block_targets = _active_manual_rules(restaurant.id)
 
-    cart_item_ids = {cart_item.item_id for cart_item in cart_items}
-    cart_source_items = _flatten_cart_sources(cart_items)
     trigger_source_item = next((item for item in cart_source_items if item.id == source_item_id), None)
     if not trigger_source_item:
         trigger_source_item = cart_source_items[-1] if cart_source_items else None
@@ -674,7 +677,6 @@ def build_cart_upsell_suggestions(
         if row.get("inventory_priority"):
             inventory_priority_ids.add(item_id)
 
-    # Cart role state.
     cart_role_set: Set[str] = set()
     for cart_item in cart_source_items:
         cart_role_set.update(_item_roles(cart_item, role_categories))
@@ -685,7 +687,6 @@ def build_cart_upsell_suggestions(
 
     stage = _detect_stage(has_main, has_drink, has_starter or has_dessert)
     region = normalize_region(getattr(restaurant, "region", None))
-    cart_total = _cart_total(cart)
     _ = HIGH_CART_DESSERT_THRESHOLD_BY_REGION.get(region, Decimal("45.00"))
     _ = STARTER_CART_CEILING_BY_REGION.get(region, Decimal("150.00"))
     gaps = _knowledge_gap_priority(cart_role_set)
@@ -721,8 +722,9 @@ def build_cart_upsell_suggestions(
         if not candidate_roles:
             continue
 
-        # Hard rule from the brief: never suggest a category already represented
-        # in the cart. The knowledge map supplies target categories first.
+        # The brief's highest-priority guard: do not suggest a role already in
+        # the current cart. Pairing intelligence can rank candidates, not break
+        # meal-composition rules.
         if candidate_roles & cart_role_set:
             continue
         if candidate_roles.isdisjoint(set(gaps)):
@@ -736,7 +738,6 @@ def build_cart_upsell_suggestions(
         score = 0
         reasons: Dict[str, int] = {}
 
-        # 1) Gap fill (exact weighting)
         matching_gap_rank = min((gap_rank.get(role, 99) for role in candidate_roles), default=99)
         if matching_gap_rank == 0:
             score += 55
@@ -750,7 +751,6 @@ def build_cart_upsell_suggestions(
         else:
             score -= 25
 
-        # 2) Culinary name/profile pairing (+18|+11|+6|+3 per cart item, capped at +36 total)
         culinary_points = 0
         for cart_source in cart_source_items:
             culinary_points += _culinary_profile_points(cart_source, candidate)
@@ -761,9 +761,6 @@ def build_cart_upsell_suggestions(
             score += culinary_points
             reasons["pair"] = reasons.get("pair", 0) + culinary_points
 
-        # 3) Category/sub-category pairing
-        # With trigger item: +14 | +8 | +4
-        # Without trigger item: +10 | +5
         category_pair_points = 0
         if trigger_source_item:
             for trigger_role in _item_roles(trigger_source_item, role_categories):
@@ -789,7 +786,6 @@ def build_cart_upsell_suggestions(
             score += category_pair_points
             reasons["pair"] = reasons.get("pair", 0) + category_pair_points
 
-        # 4) Time-of-day bonus (+10 | +6 | +3)
         time_points = 0
         candidate_profiles = _item_profiles(candidate)
         if 6 <= hour < 11:
@@ -831,7 +827,6 @@ def build_cart_upsell_suggestions(
             score += time_points
             reasons["time"] = reasons.get("time", 0) + time_points
 
-        # 5) Price sweet spot (+8 | +3 | -12)
         candidate_price = _effective_item_price(candidate)
         if cart_total > 0:
             ratio = candidate_price / cart_total
@@ -844,23 +839,19 @@ def build_cart_upsell_suggestions(
             elif ratio > Decimal("1.50"):
                 score -= 12
 
-        # 6) Browsing behavior (+3 per view, cap +15)
         view_count = signals.category_views.get(candidate_category_id, 0)
         if view_count > 0:
             browsing_points = min(15, view_count * 3)
             score += browsing_points
             reasons["pair"] = reasons.get("pair", 0) + browsing_points
 
-        # 7) Recently removed (max 8)
         if candidate_category_id in signals.recently_removed_category_ids:
             score += 8
             reasons["pair"] = reasons.get("pair", 0) + 8
 
-        # 8) Decline penalty (-10 per decline)
         if decline_count > 0:
             score -= 10 * decline_count
 
-        # Historical learning engine (brain 2)
         historical = historical_signals.get(candidate.id)
         historical_acceptance_rate = 0.0
         if historical:
@@ -873,12 +864,10 @@ def build_cart_upsell_suggestions(
                 score += historical_points
                 reasons["pair"] = reasons.get("pair", 0) + historical_points
 
-        # Settings-driven boosts
         if candidate_category_id in prioritized_categories:
             score += 15
             reasons["priority"] = reasons.get("priority", 0) + 15
 
-        # Manual pair rule is an explicit override signal.
         if candidate.id in pair_boost_targets:
             score += 200
             reasons["pair"] = reasons.get("pair", 0) + 200
@@ -939,9 +928,6 @@ def build_cart_upsell_suggestions(
     else:
         results.sort(key=lambda row: (bool(row.get("manual_pair")), row["score"]), reverse=True)
 
-    # Historical high-confidence override:
-    # if association is reliable (>=0.5 strength and >=10 co-orders),
-    # lift that item to the first slot.
     high_confidence = [
         row
         for row in results
@@ -958,7 +944,6 @@ def build_cart_upsell_suggestions(
         )
         results = [top_override] + [row for row in results if row["item"].id != top_override["item"].id]
 
-    # Aggressiveness controls output depth.
     if trigger_point in {"add_to_cart", "before_payment"}:
         settings_limit = 1
     elif setting.aggressiveness == "subtle":
@@ -970,3 +955,77 @@ def build_cart_upsell_suggestions(
 
     effective_limit = min(limit, settings_limit)
     return results[:effective_limit]
+
+
+def build_item_context_upsell_suggestions(
+    restaurant,
+    cart_item_ids: Iterable[int],
+    *,
+    limit: int = 4,
+    trigger_point: str = "cart",
+    source_item_id: Optional[int] = None,
+    session_signals: Optional[Dict] = None,
+) -> List[Dict]:
+    normalized_ids = []
+    seen_ids: Set[int] = set()
+    for raw_id in cart_item_ids:
+        try:
+            item_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0 or item_id in seen_ids:
+            continue
+        seen_ids.add(item_id)
+        normalized_ids.append(item_id)
+    if not normalized_ids:
+        return []
+
+    items_by_id = {
+        item.id: item
+        for item in Item.objects.select_related("category", "sub_category").filter(
+            restaurant=restaurant,
+            id__in=normalized_ids,
+        )
+    }
+    cart_source_items = [items_by_id[item_id] for item_id in normalized_ids if item_id in items_by_id]
+    if not cart_source_items:
+        return []
+
+    cart_total = sum((_effective_item_price(item) for item in cart_source_items), Decimal("0"))
+    return _build_upsell_suggestions_for_items(
+        restaurant,
+        cart_source_items,
+        {item.id for item in cart_source_items},
+        cart_total,
+        limit=limit,
+        trigger_point=trigger_point,
+        source_item_id=source_item_id,
+        session_signals=session_signals,
+    )
+
+
+def build_cart_upsell_suggestions(
+    cart: Cart,
+    *,
+    limit: int = 4,
+    trigger_point: str = "cart",
+    source_item_id: Optional[int] = None,
+    session_signals: Optional[Dict] = None,
+) -> List[Dict]:
+    """
+    Production scoring engine that adapts to region, session behavior, manual
+    rules, and the current cart meal composition.
+    """
+    cart_items = list(cart.items.select_related("item__category", "item__sub_category").all())
+    if not cart_items:
+        return []
+    return _build_upsell_suggestions_for_items(
+        cart.device.restaurant,
+        _flatten_cart_sources(cart_items),
+        {cart_item.item_id for cart_item in cart_items},
+        _cart_total(cart),
+        limit=limit,
+        trigger_point=trigger_point,
+        source_item_id=source_item_id,
+        session_signals=session_signals,
+    )

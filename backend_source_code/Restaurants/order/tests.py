@@ -13,6 +13,7 @@ from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
 from .models import UpsellEvent
+from .upsell import build_item_context_upsell_suggestions
 from .upsell_views import UpsellAnalyticsAPIView
 
 
@@ -164,3 +165,124 @@ class UpsellAnalyticsImageTests(TestCase):
             top_item["image_url"],
             f"http://testserver{self.item.image1.url}",
         )
+
+
+class UpsellKnowledgeEngineTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="knowledge-upsell-owner@example.com",
+            username="Knowledge Upsell Owner",
+            password="test-password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Knowledge Upsell Restaurant",
+            location="Dubai",
+            phone_number="+971500000002",
+            owner=self.owner,
+        )
+        self.main_category = Category.objects.create(
+            restaurant=self.restaurant,
+            Category_name="Mains",
+            slug="knowledge-mains",
+            category_type="main",
+        )
+        self.drink_category = Category.objects.create(
+            restaurant=self.restaurant,
+            Category_name="Drinks",
+            slug="knowledge-drinks",
+            category_type="drink",
+        )
+        self.dessert_category = Category.objects.create(
+            restaurant=self.restaurant,
+            Category_name="Desserts",
+            slug="knowledge-desserts",
+            category_type="dessert",
+        )
+        self.starter_category = Category.objects.create(
+            restaurant=self.restaurant,
+            Category_name="Starters",
+            slug="knowledge-starters",
+            category_type="starter",
+        )
+        self.burger = self._item("Classic Burger", self.main_category, "classic-burger", "Burger main dish", "35.00")
+        self.pizza = self._item("Margherita Pizza", self.main_category, "margherita-pizza", "Pizza main dish", "39.00")
+        self.cola = self._item("Cola", self.drink_category, "cola", "Cold cola drink", "10.00")
+        self.lemonade = self._item("Lemonade", self.drink_category, "lemonade", "Fresh juice drink", "14.00")
+        self.ice_cream = self._item("Vanilla Ice Cream", self.dessert_category, "vanilla-ice-cream", "Dessert", "16.00")
+        self.fries = self._item("Fries", self.starter_category, "fries", "Starter side", "12.00")
+
+    def _item(self, name, category, slug, description, price):
+        return Item.objects.create(
+            restaurant=self.restaurant,
+            category=category,
+            item_name=name,
+            description=description,
+            slug=slug,
+            price=price,
+        )
+
+    def _result_roles(self, rows):
+        roles = []
+        for row in rows:
+            item = row["item"]
+            roles.append(item.category.category_type)
+        return roles
+
+    def test_main_only_suggests_drink_and_never_another_main(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="add_to_cart",
+            source_item_id=self.burger.id,
+            limit=3,
+        )
+
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["item"].category.category_type, "drink")
+        self.assertNotIn("main", self._result_roles(rows))
+
+    def test_main_and_drink_suggests_dessert_or_starter_not_existing_roles(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id, self.cola.id],
+            trigger_point="cart",
+            source_item_id=self.cola.id,
+            limit=4,
+        )
+
+        self.assertGreater(len(rows), 0)
+        roles = self._result_roles(rows)
+        self.assertEqual(roles[0], "dessert")
+        self.assertNotIn("main", roles)
+        self.assertNotIn("drink", roles)
+
+    def test_drink_only_suggests_main(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.cola.id],
+            trigger_point="add_to_cart",
+            source_item_id=self.cola.id,
+            limit=3,
+        )
+
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["item"].category.category_type, "main")
+
+    def test_repeated_category_declines_suppress_that_category(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+            session_signals={
+                "category_declines": {str(self.drink_category.id): 2},
+                "category_views": {},
+                "recently_removed_category_ids": [],
+            },
+        )
+
+        roles = self._result_roles(rows)
+        self.assertNotIn("drink", roles)
+        self.assertTrue(any(role in {"dessert", "starter"} for role in roles))

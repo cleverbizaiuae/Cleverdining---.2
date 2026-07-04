@@ -20,6 +20,7 @@ from item.models import Item
 from restaurant.models import Restaurant
 from .models import ItemAssociation, OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .schema_guard import ensure_upsell_tables
+from .upsell import build_item_context_upsell_suggestions
 from .upsell_serializers import (
     UpsellItemSettingSerializer,
     UpsellEventCreateSerializer,
@@ -105,6 +106,32 @@ def _parse_int_list(raw_value) -> list[int]:
         if safe_value is not None:
             parsed.append(safe_value)
     return parsed
+
+
+def _parse_signal_counts(raw_value) -> dict[int, float]:
+    parsed: dict[int, float] = {}
+    if raw_value is None:
+        return parsed
+    for chunk in str(raw_value).split(","):
+        item = chunk.strip()
+        if not item:
+            continue
+        if ":" in item:
+            raw_id, raw_count = item.split(":", 1)
+        else:
+            raw_id, raw_count = item, "1"
+        key = _safe_int(raw_id)
+        if key is None:
+            continue
+        try:
+            parsed[key] = max(0.0, float(raw_count))
+        except (TypeError, ValueError):
+            parsed[key] = 1.0
+    return parsed
+
+
+def _parse_signal_id_set(raw_value) -> list[int]:
+    return _parse_int_list(raw_value)
 
 
 def _stage_bonus_for_item(
@@ -535,7 +562,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
             restaurant = get_restaurant_for_guest_request(request)
         if not restaurant:
             restaurant_id = _safe_int(request.query_params.get("restaurantId") or request.query_params.get("restaurant_id"))
-            if restaurant_id and request.user and request.user.is_authenticated:
+            if restaurant_id:
                 restaurant = Restaurant.objects.filter(id=restaurant_id).first()
         if not restaurant:
             return Response({"detail": "Restaurant not resolved."}, status=status.HTTP_404_NOT_FOUND)
@@ -544,174 +571,75 @@ class UpsellSmartSuggestionsAPIView(APIView):
             _parse_int_list(request.query_params.get("cartItemIds") or request.query_params.get("cart_item_ids"))
         )
         if not cart_item_ids:
-            return Response({"results": [], "count": 0})
+            return Response({"results": [], "suggestions": [], "count": 0})
 
         exclude_item_ids = set(
             _parse_int_list(request.query_params.get("excludeItemIds") or request.query_params.get("exclude_item_ids"))
         )
-        stage = str(request.query_params.get("stage") or "").strip().lower()
-        trigger_point = str(request.query_params.get("triggerPoint") or request.query_params.get("trigger_point") or "").strip().lower()
+        source_item_id = _safe_int(request.query_params.get("sourceItemId") or request.query_params.get("source_item_id"))
+        trigger_point = str(
+            request.query_params.get("triggerPoint") or request.query_params.get("trigger_point") or "cart"
+        ).strip().lower()
+        if trigger_point not in {"add_to_cart", "cart", "before_payment"}:
+            trigger_point = "cart"
         try:
             limit = max(1, min(int(request.query_params.get("limit") or 5), 20))
         except (TypeError, ValueError):
             limit = 5
 
-        active_rules = UpsellRule.objects.filter(restaurant=restaurant, is_active=True)
-        blocked_target_ids = set(
-            active_rules.filter(
-                Q(type="global_block") | Q(type="block", source_item_id__in=cart_item_ids)
-            ).values_list("target_item_id", flat=True)
-        )
-        paired_target_ids = set(
-            active_rules.filter(type="pair", source_item_id__in=cart_item_ids).values_list("target_item_id", flat=True)
-        )
-
-        rows = (
-            ItemAssociation.objects.filter(
-                restaurant=restaurant,
-                source_item_id__in=cart_item_ids,
-                co_order_frequency__gte=2,
-            )
-            .exclude(target_item_id__in=cart_item_ids.union(exclude_item_ids).union(blocked_target_ids))
-            .values(
-                "target_item_id",
-                "co_order_frequency",
-                "association_strength",
-                "times_shown",
-                "times_accepted",
-            )
-        )
-
-        if not rows:
-            return Response({"results": [], "count": 0})
-
-        aggregate = {}
-        for row in rows:
-            target_item_id = int(row["target_item_id"])
-            bucket = aggregate.setdefault(
-                target_item_id,
-                {
-                    "sum_strength": 0.0,
-                    "max_strength": 0.0,
-                    "total_frequency": 0,
-                    "max_frequency": 0,
-                    "times_shown": 0,
-                    "times_accepted": 0,
-                },
-            )
-            strength = float(row.get("association_strength") or 0)
-            frequency = int(row.get("co_order_frequency") or 0)
-            shown = int(row.get("times_shown") or 0)
-            accepted = int(row.get("times_accepted") or 0)
-
-            bucket["sum_strength"] += strength
-            bucket["total_frequency"] += frequency
-            bucket["times_shown"] += shown
-            bucket["times_accepted"] += accepted
-            bucket["max_strength"] = max(bucket["max_strength"], strength)
-            bucket["max_frequency"] = max(bucket["max_frequency"], frequency)
-
-        disabled_item_ids = set(
-            UpsellItemSetting.objects.filter(
-                restaurant=restaurant,
-                enabled=False,
-                item_id__in=list(aggregate.keys()),
-            ).values_list("item_id", flat=True)
-        )
-
-        candidate_item_ids = [item_id for item_id in aggregate.keys() if item_id not in disabled_item_ids]
-        items = {
-            item.id: item
-            for item in Item.objects.filter(
-                restaurant=restaurant,
-                availability=True,
-                id__in=candidate_item_ids,
-            )
+        signal_payload = {
+            "category_declines": _parse_signal_counts(request.query_params.get("category_declines")),
+            "category_views": _parse_signal_counts(request.query_params.get("category_views")),
+            "recently_removed_category_ids": _parse_signal_id_set(request.query_params.get("removed_categories")),
         }
 
-        category_name_map: dict[int, str] = {}
-        category_type_map: dict[int, str] = {}
-        category_ids = sorted({item.category_id for item in items.values() if item.category_id})
-        if category_ids:
-            try:
-                for category_id, category_name, category_type in Category.objects.filter(id__in=category_ids).values_list(
-                    "id",
-                    "Category_name",
-                    "category_type",
-                ):
-                    category_name_map[int(category_id)] = str(category_name or "")
-                    category_type_map[int(category_id)] = str(category_type or "")
-            except Exception:
-                try:
-                    for category_id, category_name in Category.objects.filter(id__in=category_ids).values_list(
-                        "id",
-                        "Category_name",
-                    ):
-                        category_name_map[int(category_id)] = str(category_name or "")
-                except Exception:
-                    category_name_map = {}
-                    category_type_map = {}
+        engine_rows = build_item_context_upsell_suggestions(
+            restaurant,
+            cart_item_ids,
+            limit=limit,
+            trigger_point=trigger_point,
+            source_item_id=source_item_id,
+            session_signals=signal_payload,
+        )
 
+        excluded_ids = cart_item_ids.union(exclude_item_ids)
         results = []
-        for item_id, metrics in aggregate.items():
-            item = items.get(item_id)
-            if not item:
+        for row in engine_rows:
+            item = row.get("item")
+            if not item or item.id in excluded_ids:
                 continue
-            category_name = category_name_map.get(item.category_id or 0, "")
-            category_type = category_type_map.get(item.category_id or 0, "")
-            shown = metrics["times_shown"]
-            accepted = metrics["times_accepted"]
-            accept_rate = (accepted / shown) if shown > 0 else 0.0
-            stage_bonus = _stage_bonus_for_item(
-                stage,
-                item,
-                category_name_hint=category_name,
-                category_type_hint=category_type,
-            )
-            historical_score = float(
-                (metrics["sum_strength"] * 100.0)
-                + min(metrics["total_frequency"], 50)
-                + stage_bonus
-            )
-            if shown > 5:
-                historical_score *= 1 + accept_rate
-            if trigger_point == "add_to_cart":
-                historical_score *= 1.2
-            if item_id in paired_target_ids:
-                historical_score += 200
             image_url = ""
             try:
                 if getattr(item, "image1", None):
                     image_url = request.build_absolute_uri(item.image1.url)
             except Exception:
                 image_url = ""
-
             results.append(
                 {
                     "id": item.id,
+                    "item_id": item.id,
                     "item_name": item.item_name,
                     "price": str(item.price or Decimal("0")),
                     "description": item.description or "",
+                    "slug": item.slug or "",
                     "category": item.category_id,
-                    "category_name": category_name,
+                    "category_id": item.category_id,
+                    "sub_category": item.sub_category_id,
+                    "sub_category_id": item.sub_category_id,
+                    "category_name": getattr(item.category, "Category_name", "") if item.category_id else "",
                     "image1": image_url,
+                    "image_url": image_url,
                     "availability": bool(item.availability),
-                    "historical_score": round(historical_score, 3),
-                    "association_strength": round(metrics["max_strength"], 6),
-                    "co_order_frequency": int(metrics["max_frequency"]),
-                    "historical_accept_rate": round(accept_rate * 100.0, 2),
+                    "upsell_rule": row.get("rule", ""),
+                    "upsell_message": row.get("message", ""),
+                    "upsell_score": row.get("score", 0),
+                    "upsell_stage": row.get("stage", ""),
+                    "association_strength": row.get("historical_max_strength", 0.0),
+                    "co_order_frequency": row.get("historical_max_frequency", 0),
                 }
             )
 
-        results.sort(
-            key=lambda row: (
-                row["historical_score"],
-                row["association_strength"],
-                row["co_order_frequency"],
-            ),
-            reverse=True,
-        )
-        return Response({"results": results[:limit], "count": len(results)})
+        return Response({"results": results[:limit], "suggestions": results[:limit], "count": len(results)})
 
 
 class UpsellAnalyticsAPIView(APIView):
