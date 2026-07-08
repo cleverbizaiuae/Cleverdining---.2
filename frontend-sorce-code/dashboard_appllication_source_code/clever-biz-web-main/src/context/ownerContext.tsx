@@ -679,12 +679,27 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
         setDevicesCurrentPage(page);
         setDevicesError(null);
       } catch (error) {
-        console.warn("Failed to load devices", error);
-        const message =
-          (error as any)?.response?.data?.error ||
-          "Unable to load tables. Please retry.";
-        setDevicesError(message);
-        toast.error(message);
+        console.warn("Failed to load devices, trying fallback list", error);
+        try {
+          const fallbackResponse = await cachedGet("/owners/devicesall/", {}, { ttlMs: 0, force: true });
+          const fallbackDevices = Array.isArray(fallbackResponse.data)
+            ? fallbackResponse.data
+            : Array.isArray(fallbackResponse.data?.results)
+              ? fallbackResponse.data.results
+              : [];
+          setAllDevices(fallbackDevices);
+          setDevicesCount(fallbackDevices.length);
+          setDevicesCurrentPage(1);
+          setDevicesError(null);
+        } catch (fallbackError) {
+          console.warn("Fallback device list failed", fallbackError);
+          const message =
+            (fallbackError as any)?.response?.data?.error ||
+            (error as any)?.response?.data?.error ||
+            "Unable to load tables. Please retry.";
+          setDevicesError(message);
+          toast.error(message);
+        }
       }
     },
     [devicesCurrentPage, devicesSearchQuery, userRole, isLoading]
@@ -708,13 +723,16 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
 
       const response = await cachedGet(endpoint, {}, { ttlMs: 0, force: true });
       setDeviceStats(response.data);
-      setDevicesError(null);
     } catch (error) {
       console.warn("Failed to load device stats", error);
-      const message =
-        (error as any)?.response?.data?.error ||
-        "Unable to load table statistics. Please retry.";
-      setDevicesError(message);
+      setDeviceStats((current) => current || {
+        total_devices: 0,
+        active_devices: 0,
+        hold_devices: 0,
+        restaurant: "",
+        table_limit: 0,
+        can_create_table: true,
+      });
     }
   }, [userRole, isLoading]);
 

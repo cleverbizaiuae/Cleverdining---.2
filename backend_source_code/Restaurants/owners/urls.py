@@ -5,7 +5,7 @@ from accounts.simple_views import SimpleOwnerRegisterView
 from category.views import CategoryViewSet, SubCategoryViewSet
 from item.views import ItemViewSet,MostSellingItemsAPIView
 from accounts.views import ChefStaffViewSet
-from device.views import DeviceViewSet, ReservationViewSet, SimpleDeviceListView, SimpleDeviceListAllView
+from device.views import DeviceViewSet, ReservationViewSet, SimpleDeviceListView, SimpleDeviceListAllView, SimpleDeviceStatsView
 from order.views import OwnerRestaurantOrdersAPIView,OwnerUpdateOrderStatusAPIView,OrderAnalyticsAPIView,MonthlySalesReportView, ConfirmCashPaymentAPIView, OwnerOrderDetailAPIView
 from review.views import OwnerRestaurantReviewListAPIView
 from device.views import DeviceViewSetall
@@ -36,7 +36,7 @@ router.register('business-days', BusinessDayViewSet, basename='business-days')
 urlpatterns = [
     # BULLETPROOF device endpoints - MUST BE BEFORE router.urls to intercept
     path('devices/', SimpleDeviceListView.as_view(), name='simple-device-list'),
-    path('devices/stats/', DeviceViewSet.as_view({'get': 'get_device_stats'}), name='device-stats'),
+    path('devices/stats/', SimpleDeviceStatsView.as_view(), name='device-stats'),
     path('devicesall/', SimpleDeviceListAllView.as_view(), name='simple-device-list-all'),
     
     path('', include(router.urls)),

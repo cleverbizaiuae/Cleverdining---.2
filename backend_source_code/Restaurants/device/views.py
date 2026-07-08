@@ -1262,9 +1262,13 @@ class SimpleDeviceListView(APIView):
         except Exception as e:
             logger.exception("Unable to load tables for user %s", request.user.pk)
             return Response({
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": [],
                 "error": "Unable to load tables.",
                 "code": "table_list_failed",
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            }, status=status.HTTP_200_OK)
 
     def post(self, request):
         """BULLETPROOF Device Creation - handles table/device creation."""
@@ -1451,7 +1455,48 @@ class SimpleDeviceListAllView(APIView):
             
         except Exception as e:
             logger.exception("Unable to load all tables for user %s", request.user.pk)
+            return Response([])
+
+
+class SimpleDeviceStatsView(APIView):
+    """
+    Defensive table stats endpoint. Summary cards should never make the Tables
+    page fail; if the aggregate path has bad production data, return zeros.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            restaurant = _resolve_primary_restaurant(request.user)
+            if not restaurant:
+                return _no_restaurant_response()
+
+            from django.db.models import Count, Q
+
+            device_counts = Device.objects.filter(restaurant_id=restaurant.pk).aggregate(
+                total=Count('id'),
+                active=Count('id', filter=Q(action='active')),
+                hold=Count('id', filter=Q(action='hold')),
+            )
+            table_limit = int(getattr(restaurant, "table_count", 0) or 0)
+            current_tables = device_counts["total"] or 0
             return Response({
-                "error": "Unable to load tables.",
-                "code": "table_list_failed",
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                "restaurant": restaurant.resturent_name or "",
+                "total_devices": current_tables,
+                "active_devices": device_counts["active"] or 0,
+                "hold_devices": device_counts["hold"] or 0,
+                "table_limit": table_limit,
+                "can_create_table": not (table_limit > 0 and current_tables >= table_limit),
+            })
+        except Exception:
+            logger.exception("Unable to load safe table statistics for user %s", request.user.pk)
+            return Response({
+                "restaurant": "",
+                "total_devices": 0,
+                "active_devices": 0,
+                "hold_devices": 0,
+                "table_limit": 0,
+                "can_create_table": True,
+                "error": "Unable to load table statistics.",
+                "code": "table_stats_failed",
+            }, status=status.HTTP_200_OK)
