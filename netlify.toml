@@ -1,8 +1,56 @@
 [build]
-  command = "npm install && npm run build"
+  base = "frontend-sorce-code/device_application_source_code/clever-biz-mobile-main"
+  command = "CI=false npm install && npm run build"
   publish = "dist"
+
+[build.environment]
+  VITE_API_URL = "/api"
+  VITE_WS_URL = "wss://cleverdining-2.onrender.com"
 
 [[redirects]]
   from = "/api/*"
   to = "https://cleverdining-2.onrender.com/:splat"
   status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/dashboard/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/dashboard"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Netlify-CDN-Cache-Control = "public, max-age=31536000, immutable, durable"
