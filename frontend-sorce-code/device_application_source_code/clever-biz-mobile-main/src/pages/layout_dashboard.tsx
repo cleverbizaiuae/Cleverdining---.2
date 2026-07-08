@@ -20,9 +20,6 @@ import { Facebook, Globe, Instagram, Loader2, Music2, Search, Twitter, UtensilsC
 import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import {
-  canShowUpsellTouchpoint,
-  getEffectiveUpsellAggressiveness,
-  getUpsellSessionCap,
   incrementUpsellTouchpointCount,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
@@ -146,12 +143,6 @@ const MenuPageUpsellHost = () => {
       try {
         const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
         if (settingsSnapshot) setSettings(settingsSnapshot);
-
-        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(settingsSnapshot?.aggressiveness || settings?.aggressiveness || "moderate");
-        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
-        const triggerLimit = sessionLimit;
-
-        if (!canShowUpsellTouchpoint("add_to_cart", triggerLimit, sessionLimit)) return;
 
         const shouldRender =
           (settingsSnapshot?.enabled ?? settings?.enabled ?? true) &&

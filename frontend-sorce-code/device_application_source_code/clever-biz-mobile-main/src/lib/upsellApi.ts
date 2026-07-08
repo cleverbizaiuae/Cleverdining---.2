@@ -1,11 +1,9 @@
 import axiosInstance from "./axios";
 import { cachedGet } from "./requestCache";
 import {
-  isUpsellItemAccepted,
   getUpsellSessionId,
   getUpsellSignalsQueryParams,
   getUpsellTableNumber,
-  isUpsellItemDismissed,
 } from "./upsellSession";
 
 export type UpsellSuggestion = {
@@ -247,8 +245,6 @@ export async function fetchUpsellSuggestions(params: {
     if (item.availability === false) return false;
     if (excludedItems.has(item.id)) return false;
     if (disabledItems.has(item.id)) return false;
-    if (isUpsellItemDismissed(item.id)) return false;
-    if (isUpsellItemAccepted(item.id)) return false;
     return true;
   }).slice(0, params.limit ?? 2) as UpsellSuggestion[];
 }
