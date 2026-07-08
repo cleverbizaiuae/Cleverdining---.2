@@ -3,13 +3,14 @@
 import {
   ModalFoodDetail,
   ModalAssistance,
+  type MenuItemAddedDetail,
 } from "@/components/dialog";
 import UpsellBottomSheet from "@/components/UpsellBottomSheet";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion, AnimatePresence } from "motion/react";
 import toast from "react-hot-toast";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CartProvider, type CartItem, useCart } from "../context/CartContext";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
@@ -83,15 +84,6 @@ function getFontFamily(fontPreset: string): string {
   return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
 }
 
-type MenuItemAddedDetail = {
-  item: Omit<CartItem, "quantity">;
-  nextCart: CartItem[];
-  metrics: {
-    cartValueAtTime: number;
-    cartItemCount: number;
-  };
-};
-
 const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
   id: suggestion.id,
   item_name: suggestion.item_name,
@@ -107,7 +99,7 @@ const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "qua
   restaurant_name: suggestion.restaurant_name || "",
 });
 
-const MenuPageUpsellHost = () => {
+const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDetail | null }) => {
   const { addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
   const [open, setOpen] = useState(false);
@@ -120,9 +112,8 @@ const MenuPageUpsellHost = () => {
   const activeRef = useRef(false);
   const pendingActionRef = useRef<null | (() => Promise<void>)>(null);
 
-  useEffect(() => {
-    const handleMenuItemAdded = async (event: Event) => {
-      const detail = (event as CustomEvent<MenuItemAddedDetail>).detail;
+  const handleMenuItemAddedDetail = useCallback(
+    async (detail?: MenuItemAddedDetail) => {
       const item = detail?.item;
       const nextCart = Array.isArray(detail?.nextCart) ? detail.nextCart : [];
       const metrics = detail?.metrics || { cartValueAtTime: 0, cartItemCount: 0 };
@@ -188,11 +179,23 @@ const MenuPageUpsellHost = () => {
       } catch {
         // Non-blocking by design.
       }
-    };
+    },
+    [settings]
+  );
 
+  useEffect(() => {
+    if (pendingDetail) {
+      void handleMenuItemAddedDetail(pendingDetail);
+    }
+  }, [handleMenuItemAddedDetail, pendingDetail]);
+
+  useEffect(() => {
+    const handleMenuItemAdded = (event: Event) => {
+      void handleMenuItemAddedDetail((event as CustomEvent<MenuItemAddedDetail>).detail);
+    };
     window.addEventListener("cleverbiz:menu-item-added", handleMenuItemAdded);
     return () => window.removeEventListener("cleverbiz:menu-item-added", handleMenuItemAdded);
-  }, [settings]);
+  }, [handleMenuItemAddedDetail]);
 
   const acceptSuggestion = async (suggestion: UpsellSuggestion) => {
     const added = await addToCart(toCartItemFromUpsell(suggestion), 1);
@@ -362,6 +365,7 @@ const LayoutDashboard = () => {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [isDetailOpen, setDetailOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [menuUpsellDetail, setMenuUpsellDetail] = useState<MenuItemAddedDetail | null>(null);
   const [isAssistanceOpen, setAssistanceOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
@@ -968,7 +972,7 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation - Hide on success/checkout pages */}
         {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
-        <MenuPageUpsellHost />
+        <MenuPageUpsellHost pendingDetail={menuUpsellDetail} />
         </div>
       </div>
 
@@ -977,7 +981,8 @@ const LayoutDashboard = () => {
         isOpen={isDetailOpen}
         close={() => setDetailOpen(false)}
         itemId={selectedItemId ?? undefined}
-        onAddToCart={() => {
+        onAddToCart={(detail) => {
+          setMenuUpsellDetail({ ...detail });
           // setIsMobileMenuOpen(true); // No longer needed with bottom nav
           // navigate("/dashboard/cart"); // Stay on page or navigate? User requested "shows toast and closes modal", didn't say navigate.
         }}

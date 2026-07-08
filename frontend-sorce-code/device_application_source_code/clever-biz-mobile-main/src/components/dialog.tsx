@@ -1,6 +1,6 @@
 import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
 import { useEffect, useState } from "react";
-import { useCart } from "../context/CartContext";
+import { useCart, type CartItem } from "../context/CartContext";
 import toast from "react-hot-toast";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
@@ -17,11 +17,21 @@ interface ModalProps {
   isOpen: boolean;
   close: () => void;
 }
+
+export type MenuItemAddedDetail = {
+  item: Omit<CartItem, "quantity">;
+  nextCart: CartItem[];
+  metrics: {
+    cartValueAtTime: number;
+    cartItemCount: number;
+  };
+};
+
 interface ModalFoodDetailProps extends ModalProps {
   isOpen: boolean;
   close: () => void;
   itemId?: number;
-  onAddToCart?: () => void;
+  onAddToCart?: (detail: MenuItemAddedDetail) => void;
 }
 
 export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
@@ -90,20 +100,16 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
     const nextCart = [...cart, { ...item, quantity }];
     const metrics = summarizeCart(nextCart);
+    const addedDetail = {
+      item,
+      nextCart,
+      metrics,
+    };
 
     window.setTimeout(async () => {
       close();
-      if (onAddToCart) onAddToCart();
+      if (onAddToCart) onAddToCart(addedDetail);
       setIsAddingToCart(false);
-      window.dispatchEvent(
-        new CustomEvent("cleverbiz:menu-item-added", {
-          detail: {
-            item,
-            nextCart,
-            metrics,
-          },
-        })
-      );
     }, 220);
   };
 

@@ -196,8 +196,7 @@ const ScreenCart = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const guestSessionToken = localStorage.getItem("guest_session_token");
-    if (!guestSessionToken || validCartItems.length === 0) {
+    if (validCartItems.length === 0) {
       setUpsellSuggestions([]);
       setUpsellLoading(false);
       cartShownSignatureRef.current = "";
@@ -223,11 +222,9 @@ const ScreenCart = () => {
 
         const effectiveAggressiveness = getEffectiveUpsellAggressiveness(effectiveSettings.aggressiveness || "moderate");
         const triggerLimit = getUpsellTriggerLimit("cart", effectiveAggressiveness);
-        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
         const shouldRenderCart =
           effectiveSettings.enabled &&
-          effectiveSettings.show_in_cart &&
-          canShowUpsellTouchpoint("cart", triggerLimit, sessionLimit);
+          effectiveSettings.show_in_cart;
 
         if (!shouldRenderCart) {
           setUpsellSuggestions([]);
