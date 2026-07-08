@@ -30,9 +30,11 @@ import {
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
+  buildClientUpsellSuggestions,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
+  rememberMenuUpsellCandidates,
   type UpsellSettingsSnapshot,
   type UpsellSuggestion,
 } from "../lib/upsellApi";
@@ -99,7 +101,13 @@ const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "qua
   restaurant_name: suggestion.restaurant_name || "",
 });
 
-const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDetail | null }) => {
+const MenuPageUpsellHost = ({
+  pendingDetail,
+  menuCandidates,
+}: {
+  pendingDetail: MenuItemAddedDetail | null;
+  menuCandidates: FoodItemTypes[];
+}) => {
   const { addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
   const [open, setOpen] = useState(false);
@@ -149,7 +157,20 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           cartItemIds,
           excludeItemIds: cartItemIds,
         });
-        const nextSuggestions = rawSuggestions.slice(0, 1);
+        const nextSuggestions = (
+          rawSuggestions.length
+            ? rawSuggestions
+            : buildClientUpsellSuggestions({
+              triggerPoint: "add_to_cart",
+              sourceItem: item,
+              candidates: menuCandidates,
+              cartItems: nextCart,
+              cartItemIds,
+              excludeItemIds: cartItemIds,
+              restaurantId: Number(item.restaurant || 0) || undefined,
+              limit: 2,
+            })
+        ).slice(0, 2);
 
         if (!nextSuggestions.length) return;
 
@@ -181,7 +202,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         // Non-blocking by design.
       }
     },
-    [settings]
+    [menuCandidates, settings]
   );
 
   useEffect(() => {
@@ -447,6 +468,7 @@ const LayoutDashboard = () => {
   };
 
   const [items, setItems] = useState<FoodItemTypes[]>([]);
+  const [upsellMenuCandidates, setUpsellMenuCandidates] = useState<FoodItemTypes[]>([]);
   const [search, setSearch] = useState("");
   const searchTimeout = useRef<any>(null);
   const [tableName, setTableName] = useState("");
@@ -600,13 +622,36 @@ const LayoutDashboard = () => {
 
       const response = await cachedGet(url, {}, { ttlMs: 8_000 });
       const payload = response.data;
-      setItems(Array.isArray(payload) ? payload : payload.results || []);
+      const nextItems = Array.isArray(payload) ? payload : payload.results || [];
+      setItems(nextItems);
+      rememberMenuUpsellCandidates(nextItems);
     } catch (error) {
       console.warn("Failed to fetch items", error);
     } finally {
       setItemsLoaded(true);
     }
   };
+
+  const fetchUpsellCandidateItems = async () => {
+    try {
+      const userInfo = localStorage.getItem("userInfo");
+      const rId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
+      const targetId = rId || restaurantId;
+      if (!targetId) return;
+      const response = await cachedGet(
+        `/api/customer/items/?restaurant_id=${targetId}`,
+        { timeout: 2500 },
+        { ttlMs: 30_000 }
+      );
+      const payload = response.data;
+      const nextItems = Array.isArray(payload) ? payload : payload.results || [];
+      setUpsellMenuCandidates(nextItems);
+      rememberMenuUpsellCandidates(nextItems);
+    } catch {
+      // The current visible category remains available as a smaller fallback.
+    }
+  };
+
   useEffect(() => {
     if (!categoriesLoaded) return;
 
@@ -620,6 +665,11 @@ const LayoutDashboard = () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
   }, [search, selectedCategory, categories, categoriesLoaded, lastUpdate]);
+
+  useEffect(() => {
+    if (!categoriesLoaded) return;
+    void fetchUpsellCandidateItems();
+  }, [categoriesLoaded, restaurantId, lastUpdate]);
 
   useEffect(() => {
     if (selectedCategory !== null && categories[selectedCategory]?.id) {
@@ -973,7 +1023,10 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation - Hide on success/checkout pages */}
         {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
-        <MenuPageUpsellHost pendingDetail={menuUpsellDetail} />
+        <MenuPageUpsellHost
+          pendingDetail={menuUpsellDetail}
+          menuCandidates={upsellMenuCandidates.length ? upsellMenuCandidates : items}
+        />
         </div>
       </div>
 

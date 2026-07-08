@@ -10,6 +10,7 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
+  fetchClientFallbackUpsellSuggestions,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
@@ -254,10 +255,20 @@ const ScreenCart = () => {
           cartItemIds: validCartItemIds,
           excludeItemIds: validCartItemIds,
         });
+        const resolvedSuggestions = rawSuggestions.length
+          ? rawSuggestions
+          : await fetchClientFallbackUpsellSuggestions({
+            triggerPoint: "cart",
+            limit: triggerLimit,
+            restaurantId: cartRestaurantId,
+            cartItems: validCartItems,
+            cartItemIds: validCartItemIds,
+            excludeItemIds: validCartItemIds,
+          });
         if (cancelled) return;
 
         const cartIds = new Set(validCartItems.map((item) => item.id));
-        const suggestions = rawSuggestions
+        const suggestions = resolvedSuggestions
           .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
           .slice(0, triggerLimit);
 
@@ -364,10 +375,20 @@ const ScreenCart = () => {
           cartItemIds: validCartItemIds,
           excludeItemIds: validCartItemIds,
         });
+        const resolvedSuggestions = rawSuggestions.length
+          ? rawSuggestions
+          : await fetchClientFallbackUpsellSuggestions({
+            triggerPoint: "before_payment",
+            limit: triggerLimit,
+            restaurantId: cartRestaurantId,
+            cartItems: validCartItems,
+            cartItemIds: validCartItemIds,
+            excludeItemIds: validCartItemIds,
+          });
         if (cancelled) return;
 
         const cartIds = new Set(validCartItems.map((item) => item.id));
-        const suggestions = rawSuggestions
+        const suggestions = resolvedSuggestions
           .filter((item: any) => item && Number.isInteger(item.id) && !cartIds.has(item.id))
           .slice(0, triggerLimit);
 

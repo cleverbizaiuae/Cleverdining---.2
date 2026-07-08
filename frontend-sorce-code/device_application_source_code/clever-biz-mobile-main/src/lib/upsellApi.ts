@@ -166,6 +166,108 @@ const getSessionRestaurantId = (): number | undefined => {
   }
 };
 
+const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
+
+const itemHaystack = (item: Partial<UpsellSuggestion> | CartLikeItem) =>
+  `${normalizeText((item as Partial<UpsellSuggestion>).item_name)} ${normalizeText((item as Partial<UpsellSuggestion>).description)} ${normalizeText((item as Partial<UpsellSuggestion>).category_name)}`;
+
+const hasAny = (item: Partial<UpsellSuggestion> | CartLikeItem, keywords: string[]) => {
+  const haystack = itemHaystack(item);
+  return keywords.some((keyword) => haystack.includes(keyword));
+};
+
+const scoreFallbackCandidate = (
+  candidate: UpsellSuggestion,
+  sourceItem?: Partial<UpsellSuggestion> | CartLikeItem,
+  cartItems: Array<Partial<UpsellSuggestion> | CartLikeItem> = [],
+) => {
+  let score = 10;
+  const source = sourceItem || cartItems[0];
+  const sourceLooksMain = source
+    ? hasAny(source, ["main", "burger", "pizza", "pasta", "steak", "chicken", "beef", "rice", "meat"])
+    : cartItems.some((item) => hasAny(item, ["main", "burger", "pizza", "pasta", "steak", "chicken", "beef", "rice", "meat"]));
+  const sourceLooksDrink = source ? hasAny(source, ["drink", "shake", "juice", "cola", "coffee", "tea", "water"]) : false;
+  const candidateIsDrink = hasAny(candidate, ["drink", "shake", "juice", "cola", "coffee", "tea", "water"]);
+  const candidateIsDessert = hasAny(candidate, ["dessert", "sweet", "cake", "ice", "chocolate"]);
+  const candidateIsSide = hasAny(candidate, ["side", "fries", "salad", "starter", "appetizer"]);
+  const candidateLooksMain = hasAny(candidate, ["main", "burger", "pizza", "pasta", "steak", "chicken", "beef", "rice", "meat"]);
+
+  if (sourceLooksMain && candidateIsDrink) score += 80;
+  if (sourceLooksMain && candidateIsDessert) score += 65;
+  if (sourceLooksMain && candidateIsSide) score += 45;
+  if (sourceLooksDrink && candidateLooksMain) score += 55;
+  if (!sourceLooksMain && !sourceLooksDrink && (candidateIsDrink || candidateIsDessert || candidateIsSide)) score += 35;
+  if (candidate.category && source && candidate.category !== (source as CartLikeItem).category) score += 15;
+  score += Math.max(0, 1000 - safeNumber(candidate.price)) / 1000;
+  return score;
+};
+
+export function rememberMenuUpsellCandidates(candidates: unknown[]) {
+  try {
+    if (Array.isArray(candidates) && candidates.length) {
+      sessionStorage.setItem("cb:menu_items", JSON.stringify(candidates));
+    }
+  } catch {
+    // Non-blocking.
+  }
+}
+
+const readCachedMenuItems = (): unknown[] => {
+  try {
+    const raw = sessionStorage.getItem("cb:menu_items");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export function buildClientUpsellSuggestions(params: {
+  candidates: unknown[];
+  triggerPoint: UpsellTriggerPoint;
+  sourceItem?: Partial<UpsellSuggestion> | CartLikeItem;
+  cartItems?: Array<Partial<UpsellSuggestion> | CartLikeItem>;
+  cartItemIds?: number[];
+  excludeItemIds?: number[];
+  restaurantId?: number;
+  limit?: number;
+}): UpsellSuggestion[] {
+  const disabledItems = getDisabledUpsellItems();
+  const excludedItems = new Set(
+    [...(params.cartItemIds || []), ...(params.excludeItemIds || [])]
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  );
+  const cartItems = params.cartItems || [];
+  const sourceRestaurantId = Number(params.restaurantId || (params.sourceItem as UpsellSuggestion | undefined)?.restaurant || getSessionRestaurantId());
+
+  return params.candidates
+    .map((candidate) => normalizeUpsellSuggestion(candidate))
+    .filter((candidate): candidate is UpsellSuggestion => {
+      if (!candidate) return false;
+      if (candidate.availability === false) return false;
+      if (excludedItems.has(candidate.id)) return false;
+      if (disabledItems.has(candidate.id)) return false;
+      const candidateRestaurantId = Number(candidate.restaurant || 0);
+      if (sourceRestaurantId > 0 && candidateRestaurantId > 0 && candidateRestaurantId !== sourceRestaurantId) return false;
+      return true;
+    })
+    .map((candidate) => ({
+      candidate,
+      score: scoreFallbackCandidate(candidate, params.sourceItem, cartItems),
+    }))
+    .sort((a, b) => b.score - a.score || safeNumber(a.candidate.price) - safeNumber(b.candidate.price))
+    .map(({ candidate }, index) => ({
+      ...candidate,
+      upsell_rule: candidate.upsell_rule || (index === 0 ? "Perfect with your order" : "Also worth adding"),
+      upsell_message: candidate.upsell_message || "Recommended to complete this order.",
+      suggestion_copy: candidate.suggestion_copy || candidate.upsell_message || "Recommended to complete this order.",
+      decision_source: candidate.decision_source || "client_fallback",
+    }))
+    .slice(0, params.limit ?? 2);
+}
+
 export function summarizeCart(items: CartLikeItem[]) {
   const cartValue = items.reduce((sum, item) => sum + safeNumber(item.price) * Math.max(1, Number(item.quantity || 1)), 0);
   const cartItemCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 1)), 0);
@@ -213,6 +315,7 @@ export async function fetchUpsellSuggestions(params: {
       "/api/customer/cart/upsell_suggestions/",
       {
         params: commonParams,
+        timeout: 2500,
         headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
       },
       { ttlMs: 2_000 }
@@ -228,6 +331,7 @@ export async function fetchUpsellSuggestions(params: {
         "/api/upsell/smart-suggestions",
         {
           params: commonParams,
+          timeout: 2500,
           headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
         },
         { ttlMs: 2_000 }
@@ -269,10 +373,44 @@ export async function fetchUpsellSuggestions(params: {
   }).slice(0, params.limit ?? 2) as UpsellSuggestion[];
 }
 
+export async function fetchClientFallbackUpsellSuggestions(params: {
+  triggerPoint: UpsellTriggerPoint;
+  sourceItem?: Partial<UpsellSuggestion> | CartLikeItem;
+  cartItems?: Array<Partial<UpsellSuggestion> | CartLikeItem>;
+  cartItemIds?: number[];
+  excludeItemIds?: number[];
+  restaurantId?: number;
+  limit?: number;
+}) {
+  const restaurantId = Number(params.restaurantId || (params.sourceItem as UpsellSuggestion | undefined)?.restaurant || getSessionRestaurantId());
+  let candidates = readCachedMenuItems();
+
+  if (!candidates.length && Number.isInteger(restaurantId) && restaurantId > 0) {
+    try {
+      const response = await cachedGet(
+        "/api/customer/items/",
+        { params: { restaurant_id: restaurantId }, timeout: 2500 },
+        { ttlMs: 20_000 }
+      );
+      candidates = extractSuggestionArray(response.data);
+      rememberMenuUpsellCandidates(candidates);
+    } catch {
+      candidates = readCachedMenuItems();
+    }
+  }
+
+  return buildClientUpsellSuggestions({
+    ...params,
+    candidates,
+    restaurantId,
+  });
+}
+
 export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
   const sessionToken = localStorage.getItem("guest_session_token");
   const response = await cachedGet("/api/upsell/settings", {
     params: sessionToken ? { guest_session_token: sessionToken } : undefined,
+    timeout: 2500,
     headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
   }, { ttlMs: 20_000 });
   return {
