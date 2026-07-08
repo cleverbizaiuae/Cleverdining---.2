@@ -144,6 +144,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "add_to_cart",
           sourceItemId: Number(item.id),
+          restaurantId: Number(item.restaurant || 0) || undefined,
           limit: 6,
           cartItemIds,
           excludeItemIds: cartItemIds,

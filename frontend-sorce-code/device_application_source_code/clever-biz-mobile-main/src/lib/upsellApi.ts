@@ -150,6 +150,22 @@ const getDisabledUpsellItems = (): Set<number> => {
   }
 };
 
+const getSessionRestaurantId = (): number | undefined => {
+  try {
+    const raw = localStorage.getItem("userInfo");
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    const restaurantId = Number(
+      parsed?.user?.restaurants?.[0]?.id ??
+      parsed?.restaurant_id ??
+      parsed?.restaurant
+    );
+    return Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export function summarizeCart(items: CartLikeItem[]) {
   const cartValue = items.reduce((sum, item) => sum + safeNumber(item.price) * Math.max(1, Number(item.quantity || 1)), 0);
   const cartItemCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 1)), 0);
@@ -163,6 +179,7 @@ export async function fetchUpsellSuggestions(params: {
   triggerPoint: UpsellTriggerPoint;
   limit?: number;
   sourceItemId?: number;
+  restaurantId?: number;
   cartItemIds?: number[];
   excludeItemIds?: number[];
   stage?: string;
@@ -171,10 +188,13 @@ export async function fetchUpsellSuggestions(params: {
   const sessionToken = localStorage.getItem("guest_session_token");
   const cartItemIds = toCsv(params.cartItemIds);
   const excludeItemIds = toCsv(params.excludeItemIds);
+  const restaurantId = Number(params.restaurantId || getSessionRestaurantId());
   const commonParams = {
     trigger_point: params.triggerPoint,
     triggerPoint: params.triggerPoint,
     limit: params.limit ?? 2,
+    restaurant_id: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined,
+    restaurantId: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined,
     source_item_id: params.sourceItemId,
     sourceItemId: params.sourceItemId,
     cart_item_ids: cartItemIds,

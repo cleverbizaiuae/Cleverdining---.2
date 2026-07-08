@@ -162,6 +162,21 @@ const ScreenCart = () => {
   );
   const cartMetrics = useMemo(() => summarizeCart(validCartItems), [validCartItems]);
   const validCartItemIds = useMemo(() => validCartItems.map((item) => item.id), [validCartItems]);
+  const cartRestaurantId = useMemo(() => {
+    const fromCart = validCartItems
+      .map((item) => Number(item.restaurant || 0))
+      .find((id) => Number.isInteger(id) && id > 0);
+    if (fromCart) return fromCart;
+    try {
+      const raw = localStorage.getItem("userInfo");
+      if (!raw) return undefined;
+      const parsed = JSON.parse(raw);
+      const fromSession = Number(parsed?.user?.restaurants?.[0]?.id ?? parsed?.restaurant_id ?? parsed?.restaurant);
+      return Number.isInteger(fromSession) && fromSession > 0 ? fromSession : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [validCartItems]);
 
   useEffect(() => {
     const userInfo = localStorage.getItem("userInfo");
@@ -235,6 +250,7 @@ const ScreenCart = () => {
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "cart",
           limit: triggerLimit,
+          restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
           excludeItemIds: validCartItemIds,
         });
@@ -289,7 +305,7 @@ const ScreenCart = () => {
     return () => {
       cancelled = true;
     };
-  }, [cartFingerprint, cartMetrics.cartItemCount, cartMetrics.cartValueAtTime, validCartItems, validCartItemIds]);
+  }, [cartFingerprint, cartMetrics.cartItemCount, cartMetrics.cartValueAtTime, cartRestaurantId, validCartItems, validCartItemIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -344,6 +360,7 @@ const ScreenCart = () => {
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "before_payment",
           limit: triggerLimit,
+          restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
           excludeItemIds: validCartItemIds,
         });
@@ -402,6 +419,7 @@ const ScreenCart = () => {
     cartFingerprint,
     cartMetrics.cartItemCount,
     cartMetrics.cartValueAtTime,
+    cartRestaurantId,
     validCartItems,
     validCartItemIds,
   ]);
