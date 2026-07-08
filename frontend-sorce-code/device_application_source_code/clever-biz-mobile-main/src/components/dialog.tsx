@@ -1,35 +1,17 @@
 import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
-import { useEffect, useRef, useState } from "react";
-import { type CartItem, useCart } from "../context/CartContext";
+import { useEffect, useState } from "react";
+import { useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
 import { motion } from "motion/react";
 import { cn } from "clsx-for-tailwind";
 import { cachedGet } from "../lib/requestCache";
 import { resolveMediaUrl } from "../lib/media";
 import { getSessionCurrencyCode } from "../utils/regionSession";
-import UpsellBottomSheet from "./UpsellBottomSheet";
 import { OptimizedImage } from "./OptimizedImage";
 import { CheckCircle2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import {
-  fetchUpsellSettings,
-  fetchUpsellSuggestions,
-  logUpsellAssociationStat,
-  logUpsellEvent,
-  logUpsellShownBatch,
   summarizeCart,
-  type UpsellSettingsSnapshot,
-  type UpsellSuggestion,
 } from "../lib/upsellApi";
-import {
-  canShowUpsellTouchpoint,
-  getEffectiveUpsellAggressiveness,
-  getUpsellSessionCap,
-  getUpsellTriggerLimit,
-  incrementUpsellTouchpointCount,
-  markUpsellItemAccepted,
-  markUpsellItemDismissed,
-  trackUpsellCategoryDecline,
-} from "../lib/upsellSession";
 
 interface ModalProps {
   isOpen: boolean;
@@ -53,15 +35,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [quantity, setQuantity] = useState(1);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [upsellOpen, setUpsellOpen] = useState(false);
-  const [upsellSuggestions, setUpsellSuggestions] = useState<UpsellSuggestion[]>([]);
-  const [upsellTriggerItem, setUpsellTriggerItem] = useState<any>(null);
-  const [upsellSettings, setUpsellSettings] = useState<UpsellSettingsSnapshot | null>(null);
-  const [upsellCartMetrics, setUpsellCartMetrics] = useState({ cartValueAtTime: 0, cartItemCount: 0 });
-  const upsellActiveRef = useRef(false);
-  const upsellSourceItemIdRef = useRef<number | null>(null);
-  const upsellSourceItemIdsRef = useRef<number[]>([]);
-  const pendingUpsellActionRef = useRef<null | (() => Promise<void>)>(null);
   const { cart, addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
 
@@ -82,21 +55,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       setIsImageLoading(true);
     }
   }, [isOpen, itemId]);
-
-  const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
-    id: suggestion.id,
-    item_name: suggestion.item_name,
-    price: String(suggestion.price ?? "0"),
-    description: suggestion.description || "",
-    slug: suggestion.slug || "",
-    category: Number(suggestion.category || 0),
-    restaurant: Number(suggestion.restaurant || 0),
-    category_name: suggestion.category_name || "",
-    image1: suggestion.image1 || "",
-    availability: suggestion.availability !== false,
-    video: suggestion.video || "",
-    restaurant_name: suggestion.restaurant_name || "",
-  });
 
   const showAddedToCartToast = (qty: number, name: string) => {
     toast.custom(
@@ -132,225 +90,24 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
     const nextCart = [...cart, { ...item, quantity }];
     const metrics = summarizeCart(nextCart);
-    setUpsellCartMetrics(metrics);
-    setUpsellTriggerItem(item);
-    upsellSourceItemIdRef.current = Number(item.id);
-    upsellSourceItemIdsRef.current = nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0);
 
     window.setTimeout(async () => {
       close();
       if (onAddToCart) onAddToCart();
       setIsAddingToCart(false);
-
-      try {
-        const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
-        if (settingsSnapshot) setUpsellSettings(settingsSnapshot);
-        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(settingsSnapshot?.aggressiveness || "moderate");
-        const suggestionLimit = 1;
-        const candidateLimit = 6;
-        const triggerLimit = Math.max(2, getUpsellTriggerLimit("add_to_cart", effectiveAggressiveness));
-        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
-
-        if (upsellActiveRef.current || !canShowUpsellTouchpoint("add_to_cart", triggerLimit, sessionLimit)) {
-          return;
-        }
-
-        const shouldRender =
-          (settingsSnapshot?.enabled ?? upsellSettings?.enabled ?? true) &&
-          (settingsSnapshot?.show_after_add_to_cart ?? upsellSettings?.show_after_add_to_cart ?? true);
-
-        if (!shouldRender) return;
-        const rawSuggestions = await fetchUpsellSuggestions({
-          triggerPoint: "add_to_cart",
-          sourceItemId: Number(item.id),
-          limit: candidateLimit,
-          cartItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
-          excludeItemIds: nextCart.map((cartItem) => Number(cartItem.id)).filter((id) => Number.isInteger(id) && id > 0),
-        });
-        const cartCategoryIds = new Set(
-          nextCart
-            .map((cartItem) => Number(cartItem.category))
-            .filter((categoryId) => Number.isInteger(categoryId) && categoryId > 0)
-        );
-        const suggestions = rawSuggestions
-          .filter((suggestion) => {
-            const suggestionCategoryId = Number(suggestion.category);
-            return !Number.isInteger(suggestionCategoryId) || suggestionCategoryId <= 0 || !cartCategoryIds.has(suggestionCategoryId);
-          })
-          .slice(0, suggestionLimit);
-
-        if (!suggestions.length || !shouldRender) return;
-        setUpsellSuggestions(suggestions);
-        setUpsellOpen(true);
-        upsellActiveRef.current = true;
-        incrementUpsellTouchpointCount("add_to_cart");
-
-        await logUpsellShownBatch({
-          triggerPoint: "add_to_cart",
-          suggestions,
-          cartValueAtTime: metrics.cartValueAtTime,
-          cartItemCount: metrics.cartItemCount,
-          metadata: { source_item_id: item.id, source_category_id: item.category },
-        });
-        await Promise.allSettled(
-          suggestions.map((suggestion) =>
-            logUpsellAssociationStat({
-              triggerPoint: "add_to_cart",
-              action: "shown",
-              sourceItemId: Number(item.id),
-              sourceItemIds: upsellSourceItemIdsRef.current,
-              upsellItemId: suggestion.id,
-              metadata: { source_category_id: item.category },
-            })
-          )
-        );
-      } catch {
-        // Non-blocking by design.
-      }
+      window.dispatchEvent(
+        new CustomEvent("cleverbiz:menu-item-added", {
+          detail: {
+            item,
+            nextCart,
+            metrics,
+          },
+        })
+      );
     }, 220);
   };
 
-  const acceptUpsellSuggestion = async (suggestion: UpsellSuggestion) => {
-    const added = await addToCart(toCartItemFromUpsell(suggestion), 1);
-    if (!added) {
-      toast.error("Could not add this suggestion. Please try again.");
-      return;
-    }
-    setUpsellOpen(false);
-    toast.success(`${suggestion.item_name} added to cart`);
-    pendingUpsellActionRef.current = async () => {
-      if (suggestion.id) {
-        markUpsellItemAccepted(suggestion.id);
-      }
-      await Promise.allSettled([
-        logUpsellEvent({
-          triggerPoint: "add_to_cart",
-          action: "accepted",
-          suggestion,
-          cartValueAtTime: upsellCartMetrics.cartValueAtTime,
-          cartItemCount: upsellCartMetrics.cartItemCount,
-        }),
-        logUpsellAssociationStat({
-          triggerPoint: "add_to_cart",
-          action: "accepted",
-          sourceItemId: upsellSourceItemIdRef.current || undefined,
-          sourceItemIds: upsellSourceItemIdsRef.current,
-          upsellItemId: suggestion.id,
-          upsellPrice: suggestion.price,
-        }),
-      ]);
-    };
-  };
-
-  const declineSingleSuggestion = async (suggestion: UpsellSuggestion) => {
-    setUpsellOpen(false);
-    pendingUpsellActionRef.current = async () => {
-      if (suggestion.id) {
-        markUpsellItemDismissed(suggestion.id);
-      }
-      if (suggestion.category) {
-        trackUpsellCategoryDecline(suggestion.category, 1);
-      }
-      await Promise.allSettled([
-        logUpsellEvent({
-          triggerPoint: "add_to_cart",
-          action: "declined",
-          suggestion,
-          cartValueAtTime: upsellCartMetrics.cartValueAtTime,
-          cartItemCount: upsellCartMetrics.cartItemCount,
-        }),
-        logUpsellAssociationStat({
-          triggerPoint: "add_to_cart",
-          action: "dismissed",
-          sourceItemId: upsellSourceItemIdRef.current || undefined,
-          sourceItemIds: upsellSourceItemIdsRef.current,
-          upsellItemId: suggestion.id,
-        }),
-      ]);
-    };
-  };
-
-  const dismissCardSuggestion = async (suggestion: UpsellSuggestion) => {
-    if (suggestion.id) {
-      markUpsellItemDismissed(suggestion.id);
-    }
-    if (suggestion.category) {
-      trackUpsellCategoryDecline(suggestion.category, 0.5);
-    }
-    setUpsellSuggestions((prev) => {
-      const next = prev.filter((row) => row.id !== suggestion.id);
-      if (next.length === 0) {
-        setUpsellOpen(false);
-      }
-      return next;
-    });
-    await Promise.allSettled([
-      logUpsellEvent({
-        triggerPoint: "add_to_cart",
-        action: "dismissed",
-        suggestion,
-        cartValueAtTime: upsellCartMetrics.cartValueAtTime,
-        cartItemCount: upsellCartMetrics.cartItemCount,
-      }),
-      logUpsellAssociationStat({
-        triggerPoint: "add_to_cart",
-        action: "dismissed",
-        sourceItemId: upsellSourceItemIdRef.current || undefined,
-        sourceItemIds: upsellSourceItemIdsRef.current,
-        upsellItemId: suggestion.id,
-      }),
-    ]);
-  };
-
-  const dismissManySuggestions = async (suggestions: UpsellSuggestion[]) => {
-    setUpsellOpen(false);
-    pendingUpsellActionRef.current = async () => {
-      const tasks: Promise<unknown>[] = [];
-      for (const suggestion of suggestions) {
-        if (suggestion.id) {
-          markUpsellItemDismissed(suggestion.id);
-        }
-        if (suggestion.category) {
-          trackUpsellCategoryDecline(suggestion.category, 0.5);
-        }
-        tasks.push(
-          logUpsellEvent({
-            triggerPoint: "add_to_cart",
-            action: "dismissed",
-            suggestion,
-            cartValueAtTime: upsellCartMetrics.cartValueAtTime,
-            cartItemCount: upsellCartMetrics.cartItemCount,
-          })
-        );
-        tasks.push(
-          logUpsellAssociationStat({
-            triggerPoint: "add_to_cart",
-            action: "dismissed",
-            sourceItemId: upsellSourceItemIdRef.current || undefined,
-            sourceItemIds: upsellSourceItemIdsRef.current,
-            upsellItemId: suggestion.id,
-          })
-        );
-      }
-      await Promise.allSettled(tasks);
-    };
-  };
-
-  const handleUpsellExited = async () => {
-    setUpsellSuggestions([]);
-    setUpsellTriggerItem(null);
-    upsellActiveRef.current = false;
-    const action = pendingUpsellActionRef.current;
-    pendingUpsellActionRef.current = null;
-    if (action) {
-      window.setTimeout(() => {
-        void action();
-      }, 420);
-    }
-  };
-
   return (
-    <>
     <Dialog open={isOpen} onClose={() => close()} className="relative z-50">
       <DialogBackdrop className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300" />
       <div className="fixed inset-0 flex w-screen items-center justify-center sm:p-6">
@@ -537,18 +294,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
         </DialogPanel>
       </div>
     </Dialog>
-    <UpsellBottomSheet
-        open={upsellOpen}
-        suggestions={upsellSuggestions}
-        triggerItem={upsellTriggerItem}
-        currencyCode={currencyCode}
-        onAccept={acceptUpsellSuggestion}
-        onDeclineSingle={declineSingleSuggestion}
-        onDismissSingle={dismissCardSuggestion}
-        onDismissMany={dismissManySuggestions}
-        onExited={handleUpsellExited}
-      />
-    </>
   );
 };
 

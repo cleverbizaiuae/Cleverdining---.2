@@ -1335,13 +1335,35 @@ class CartViewSet(viewsets.ModelViewSet):
             limit = 4
 
         from .upsell import build_cart_upsell_suggestions
+        from .models import UpsellEvent, UpsellSetting
         from item.serializers import ItemSerializer
 
         trigger_point = request.query_params.get('trigger_point', 'cart')
+        if trigger_point not in {'add_to_cart', 'cart', 'before_payment'}:
+            trigger_point = 'cart'
         try:
             source_item_id = int(request.query_params.get('source_item_id')) if request.query_params.get('source_item_id') else None
         except (TypeError, ValueError):
             source_item_id = None
+        session_id = str(request.query_params.get('session_id') or request.query_params.get('sessionId') or '').strip()[:120]
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=session.device.restaurant)
+        session_cap = {'subtle': 2, 'moderate': 4, 'aggressive': 6}.get(setting.aggressiveness, 4)
+        if session_id:
+            shown_count = UpsellEvent.objects.filter(
+                restaurant=session.device.restaurant,
+                session_id=session_id,
+                action='shown',
+            ).count()
+            if shown_count >= session_cap:
+                return Response({
+                    'cart_id': cart.id,
+                    'suggestions': [],
+                    'agent_decision': {
+                        'suggest_nothing': True,
+                        'reason': 'Session cap reached.',
+                        'decision_source': 'backend_session_cap',
+                    },
+                })
 
         # Compact signal transport over query params:
         # category_views=1:2,5:1
@@ -1410,8 +1432,15 @@ class CartViewSet(viewsets.ModelViewSet):
                 **item_data,
                 'upsell_rule': meta['rule'],
                 'upsell_message': meta['message'],
+                'suggestion_copy': meta['message'],
                 'upsell_score': meta['score'],
                 'upsell_stage': meta.get('stage'),
+                'target_role': meta.get('target_role', ''),
+                'candidate_roles': meta.get('candidate_roles', []),
+                'cart_roles': meta.get('cart_roles', []),
+                'venue_type': meta.get('venue_type', 'restaurant'),
+                'agent_reasoning': meta.get('agent_reasoning', ''),
+                'decision_source': 'deterministic',
             })
 
         return Response({

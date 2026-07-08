@@ -4,13 +4,14 @@ import {
   ModalFoodDetail,
   ModalAssistance,
 } from "@/components/dialog";
+import UpsellBottomSheet from "@/components/UpsellBottomSheet";
 import { useWebSocket } from "@/components/WebSocketContext";
 import { cn } from "clsx-for-tailwind";
 import { motion, AnimatePresence } from "motion/react";
 import toast from "react-hot-toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { CartProvider } from "../context/CartContext";
+import { CartProvider, type CartItem, useCart } from "../context/CartContext";
 import { type CategoryItemType, CategoryItem } from "./dashboard/category-item";
 import { FoodItemTypes } from "./dashboard/food-items";
 import { FoodItemCard } from "./dashboard/food-item-card";
@@ -18,9 +19,28 @@ import { BottomNav } from "@/components/BottomNav";
 import { Facebook, Globe, Instagram, Loader2, Music2, Search, Twitter, UtensilsCrossed } from "lucide-react";
 import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
-import { trackUpsellCategoryView } from "../lib/upsellSession";
+import {
+  canShowUpsellTouchpoint,
+  getEffectiveUpsellAggressiveness,
+  getUpsellSessionCap,
+  incrementUpsellTouchpointCount,
+  markUpsellItemAccepted,
+  markUpsellItemDismissed,
+  trackUpsellCategoryDecline,
+  trackUpsellCategoryView,
+} from "../lib/upsellSession";
+import {
+  fetchUpsellSettings,
+  fetchUpsellSuggestions,
+  logUpsellAssociationStat,
+  logUpsellEvent,
+  logUpsellShownBatch,
+  type UpsellSettingsSnapshot,
+  type UpsellSuggestion,
+} from "../lib/upsellApi";
 import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
+import { getSessionCurrencyCode } from "../utils/regionSession";
 
 function hexToRgba(hex: string, alpha: number): string {
   const cleaned = (hex || "").replace("#", "");
@@ -65,6 +85,275 @@ function hexToHsl(hex: string): string {
 function getFontFamily(fontPreset: string): string {
   return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
 }
+
+type MenuItemAddedDetail = {
+  item: Omit<CartItem, "quantity">;
+  nextCart: CartItem[];
+  metrics: {
+    cartValueAtTime: number;
+    cartItemCount: number;
+  };
+};
+
+const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
+  id: suggestion.id,
+  item_name: suggestion.item_name,
+  price: String(suggestion.price ?? "0"),
+  description: suggestion.description || "",
+  slug: suggestion.slug || "",
+  category: Number(suggestion.category || 0),
+  restaurant: Number(suggestion.restaurant || 0),
+  category_name: suggestion.category_name || "",
+  image1: suggestion.image1 || "",
+  availability: suggestion.availability !== false,
+  video: suggestion.video || "",
+  restaurant_name: suggestion.restaurant_name || "",
+});
+
+const MenuPageUpsellHost = () => {
+  const { addToCart } = useCart();
+  const currencyCode = getSessionCurrencyCode();
+  const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<UpsellSuggestion[]>([]);
+  const [triggerItem, setTriggerItem] = useState<any>(null);
+  const [settings, setSettings] = useState<UpsellSettingsSnapshot | null>(null);
+  const [cartMetrics, setCartMetrics] = useState({ cartValueAtTime: 0, cartItemCount: 0 });
+  const sourceItemIdRef = useRef<number | null>(null);
+  const sourceItemIdsRef = useRef<number[]>([]);
+  const activeRef = useRef(false);
+  const pendingActionRef = useRef<null | (() => Promise<void>)>(null);
+
+  useEffect(() => {
+    const handleMenuItemAdded = async (event: Event) => {
+      const detail = (event as CustomEvent<MenuItemAddedDetail>).detail;
+      const item = detail?.item;
+      const nextCart = Array.isArray(detail?.nextCart) ? detail.nextCart : [];
+      const metrics = detail?.metrics || { cartValueAtTime: 0, cartItemCount: 0 };
+
+      if (!item?.id || !nextCart.length) return;
+      if (activeRef.current) {
+        setOpen(false);
+      }
+
+      const cartItemIds = nextCart
+        .map((cartItem) => Number(cartItem.id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+      setTriggerItem(item);
+      setCartMetrics(metrics);
+      sourceItemIdRef.current = Number(item.id);
+      sourceItemIdsRef.current = cartItemIds;
+
+      try {
+        const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
+        if (settingsSnapshot) setSettings(settingsSnapshot);
+
+        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(settingsSnapshot?.aggressiveness || settings?.aggressiveness || "moderate");
+        const sessionLimit = getUpsellSessionCap(effectiveAggressiveness);
+        const triggerLimit = sessionLimit;
+
+        if (!canShowUpsellTouchpoint("add_to_cart", triggerLimit, sessionLimit)) return;
+
+        const shouldRender =
+          (settingsSnapshot?.enabled ?? settings?.enabled ?? true) &&
+          (settingsSnapshot?.show_after_add_to_cart ?? settings?.show_after_add_to_cart ?? true);
+
+        if (!shouldRender) return;
+
+        const rawSuggestions = await fetchUpsellSuggestions({
+          triggerPoint: "add_to_cart",
+          sourceItemId: Number(item.id),
+          limit: 6,
+          cartItemIds,
+          excludeItemIds: cartItemIds,
+        });
+        const nextSuggestions = rawSuggestions.slice(0, 1);
+
+        if (!nextSuggestions.length) return;
+
+        setSuggestions(nextSuggestions);
+        activeRef.current = true;
+        setOpen(true);
+        incrementUpsellTouchpointCount("add_to_cart");
+
+        await logUpsellShownBatch({
+          triggerPoint: "add_to_cart",
+          suggestions: nextSuggestions,
+          cartValueAtTime: metrics.cartValueAtTime,
+          cartItemCount: metrics.cartItemCount,
+          metadata: { source_item_id: item.id, source_category_id: item.category, surface: "menu_page" },
+        });
+        await Promise.allSettled(
+          nextSuggestions.map((suggestion) =>
+            logUpsellAssociationStat({
+              triggerPoint: "add_to_cart",
+              action: "shown",
+              sourceItemId: Number(item.id),
+              sourceItemIds: cartItemIds,
+              upsellItemId: suggestion.id,
+              metadata: { source_category_id: item.category, surface: "menu_page" },
+            })
+          )
+        );
+      } catch {
+        // Non-blocking by design.
+      }
+    };
+
+    window.addEventListener("cleverbiz:menu-item-added", handleMenuItemAdded);
+    return () => window.removeEventListener("cleverbiz:menu-item-added", handleMenuItemAdded);
+  }, [settings]);
+
+  const acceptSuggestion = async (suggestion: UpsellSuggestion) => {
+    const added = await addToCart(toCartItemFromUpsell(suggestion), 1);
+    if (!added) {
+      toast.error("Could not add this suggestion. Please try again.");
+      return;
+    }
+    setOpen(false);
+    toast.success(`${suggestion.item_name} added to cart`);
+    pendingActionRef.current = async () => {
+      markUpsellItemAccepted(suggestion.id);
+      await Promise.allSettled([
+        logUpsellEvent({
+          triggerPoint: "add_to_cart",
+          action: "accepted",
+          suggestion,
+          cartValueAtTime: cartMetrics.cartValueAtTime,
+          cartItemCount: cartMetrics.cartItemCount,
+          metadata: { surface: "menu_page" },
+        }),
+        logUpsellAssociationStat({
+          triggerPoint: "add_to_cart",
+          action: "accepted",
+          sourceItemId: sourceItemIdRef.current || undefined,
+          sourceItemIds: sourceItemIdsRef.current,
+          upsellItemId: suggestion.id,
+          upsellPrice: suggestion.price,
+          metadata: { surface: "menu_page" },
+        }),
+      ]);
+    };
+  };
+
+  const declineSuggestion = async (suggestion: UpsellSuggestion) => {
+    setOpen(false);
+    pendingActionRef.current = async () => {
+      markUpsellItemDismissed(suggestion.id);
+      if (suggestion.category) {
+        trackUpsellCategoryDecline(suggestion.category, 1);
+      }
+      await Promise.allSettled([
+        logUpsellEvent({
+          triggerPoint: "add_to_cart",
+          action: "declined",
+          suggestion,
+          cartValueAtTime: cartMetrics.cartValueAtTime,
+          cartItemCount: cartMetrics.cartItemCount,
+          metadata: { surface: "menu_page" },
+        }),
+        logUpsellAssociationStat({
+          triggerPoint: "add_to_cart",
+          action: "dismissed",
+          sourceItemId: sourceItemIdRef.current || undefined,
+          sourceItemIds: sourceItemIdsRef.current,
+          upsellItemId: suggestion.id,
+          metadata: { surface: "menu_page" },
+        }),
+      ]);
+    };
+  };
+
+  const dismissSingle = async (suggestion: UpsellSuggestion) => {
+    markUpsellItemDismissed(suggestion.id);
+    if (suggestion.category) {
+      trackUpsellCategoryDecline(suggestion.category, 0.5);
+    }
+    setSuggestions((current) => {
+      const remaining = current.filter((row) => row.id !== suggestion.id);
+      if (remaining.length === 0) setOpen(false);
+      return remaining;
+    });
+    await Promise.allSettled([
+      logUpsellEvent({
+        triggerPoint: "add_to_cart",
+        action: "dismissed",
+        suggestion,
+        cartValueAtTime: cartMetrics.cartValueAtTime,
+        cartItemCount: cartMetrics.cartItemCount,
+        metadata: { surface: "menu_page" },
+      }),
+      logUpsellAssociationStat({
+        triggerPoint: "add_to_cart",
+        action: "dismissed",
+        sourceItemId: sourceItemIdRef.current || undefined,
+        sourceItemIds: sourceItemIdsRef.current,
+        upsellItemId: suggestion.id,
+        metadata: { surface: "menu_page" },
+      }),
+    ]);
+  };
+
+  const dismissMany = async (items: UpsellSuggestion[]) => {
+    setOpen(false);
+    pendingActionRef.current = async () => {
+      const tasks: Promise<unknown>[] = [];
+      items.forEach((suggestion) => {
+        markUpsellItemDismissed(suggestion.id);
+        if (suggestion.category) {
+          trackUpsellCategoryDecline(suggestion.category, 0.5);
+        }
+        tasks.push(
+          logUpsellEvent({
+            triggerPoint: "add_to_cart",
+            action: "dismissed",
+            suggestion,
+            cartValueAtTime: cartMetrics.cartValueAtTime,
+            cartItemCount: cartMetrics.cartItemCount,
+            metadata: { surface: "menu_page" },
+          })
+        );
+        tasks.push(
+          logUpsellAssociationStat({
+            triggerPoint: "add_to_cart",
+            action: "dismissed",
+            sourceItemId: sourceItemIdRef.current || undefined,
+            sourceItemIds: sourceItemIdsRef.current,
+            upsellItemId: suggestion.id,
+            metadata: { surface: "menu_page" },
+          })
+        );
+      });
+      await Promise.allSettled(tasks);
+    };
+  };
+
+  const handleExited = () => {
+    setSuggestions([]);
+    setTriggerItem(null);
+    activeRef.current = false;
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    if (action) {
+      window.setTimeout(() => {
+        void action();
+      }, 420);
+    }
+  };
+
+  return (
+    <UpsellBottomSheet
+      open={open}
+      suggestions={suggestions}
+      triggerItem={triggerItem}
+      currencyCode={currencyCode}
+      onAccept={acceptSuggestion}
+      onDeclineSingle={declineSuggestion}
+      onDismissSingle={dismissSingle}
+      onDismissMany={dismissMany}
+      onExited={handleExited}
+    />
+  );
+};
 
 const LayoutDashboard = () => {
   const location = useLocation();
@@ -688,6 +977,7 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation - Hide on success/checkout pages */}
         {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
+        <MenuPageUpsellHost />
         </div>
       </div>
 

@@ -24,8 +24,15 @@ export type UpsellSuggestion = {
   restaurant_name?: string;
   upsell_rule?: string;
   upsell_message?: string;
+  suggestion_copy?: string;
   upsell_score?: number;
   upsell_stage?: string;
+  target_role?: string;
+  candidate_roles?: string[];
+  cart_roles?: string[];
+  venue_type?: string;
+  agent_reasoning?: string;
+  decision_source?: string;
   association_strength?: number;
   co_order_frequency?: number;
 };
@@ -91,9 +98,20 @@ const normalizeUpsellSuggestion = (raw: unknown): UpsellSuggestion | null => {
     video: String(source.video || ""),
     restaurant_name: String(source.restaurant_name || ""),
     upsell_rule: source.upsell_rule ? String(source.upsell_rule) : undefined,
-    upsell_message: source.upsell_message ? String(source.upsell_message) : undefined,
+    upsell_message: source.suggestion_copy
+      ? String(source.suggestion_copy)
+      : source.upsell_message
+        ? String(source.upsell_message)
+        : undefined,
+    suggestion_copy: source.suggestion_copy ? String(source.suggestion_copy) : undefined,
     upsell_score: source.upsell_score === undefined ? undefined : safeNumber(source.upsell_score),
     upsell_stage: source.upsell_stage ? String(source.upsell_stage) : undefined,
+    target_role: source.target_role ? String(source.target_role) : undefined,
+    candidate_roles: Array.isArray(source.candidate_roles) ? source.candidate_roles.map((role) => String(role)) : undefined,
+    cart_roles: Array.isArray(source.cart_roles) ? source.cart_roles.map((role) => String(role)) : undefined,
+    venue_type: source.venue_type ? String(source.venue_type) : undefined,
+    agent_reasoning: source.agent_reasoning ? String(source.agent_reasoning) : undefined,
+    decision_source: source.decision_source ? String(source.decision_source) : undefined,
     association_strength:
       source.association_strength === undefined ? undefined : safeNumber(source.association_strength),
     co_order_frequency:
@@ -166,6 +184,8 @@ export async function fetchUpsellSuggestions(params: {
     exclude_item_ids: excludeItemIds,
     excludeItemIds,
     guest_session_token: sessionToken || undefined,
+    session_id: getUpsellSessionId(),
+    sessionId: getUpsellSessionId(),
     ...signalParams,
   };
 

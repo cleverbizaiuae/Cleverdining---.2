@@ -12,6 +12,15 @@ from category.models import Category
 from item.models import Item
 from order.models import Cart, ItemAssociation, UpsellItemSetting, UpsellRule, UpsellSetting
 from core.region_config import normalize_region
+from .upsell_knowledge import (
+    ROLE_ADDON,
+    classify_cart_roles,
+    classify_item_roles,
+    default_knowledge_role_for_engine_role,
+    get_gap_priority,
+    infer_venue_type,
+    knowledge_roles_to_engine_roles,
+)
 
 
 CATEGORY_KEYWORDS = {
@@ -315,6 +324,8 @@ def _item_roles(item: Item, role_categories: Dict[str, Set[int]]) -> Set[str]:
         if category_id in category_ids or (sub_category_id and sub_category_id in category_ids):
             roles.add(role)
 
+    roles.update(knowledge_roles_to_engine_roles(classify_item_roles(item)))
+
     if roles:
         return roles
 
@@ -333,7 +344,7 @@ def _detect_stage(has_main: bool, has_drink: bool, has_starter_or_dessert: bool)
     return "balanced"
 
 
-def _knowledge_gap_priority(cart_roles: Set[str]) -> List[str]:
+def _legacy_gap_priority(cart_roles: Set[str]) -> List[str]:
     """
     Cart-state knowledge base from the upsell redesign brief.
     The engine fills missing meal roles before scoring and avoids suggesting
@@ -359,6 +370,24 @@ def _knowledge_gap_priority(cart_roles: Set[str]) -> List[str]:
     if has_dessert:
         return [role for role in ["drinks", "main"] if role not in cart_roles]
     return []
+
+
+def _knowledge_gap_priority(
+    cart_roles: Set[str],
+    *,
+    cart_items: Optional[List[Item]] = None,
+    restaurant=None,
+    hour: Optional[int] = None,
+) -> List[str]:
+    if cart_items:
+        knowledge_roles = classify_cart_roles(cart_items)
+        if knowledge_roles:
+            venue_type = infer_venue_type(restaurant, cart_items)
+            gaps = knowledge_roles_to_engine_roles(
+                get_gap_priority(knowledge_roles, venue_type=venue_type, hour=hour)
+            )
+            return gaps
+    return _legacy_gap_priority(cart_roles)
 
 
 def _flatten_cart_sources(cart_items: Iterable) -> List[Item]:
@@ -680,6 +709,7 @@ def _build_upsell_suggestions_for_items(
     cart_role_set: Set[str] = set()
     for cart_item in cart_source_items:
         cart_role_set.update(_item_roles(cart_item, role_categories))
+    cart_knowledge_roles = classify_cart_roles(cart_source_items)
     has_main = "main" in cart_role_set
     has_drink = "drinks" in cart_role_set
     has_starter = "starters" in cart_role_set
@@ -689,12 +719,24 @@ def _build_upsell_suggestions_for_items(
     region = normalize_region(getattr(restaurant, "region", None))
     _ = HIGH_CART_DESSERT_THRESHOLD_BY_REGION.get(region, Decimal("45.00"))
     _ = STARTER_CART_CEILING_BY_REGION.get(region, Decimal("150.00"))
-    gaps = _knowledge_gap_priority(cart_role_set)
+    hour = _current_hour_for_restaurant(getattr(restaurant, "timezone", "UTC"))
+    venue_type = infer_venue_type(restaurant, cart_source_items)
+    knowledge_gaps = get_gap_priority(cart_knowledge_roles, venue_type=venue_type, hour=hour) if cart_knowledge_roles else []
+    generic_unknown_menu = not cart_knowledge_roles and not cart_role_set
+    gaps = knowledge_roles_to_engine_roles(knowledge_gaps) if knowledge_gaps or cart_knowledge_roles else _knowledge_gap_priority(
+        cart_role_set,
+        cart_items=cart_source_items,
+        restaurant=restaurant,
+        hour=hour,
+    )
+    if generic_unknown_menu and not gaps:
+        gaps = ["premium"]
+        knowledge_gaps = [ROLE_ADDON]
     if not gaps:
         return []
     gap_rank = {role: index for index, role in enumerate(gaps)}
+    target_knowledge_roles = set(knowledge_gaps)
 
-    hour = _current_hour_for_restaurant(getattr(restaurant, "timezone", "UTC"))
     blocked_target_ids: Set[int] = set()
     pair_boost_targets: Set[int] = set()
     for source_item in cart_source_items:
@@ -719,15 +761,23 @@ def _build_upsell_suggestions_for_items(
             continue
 
         candidate_roles = _item_roles(candidate, role_categories)
+        if generic_unknown_menu and not candidate_roles:
+            candidate_roles = {"premium"}
         if not candidate_roles:
             continue
+        candidate_knowledge_roles = classify_item_roles(candidate)
+        if generic_unknown_menu and not candidate_knowledge_roles:
+            candidate_knowledge_roles = {ROLE_ADDON}
 
         # The brief's highest-priority guard: do not suggest a role already in
         # the current cart. Pairing intelligence can rank candidates, not break
         # meal-composition rules.
         if candidate_roles & cart_role_set:
-            continue
+            if not candidate_knowledge_roles or (candidate_knowledge_roles & cart_knowledge_roles):
+                continue
         if candidate_roles.isdisjoint(set(gaps)):
+            continue
+        if target_knowledge_roles and candidate_knowledge_roles and candidate_knowledge_roles.isdisjoint(target_knowledge_roles):
             continue
 
         candidate_category_id = candidate.category_id
@@ -739,6 +789,12 @@ def _build_upsell_suggestions_for_items(
         reasons: Dict[str, int] = {}
 
         matching_gap_rank = min((gap_rank.get(role, 99) for role in candidate_roles), default=99)
+        matching_target_roles = [role for role in knowledge_gaps if role in candidate_knowledge_roles]
+        target_role = (
+            matching_target_roles[0]
+            if matching_target_roles
+            else default_knowledge_role_for_engine_role(min(candidate_roles, key=lambda role: gap_rank.get(role, 99)))
+        )
         if matching_gap_rank == 0:
             score += 55
             reasons["gap"] = reasons.get("gap", 0) + 55
@@ -750,6 +806,10 @@ def _build_upsell_suggestions_for_items(
             reasons["gap"] = reasons.get("gap", 0) + 18
         else:
             score -= 25
+
+        if matching_target_roles:
+            score += 12
+            reasons["gap"] = reasons.get("gap", 0) + 12
 
         culinary_points = 0
         for cart_source in cart_source_items:
@@ -765,8 +825,8 @@ def _build_upsell_suggestions_for_items(
         if trigger_source_item:
             for trigger_role in _item_roles(trigger_source_item, role_categories):
                 ranked_targets = list(PAIRING_BY_ROLE.get(trigger_role, ()))
-                for rank, target_role in enumerate(ranked_targets):
-                    if target_role not in candidate_roles:
+                for rank, paired_engine_role in enumerate(ranked_targets):
+                    if paired_engine_role not in candidate_roles:
                         continue
                     if rank == 0:
                         category_pair_points = max(category_pair_points, 14)
@@ -778,8 +838,8 @@ def _build_upsell_suggestions_for_items(
             for source in cart_source_items:
                 for source_role in _item_roles(source, role_categories):
                     ranked_targets = list(PAIRING_BY_ROLE.get(source_role, ()))
-                    for rank, target_role in enumerate(ranked_targets):
-                        if target_role not in candidate_roles:
+                    for rank, paired_engine_role in enumerate(ranked_targets):
+                        if paired_engine_role not in candidate_roles:
                             continue
                         category_pair_points = max(category_pair_points, 10 if rank == 0 else 5)
         if category_pair_points:
@@ -894,6 +954,14 @@ def _build_upsell_suggestions_for_items(
                 "stage": stage,
                 "price": float(candidate_price),
                 "gap_rank": matching_gap_rank,
+                "target_role": target_role,
+                "candidate_roles": sorted(candidate_knowledge_roles),
+                "cart_roles": sorted(cart_knowledge_roles),
+                "venue_type": venue_type,
+                "agent_reasoning": (
+                    f"Cart roles {', '.join(sorted(cart_knowledge_roles)) or 'unknown'}; "
+                    f"target {target_role}; venue {venue_type}; backend score {int(score)}."
+                ),
                 "manual_pair": candidate.id in pair_boost_targets,
                 "historical_max_strength": float(historical.get("max_strength", 0.0)) if historical else 0.0,
                 "historical_max_frequency": int(historical.get("max_frequency", 0.0)) if historical else 0,
@@ -903,6 +971,9 @@ def _build_upsell_suggestions_for_items(
 
     if not results:
         return []
+
+    best_gap_rank = min(int(row.get("gap_rank", 99)) for row in results)
+    results = [row for row in results if int(row.get("gap_rank", 99)) == best_gap_rank]
 
     strategy = _canonical_strategy(setting.strategy)
     if strategy == "max_revenue":

@@ -21,6 +21,7 @@ from restaurant.models import Restaurant
 from .models import ItemAssociation, OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .schema_guard import ensure_upsell_tables
 from .upsell import build_item_context_upsell_suggestions
+from .upsell_knowledge import build_upsell_agent_context, validated_upsell_agent_decision
 from .upsell_serializers import (
     UpsellItemSettingSerializer,
     UpsellEventCreateSerializer,
@@ -586,6 +587,29 @@ class UpsellSmartSuggestionsAPIView(APIView):
             limit = max(1, min(int(request.query_params.get("limit") or 5), 20))
         except (TypeError, ValueError):
             limit = 5
+        session_id = str(request.query_params.get("session_id") or request.query_params.get("sessionId") or "").strip()[:120]
+
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
+        session_cap = {"subtle": 2, "moderate": 4, "aggressive": 6}.get(setting.aggressiveness, 4)
+        if session_id:
+            shown_count = UpsellEvent.objects.filter(
+                restaurant=restaurant,
+                session_id=session_id,
+                action="shown",
+            ).count()
+            if shown_count >= session_cap:
+                return Response(
+                    {
+                        "results": [],
+                        "suggestions": [],
+                        "count": 0,
+                        "agent_decision": {
+                            "suggest_nothing": True,
+                            "reason": "Session cap reached.",
+                            "decision_source": "backend_session_cap",
+                        },
+                    }
+                )
 
         signal_payload = {
             "category_declines": _parse_signal_counts(request.query_params.get("category_declines")),
@@ -603,10 +627,31 @@ class UpsellSmartSuggestionsAPIView(APIView):
         )
 
         excluded_ids = cart_item_ids.union(exclude_item_ids)
+        eligible_engine_rows = [
+            row
+            for row in engine_rows
+            if row.get("item") and row["item"].id not in excluded_ids
+        ]
+        cart_items = list(
+            Item.objects.select_related("category", "sub_category").filter(
+                restaurant=restaurant,
+                id__in=cart_item_ids,
+            )
+        )
+        agent_context = build_upsell_agent_context(
+            restaurant=restaurant,
+            setting=setting,
+            cart_items=cart_items,
+            candidate_rows=eligible_engine_rows,
+            trigger_point=trigger_point,
+            hour=timezone.localtime(timezone.now()).hour,
+            session_signals=signal_payload,
+        )
+        agent_decision = validated_upsell_agent_decision(None, eligible_engine_rows)
         results = []
-        for row in engine_rows:
+        for row in eligible_engine_rows:
             item = row.get("item")
-            if not item or item.id in excluded_ids:
+            if not item:
                 continue
             image_url = ""
             try:
@@ -632,14 +677,36 @@ class UpsellSmartSuggestionsAPIView(APIView):
                     "availability": bool(item.availability),
                     "upsell_rule": row.get("rule", ""),
                     "upsell_message": row.get("message", ""),
+                    "suggestion_copy": row.get("message", ""),
                     "upsell_score": row.get("score", 0),
                     "upsell_stage": row.get("stage", ""),
+                    "target_role": row.get("target_role", ""),
+                    "candidate_roles": row.get("candidate_roles", []),
+                    "cart_roles": row.get("cart_roles", []),
+                    "venue_type": row.get("venue_type", agent_context.get("restaurant", {}).get("venue_type", "restaurant")),
+                    "agent_reasoning": row.get("agent_reasoning", ""),
+                    "decision_source": "deterministic",
                     "association_strength": row.get("historical_max_strength", 0.0),
                     "co_order_frequency": row.get("historical_max_frequency", 0),
                 }
             )
 
-        return Response({"results": results[:limit], "suggestions": results[:limit], "count": len(results)})
+        response_payload = {
+            "results": results[:limit],
+            "suggestions": results[:limit],
+            "count": len(results),
+            "agent_decision": agent_decision,
+            "knowledge_base": {
+                "venue_type": agent_context.get("restaurant", {}).get("venue_type", "restaurant"),
+                "cart_roles": agent_context.get("cart_roles", []),
+                "target_roles": agent_context.get("target_roles", []),
+                "candidate_count": len(agent_context.get("candidates", [])),
+                "llm_ready": bool(agent_context.get("candidates")),
+            },
+        }
+        if str(request.query_params.get("debug_agent_context") or "").lower() in {"1", "true", "yes"}:
+            response_payload["agent_context"] = agent_context
+        return Response(response_payload)
 
 
 class UpsellAnalyticsAPIView(APIView):

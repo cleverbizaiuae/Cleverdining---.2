@@ -14,6 +14,7 @@ from restaurant.models import BrandConfig, Restaurant
 
 from .models import UpsellEvent
 from .upsell import build_item_context_upsell_suggestions
+from .upsell_knowledge import validated_upsell_agent_decision
 from .upsell_views import UpsellAnalyticsAPIView
 
 
@@ -205,12 +206,20 @@ class UpsellKnowledgeEngineTests(TestCase):
             slug="knowledge-starters",
             category_type="starter",
         )
+        self.shisha_category = Category.objects.create(
+            restaurant=self.restaurant,
+            Category_name="Shisha",
+            slug="knowledge-shisha",
+            category_type="premium",
+        )
         self.burger = self._item("Classic Burger", self.main_category, "classic-burger", "Burger main dish", "35.00")
         self.pizza = self._item("Margherita Pizza", self.main_category, "margherita-pizza", "Pizza main dish", "39.00")
         self.cola = self._item("Cola", self.drink_category, "cola", "Cold cola drink", "10.00")
         self.lemonade = self._item("Lemonade", self.drink_category, "lemonade", "Fresh juice drink", "14.00")
+        self.cappuccino = self._item("Cappuccino", self.drink_category, "cappuccino", "Hot coffee drink", "12.00")
         self.ice_cream = self._item("Vanilla Ice Cream", self.dessert_category, "vanilla-ice-cream", "Dessert", "16.00")
         self.fries = self._item("Fries", self.starter_category, "fries", "Starter side", "12.00")
+        self.shisha = self._item("Double Apple Shisha", self.shisha_category, "double-apple-shisha", "Shisha flavour", "75.00")
 
     def _item(self, name, category, slug, description, price):
         return Item.objects.create(
@@ -286,3 +295,63 @@ class UpsellKnowledgeEngineTests(TestCase):
         roles = self._result_roles(rows)
         self.assertNotIn("drink", roles)
         self.assertTrue(any(role in {"dessert", "starter"} for role in roles))
+
+    def test_hot_drink_only_suggests_dessert_or_light_food_not_main(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.cappuccino.id],
+            trigger_point="cart",
+            source_item_id=self.cappuccino.id,
+            limit=4,
+        )
+
+        self.assertGreater(len(rows), 0)
+        roles = self._result_roles(rows)
+        self.assertNotIn("main", roles)
+        self.assertIn(rows[0]["target_role"], {"DESSERT", "STARTER"})
+
+    def test_shisha_only_suggests_cold_drink_before_food(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.shisha.id],
+            trigger_point="cart",
+            source_item_id=self.shisha.id,
+            limit=4,
+        )
+
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["item"].category.category_type, "drink")
+        self.assertEqual(rows[0]["target_role"], "DRINK_COLD")
+
+    def test_complete_meal_with_side_suggests_nothing(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id, self.cola.id, self.ice_cream.id, self.fries.id],
+            trigger_point="cart",
+            source_item_id=self.fries.id,
+            limit=4,
+        )
+
+        self.assertEqual(rows, [])
+
+    def test_invalid_llm_decision_falls_back_to_top_candidate(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+
+        decision = validated_upsell_agent_decision(
+            {
+                "suggest_nothing": False,
+                "suggested_item_id": "999999",
+                "suggestion_copy": "Add a fake item?",
+                "confidence": 0.99,
+            },
+            rows,
+        )
+
+        self.assertEqual(decision["decision_source"], "deterministic_fallback")
+        self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
