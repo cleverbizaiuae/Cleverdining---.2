@@ -31,6 +31,7 @@ interface ModalFoodDetailProps extends ModalProps {
   isOpen: boolean;
   close: () => void;
   itemId?: number;
+  initialItem?: any;
   onAddToCart?: (detail: MenuItemAddedDetail) => void;
 }
 
@@ -38,9 +39,11 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   isOpen,
   close,
   itemId,
+  initialItem,
   onAddToCart,
 }) => {
   const [item, setItem] = useState<any>(null);
+  const [loadError, setLoadError] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isImageLoading, setIsImageLoading] = useState(true);
@@ -49,22 +52,52 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const currencyCode = getSessionCurrencyCode();
 
   const truncatedName = item?.item_name || "Loading...";
+  const hasValidItem =
+    item &&
+    Number.isInteger(Number(item.id)) &&
+    Number(item.id) > 0 &&
+    typeof item.item_name === "string" &&
+    item.item_name.trim().length > 0 &&
+    Number.isFinite(Number(String(item.price || "").replace(/[^0-9.-]/g, ""))) &&
+    Number(String(item.price || "").replace(/[^0-9.-]/g, "")) > 0;
 
   useEffect(() => {
+    let cancelled = false;
     if (isOpen && itemId) {
       setIsImageLoading(true);
-      cachedGet(`/api/customer/items/${itemId}/`, {}, { ttlMs: 60_000 }).then((res) => {
-        setItem(res.data);
+      setLoadError(false);
+      if (initialItem) {
+        setItem(initialItem);
         setShowVideo(false);
         setQuantity(1);
-      });
+      } else {
+        setItem(null);
+      }
+
+      cachedGet(`/api/customer/items/${itemId}/`, { timeout: 3500 }, { ttlMs: 60_000 })
+        .then((res) => {
+          if (cancelled) return;
+          setItem(res.data);
+          setShowVideo(false);
+          setQuantity(1);
+          setLoadError(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setLoadError(!initialItem);
+          setIsImageLoading(false);
+        });
     } else {
       setItem(null);
+      setLoadError(false);
       setShowVideo(false);
       setQuantity(1);
       setIsImageLoading(true);
     }
-  }, [isOpen, itemId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, itemId, initialItem]);
 
   const showAddedToCartToast = (qty: number, name: string) => {
     toast.custom(
@@ -87,10 +120,28 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   };
 
   const handleAddToCart = async () => {
-    if (!item || isAddingToCart) return;
+    if (!hasValidItem || isAddingToCart) {
+      toast.error(loadError ? "Could not load this item. Please try another item." : "Please wait for the item to load.");
+      return;
+    }
 
     setIsAddingToCart(true);
-    const added = await addToCart(item, quantity);
+    const cartItem: Omit<CartItem, "quantity"> = {
+      id: Number(item.id),
+      item_name: String(item.item_name || "").trim(),
+      price: String(item.price || "0"),
+      description: String(item.description || ""),
+      slug: String(item.slug || ""),
+      category: Number(item.category || 0),
+      restaurant: Number(item.restaurant || 0),
+      category_name: String(item.category_name || ""),
+      image1: String(item.image1 || ""),
+      availability: item.availability !== false,
+      video: String(item.video || ""),
+      restaurant_name: String(item.restaurant_name || ""),
+    };
+
+    const added = await addToCart(cartItem, quantity);
     if (!added) {
       toast.error("Could not add this item. Please try again.");
       setIsAddingToCart(false);
@@ -98,10 +149,10 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     }
     showAddedToCartToast(quantity, item.item_name || "Item");
 
-    const nextCart = [...cart, { ...item, quantity }];
+    const nextCart = [...cart, { ...cartItem, quantity }];
     const metrics = summarizeCart(nextCart);
     const addedDetail = {
-      item,
+      item: cartItem,
       nextCart,
       metrics,
     };
@@ -238,7 +289,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               </div>
 
               <p className="text-base text-muted-foreground leading-relaxed max-w-md mx-auto">
-                {item?.description || "No description available for this item."}
+                {loadError ? "Could not load this item. Please close and try again." : item?.description || "No description available for this item."}
               </p>
             </div>
           </div>
@@ -250,7 +301,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               <div className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-secondary/70 p-1.5 sm:gap-3">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
+                  disabled={quantity <= 1 || !hasValidItem}
                   className={cn(
                     "flex h-10 w-10 items-center justify-center rounded-full shadow-sm transition-colors active:scale-90 sm:h-12 sm:w-12",
                     quantity <= 1
@@ -263,6 +314,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 <span className="w-6 text-center text-lg font-bold tabular-nums text-foreground sm:w-8 sm:text-xl">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
+                  disabled={!hasValidItem}
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-md transition-colors hover:bg-primary/90 active:scale-90 sm:h-12 sm:w-12"
                 >
                   <Plus className="w-4 h-4" strokeWidth={2.4} />
@@ -271,11 +323,13 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 
               <button
                 onClick={handleAddToCart}
-                disabled={isAddingToCart}
+                disabled={isAddingToCart || !hasValidItem}
                 className={cn(
                   "flex h-14 min-w-0 flex-1 items-center justify-center gap-2 truncate rounded-full px-4 text-sm font-bold text-white shadow-xl transition-transform active:scale-[0.98] sm:h-16 sm:text-base",
                   isAddingToCart
                     ? "bg-emerald-500 shadow-xl shadow-emerald-500/25 scale-[1.01]"
+                    : !hasValidItem
+                      ? "bg-slate-400 text-white shadow-none"
                     : "bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
                 )}
               >
@@ -287,7 +341,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 ) : (
                   <>
                     <ShoppingBag className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={1.8} />
-                    <span className="truncate px-1 font-semibold whitespace-nowrap">Add</span>
+                    <span className="truncate px-1 font-semibold whitespace-nowrap">{hasValidItem ? "Add" : "Loading"}</span>
                     <span className="text-sm sm:text-base font-bold whitespace-nowrap">
                       {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
                     </span>

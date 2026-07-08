@@ -149,6 +149,24 @@ const MenuPageUpsellHost = ({
 
         if (!shouldRender) return;
 
+        const fallbackSuggestions = buildClientUpsellSuggestions({
+          triggerPoint: "add_to_cart",
+          sourceItem: item,
+          candidates: menuCandidates,
+          cartItems: nextCart,
+          cartItemIds,
+          excludeItemIds: cartItemIds,
+          restaurantId: Number(item.restaurant || 0) || undefined,
+          limit: 2,
+        });
+        let nextSuggestions = fallbackSuggestions.slice(0, 2);
+
+        if (nextSuggestions.length) {
+          setSuggestions(nextSuggestions);
+          activeRef.current = true;
+          setOpen(true);
+        }
+
         const rawSuggestions = await fetchUpsellSuggestions({
           triggerPoint: "add_to_cart",
           sourceItemId: Number(item.id),
@@ -157,20 +175,9 @@ const MenuPageUpsellHost = ({
           cartItemIds,
           excludeItemIds: cartItemIds,
         });
-        const nextSuggestions = (
-          rawSuggestions.length
-            ? rawSuggestions
-            : buildClientUpsellSuggestions({
-              triggerPoint: "add_to_cart",
-              sourceItem: item,
-              candidates: menuCandidates,
-              cartItems: nextCart,
-              cartItemIds,
-              excludeItemIds: cartItemIds,
-              restaurantId: Number(item.restaurant || 0) || undefined,
-              limit: 2,
-            })
-        ).slice(0, 2);
+        if (rawSuggestions.length) {
+          nextSuggestions = rawSuggestions.slice(0, 2);
+        }
 
         if (!nextSuggestions.length) return;
 
@@ -387,6 +394,7 @@ const LayoutDashboard = () => {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [isDetailOpen, setDetailOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedItem, setSelectedItem] = useState<FoodItemTypes | null>(null);
   const [menuUpsellDetail, setMenuUpsellDetail] = useState<MenuItemAddedDetail | null>(null);
   const [isAssistanceOpen, setAssistanceOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
@@ -737,8 +745,9 @@ const LayoutDashboard = () => {
     }
   }, [location.search]);
 
-  const showFood = (id: number) => {
-    setSelectedItemId(id);
+  const showFood = (item: FoodItemTypes) => {
+    setSelectedItemId(item.id);
+    setSelectedItem(item);
     setDetailOpen(true);
   };
 
@@ -1005,7 +1014,7 @@ const LayoutDashboard = () => {
                       >
                         <FoodItemCard
                           item={item}
-                          onAdd={() => showFood(item.id)}
+                          onAdd={() => showFood(item)}
                         />
                       </motion.div>
                     ))}
@@ -1033,8 +1042,12 @@ const LayoutDashboard = () => {
       {/* Detail modal */}
       <ModalFoodDetail
         isOpen={isDetailOpen}
-        close={() => setDetailOpen(false)}
+        close={() => {
+          setDetailOpen(false);
+          setSelectedItem(null);
+        }}
         itemId={selectedItemId ?? undefined}
+        initialItem={selectedItem}
         onAddToCart={(detail) => {
           setMenuUpsellDetail({ ...detail });
           // setIsMobileMenuOpen(true); // No longer needed with bottom nav
