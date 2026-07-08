@@ -1,1 +1,7 @@
+/api/* https://cleverdining-2.onrender.com/api/:splat 200!
+/owners/* https://cleverdining-2.onrender.com/owners/:splat 200!
+/message/* https://cleverdining-2.onrender.com/message/:splat 200!
+/token/* https://cleverdining-2.onrender.com/token/:splat 200!
+/adminapi/* https://cleverdining-2.onrender.com/adminapi/:splat 200!
+/profile/* https://cleverdining-2.onrender.com/profile/:splat 200!
 /* /index.html 200

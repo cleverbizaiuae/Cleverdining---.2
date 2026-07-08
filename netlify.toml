@@ -9,7 +9,42 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://cleverdining-2.onrender.com/:splat"
+  to = "https://cleverdining-2.onrender.com/api/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/owners/*"
+  to = "https://cleverdining-2.onrender.com/owners/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/message/*"
+  to = "https://cleverdining-2.onrender.com/message/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/token/*"
+  to = "https://cleverdining-2.onrender.com/token/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/adminapi/*"
+  to = "https://cleverdining-2.onrender.com/adminapi/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/profile/*"
+  to = "https://cleverdining-2.onrender.com/profile/:splat"
   status = 200
   force = true
   headers = {X-From = "Netlify"}
