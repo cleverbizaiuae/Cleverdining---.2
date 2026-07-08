@@ -101,6 +101,45 @@ const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "qua
   restaurant_name: suggestion.restaurant_name || "",
 });
 
+const getRestaurantIdFromStorage = (): number | null => {
+  try {
+    const userInfo = localStorage.getItem("userInfo");
+    if (!userInfo) return null;
+    const parsedUserInfo = JSON.parse(userInfo);
+    const restaurantId = parsedUserInfo?.user?.restaurants?.[0]?.id;
+    return Number.isFinite(Number(restaurantId)) ? Number(restaurantId) : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeListPayload = <T,>(payload: any): T[] => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+};
+
+const getMenuCacheKey = (restaurantId: number | null | undefined, kind: "categories" | "items") =>
+  `cb:menu:${restaurantId || "unknown"}:${kind}`;
+
+const readMenuCache = <T,>(restaurantId: number | null | undefined, kind: "categories" | "items"): T[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(getMenuCacheKey(restaurantId, kind)) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeMenuCache = (restaurantId: number | null | undefined, kind: "categories" | "items", value: unknown[]) => {
+  if (!restaurantId || !Array.isArray(value) || value.length === 0) return;
+  try {
+    localStorage.setItem(getMenuCacheKey(restaurantId, kind), JSON.stringify(value));
+  } catch {
+    // Local cache is an enhancement only.
+  }
+};
+
 const MenuPageUpsellHost = ({
   pendingDetail,
   menuCandidates,
@@ -561,36 +600,31 @@ const LayoutDashboard = () => {
 
   useEffect(() => {
     const fetchRestaurantId = () => {
-      const userInfo = localStorage.getItem("userInfo");
-      if (userInfo) {
-        try {
-          const parsedUserInfo = JSON.parse(userInfo);
-          if (
-            parsedUserInfo.user &&
-            parsedUserInfo.user.restaurants &&
-            parsedUserInfo.user.restaurants.length > 0
-          ) {
-            setRestaurantId(parsedUserInfo.user.restaurants[0].id);
-          }
-        } catch (e) {
-          console.error(e);
-        }
+      const storedRestaurantId = getRestaurantIdFromStorage();
+      if (storedRestaurantId) {
+        setRestaurantId(storedRestaurantId);
       }
     };
     fetchRestaurantId();
   }, []);
 
   const fetchCategories = async () => {
-    try {
-      const userInfo = localStorage.getItem("userInfo");
-      const rId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
-      // prioritize local ID if state not yet set
-      const targetId = rId || restaurantId;
+    const targetId = getRestaurantIdFromStorage() || restaurantId;
+    const cachedCategories = readMenuCache<CategoryItemType>(targetId, "categories");
+    if (cachedCategories.length) {
+      setCategories(cachedCategories);
+    }
 
+    try {
       const url = targetId ? `/api/customer/categories/?restaurant_id=${targetId}` : "/api/customer/categories/";
       const response = await cachedGet(url, {}, { ttlMs: 30_000 });
-      const data = response.data;
-      setCategories(Array.isArray(data) ? data : data?.results || []);
+      const nextCategories = normalizeListPayload<CategoryItemType>(response.data);
+      if (nextCategories.length) {
+        setCategories(nextCategories);
+        writeMenuCache(targetId, "categories", nextCategories);
+      } else if (!cachedCategories.length) {
+        setCategories([]);
+      }
     } catch (error) {
       console.warn("Failed to fetch categories", error);
     } finally {
@@ -603,13 +637,17 @@ const LayoutDashboard = () => {
 
   const fetchItems = async () => {
     setItemsLoaded(false);
+    const targetId = getRestaurantIdFromStorage() || restaurantId;
+    const cachedItems = readMenuCache<FoodItemTypes>(targetId, "items");
+    if (!items.length && cachedItems.length) {
+      setItems(cachedItems);
+      setUpsellMenuCandidates(cachedItems);
+      rememberMenuUpsellCandidates(cachedItems);
+    }
+
     try {
       let url = "/api/customer/items/";
       const params = [];
-
-      const userInfo = localStorage.getItem("userInfo");
-      const rId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
-      const targetId = rId || restaurantId; // prioritize localStorage
 
       if (targetId) {
         params.push(`restaurant_id=${targetId}`);
@@ -629,10 +667,17 @@ const LayoutDashboard = () => {
       }
 
       const response = await cachedGet(url, {}, { ttlMs: 8_000 });
-      const payload = response.data;
-      const nextItems = Array.isArray(payload) ? payload : payload.results || [];
-      setItems(nextItems);
-      rememberMenuUpsellCandidates(nextItems);
+      const nextItems = normalizeListPayload<FoodItemTypes>(response.data);
+      if (nextItems.length || !cachedItems.length) {
+        setItems(nextItems);
+      }
+      if (nextItems.length) {
+        rememberMenuUpsellCandidates(nextItems);
+        if (selectedCategory === null && !search.trim()) {
+          setUpsellMenuCandidates(nextItems);
+          writeMenuCache(targetId, "items", nextItems);
+        }
+      }
     } catch (error) {
       console.warn("Failed to fetch items", error);
     } finally {
@@ -641,20 +686,32 @@ const LayoutDashboard = () => {
   };
 
   const fetchUpsellCandidateItems = async () => {
+    const targetId = getRestaurantIdFromStorage() || restaurantId;
+    const cachedItems = readMenuCache<FoodItemTypes>(targetId, "items");
+    if (cachedItems.length) {
+      setUpsellMenuCandidates(cachedItems);
+      rememberMenuUpsellCandidates(cachedItems);
+      if (!items.length) {
+        setItems(cachedItems);
+      }
+    }
+
     try {
-      const userInfo = localStorage.getItem("userInfo");
-      const rId = userInfo ? JSON.parse(userInfo)?.user?.restaurants[0]?.id : null;
-      const targetId = rId || restaurantId;
       if (!targetId) return;
       const response = await cachedGet(
         `/api/customer/items/?restaurant_id=${targetId}`,
         { timeout: 2500 },
         { ttlMs: 30_000 }
       );
-      const payload = response.data;
-      const nextItems = Array.isArray(payload) ? payload : payload.results || [];
-      setUpsellMenuCandidates(nextItems);
-      rememberMenuUpsellCandidates(nextItems);
+      const nextItems = normalizeListPayload<FoodItemTypes>(response.data);
+      if (nextItems.length) {
+        setUpsellMenuCandidates(nextItems);
+        rememberMenuUpsellCandidates(nextItems);
+        writeMenuCache(targetId, "items", nextItems);
+        if (!items.length) {
+          setItems(nextItems);
+        }
+      }
     } catch {
       // The current visible category remains available as a smaller fallback.
     }
@@ -694,6 +751,14 @@ const LayoutDashboard = () => {
   // Memoized filtered items to avoid re-computing on every render
   const filteredItems = useMemo(() => {
     let result = [...items];
+
+    if (categories.length === 0) {
+      if (search.trim()) {
+        const query = search.trim().toLowerCase();
+        result = result.filter((item) => String(item.item_name || "").toLowerCase().includes(query));
+      }
+      return result;
+    }
 
     // Determine active main category
     let activeCategoryIndex = selectedCategory;
