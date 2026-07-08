@@ -71,6 +71,9 @@ const TableEntry = () => {
                 localStorage.removeItem("userInfo");
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem('cart');
+                Object.keys(localStorage)
+                    .filter((key) => key.startsWith('cb:cart:'))
+                    .forEach((key) => localStorage.removeItem(key));
                 resetUpsellSession();
                 // Clear chat/messages state for session isolation
                 localStorage.removeItem("chat_messages_cache");

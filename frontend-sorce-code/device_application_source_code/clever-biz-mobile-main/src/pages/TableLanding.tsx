@@ -70,8 +70,11 @@ export default function TableLanding() {
                 // Backend treats it as Invalid Token (401) if sent as Bearer.
                 // Guest access relies on X-Guest-Session-Token header.
 
-                // Clear old non-namespaced cart to prevent leaks
+                // Clear old cart backups to prevent leaks between guest sessions.
                 localStorage.removeItem('cart');
+                Object.keys(localStorage)
+                    .filter((key) => key.startsWith('cb:cart:'))
+                    .forEach((key) => localStorage.removeItem(key));
                 resetUpsellSession();
 
                 // Construct and store userInfo

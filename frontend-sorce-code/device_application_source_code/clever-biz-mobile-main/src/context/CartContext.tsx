@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../lib/axios";
 import { resetUpsellSession, trackUpsellCategoryRemoved } from "../lib/upsellSession";
-import { TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
+import { getTableIdentity, TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
 
 export { TABLE_NAME, TABLE_NUMBER };
 
@@ -80,6 +80,54 @@ const sanitizeCartItems = (raw: unknown): CartItem[] => {
     .filter((entry): entry is CartItem => !!entry);
 };
 
+const getCartStorageKeys = (sessionToken?: string | null): string[] => {
+  const keys: string[] = [];
+  if (sessionToken) keys.push(`cb:cart:${sessionToken}`);
+
+  try {
+    const tableInfo = getTableIdentity();
+    if (tableInfo.restaurantId && tableInfo.deviceId) {
+      keys.push(`cb:cart:restaurant:${tableInfo.restaurantId}:device:${tableInfo.deviceId}`);
+    }
+    if (tableInfo.restaurantId && tableInfo.storageId) {
+      keys.push(`cb:cart:restaurant:${tableInfo.restaurantId}:table:${tableInfo.storageId}`);
+    }
+  } catch {
+    // Fall through to legacy keys.
+  }
+
+  keys.push("cart");
+  return Array.from(new Set(keys));
+};
+
+const readStoredCart = (sessionToken?: string | null): CartItem[] => {
+  for (const key of getCartStorageKeys(sessionToken)) {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? sanitizeCartItems(JSON.parse(raw)) : [];
+      if (parsed.length) return parsed;
+    } catch {
+      // Try the next key.
+    }
+  }
+  return [];
+};
+
+const persistCart = (cart: CartItem[], sessionToken?: string | null) => {
+  const keys = getCartStorageKeys(sessionToken);
+  keys.forEach((key) => {
+    try {
+      if (cart.length) {
+        localStorage.setItem(key, JSON.stringify(cart));
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // Non-blocking.
+    }
+  });
+};
+
 export const useCart = () => {
   const ctx = useContext(CartContext);
   if (!ctx) throw new Error("useCart must be used within CartProvider");
@@ -96,6 +144,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const fetchCart = async () => {
       const sessionToken = localStorage.getItem("guest_session_token");
+      const storedCart = readStoredCart(sessionToken);
+
+      if (storedCart.length) {
+        setCart(storedCart);
+      }
+
       if (sessionToken) {
         try {
           const res = await axiosInstance.get("/api/customer/cart/");
@@ -108,25 +162,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
             // Ensure all required fields are present, fallback if needed
             restaurant_name: cartItem.item_name ? "Restaurant" : "",
           }));
-          setCart(sanitizeCartItems(backendItems));
+          const sanitizedBackendItems = sanitizeCartItems(backendItems);
+          if (sanitizedBackendItems.length > 0 || storedCart.length === 0) {
+            setCart(sanitizedBackendItems);
+            persistCart(sanitizedBackendItems, sessionToken);
+          }
         } catch (error) {
           console.warn("Failed to fetch cart from server", error);
-          // Fallback to namespaced local storage
-          const stored = localStorage.getItem(`cb:cart:${sessionToken}`);
-          if (stored) {
-            try {
-              setCart(sanitizeCartItems(JSON.parse(stored)));
-            } catch {
-              setCart([]);
-            }
-          } else {
+          if (!storedCart.length) {
             setCart([]);
           }
         }
       } else {
-        // No session, clear cart or handle appropriately
-        setCart([]);
-        localStorage.removeItem("cart");
+        setCart(storedCart);
       }
       setIsInitialized(true);
     };
@@ -138,9 +186,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (isInitialized) {
       const sessionToken = localStorage.getItem("guest_session_token");
-      if (sessionToken) {
-        localStorage.setItem(`cb:cart:${sessionToken}`, JSON.stringify(cart));
-      }
+      persistCart(cart, sessionToken);
     }
   }, [cart, isInitialized]);
 
@@ -252,10 +298,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     setCart([]);
     resetUpsellSession();
     const sessionToken = localStorage.getItem("guest_session_token");
-    localStorage.removeItem("cart");
-    if (sessionToken) {
-      localStorage.removeItem(`cb:cart:${sessionToken}`);
-    }
+    persistCart([], sessionToken);
     if (sessionToken) {
       try {
         await axiosInstance.post("/api/customer/cart/clear/");
