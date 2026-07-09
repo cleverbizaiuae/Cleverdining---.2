@@ -150,6 +150,7 @@ export default function UpsellBottomSheet({
   const handleAccept = async (item: UpsellSuggestion) => {
     if (addingItemId !== null) return;
     setAddingItemId(item.id);
+    setLocalDismissed((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
     try {
       await onAccept(item);
     } finally {

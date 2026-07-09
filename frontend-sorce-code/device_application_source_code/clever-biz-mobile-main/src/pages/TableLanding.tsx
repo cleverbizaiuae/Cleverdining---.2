@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
 import { getRegionConfig } from '../config/regionConfig';
@@ -9,6 +9,7 @@ import { cacheBrandConfigForRestaurant, getBrandSplashSessionKey } from '../lib/
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -30,7 +31,11 @@ export default function TableLanding() {
             if (qrRestaurantId) payload.restaurant_id = qrRestaurantId;
 
             if (Object.keys(payload).length === 0) {
-                // No parameters provided -> Show QR Code Scan prompt instead of error
+                // No parameters provided. Keep an existing guest in the app
+                // instead of showing the scan prompt after a refresh/history jump.
+                if (localStorage.getItem('guest_session_token') || localStorage.getItem('userInfo')) {
+                    navigate('/dashboard', { replace: true });
+                }
                 return;
             }
 
@@ -62,6 +67,7 @@ export default function TableLanding() {
 
                 // Store session token
                 localStorage.setItem('guest_session_token', session_token);
+                localStorage.setItem('guest_session_id', String(guest_session_id || ""));
                 localStorage.setItem('restaurant_id', String(resolvedRestaurantId || ""));
                 localStorage.setItem('device_id', String(table_id || ""));
                 localStorage.setItem('table_name', table_name || `Table ${table_id}`);
@@ -93,6 +99,7 @@ export default function TableLanding() {
                                 id: res.data.restaurant_id, // Use validated ID from backend
                                 table_name: table_name || `Table ${table_id}`,
                                 device_id: table_id,
+                                guest_session_id,
                                 resturent_name: res.data.restaurant_name || "Restaurant",
                                 region: res.data.restaurant_region || resolvedRegion,
                                 currency: res.data.restaurant_currency || regionSettings.currency,
@@ -119,7 +126,7 @@ export default function TableLanding() {
         };
 
         resolveTable();
-    }, [restaurantId, tableToken, searchParams]);
+    }, [restaurantId, tableToken, searchParams, navigate]);
 
     if (error) {
         return (

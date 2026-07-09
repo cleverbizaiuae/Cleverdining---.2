@@ -191,10 +191,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event))
 
     async def session_closed(self, event):
-        # Forward session closed signal to client for immediate logout
+        # Forward the target metadata so shared restaurant-room clients can
+        # ignore close events for other tables/sessions.
         await self.send(text_data=json.dumps({
             "type": "session_closed",
-            "message": event.get("message", "Session ended")
+            "message": event.get("message", "Session ended"),
+            "session_id": event.get("session_id"),
+            "guest_session_id": event.get("guest_session_id") or event.get("session_id"),
+            "table_id": event.get("table_id") or event.get("device_id"),
+            "device_id": event.get("device_id") or event.get("table_id"),
+            "reason": event.get("reason"),
         }))
 
     async def chat_cleared(self, event):

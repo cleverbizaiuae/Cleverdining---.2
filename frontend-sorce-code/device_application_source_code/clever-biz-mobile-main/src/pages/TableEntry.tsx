@@ -29,6 +29,7 @@ const TableEntry = () => {
                 });
 
                 const {
+                    guest_session_id,
                     session_token,
                     restaurant_region,
                     restaurant_currency,
@@ -50,6 +51,7 @@ const TableEntry = () => {
                                 id: device.restaurant_id,
                                 table_name: device.table_name,
                                 device_id: device.id,
+                                guest_session_id,
                                 resturent_name: device.restaurant_name,
                                 region: restaurant_region || resolvedRegion,
                                 currency: restaurant_currency || regionSettings.currency,
@@ -83,6 +85,10 @@ const TableEntry = () => {
                 localStorage.setItem("userInfo", JSON.stringify(mockUserInfo));
                 localStorage.setItem("accessToken", "guest_token"); // Marker for axios interceptor (optional but keeps flow)
                 localStorage.setItem("guest_session_token", session_token); // CRITICAL for backend auth
+                localStorage.setItem("guest_session_id", String(guest_session_id || ""));
+                localStorage.setItem("restaurant_id", String(device.restaurant_id || ""));
+                localStorage.setItem("device_id", String(device.id || ""));
+                localStorage.setItem("table_name", device.table_name || `Table ${device.table_number || device.id}`);
 
                 // 5. Redirect to splash (Force reload)
                 window.location.href = "/splash";

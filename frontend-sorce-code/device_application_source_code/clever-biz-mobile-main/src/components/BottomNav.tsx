@@ -41,6 +41,7 @@ export const BottomNav = () => {
             window.dispatchEvent(new CustomEvent("trigger-call-staff"));
             return;
         }
+        window.dispatchEvent(new CustomEvent("cleverbiz:upsell-sheet-close"));
         if (tab.id === "message") {
             // Clear the notification badge when navigating to messages
             setNewMessageFlag(false);

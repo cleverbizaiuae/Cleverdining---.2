@@ -27,6 +27,14 @@ const isLocalHost = () =>
   typeof window !== "undefined" &&
   ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
+const firstString = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+};
+
 interface WebSocketProviderProps {
   children: ReactNode;
 }
@@ -97,6 +105,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const parsedUserInfo = userInfo ? JSON.parse(userInfo) : null;
 
     // Robust ID Extraction (Supports Owner User structure AND Guest/Table Session structure)
+    const session_id = firstString(
+      localStorage.getItem("guest_session_id"),
+      parsedUserInfo?.user?.restaurants?.[0]?.guest_session_id,
+      parsedUserInfo?.guest_session_id,
+      parsedUserInfo?.session_id,
+    );
     let device_id = parsedUserInfo?.user?.restaurants?.[0]?.device_id || parsedUserInfo?.device_id || parsedUserInfo?.table_id;
     let restaurant_id = parsedUserInfo?.user?.restaurants?.[0]?.id || parsedUserInfo?.restaurant_id || localStorage.getItem("restaurant_id");
 
@@ -196,9 +210,25 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       try {
         const data = JSON.parse(event.data);
         if ((data.type === 'order_status_update' && data.session_ended) || data.type === 'session_closed') {
+          const eventSessionId = firstString(data.session_id, data.guest_session_id);
+          const eventDeviceId = firstString(data.table_id, data.device_id);
+          const eventHasTarget = Boolean(eventSessionId || eventDeviceId);
+          const eventMatchesSession = Boolean(eventSessionId && session_id && String(eventSessionId) === String(session_id));
+          const eventMatchesDevice = Boolean(eventDeviceId && device_id && String(eventDeviceId) === String(device_id));
+
+          if (eventHasTarget && !eventMatchesSession && !eventMatchesDevice) {
+            return;
+          }
+
+          if (!eventHasTarget && data.type === "session_closed") {
+            console.warn("Ignoring untargeted shared-room session_closed event.");
+            return;
+          }
+
           console.log("Session Ended via WebSocket");
           localStorage.removeItem("userInfo");
           localStorage.removeItem("guest_session_token");
+          localStorage.removeItem("guest_session_id");
           localStorage.removeItem("accessToken");
           localStorage.removeItem("pending_order_id");
           removeLocalStorageSynced(chatStorageKey);

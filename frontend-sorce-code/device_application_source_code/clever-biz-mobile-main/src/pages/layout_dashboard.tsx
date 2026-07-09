@@ -192,6 +192,11 @@ const MenuPageUpsellHost = ({
     }
   }, [closeActiveSheet, location.pathname]);
 
+  useEffect(() => {
+    window.addEventListener("cleverbiz:upsell-sheet-close", closeActiveSheet);
+    return () => window.removeEventListener("cleverbiz:upsell-sheet-close", closeActiveSheet);
+  }, [closeActiveSheet]);
+
   const recordShown = useCallback(
     (
       shownItems: UpsellSuggestion[],
@@ -522,6 +527,12 @@ const LayoutDashboard = () => {
   const [isAssistanceOpen, setAssistanceOpen] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
+  useEffect(() => {
+    if (isSubRoute) {
+      setMenuUpsellDetail(null);
+    }
+  }, [isSubRoute]);
+
   const subCategories = useMemo(() => {
     let activeCategoryIndex = selectedCategory;
     if (activeCategoryIndex === null && categories.length > 0) {
@@ -535,36 +546,6 @@ const LayoutDashboard = () => {
     }
     return [];
   }, [selectedCategory, categories]);
-
-  useEffect(() => {
-    if (!categories.length) return;
-
-    let activeCategoryIndex = selectedCategory;
-    if (activeCategoryIndex === null || !categories[activeCategoryIndex]) {
-      const firstParent = categories.find((category) => !category.parent_category);
-      if (!firstParent) return;
-      activeCategoryIndex = categories.indexOf(firstParent);
-    }
-
-    const activeCategory = categories[activeCategoryIndex];
-    if (!activeCategory) return;
-
-    const children = categories.filter(
-      (category) => Number(category.parent_category) === Number(activeCategory.id)
-    );
-
-    if (children.length) {
-      const childIds = new Set(children.map((child) => Number(child.id)));
-      if (selectedSubCategory === null || !childIds.has(Number(selectedSubCategory))) {
-        setSelectedSubCategory(children[0].id);
-      }
-      return;
-    }
-
-    if (selectedSubCategory !== null) {
-      setSelectedSubCategory(null);
-    }
-  }, [categories, selectedCategory, selectedSubCategory]);
 
   // Access WebSocket context to use setNewMessageFlag and sendMessage
   const { ws, setNewMessageFlag, sendMessage } = useWebSocket();
@@ -853,6 +834,40 @@ const LayoutDashboard = () => {
   }, [restaurantId, lastUpdate]);
 
   useEffect(() => {
+    if (!categories.length) return;
+
+    let activeCategoryIndex = selectedCategory;
+    if (activeCategoryIndex === null || !categories[activeCategoryIndex]) {
+      const firstParent = categories.find((category) => !category.parent_category);
+      if (!firstParent) return;
+      activeCategoryIndex = categories.indexOf(firstParent);
+    }
+
+    const activeCategory = categories[activeCategoryIndex];
+    if (!activeCategory) return;
+
+    const children = categories.filter(
+      (category) => Number(category.parent_category) === Number(activeCategory.id)
+    );
+    if (!children.length) return;
+
+    const currentHasItems =
+      selectedSubCategory !== null &&
+      items.some((item) => Number(item.sub_category) === Number(selectedSubCategory));
+    if (currentHasItems) return;
+
+    const preferredChild = children.find((child) =>
+      items.some((item) => Number(item.sub_category) === Number(child.id))
+    );
+
+    if (preferredChild && Number(selectedSubCategory) !== Number(preferredChild.id)) {
+      setSelectedSubCategory(preferredChild.id);
+    } else if (!preferredChild && selectedSubCategory !== null) {
+      setSelectedSubCategory(null);
+    }
+  }, [categories, items, selectedCategory, selectedSubCategory]);
+
+  useEffect(() => {
     if (selectedCategory !== null && categories[selectedCategory]?.id) {
       trackUpsellCategoryView(categories[selectedCategory].id);
     }
@@ -1137,10 +1152,7 @@ const LayoutDashboard = () => {
                         isActive={(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)}
                         onClick={() => {
                           setSelectedCategory(categories.indexOf(category));
-                          const firstChild = categories.find(
-                            (candidate) => Number(candidate.parent_category) === Number(category.id)
-                          );
-                          setSelectedSubCategory(firstChild?.id ?? null);
+                          setSelectedSubCategory(null);
                         }}
                       />
                     ))}
@@ -1218,10 +1230,12 @@ const LayoutDashboard = () => {
 
         {/* 6. Bottom Navigation - Hide on success/checkout pages */}
         {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
-        <MenuPageUpsellHost
-          pendingDetail={menuUpsellDetail}
-          menuCandidates={upsellMenuCandidates.length ? upsellMenuCandidates : items}
-        />
+        {!isSubRoute && (
+          <MenuPageUpsellHost
+            pendingDetail={menuUpsellDetail}
+            menuCandidates={upsellMenuCandidates.length ? upsellMenuCandidates : items}
+          />
+        )}
         </div>
       </div>
 
