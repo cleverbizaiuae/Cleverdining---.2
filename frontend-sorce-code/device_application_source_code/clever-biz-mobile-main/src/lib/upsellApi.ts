@@ -223,6 +223,10 @@ const readCachedMenuItems = (): unknown[] => {
   }
 };
 
+export function getRememberedMenuUpsellCandidates(): unknown[] {
+  return readCachedMenuItems();
+}
+
 export function buildClientUpsellSuggestions(params: {
   candidates: unknown[];
   triggerPoint: UpsellTriggerPoint;

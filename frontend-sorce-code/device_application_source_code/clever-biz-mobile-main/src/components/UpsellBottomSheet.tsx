@@ -162,7 +162,7 @@ export default function UpsellBottomSheet({
       {open && shownItems.length > 0 ? (
         <>
           <motion.div
-            className="fixed inset-0 z-[60] bg-black/35 backdrop-blur-[2px]"
+            className="fixed left-0 right-0 top-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] bg-black/35 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -170,7 +170,7 @@ export default function UpsellBottomSheet({
           />
 
           <motion.div
-            className="fixed bottom-0 left-1/2 z-[70] w-full max-w-[430px] -translate-x-1/2 rounded-t-[28px] border-t border-slate-100 bg-white px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 text-slate-900 shadow-[0_-22px_55px_rgba(15,23,42,0.18)]"
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-[70] max-h-[calc(100dvh-8rem)] w-full max-w-[430px] -translate-x-1/2 overflow-y-auto rounded-t-[28px] border-t border-slate-100 bg-white px-5 pb-5 pt-4 text-slate-900 shadow-[0_-22px_55px_rgba(15,23,42,0.18)]"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

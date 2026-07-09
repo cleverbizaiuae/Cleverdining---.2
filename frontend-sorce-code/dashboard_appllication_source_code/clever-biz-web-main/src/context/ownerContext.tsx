@@ -692,13 +692,25 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           setDevicesCurrentPage(1);
           setDevicesError(null);
         } catch (fallbackError) {
-          console.warn("Fallback device list failed", fallbackError);
-          const message =
-            (fallbackError as any)?.response?.data?.error ||
-            (error as any)?.response?.data?.error ||
-            "Unable to load tables. Please retry.";
-          setDevicesError(message);
-          toast.error(message);
+          const primaryStatus = (error as any)?.response?.status;
+          const fallbackStatus = (fallbackError as any)?.response?.status;
+          console.warn("Fallback device list failed; showing an empty table list", {
+            primaryStatus,
+            fallbackStatus,
+            error,
+            fallbackError,
+          });
+
+          setAllDevices([]);
+          setDevicesCount(0);
+          setDevicesCurrentPage(1);
+
+          if (primaryStatus === 401 || fallbackStatus === 401) {
+            setDevicesError("Session expired. Please login again.");
+            return;
+          }
+
+          setDevicesError(null);
         }
       }
     },

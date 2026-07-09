@@ -713,6 +713,7 @@ const LayoutDashboard = () => {
       rememberMenuUpsellCandidates(cachedItems);
       if (!items.length) {
         setItems(cachedItems);
+        setItemsLoaded(true);
       }
     }
 
@@ -730,6 +731,7 @@ const LayoutDashboard = () => {
         writeMenuCache(targetId, "items", nextItems);
         if (!items.length) {
           setItems(nextItems);
+          setItemsLoaded(true);
         }
       }
     } catch {
@@ -752,9 +754,8 @@ const LayoutDashboard = () => {
   }, [search, selectedCategory, categories, categoriesLoaded, lastUpdate]);
 
   useEffect(() => {
-    if (!categoriesLoaded) return;
     void fetchUpsellCandidateItems();
-  }, [categoriesLoaded, restaurantId, lastUpdate]);
+  }, [restaurantId, lastUpdate]);
 
   useEffect(() => {
     if (selectedCategory !== null && categories[selectedCategory]?.id) {
