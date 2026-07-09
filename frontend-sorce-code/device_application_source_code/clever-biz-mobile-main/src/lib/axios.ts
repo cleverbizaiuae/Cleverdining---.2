@@ -7,8 +7,8 @@ const TOKENS = {
   USER_INFO: "userInfo",
 };
 
-// Use env when provided, but ignore "/api" shorthand in production
-// because Netlify has no API proxy configured for this app.
+// Use the Netlify proxy in deployed builds. Direct browser calls to Render can
+// be blocked by CORS, while `/api` is proxied by this app's Netlify config.
 const envApiUrl = import.meta.env.VITE_API_URL?.trim();
 const isLocalBrowser =
   typeof window !== "undefined" &&
@@ -18,8 +18,8 @@ const rawApiBase =
     ? "http://127.0.0.1:8000"
     : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
-    : "https://cleverdining-2.onrender.com";
-export const API_BASE_URL = `${rawApiBase.replace(/\/+$/, "")}/`;
+    : "";
+export const API_BASE_URL = rawApiBase ? `${rawApiBase.replace(/\/+$/, "")}/` : "/";
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
