@@ -476,7 +476,11 @@ else:
             'PASSWORD': env('DATABASE_PASSWORD', default='41ETCSVh25R43IG4vJrL0FHaFOcUoClV'),
             'HOST': 'dpg-d4ivnueuk2gs73bh11i0-a.oregon-postgres.render.com',
             'PORT': '5432',
-            'CONN_MAX_AGE': 600,  # Keep DB connections alive for 10 minutes
+            # Render's small Postgres plans have very limited connection slots.
+            # Closing request connections by default prevents the app from
+            # holding idle connections until the database refuses new work.
+            'CONN_MAX_AGE': env.int('DB_CONN_MAX_AGE', default=0),
+            'CONN_HEALTH_CHECKS': env.bool('DB_CONN_HEALTH_CHECKS', default=True),
             'OPTIONS': {
                 'sslmode': 'prefer',
                 'connect_timeout': 10,
