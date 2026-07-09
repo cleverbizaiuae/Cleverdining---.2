@@ -7,17 +7,15 @@ const isLocalBrowser =
   typeof window !== "undefined" &&
   ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
-// FIX: Use direct backend URL to bypass Netlify proxy issues
-// If VITE_API_URL is "/api" or not set, use local backend in local previews
-// and direct backend URL in deployed builds.
-// This ensures requests go directly to Render, avoiding Netlify proxy 500 errors
+// Use same-origin Netlify proxy in deployed builds. Direct browser calls to
+// Render are vulnerable to CORS failures and bypass the dashboard proxy rules.
 const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const API_BASE_URL = normalizeBaseUrl(
   isLocalBrowser
     ? "http://127.0.0.1:8000"
     : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
-    : "https://cleverdining-2.onrender.com"
+    : "/api"
 );
 
 const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;

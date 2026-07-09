@@ -77,8 +77,17 @@ const API_BASE_URL = normalizeBaseUrl(
     ? "http://127.0.0.1:8000"
     : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
-    : "https://cleverdining-2.onrender.com"
+    : "/api"
 );
+
+function buildApiUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (API_BASE_URL.startsWith("http")) {
+    return `${API_BASE_URL}${normalizedPath}`;
+  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  return new URL(`${API_BASE_URL}${normalizedPath}`, origin).toString();
+}
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem("accessToken") || localStorage.getItem("superAdminToken");
@@ -151,7 +160,7 @@ export function useBrandConfig(restaurantId?: string | number | null) {
   const { data } = useQuery<BrandConfig>({
     queryKey: ["brand-config", restaurantId ?? null],
     queryFn: async () => {
-      const url = new URL(`${API_BASE_URL}/api/brand-config/`);
+      const url = new URL(buildApiUrl("/api/brand-config/"));
       if (restaurantId) {
         url.searchParams.set("restaurant_id", String(restaurantId));
       }
@@ -190,7 +199,7 @@ export function useBrandConfigMutation(restaurantId?: string | number | null) {
         body.restaurant_id = restaurantId;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/brand-config/`, {
+      const response = await fetch(buildApiUrl("/api/brand-config/"), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
