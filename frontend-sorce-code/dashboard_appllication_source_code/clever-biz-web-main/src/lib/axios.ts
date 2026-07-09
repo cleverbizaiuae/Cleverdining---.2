@@ -7,15 +7,16 @@ const isLocalBrowser =
   typeof window !== "undefined" &&
   ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
-// Use same-origin Netlify proxy in deployed builds. Direct browser calls to
-// Render are vulnerable to CORS failures and bypass the dashboard proxy rules.
+// Keep deployed dashboard API calls pointed at the backend service. The
+// dashboard has mixed root and /api backend routes, so routing everything
+// through the Netlify /api proxy changes endpoint paths like /login/.
 const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const API_BASE_URL = normalizeBaseUrl(
   isLocalBrowser
     ? "http://127.0.0.1:8000"
     : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
-    : "/api"
+    : "https://cleverdining-2.onrender.com"
 );
 
 const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;

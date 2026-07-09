@@ -77,16 +77,12 @@ const API_BASE_URL = normalizeBaseUrl(
     ? "http://127.0.0.1:8000"
     : envApiUrl && envApiUrl !== "/api"
     ? envApiUrl
-    : "/api"
+    : "https://cleverdining-2.onrender.com"
 );
 
 function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  if (API_BASE_URL.startsWith("http")) {
-    return `${API_BASE_URL}${normalizedPath}`;
-  }
-  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
-  return new URL(`${API_BASE_URL}${normalizedPath}`, origin).toString();
+  return `${API_BASE_URL}${normalizedPath}`;
 }
 
 function getAuthHeaders(): Record<string, string> {

@@ -17,7 +17,7 @@ const resolveHttpBaseUrl = () => {
 
   if (isLocalBrowser) return "http://127.0.0.1:8000";
   if (envApiUrl && envApiUrl !== "/api") return normalizeBaseUrl(envApiUrl);
-  return "/api";
+  return "https://cleverdining-2.onrender.com";
 };
 
 type UnreadTable = {
