@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../lib/axios";
 import { resetUpsellSession, trackUpsellCategoryRemoved } from "../lib/upsellSession";
 import { getTableIdentity, TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
+import { getDiscountPercent, toSafeNumber } from "../utils/pricing";
 
 export { TABLE_NAME, TABLE_NUMBER };
 
@@ -9,6 +10,8 @@ export type CartItem = {
   id: number;
   item_name: string;
   price: string;
+  discount_percentage?: number;
+  final_price?: string | number;
   description: string;
   slug: string;
   category: number;
@@ -32,23 +35,13 @@ type CartContextType = {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const parsePrice = (value: unknown): number => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
-  if (typeof value === "string") {
-    const normalized = value.replace(/[^0-9.-]/g, "");
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : NaN;
-  }
-  return NaN;
-};
-
 const sanitizeCartItems = (raw: unknown): CartItem[] => {
   if (!Array.isArray(raw)) return [];
 
   return raw
     .filter((entry: any) => entry && typeof entry === "object")
     .map((entry: any) => {
-      const price = parsePrice(entry.price);
+      const price = toSafeNumber(entry.price);
       const quantity = Number(entry.quantity);
       if (
         !Number.isInteger(entry.id) ||
@@ -65,6 +58,8 @@ const sanitizeCartItems = (raw: unknown): CartItem[] => {
         id: entry.id,
         item_name: entry.item_name.trim(),
         price: String(price),
+        discount_percentage: getDiscountPercent(entry),
+        final_price: entry.final_price,
         description: String(entry.description || ""),
         slug: String(entry.slug || ""),
         category: Number(entry.category || 0),
@@ -191,7 +186,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [cart, isInitialized]);
 
   const addToCart = React.useCallback(async (item: Omit<CartItem, "quantity">, quantity: number = 1) => {
-    const parsedPrice = parsePrice(item?.price);
+    const parsedPrice = toSafeNumber(item?.price);
     if (
       !item ||
       !Number.isInteger(item.id) ||
@@ -210,6 +205,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       ...item,
       item_name: item.item_name.trim(),
       price: String(parsedPrice),
+      discount_percentage: getDiscountPercent(item),
     };
 
     // Optimistic update

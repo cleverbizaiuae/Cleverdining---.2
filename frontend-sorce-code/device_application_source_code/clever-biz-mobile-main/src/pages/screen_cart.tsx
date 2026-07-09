@@ -34,6 +34,14 @@ import {
 import { getTableIdentity, setLocalStorageSynced } from "../lib/tableIdentity";
 import { OptimizedImage } from "../components/OptimizedImage";
 import { useActiveBrandConfig } from "../lib/useBrandConfig";
+import {
+  getDiscountPercent,
+  getEffectiveItemPrice,
+  getLineTotal,
+  getOriginalItemPrice,
+  hasItemDiscount,
+  toSafeNumber,
+} from "../utils/pricing";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -104,14 +112,6 @@ const ScreenCart = () => {
   const tableInfo = useMemo(() => getTableIdentity(), []);
   const brandConfig = useActiveBrandConfig();
   const payBeforeOrder = brandConfig.payBeforeOrder;
-  const toSafeNumber = (value: unknown): number => {
-    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-    if (typeof value === "string") {
-      const parsed = Number(value.replace(/[^0-9.-]/g, ""));
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-    return 0;
-  };
 
   const getCategoryKey = (item: CartItem): string => {
     if (Number.isInteger(item.category) && item.category > 0) {
@@ -148,7 +148,7 @@ const ScreenCart = () => {
 
   const totalQuantity = validCartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalCost = validCartItems.reduce(
-    (sum, item) => sum + toSafeNumber(item.price) * item.quantity,
+    (sum, item) => sum + getLineTotal(item, item.quantity),
     0
   );
   const activeCartUpsells = useMemo(() => upsellSuggestions.slice(0, 2), [upsellSuggestions]);
@@ -524,6 +524,8 @@ const ScreenCart = () => {
     id: item.id,
     item_name: item.item_name,
     price: String(toSafeNumber(item.price)),
+    discount_percentage: getDiscountPercent(item),
+    final_price: item.final_price,
     description: item.description || "",
     slug: item.slug || "",
     category: Number(item.category || 0),
@@ -560,7 +562,7 @@ const ScreenCart = () => {
         action: "accepted",
         sourceItemIds: validCartItemIds,
         upsellItemId: item.id,
-        upsellPrice: item.price,
+        upsellPrice: getEffectiveItemPrice(item),
       }),
     ]);
   };
@@ -694,14 +696,22 @@ const ScreenCart = () => {
       }
 
       const placedAt = new Date().toISOString();
-      const placedItemsSnapshot = validCartItems.map((item) => ({
+      const backendItemsSnapshot = Array.isArray(response?.data?.order_items)
+        ? response.data.order_items
+        : Array.isArray(response?.data?.items)
+          ? response.data.items
+          : null;
+      const placedItemsSnapshot = backendItemsSnapshot || validCartItems.map((item) => ({
         id: item.id,
         item_id: item.id,
         item_name: item.item_name,
         name: item.item_name,
         quantity: item.quantity,
-        price: toSafeNumber(item.price),
+        price: getEffectiveItemPrice(item),
       }));
+      const orderTotal = Number(
+        toSafeNumber(response?.data?.total_price ?? response?.data?.total ?? totalCost).toFixed(2)
+      );
 
       toast.success(
         payBeforeOrder && paymentMethod === "card"
@@ -713,15 +723,15 @@ const ScreenCart = () => {
         const { getPlayerSession } = await import("../lib/playerSession");
         const player = getPlayerSession();
         if (player?.phone && player?.name && player.name !== "Guest") {
-          const points = Math.max(1, Math.floor(totalCost));
+          const points = Math.max(1, Math.floor(orderTotal));
           await axiosInstance.post("/api/loyalty/earn", {
             phone: player.phone,
             name: player.name,
             points,
             orderId: response?.data?.id,
             restaurantId: tableInfo.restaurantId,
-            amount: totalCost,
-            description: `Order ${currencyCode} ${totalCost.toFixed(0)} - ${points} pts earned`,
+            amount: orderTotal,
+            description: `Order ${currencyCode} ${orderTotal.toFixed(0)} - ${points} pts earned`,
           });
         }
       } catch {
@@ -747,8 +757,8 @@ const ScreenCart = () => {
           id: `local-${orderId}`,
           backendId: orderId,
           items: placedItemsSnapshot,
-          total: totalCost,
-          total_price: totalCost,
+          total: orderTotal,
+          total_price: orderTotal,
           status: "Pending",
           paymentStatus: "Unpaid",
           payment_status: "unpaid",
@@ -906,6 +916,9 @@ const ScreenCart = () => {
                     DESSERT_CATS.includes(categoryKey) || /dessert|sweet|cake|ice\s?cream/.test(categoryName);
                   const needsTiming = isDrink || isCoffee || isDessert;
                   const itemTiming = itemTimings[String(item.id)];
+                  const unitPrice = getEffectiveItemPrice(item);
+                  const originalPrice = getOriginalItemPrice(item);
+                  const discounted = hasItemDiscount(item);
 
                   return (
                     <>
@@ -934,9 +947,16 @@ const ScreenCart = () => {
                         <div className="ml-4 flex-1 min-w-0 flex flex-col justify-between">
                           <div>
                             <h2 className="font-bold text-sm text-foreground leading-tight truncate">{item.item_name}</h2>
-                            <p className="text-primary font-bold text-sm mb-3">
-                              {currencyCode} {item.price}
-                            </p>
+                            <div className="mb-3">
+                              <p className="text-primary font-bold text-sm">
+                                {currencyCode} {unitPrice.toFixed(2)}
+                              </p>
+                              {discounted && (
+                                <p className="text-[11px] text-muted-foreground line-through">
+                                  {currencyCode} {originalPrice.toFixed(2)}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center space-x-2">
                             <button
@@ -1073,7 +1093,7 @@ const ScreenCart = () => {
                         {suggestion.upsell_message || "A starter to keep things going before the main arrives."}
                       </p>
                       <p className="text-base font-bold text-primary mt-1">
-                        {currencyCode} {toSafeNumber(suggestion.price).toFixed(2)}
+                        {currencyCode} {getEffectiveItemPrice(suggestion).toFixed(2)}
                       </p>
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
@@ -1186,7 +1206,12 @@ const ScreenCart = () => {
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-foreground">{currencyCode} {(toSafeNumber(item.price) * item.quantity).toFixed(2)}</p>
+                      <p className="text-sm font-bold text-foreground">{currencyCode} {getLineTotal(item, item.quantity).toFixed(2)}</p>
+                      {hasItemDiscount(item) && (
+                        <p className="text-[10px] text-slate-400 line-through">
+                          {currencyCode} {(getOriginalItemPrice(item) * item.quantity).toFixed(2)}
+                        </p>
+                      )}
                       <p className="text-[10px] text-slate-400">×{item.quantity}</p>
                     </div>
                   </div>
@@ -1265,7 +1290,7 @@ const ScreenCart = () => {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-foreground truncate">{suggestion.item_name}</p>
                           <p className="text-xs text-primary font-bold">
-                            {currencyCode} {toSafeNumber(suggestion.price).toFixed(2)}
+                            {currencyCode} {getEffectiveItemPrice(suggestion).toFixed(2)}
                           </p>
                         </div>
                         <button

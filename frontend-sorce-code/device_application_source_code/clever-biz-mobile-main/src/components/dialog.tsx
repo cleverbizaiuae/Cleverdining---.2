@@ -12,6 +12,7 @@ import { CheckCircle2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import {
   summarizeCart,
 } from "../lib/upsellApi";
+import { getEffectiveItemPrice, getLineTotal, hasItemDiscount } from "../utils/pricing";
 
 interface ModalProps {
   isOpen: boolean;
@@ -64,6 +65,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const { cart, addToCart } = useCart();
   const currencyCode = getSessionCurrencyCode();
+  const effectiveUnitPrice = item ? getEffectiveItemPrice(item) : 0;
+  const originalUnitPrice = Number(String(item?.price || "0").replace(/[^0-9.-]/g, "")) || 0;
+  const hasDiscount = item ? hasItemDiscount(item) : false;
 
   const truncatedName = item?.item_name || "Loading...";
   const hasValidItem =
@@ -151,6 +155,8 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       id: Number(item.id),
       item_name: String(item.item_name || "").trim(),
       price: String(item.price || "0"),
+      discount_percentage: Number(item.discount_percentage || 0),
+      final_price: item.final_price,
       description: String(item.description || ""),
       slug: String(item.slug || ""),
       category: Number(item.category || 0),
@@ -290,8 +296,13 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
             )}
             <div className="absolute left-4 bottom-4 z-20">
               <span className="inline-flex items-center rounded-full bg-white/95 backdrop-blur-md border border-white px-3 py-1 text-sm font-bold text-slate-900 shadow-sm">
-                {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
+                {currencyCode} {getLineTotal({ price: effectiveUnitPrice }, quantity).toFixed(2)}
               </span>
+              {hasDiscount && (
+                <span className="ml-2 inline-flex rounded-full bg-red-500 px-2 py-1 text-[11px] font-bold text-white shadow-sm">
+                  {Number(item.discount_percentage).toFixed(0)}% OFF
+                </span>
+              )}
             </div>
             {/* Gradient Overlay for text readability if needed, though design says -mt-4 pulls white card up */}
           </div>
@@ -371,8 +382,13 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                     <ShoppingBag className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={1.8} />
                     <span className="truncate px-1 font-semibold whitespace-nowrap">{hasValidItem ? "Add" : "Loading"}</span>
                     <span className="text-sm sm:text-base font-bold whitespace-nowrap">
-                      {currencyCode} {(Number(item?.price || 0) * quantity).toFixed(2)}
+                      {currencyCode} {getLineTotal({ price: effectiveUnitPrice }, quantity).toFixed(2)}
                     </span>
+                    {hasDiscount && (
+                      <span className="text-xs font-semibold text-white/70 line-through">
+                        {currencyCode} {(originalUnitPrice * quantity).toFixed(2)}
+                      </span>
+                    )}
                   </>
                 )}
               </button>

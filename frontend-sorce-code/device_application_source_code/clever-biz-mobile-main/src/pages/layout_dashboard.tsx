@@ -41,6 +41,7 @@ import {
 import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { getSessionCurrencyCode } from "../utils/regionSession";
+import { getEffectiveItemPrice } from "../utils/pricing";
 
 function hexToRgba(hex: string, alpha: number): string {
   const cleaned = (hex || "").replace("#", "");
@@ -90,6 +91,8 @@ const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "qua
   id: suggestion.id,
   item_name: suggestion.item_name,
   price: String(suggestion.price ?? "0"),
+  discount_percentage: Number(suggestion.discount_percentage || 0),
+  final_price: suggestion.final_price,
   description: suggestion.description || "",
   slug: suggestion.slug || "",
   category: Number(suggestion.category || 0),
@@ -377,7 +380,7 @@ const MenuPageUpsellHost = ({
         sourceItemId: sourceItemIdRef.current || undefined,
         sourceItemIds: sourceItemIdsRef.current,
         upsellItemId: suggestion.id,
-        upsellPrice: suggestion.price,
+        upsellPrice: getEffectiveItemPrice(suggestion),
         metadata: { surface: "menu_page" },
       }),
     ]);

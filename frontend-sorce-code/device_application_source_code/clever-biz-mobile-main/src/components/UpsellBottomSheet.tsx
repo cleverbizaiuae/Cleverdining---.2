@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Gem, Plus, X } from "lucide-react";
 import type { UpsellSuggestion } from "../lib/upsellApi";
 import { OptimizedImage } from "./OptimizedImage";
+import { getEffectiveItemPrice } from "../utils/pricing";
 
 type Props = {
   open: boolean;
@@ -19,15 +20,6 @@ type Props = {
   onDismissSingle: (suggestion: UpsellSuggestion) => void;
   onDismissMany: (suggestions: UpsellSuggestion[]) => void;
   onExited?: () => void;
-};
-
-const toSafePrice = (value: unknown): number => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/[^0-9.-]/g, ""));
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
 };
 
 const normalizeText = (value: unknown) => String(value || "").toLowerCase();
@@ -220,7 +212,7 @@ export default function UpsellBottomSheet({
 
                       <p className="line-clamp-2 pr-4 text-sm font-bold leading-tight text-slate-900">{item.item_name}</p>
                       <p className="mt-1 text-sm font-bold text-[#552500]">
-                        {currencyCode} {toSafePrice(item.price).toFixed(2)}
+                        {currencyCode} {getEffectiveItemPrice(item).toFixed(2)}
                       </p>
 
                       <button
@@ -260,7 +252,7 @@ export default function UpsellBottomSheet({
                     <p className="truncate text-base font-bold text-slate-900">{primaryItem.item_name}</p>
                     <p className="line-clamp-1 text-xs text-slate-500">{primaryItem.description || "Popular with this meal."}</p>
                     <p className="mt-1.5 text-sm font-bold text-[#552500]">
-                      {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
+                      {currencyCode} {getEffectiveItemPrice(primaryItem).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -284,7 +276,7 @@ export default function UpsellBottomSheet({
                       : (
                         <>
                           <Plus className="h-4 w-4" strokeWidth={1.8} />
-                          Add · {currencyCode} {toSafePrice(primaryItem.price).toFixed(2)}
+                          Add · {currencyCode} {getEffectiveItemPrice(primaryItem).toFixed(2)}
                         </>
                       )}
                   </button>

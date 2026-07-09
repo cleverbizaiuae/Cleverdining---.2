@@ -5,6 +5,7 @@ import {
   getUpsellSignalsQueryParams,
   getUpsellTableNumber,
 } from "./upsellSession";
+import { getEffectiveItemPrice } from "../utils/pricing";
 
 export type UpsellSuggestion = {
   id: number;
@@ -20,6 +21,8 @@ export type UpsellSuggestion = {
   availability?: boolean;
   video?: string;
   restaurant_name?: string;
+  discount_percentage?: number | string;
+  final_price?: number | string;
   upsell_rule?: string;
   upsell_message?: string;
   suggestion_copy?: string;
@@ -54,6 +57,8 @@ type CartLikeItem = {
   sub_category?: number;
   item_name?: string;
   price?: number | string;
+  discount_percentage?: number | string;
+  final_price?: number | string;
 };
 
 const safeNumber = (value: unknown): number => {
@@ -326,7 +331,7 @@ export function buildClientUpsellSuggestions(params: {
 }
 
 export function summarizeCart(items: CartLikeItem[]) {
-  const cartValue = items.reduce((sum, item) => sum + safeNumber(item.price) * Math.max(1, Number(item.quantity || 1)), 0);
+  const cartValue = items.reduce((sum, item) => sum + getEffectiveItemPrice(item) * Math.max(1, Number(item.quantity || 1)), 0);
   const cartItemCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 1)), 0);
   return {
     cartValueAtTime: Number(cartValue.toFixed(2)),
