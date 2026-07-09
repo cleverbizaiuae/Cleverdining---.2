@@ -80,15 +80,9 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // NetworkOnly for API calls (NEVER cache API responses)
-          {
-            urlPattern: /^https:\/\/cleverdining-2\.onrender\.com\/(?:api|owners|message|token|adminapi|profile)\/.*/i,
-            handler: "NetworkOnly",
-          },
-          {
-            urlPattern: /\/(?:api|owners|message|token|adminapi|profile)\//i,
-            handler: "NetworkOnly",
-          },
+          // API calls are intentionally left to the browser network stack. Routing
+          // them through Workbox NetworkOnly produced noisy rejected FetchEvents
+          // during backend hiccups and could flood mobile Safari/Chrome consoles.
           // Hashed static assets are immutable; serve cached files immediately.
           {
             urlPattern: /\.(?:js|css)$/i,

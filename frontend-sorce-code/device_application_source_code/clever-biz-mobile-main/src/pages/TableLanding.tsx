@@ -62,6 +62,9 @@ export default function TableLanding() {
 
                 // Store session token
                 localStorage.setItem('guest_session_token', session_token);
+                localStorage.setItem('restaurant_id', String(resolvedRestaurantId || ""));
+                localStorage.setItem('device_id', String(table_id || ""));
+                localStorage.setItem('table_name', table_name || `Table ${table_id}`);
                 // CRITICAL FIX: Remove accessToken to prevent "Identity Crisis"
                 // If we don't remove this, WebSocketContext might still try to authenticate as the Owner (Pranay)
                 // instead of the Guest (Table 1), causing blue bubbles and confusion.

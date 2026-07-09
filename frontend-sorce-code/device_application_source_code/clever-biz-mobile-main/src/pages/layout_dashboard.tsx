@@ -148,6 +148,7 @@ const MenuPageUpsellHost = ({
   menuCandidates: FoodItemTypes[];
 }) => {
   const { addToCart } = useCart();
+  const location = useLocation();
   const currencyCode = getSessionCurrencyCode();
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<UpsellSuggestion[]>([]);
@@ -157,6 +158,9 @@ const MenuPageUpsellHost = ({
   const sourceItemIdRef = useRef<number | null>(null);
   const sourceItemIdsRef = useRef<number[]>([]);
   const activeRef = useRef(false);
+  const requestSeqRef = useRef(0);
+  const shownSignatureRef = useRef("");
+  const processedPendingDetailRef = useRef("");
   const pendingActionRef = useRef<null | (() => Promise<void>)>(null);
 
   useEffect(() => {
@@ -173,6 +177,63 @@ const MenuPageUpsellHost = ({
     };
   }, []);
 
+  const closeActiveSheet = useCallback(() => {
+    requestSeqRef.current += 1;
+    activeRef.current = false;
+    pendingActionRef.current = null;
+    setOpen(false);
+    setSuggestions([]);
+    setTriggerItem(null);
+  }, []);
+
+  useEffect(() => {
+    if (open || suggestions.length) {
+      closeActiveSheet();
+    }
+  }, [closeActiveSheet, location.pathname]);
+
+  const recordShown = useCallback(
+    (
+      shownItems: UpsellSuggestion[],
+      item: any,
+      cartItemIds: number[],
+      metrics: { cartValueAtTime: number; cartItemCount: number },
+      source: "local_fallback" | "remote"
+    ) => {
+      if (!shownItems.length) return;
+      const signature = [
+        source,
+        item?.id || "unknown",
+        cartItemIds.join(","),
+        shownItems.map((suggestion) => suggestion.id).join(","),
+      ].join(":");
+      if (shownSignatureRef.current === signature) return;
+      shownSignatureRef.current = signature;
+
+      incrementUpsellTouchpointCount("add_to_cart");
+      void logUpsellShownBatch({
+        triggerPoint: "add_to_cart",
+        suggestions: shownItems,
+        cartValueAtTime: metrics.cartValueAtTime,
+        cartItemCount: metrics.cartItemCount,
+        metadata: { source_item_id: item.id, source_category_id: item.category, surface: "menu_page", source },
+      });
+      void Promise.allSettled(
+        shownItems.map((suggestion) =>
+          logUpsellAssociationStat({
+            triggerPoint: "add_to_cart",
+            action: "shown",
+            sourceItemId: Number(item.id),
+            sourceItemIds: cartItemIds,
+            upsellItemId: suggestion.id,
+            metadata: { source_category_id: item.category, surface: "menu_page", source },
+          })
+        )
+      );
+    },
+    []
+  );
+
   const handleMenuItemAddedDetail = useCallback(
     (detail?: MenuItemAddedDetail) => {
       const item = detail?.item;
@@ -180,6 +241,10 @@ const MenuPageUpsellHost = ({
       const metrics = detail?.metrics || { cartValueAtTime: 0, cartItemCount: 0 };
 
       if (!item?.id || !nextCart.length) return;
+      const requestId = requestSeqRef.current + 1;
+      requestSeqRef.current = requestId;
+      pendingActionRef.current = null;
+      shownSignatureRef.current = "";
       if (activeRef.current) {
         setOpen(false);
       }
@@ -196,7 +261,12 @@ const MenuPageUpsellHost = ({
         (settings?.enabled ?? true) &&
         (settings?.show_after_add_to_cart ?? true);
 
-      if (!shouldRender) return;
+      if (!shouldRender) {
+        activeRef.current = false;
+        setOpen(false);
+        setSuggestions([]);
+        return;
+      }
 
       const fallbackSuggestions = buildClientUpsellSuggestions({
         triggerPoint: "add_to_cart",
@@ -213,33 +283,17 @@ const MenuPageUpsellHost = ({
         setSuggestions(fallbackSuggestions);
         activeRef.current = true;
         setOpen(true);
-        incrementUpsellTouchpointCount("add_to_cart");
-        void logUpsellShownBatch({
-          triggerPoint: "add_to_cart",
-          suggestions: fallbackSuggestions,
-          cartValueAtTime: metrics.cartValueAtTime,
-          cartItemCount: metrics.cartItemCount,
-          metadata: { source_item_id: item.id, source_category_id: item.category, surface: "menu_page" },
-        });
-        void Promise.allSettled(
-          fallbackSuggestions.map((suggestion) =>
-            logUpsellAssociationStat({
-              triggerPoint: "add_to_cart",
-              action: "shown",
-              sourceItemId: Number(item.id),
-              sourceItemIds: cartItemIds,
-              upsellItemId: suggestion.id,
-              metadata: { source_category_id: item.category, surface: "menu_page" },
-            })
-          )
-        );
+        recordShown(fallbackSuggestions, item, cartItemIds, metrics, "local_fallback");
       }
 
       void fetchUpsellSettings()
         .then((settingsSnapshot) => {
+          if (requestSeqRef.current !== requestId) return [];
           setSettings(settingsSnapshot);
           if (!settingsSnapshot.enabled || !settingsSnapshot.show_after_add_to_cart) {
             setOpen(false);
+            setSuggestions([]);
+            activeRef.current = false;
             return [];
           }
           return fetchUpsellSuggestions({
@@ -252,21 +306,31 @@ const MenuPageUpsellHost = ({
           });
         })
         .then((rawSuggestions) => {
+          if (requestSeqRef.current !== requestId) return;
           const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 2) : [];
           if (!remoteSuggestions.length) return;
           setSuggestions(remoteSuggestions);
           activeRef.current = true;
           setOpen(true);
+          recordShown(remoteSuggestions, item, cartItemIds, metrics, "remote");
         })
         .catch(() => {
           // Local fallback already handled the visible recommendation.
         });
     },
-    [menuCandidates, settings]
+    [menuCandidates, recordShown, settings]
   );
 
   useEffect(() => {
     if (pendingDetail) {
+      const signature = [
+        pendingDetail.item?.id || "unknown",
+        pendingDetail.metrics?.cartItemCount || 0,
+        pendingDetail.metrics?.cartValueAtTime || 0,
+        (pendingDetail.nextCart || []).map((item) => `${item.id}:${item.quantity || 1}`).join(","),
+      ].join(":");
+      if (processedPendingDetailRef.current === signature) return;
+      processedPendingDetailRef.current = signature;
       void handleMenuItemAddedDetail(pendingDetail);
     }
   }, [handleMenuItemAddedDetail, pendingDetail]);
@@ -280,38 +344,42 @@ const MenuPageUpsellHost = ({
   }, [handleMenuItemAddedDetail]);
 
   const acceptSuggestion = async (suggestion: UpsellSuggestion) => {
+    requestSeqRef.current += 1;
+    pendingActionRef.current = null;
+    activeRef.current = false;
     setOpen(false);
+    setSuggestions([]);
+    setTriggerItem(null);
     const added = await addToCart(toCartItemFromUpsell(suggestion), 1);
     if (!added) {
       toast.error("Could not add this suggestion. Please try again.");
       return;
     }
     toast.success(`${suggestion.item_name} added to cart`);
-    pendingActionRef.current = async () => {
-      markUpsellItemAccepted(suggestion.id);
-      await Promise.allSettled([
-        logUpsellEvent({
-          triggerPoint: "add_to_cart",
-          action: "accepted",
-          suggestion,
-          cartValueAtTime: cartMetrics.cartValueAtTime,
-          cartItemCount: cartMetrics.cartItemCount,
-          metadata: { surface: "menu_page" },
-        }),
-        logUpsellAssociationStat({
-          triggerPoint: "add_to_cart",
-          action: "accepted",
-          sourceItemId: sourceItemIdRef.current || undefined,
-          sourceItemIds: sourceItemIdsRef.current,
-          upsellItemId: suggestion.id,
-          upsellPrice: suggestion.price,
-          metadata: { surface: "menu_page" },
-        }),
-      ]);
-    };
+    markUpsellItemAccepted(suggestion.id);
+    void Promise.allSettled([
+      logUpsellEvent({
+        triggerPoint: "add_to_cart",
+        action: "accepted",
+        suggestion,
+        cartValueAtTime: cartMetrics.cartValueAtTime,
+        cartItemCount: cartMetrics.cartItemCount,
+        metadata: { surface: "menu_page" },
+      }),
+      logUpsellAssociationStat({
+        triggerPoint: "add_to_cart",
+        action: "accepted",
+        sourceItemId: sourceItemIdRef.current || undefined,
+        sourceItemIds: sourceItemIdsRef.current,
+        upsellItemId: suggestion.id,
+        upsellPrice: suggestion.price,
+        metadata: { surface: "menu_page" },
+      }),
+    ]);
   };
 
   const declineSuggestion = async (suggestion: UpsellSuggestion) => {
+    requestSeqRef.current += 1;
     setOpen(false);
     pendingActionRef.current = async () => {
       markUpsellItemDismissed(suggestion.id);
@@ -340,6 +408,7 @@ const MenuPageUpsellHost = ({
   };
 
   const dismissSingle = async (suggestion: UpsellSuggestion) => {
+    requestSeqRef.current += 1;
     markUpsellItemDismissed(suggestion.id);
     if (suggestion.category) {
       trackUpsellCategoryDecline(suggestion.category, 0.5);
@@ -370,6 +439,7 @@ const MenuPageUpsellHost = ({
   };
 
   const dismissMany = async (items: UpsellSuggestion[]) => {
+    requestSeqRef.current += 1;
     setOpen(false);
     pendingActionRef.current = async () => {
       const tasks: Promise<unknown>[] = [];
@@ -461,10 +531,40 @@ const LayoutDashboard = () => {
 
     if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
       const mainCatId = categories[activeCategoryIndex].id;
-      return categories.filter(c => c.parent_category === mainCatId);
+      return categories.filter(c => Number(c.parent_category) === Number(mainCatId));
     }
     return [];
   }, [selectedCategory, categories]);
+
+  useEffect(() => {
+    if (!categories.length) return;
+
+    let activeCategoryIndex = selectedCategory;
+    if (activeCategoryIndex === null || !categories[activeCategoryIndex]) {
+      const firstParent = categories.find((category) => !category.parent_category);
+      if (!firstParent) return;
+      activeCategoryIndex = categories.indexOf(firstParent);
+    }
+
+    const activeCategory = categories[activeCategoryIndex];
+    if (!activeCategory) return;
+
+    const children = categories.filter(
+      (category) => Number(category.parent_category) === Number(activeCategory.id)
+    );
+
+    if (children.length) {
+      const childIds = new Set(children.map((child) => Number(child.id)));
+      if (selectedSubCategory === null || !childIds.has(Number(selectedSubCategory))) {
+        setSelectedSubCategory(children[0].id);
+      }
+      return;
+    }
+
+    if (selectedSubCategory !== null) {
+      setSelectedSubCategory(null);
+    }
+  }, [categories, selectedCategory, selectedSubCategory]);
 
   // Access WebSocket context to use setNewMessageFlag and sendMessage
   const { ws, setNewMessageFlag, sendMessage } = useWebSocket();
@@ -576,7 +676,8 @@ const LayoutDashboard = () => {
 
   useEffect(() => {
     const storedUserInfo = localStorage.getItem("userInfo");
-    if (!storedUserInfo) {
+    const storedGuestToken = localStorage.getItem("guest_session_token");
+    if (!storedUserInfo && !storedGuestToken) {
       // Dynamic Bootstrapping: Fetch valid restaurant and device from API
       const bootstrapSession = async () => {
         try {
@@ -673,12 +774,6 @@ const LayoutDashboard = () => {
         params.push(`restaurant_id=${targetId}`);
       }
 
-      // If subcategory is selected, filter by subcategory
-      if (selectedCategory !== null && categories[selectedCategory]) {
-        // Filter by main category
-        params.push(`category=${categories[selectedCategory].id}`);
-      }
-
       if (search) {
         params.push(`search=${encodeURIComponent(search)}`);
       }
@@ -693,7 +788,7 @@ const LayoutDashboard = () => {
       }
       if (nextItems.length) {
         rememberMenuUpsellCandidates(nextItems);
-        if (selectedCategory === null && !search.trim()) {
+        if (!search.trim()) {
           setUpsellMenuCandidates(nextItems);
           writeMenuCache(targetId, "items", nextItems);
         }
@@ -791,14 +886,16 @@ const LayoutDashboard = () => {
     // 1. Filter by Main Category
     if (activeCategoryIndex !== null && categories[activeCategoryIndex]) {
       const mainCatId = categories[activeCategoryIndex].id;
-      const subCats = categories.filter(c => c.parent_category === mainCatId);
+      const subCats = categories.filter(c => Number(c.parent_category) === Number(mainCatId));
 
       if (selectedSubCategory !== null) {
-        result = result.filter(item => item.sub_category === selectedSubCategory);
+        result = result.filter(item => Number(item.sub_category) === Number(selectedSubCategory));
       } else {
-        const subCatIds = new Set(subCats.map((sub) => sub.id));
+        const subCatIds = new Set(subCats.map((sub) => Number(sub.id)));
         result = result.filter(
-          item => item.category === mainCatId || (item.sub_category ? subCatIds.has(item.sub_category) : false)
+          item =>
+            Number(item.category) === Number(mainCatId) ||
+            (item.sub_category ? subCatIds.has(Number(item.sub_category)) : false)
         );
       }
     } else {
@@ -1040,7 +1137,10 @@ const LayoutDashboard = () => {
                         isActive={(selectedCategory !== null && categories[selectedCategory]?.id === category.id) || (selectedCategory === null && categories.indexOf(category) === 0)}
                         onClick={() => {
                           setSelectedCategory(categories.indexOf(category));
-                          setSelectedSubCategory(null);
+                          const firstChild = categories.find(
+                            (candidate) => Number(candidate.parent_category) === Number(category.id)
+                          );
+                          setSelectedSubCategory(firstChild?.id ?? null);
                         }}
                       />
                     ))}

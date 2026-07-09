@@ -160,6 +160,7 @@ function App() {
     const tableNameParam = searchParams.get("table_name") || searchParams.get("table");
     const restaurantIdParam = searchParams.get("restaurant_id");
     const storedUserInfo = localStorage.getItem("userInfo");
+    const storedGuestToken = localStorage.getItem("guest_session_token");
 
     if (tableIdParam && restaurantIdParam) {
       // Case 1: URL params present - redirect to real login flow (TableLanding)
@@ -168,9 +169,9 @@ function App() {
       window.location.href = `/login?id=${encodeURIComponent(tableIdParam)}&table=${encodedName}&restaurant_id=${encodeURIComponent(restaurantIdParam)}`;
       return;
 
-    } else if (storedUserInfo) {
-      // Case 2: Session already exists (and no new table scan) - redirect to splash first
-      navigate("/splash");
+    } else if (storedUserInfo || storedGuestToken) {
+      // Case 2: Session already exists (and no new table scan) - keep the guest in the app.
+      navigate("/dashboard", { replace: true });
 
     } else {
       // Case 3: No params and no session - Redirect to Scan Table

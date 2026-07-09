@@ -65,6 +65,56 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
+const UPSELL_LOG_DISABLED_UNTIL_KEY = "cb:upsell_log_disabled_until";
+const recentLogKeys = new Map<string, number>();
+
+const getLogDisabledUntil = () => {
+  try {
+    return Number(sessionStorage.getItem(UPSELL_LOG_DISABLED_UNTIL_KEY) || 0);
+  } catch {
+    return 0;
+  }
+};
+
+const disableUpsellLoggingTemporarily = () => {
+  try {
+    sessionStorage.setItem(UPSELL_LOG_DISABLED_UNTIL_KEY, String(Date.now() + 60_000));
+  } catch {
+    // Logging is non-critical.
+  }
+};
+
+const shouldSendUpsellLog = (key: string, ttlMs = 20_000) => {
+  const now = Date.now();
+  if (getLogDisabledUntil() > now) return false;
+
+  const previous = recentLogKeys.get(key) || 0;
+  if (now - previous < ttlMs) return false;
+
+  recentLogKeys.set(key, now);
+  if (recentLogKeys.size > 150) {
+    for (const [entryKey, entryTime] of recentLogKeys.entries()) {
+      if (now - entryTime > 120_000) recentLogKeys.delete(entryKey);
+    }
+  }
+  return true;
+};
+
+const handleUpsellLogFailure = (error: unknown) => {
+  const maybeError = error as { response?: { status?: number }; code?: string };
+  const status = Number(maybeError?.response?.status || 0);
+  if (!maybeError?.response || status >= 500 || maybeError?.code === "ERR_NETWORK") {
+    disableUpsellLoggingTemporarily();
+  }
+};
+
+const compactMetadata = (metadata?: Record<string, unknown>) => {
+  if (!metadata) return "";
+  const source = metadata.source_item_id ?? metadata.source_category_id ?? "";
+  const surface = metadata.surface ?? "";
+  return `${surface}:${source}`;
+};
+
 const normalizeUpsellSuggestion = (raw: unknown): UpsellSuggestion | null => {
   if (!raw || typeof raw !== "object") return null;
   const rawRecord = raw as Record<string, unknown>;
@@ -436,6 +486,17 @@ export async function logUpsellEvent(params: {
   cartItemCount: number;
   metadata?: Record<string, unknown>;
 }) {
+  const logKey = [
+    "event",
+    getUpsellSessionId(),
+    params.triggerPoint,
+    params.action,
+    params.suggestion.id || "unknown",
+    params.cartItemCount,
+    compactMetadata(params.metadata),
+  ].join(":");
+  if (!shouldSendUpsellLog(logKey, params.action === "shown" ? 30_000 : 3_000)) return;
+
   try {
     const now = new Date();
     const sessionToken = localStorage.getItem("guest_session_token");
@@ -460,7 +521,8 @@ export async function logUpsellEvent(params: {
         headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
       }
     );
-  } catch {
+  } catch (error) {
+    handleUpsellLogFailure(error);
     // Non-blocking by design.
   }
 }
@@ -473,8 +535,8 @@ export async function logUpsellShownBatch(params: {
   metadata?: Record<string, unknown>;
 }) {
   if (!params.suggestions.length) return;
-  await Promise.all(
-    params.suggestions.map((suggestion) =>
+  await Promise.allSettled(
+    params.suggestions.slice(0, 3).map((suggestion) =>
       logUpsellEvent({
         triggerPoint: params.triggerPoint,
         action: "shown",
@@ -496,6 +558,20 @@ export async function logUpsellAssociationStat(params: {
   upsellPrice?: number | string;
   metadata?: Record<string, unknown>;
 }) {
+  const sourceKey = params.sourceItemIds?.length
+    ? params.sourceItemIds.join(",")
+    : params.sourceItemId || "unknown";
+  const logKey = [
+    "association",
+    getUpsellSessionId(),
+    params.triggerPoint,
+    params.action,
+    sourceKey,
+    params.upsellItemId || "unknown",
+    compactMetadata(params.metadata),
+  ].join(":");
+  if (!shouldSendUpsellLog(logKey, params.action === "shown" ? 30_000 : 3_000)) return;
+
   try {
     const sessionToken = localStorage.getItem("guest_session_token");
     await axiosInstance.post(
@@ -516,7 +592,8 @@ export async function logUpsellAssociationStat(params: {
         headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
       }
     );
-  } catch {
+  } catch (error) {
+    handleUpsellLogFailure(error);
     // Fire-and-forget by design.
   }
 }

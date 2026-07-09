@@ -35,6 +35,20 @@ interface ModalFoodDetailProps extends ModalProps {
   onAddToCart?: (detail: MenuItemAddedDetail) => void;
 }
 
+const isUsableMenuItem = (candidate: unknown) => {
+  if (!candidate || typeof candidate !== "object") return false;
+  const record = candidate as Record<string, unknown>;
+  const price = Number(String(record.price || "").replace(/[^0-9.-]/g, ""));
+  return (
+    Number.isInteger(Number(record.id)) &&
+    Number(record.id) > 0 &&
+    typeof record.item_name === "string" &&
+    record.item_name.trim().length > 0 &&
+    Number.isFinite(price) &&
+    price > 0
+  );
+};
+
 export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   isOpen,
   close,
@@ -77,10 +91,17 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       cachedGet(`/api/customer/items/${itemId}/`, { timeout: 3500 }, { ttlMs: 60_000 })
         .then((res) => {
           if (cancelled) return;
-          setItem(res.data);
+          if (isUsableMenuItem(res.data)) {
+            setItem(res.data);
+            setLoadError(false);
+          } else if (!initialItem) {
+            setItem(null);
+            setLoadError(true);
+          } else {
+            setLoadError(false);
+          }
           setShowVideo(false);
           setQuantity(1);
-          setLoadError(false);
         })
         .catch(() => {
           if (cancelled) return;
