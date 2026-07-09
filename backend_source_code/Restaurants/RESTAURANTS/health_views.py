@@ -4,6 +4,9 @@ from django.db import connection
 from django.conf import settings
 
 def health_check(request):
+    if request.GET.get("deep") not in {"1", "true", "yes"}:
+        return JsonResponse({"status": "ok", "service": "Cleverdining Backend API"}, status=200)
+
     db_config = settings.DATABASES['default']
     debug_info = {
         "host": str(db_config.get('HOST', 'unknown')),

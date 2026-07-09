@@ -66,3 +66,6 @@ zope.interface==7.2
 django-storages[google]==1.14.4
 google-cloud-storage==2.18.2
 qrcode[pil]==8.0
+gunicorn==23.0.0
+uvicorn==0.34.3
+websockets==15.0.1
