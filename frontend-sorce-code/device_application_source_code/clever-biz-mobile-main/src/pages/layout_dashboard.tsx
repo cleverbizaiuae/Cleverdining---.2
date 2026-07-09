@@ -159,8 +159,22 @@ const MenuPageUpsellHost = ({
   const activeRef = useRef(false);
   const pendingActionRef = useRef<null | (() => Promise<void>)>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchUpsellSettings()
+      .then((snapshot) => {
+        if (!cancelled) setSettings(snapshot);
+      })
+      .catch(() => {
+        // Keep default behavior if settings are temporarily unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleMenuItemAddedDetail = useCallback(
-    async (detail?: MenuItemAddedDetail) => {
+    (detail?: MenuItemAddedDetail) => {
       const item = detail?.item;
       const nextCart = Array.isArray(detail?.nextCart) ? detail.nextCart : [];
       const metrics = detail?.metrics || { cartValueAtTime: 0, cartItemCount: 0 };
@@ -178,62 +192,37 @@ const MenuPageUpsellHost = ({
       sourceItemIdRef.current = Number(item.id);
       sourceItemIdsRef.current = cartItemIds;
 
-      try {
-        const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
-        if (settingsSnapshot) setSettings(settingsSnapshot);
+      const shouldRender =
+        (settings?.enabled ?? true) &&
+        (settings?.show_after_add_to_cart ?? true);
 
-        const shouldRender =
-          (settingsSnapshot?.enabled ?? settings?.enabled ?? true) &&
-          (settingsSnapshot?.show_after_add_to_cart ?? settings?.show_after_add_to_cart ?? true);
+      if (!shouldRender) return;
 
-        if (!shouldRender) return;
+      const fallbackSuggestions = buildClientUpsellSuggestions({
+        triggerPoint: "add_to_cart",
+        sourceItem: item,
+        candidates: menuCandidates,
+        cartItems: nextCart,
+        cartItemIds,
+        excludeItemIds: cartItemIds,
+        restaurantId: Number(item.restaurant || 0) || undefined,
+        limit: 2,
+      }).slice(0, 2);
 
-        const fallbackSuggestions = buildClientUpsellSuggestions({
-          triggerPoint: "add_to_cart",
-          sourceItem: item,
-          candidates: menuCandidates,
-          cartItems: nextCart,
-          cartItemIds,
-          excludeItemIds: cartItemIds,
-          restaurantId: Number(item.restaurant || 0) || undefined,
-          limit: 2,
-        });
-        let nextSuggestions = fallbackSuggestions.slice(0, 2);
-
-        if (nextSuggestions.length) {
-          setSuggestions(nextSuggestions);
-          activeRef.current = true;
-          setOpen(true);
-        }
-
-        const rawSuggestions = await fetchUpsellSuggestions({
-          triggerPoint: "add_to_cart",
-          sourceItemId: Number(item.id),
-          restaurantId: Number(item.restaurant || 0) || undefined,
-          limit: 6,
-          cartItemIds,
-          excludeItemIds: cartItemIds,
-        });
-        if (rawSuggestions.length) {
-          nextSuggestions = rawSuggestions.slice(0, 2);
-        }
-
-        if (!nextSuggestions.length) return;
-
-        setSuggestions(nextSuggestions);
+      if (fallbackSuggestions.length) {
+        setSuggestions(fallbackSuggestions);
         activeRef.current = true;
         setOpen(true);
         incrementUpsellTouchpointCount("add_to_cart");
-
-        await logUpsellShownBatch({
+        void logUpsellShownBatch({
           triggerPoint: "add_to_cart",
-          suggestions: nextSuggestions,
+          suggestions: fallbackSuggestions,
           cartValueAtTime: metrics.cartValueAtTime,
           cartItemCount: metrics.cartItemCount,
           metadata: { source_item_id: item.id, source_category_id: item.category, surface: "menu_page" },
         });
-        await Promise.allSettled(
-          nextSuggestions.map((suggestion) =>
+        void Promise.allSettled(
+          fallbackSuggestions.map((suggestion) =>
             logUpsellAssociationStat({
               triggerPoint: "add_to_cart",
               action: "shown",
@@ -244,9 +233,34 @@ const MenuPageUpsellHost = ({
             })
           )
         );
-      } catch {
-        // Non-blocking by design.
       }
+
+      void fetchUpsellSettings()
+        .then((settingsSnapshot) => {
+          setSettings(settingsSnapshot);
+          if (!settingsSnapshot.enabled || !settingsSnapshot.show_after_add_to_cart) {
+            setOpen(false);
+            return [];
+          }
+          return fetchUpsellSuggestions({
+            triggerPoint: "add_to_cart",
+            sourceItemId: Number(item.id),
+            restaurantId: Number(item.restaurant || 0) || undefined,
+            limit: 6,
+            cartItemIds,
+            excludeItemIds: cartItemIds,
+          });
+        })
+        .then((rawSuggestions) => {
+          const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 2) : [];
+          if (!remoteSuggestions.length) return;
+          setSuggestions(remoteSuggestions);
+          activeRef.current = true;
+          setOpen(true);
+        })
+        .catch(() => {
+          // Local fallback already handled the visible recommendation.
+        });
     },
     [menuCandidates, settings]
   );
@@ -266,12 +280,12 @@ const MenuPageUpsellHost = ({
   }, [handleMenuItemAddedDetail]);
 
   const acceptSuggestion = async (suggestion: UpsellSuggestion) => {
+    setOpen(false);
     const added = await addToCart(toCartItemFromUpsell(suggestion), 1);
     if (!added) {
       toast.error("Could not add this suggestion. Please try again.");
       return;
     }
-    setOpen(false);
     toast.success(`${suggestion.item_name} added to cart`);
     pendingActionRef.current = async () => {
       markUpsellItemAccepted(suggestion.id);
@@ -335,7 +349,7 @@ const MenuPageUpsellHost = ({
       if (remaining.length === 0) setOpen(false);
       return remaining;
     });
-    await Promise.allSettled([
+    void Promise.allSettled([
       logUpsellEvent({
         triggerPoint: "add_to_cart",
         action: "dismissed",
@@ -613,6 +627,7 @@ const LayoutDashboard = () => {
     const cachedCategories = readMenuCache<CategoryItemType>(targetId, "categories");
     if (cachedCategories.length) {
       setCategories(cachedCategories);
+      setCategoriesLoaded(true);
     }
 
     try {
@@ -636,9 +651,14 @@ const LayoutDashboard = () => {
   }, [lastUpdate]);
 
   const fetchItems = async () => {
-    setItemsLoaded(false);
     const targetId = getRestaurantIdFromStorage() || restaurantId;
     const cachedItems = readMenuCache<FoodItemTypes>(targetId, "items");
+    const hasVisibleItems = items.length > 0 || cachedItems.length > 0;
+    if (!hasVisibleItems) {
+      setItemsLoaded(false);
+    } else {
+      setItemsLoaded(true);
+    }
     if (!items.length && cachedItems.length) {
       setItems(cachedItems);
       setUpsellMenuCandidates(cachedItems);

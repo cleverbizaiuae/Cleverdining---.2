@@ -49,6 +49,9 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const accessToken = localStorage.getItem(TOKENS.ACCESS_TOKEN);
+    const guestSessionToken = localStorage.getItem("guest_session_token");
+    const isGuestRequest = Boolean(guestSessionToken) || accessToken === "guest_token";
 
     captureApiFailure(error, {
       feature: "api",
@@ -62,7 +65,7 @@ axiosInstance.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem(TOKENS.REFRESH_TOKEN);
-        if (refreshToken) {
+        if (refreshToken && !isGuestRequest) {
           const response = await axios.post(
             `${API_BASE_URL}token/refresh/`,
             {
@@ -76,28 +79,22 @@ axiosInstance.interceptors.response.use(
           // Retry the original request with new token
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return axiosInstance(originalRequest);
-        } else {
-          // No refresh token available (e.g., Guest Session)
-          throw new Error("No refresh token available");
         }
+        return Promise.reject(error);
       } catch {
-        // Refresh token failed or ignored (or none existed)
-        // UNCONDITIONALLY clear storage to prevent infinite loops.
-        // If the token is invalid (401), the session is dead.
-        // Clearing storage forces LayoutDashboard to re-bootstrap a new valid session.
+        if (isGuestRequest) return Promise.reject(error);
         localStorage.removeItem(TOKENS.ACCESS_TOKEN);
         localStorage.removeItem(TOKENS.REFRESH_TOKEN);
         localStorage.removeItem(TOKENS.USER_INFO);
-        localStorage.removeItem("guest_session_token");
 
         window.location.href = "/";
       }
     } else if (error.response?.status === 401) {
+      if (isGuestRequest) return Promise.reject(error);
       // Direct 401 fallback
       localStorage.removeItem(TOKENS.ACCESS_TOKEN);
       localStorage.removeItem(TOKENS.REFRESH_TOKEN);
       localStorage.removeItem(TOKENS.USER_INFO);
-      localStorage.removeItem("guest_session_token");
       window.location.href = "/";
     }
 

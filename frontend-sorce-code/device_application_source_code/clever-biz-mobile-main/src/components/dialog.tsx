@@ -149,7 +149,14 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     }
     showAddedToCartToast(quantity, item.item_name || "Item");
 
-    const nextCart = [...cart, { ...cartItem, quantity }];
+    const existingCartItem = cart.find((entry) => entry.id === cartItem.id);
+    const nextCart = existingCartItem
+      ? cart.map((entry) =>
+          entry.id === cartItem.id
+            ? { ...entry, quantity: entry.quantity + quantity }
+            : entry
+        )
+      : [...cart, { ...cartItem, quantity }];
     const metrics = summarizeCart(nextCart);
     const addedDetail = {
       item: cartItem,

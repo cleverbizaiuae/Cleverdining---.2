@@ -227,27 +227,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     // Server sync
     const sessionToken = localStorage.getItem("guest_session_token");
     if (sessionToken) {
-      try {
-        await axiosInstance.post("/api/customer/cart/add_item/", {
+      void axiosInstance.post("/api/customer/cart/add_item/", {
           item_id: normalizedItem.id,
           quantity: safeQuantity
+        }).catch((error) => {
+          console.warn("Server cart sync failed after local add", error);
         });
-      } catch (error) {
-        console.error("Failed to add item to server cart", error);
-        setCart((prev) => {
-          const target = prev.find((entry) => entry.id === normalizedItem.id);
-          if (!target) return prev;
-          if (target.quantity <= safeQuantity) {
-            return prev.filter((entry) => entry.id !== normalizedItem.id);
-          }
-          return prev.map((entry) =>
-            entry.id === normalizedItem.id
-              ? { ...entry, quantity: entry.quantity - safeQuantity }
-              : entry
-          );
-        });
-        return false;
-      }
     }
     return true;
   }, []);
@@ -272,14 +257,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const sessionToken = localStorage.getItem("guest_session_token");
     if (sessionToken) {
-      try {
-        await axiosInstance.post("/api/customer/cart/add_item/", {
+      void axiosInstance.post("/api/customer/cart/add_item/", {
           item_id: id,
           quantity: 1
+        }).catch((error) => {
+          console.warn("Server cart sync failed after local increment", error);
         });
-      } catch (error) {
-        console.error("Failed to increment item", error);
-      }
     }
   }, []);
 
