@@ -120,7 +120,7 @@ FOOD_PROFILE_KEYWORDS: Dict[str, Tuple[str, ...]] = {
 }
 
 FOOD_PROFILE_PAIRINGS: Dict[str, Tuple[str, ...]] = {
-    "burger": ("cola", "shake", "starter", "icecream"),
+    "burger": ("cola", "juice", "cocktail", "starter", "shake", "icecream"),
     "pizza": ("cola", "juice", "salad_starter", "dessert"),
     "pasta": ("juice", "cocktail", "salad_starter", "cake"),
     "sushi": ("tea", "juice", "salad_starter", "dessert"),

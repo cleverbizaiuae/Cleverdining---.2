@@ -81,6 +81,7 @@ class PranayMenuSeedTests(TestCase):
         )
         self.assertGreaterEqual(len(after_burger), 3)
         self.assertEqual(after_burger[0]["item"].category.category_type, "drink")
+        self.assertNotIn("shake", after_burger[0]["item"].item_name.lower())
         self.assertTrue(all(row["item"].category.category_type != "main" for row in after_burger))
         self.assertLessEqual(
             sum("shake" in row["item"].item_name.lower() for row in after_burger[:4]),
