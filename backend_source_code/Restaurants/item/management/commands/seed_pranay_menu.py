@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from category.models import Category
 from item.models import Item
 from item.pranay_menu import seed_pranay_menu
-from restaurant.models import Restaurant
+from restaurant.models import BrandConfig, Restaurant
 
 
 class Command(BaseCommand):
@@ -11,12 +11,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--restaurant-id", type=int, default=8)
-        parser.add_argument("--restaurant-name", default="Pranay")
+        parser.add_argument("--restaurant-phone", default="17678060045")
+        parser.add_argument("--brand-name", default="Pranay")
         parser.add_argument("--refresh-images", action="store_true")
 
     def handle(self, *args, **options):
         restaurant_id = options["restaurant_id"]
-        expected_name = options["restaurant_name"].strip()
+        expected_phone = options["restaurant_phone"].strip()
+        expected_brand_name = options["brand_name"].strip()
         restaurant = Restaurant.objects.filter(pk=restaurant_id).first()
         if restaurant is None:
             self.stdout.write(
@@ -25,11 +27,22 @@ class Command(BaseCommand):
                 )
             )
             return
-        if restaurant.resturent_name.strip().casefold() != expected_name.casefold():
+        if restaurant.phone_number.strip() != expected_phone:
             self.stdout.write(
                 self.style.WARNING(
-                    f"Skipping Pranay menu for restaurant {restaurant_id}: expected {expected_name!r}, "
-                    f"found {restaurant.resturent_name!r}."
+                    f"Skipping Pranay menu for restaurant {restaurant_id}: phone identity does not match."
+                )
+            )
+            return
+        brand_matches = BrandConfig.objects.filter(
+            restaurant=restaurant,
+            restaurant_name__iexact=expected_brand_name,
+        ).exists()
+        if not brand_matches:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Skipping Pranay menu for restaurant {restaurant_id}: expected brand "
+                    f"{expected_brand_name!r} was not found."
                 )
             )
             return

@@ -8,7 +8,7 @@ from accounts.models import User
 from category.models import Category
 from item.models import Item
 from order.upsell import build_item_context_upsell_suggestions
-from restaurant.models import Restaurant
+from restaurant.models import BrandConfig, Restaurant
 
 from .pranay_menu import PRANAY_MENU
 
@@ -36,10 +36,14 @@ class PranayMenuSeedTests(TestCase):
         )
         self.restaurant = Restaurant.objects.create(
             id=8,
-            resturent_name="Pranay",
+            resturent_name="XYZ",
             location="Dubai",
-            phone_number="+971500008888",
+            phone_number="17678060045",
             owner=self.owner,
+        )
+        BrandConfig.objects.create(
+            restaurant=self.restaurant,
+            restaurant_name="Pranay",
         )
 
     def test_seed_creates_complete_menu_with_images_and_is_idempotent(self):
