@@ -11,6 +11,7 @@ from order.upsell import build_item_context_upsell_suggestions
 from restaurant.models import BrandConfig, Restaurant
 
 from .pranay_menu import PRANAY_MENU
+from . import bootstrap
 
 
 class PranayMenuSeedTests(TestCase):
@@ -70,6 +71,23 @@ class PranayMenuSeedTests(TestCase):
             self.assertTrue(item.availability)
             self.assertGreater(len(item.tags), 1)
             self.assertTrue(item.image1.storage.exists(item.image1.name))
+
+    def test_runtime_bootstrap_seeds_verified_production_identity(self):
+        bootstrap._bootstrap_complete = False
+        bootstrap.ensure_pranay_production_menu()
+
+        seeded_names = {
+            item_data[0]
+            for category_data in PRANAY_MENU
+            for item_data in category_data["items"]
+        }
+        self.assertEqual(
+            Item.objects.filter(
+                restaurant=self.restaurant,
+                item_name__in=seeded_names,
+            ).count(),
+            40,
+        )
 
     def test_balanced_menu_recommends_missing_meal_roles(self):
         call_command("seed_pranay_menu")
