@@ -2,6 +2,7 @@ const SESSION_KEY = "upsell_session_id";
 const SIGNALS_KEY = "upsell_signals";
 const DISMISSED_ITEMS_KEY = "upsell_dismissed_items";
 const ACCEPTED_ITEMS_KEY = "upsell_accepted_items";
+const SHOWN_ITEMS_KEY = "upsell_shown_items";
 const AFTER_ADD_COUNT_KEY = "cb_suggest_after_add";
 const CART_COUNT_KEY = "cb_suggest_cart";
 const PREPAY_COUNT_KEY = "cb_suggest_prepay";
@@ -60,6 +61,7 @@ export function resetUpsellSession(): void {
   localStorage.removeItem(SIGNALS_KEY);
   localStorage.removeItem(DISMISSED_ITEMS_KEY);
   localStorage.removeItem(ACCEPTED_ITEMS_KEY);
+  localStorage.removeItem(SHOWN_ITEMS_KEY);
   try {
     Object.values(TOUCHPOINT_COUNTER_KEYS).forEach((key) => {
       sessionStorage.removeItem(key);
@@ -163,6 +165,26 @@ export function markUpsellItemAccepted(itemId: number): void {
 export function isUpsellItemAccepted(itemId: number): boolean {
   const current = readJson<number[]>(ACCEPTED_ITEMS_KEY, []);
   return current.includes(itemId);
+}
+
+export function markUpsellItemsShown(itemIds: number[]): void {
+  const current = readJson<number[]>(SHOWN_ITEMS_KEY, []);
+  const merged = new Set(current);
+  itemIds.forEach((itemId) => {
+    if (Number.isInteger(itemId) && itemId > 0) merged.add(itemId);
+  });
+  writeJson(SHOWN_ITEMS_KEY, Array.from(merged).slice(-40));
+}
+
+export function getUpsellExcludedItemIds(): number[] {
+  const values = [
+    ...readJson<number[]>(DISMISSED_ITEMS_KEY, []),
+    ...readJson<number[]>(ACCEPTED_ITEMS_KEY, []),
+    ...readJson<number[]>(SHOWN_ITEMS_KEY, []),
+  ];
+  return Array.from(
+    new Set(values.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))
+  );
 }
 
 export function canShowAfterAddUpsell(limit = 2): boolean {

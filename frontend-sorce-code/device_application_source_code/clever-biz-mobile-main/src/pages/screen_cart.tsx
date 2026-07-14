@@ -10,7 +10,6 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
-  fetchClientFallbackUpsellSuggestions,
   buildClientUpsellSuggestions,
   getRememberedMenuUpsellCandidates,
   logUpsellAssociationStat,
@@ -24,11 +23,13 @@ import {
 import {
   canShowUpsellTouchpoint,
   getEffectiveUpsellAggressiveness,
+  getUpsellExcludedItemIds,
   getUpsellSessionCap,
   getUpsellTriggerLimit,
   incrementUpsellTouchpointCount,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
+  markUpsellItemsShown,
   trackUpsellCategoryDecline,
 } from "../lib/upsellSession";
 import { getTableIdentity, setLocalStorageSynced } from "../lib/tableIdentity";
@@ -224,6 +225,7 @@ const ScreenCart = () => {
     }
 
     const cartIds = new Set(validCartItems.map((item) => item.id));
+    const excludedItemIds = Array.from(new Set([...validCartItemIds, ...getUpsellExcludedItemIds()]));
     const currentSettings = upsellSettings || DEFAULT_UPSELL_SETTINGS;
     const currentAggressiveness = getEffectiveUpsellAggressiveness(currentSettings.aggressiveness || "moderate");
     const triggerLimit = getUpsellTriggerLimit("cart", currentAggressiveness);
@@ -239,6 +241,7 @@ const ScreenCart = () => {
       if (signature === cartShownSignatureRef.current) return;
 
       cartShownSignatureRef.current = signature;
+      markUpsellItemsShown(suggestions.map((suggestion) => suggestion.id));
       incrementUpsellTouchpointCount("cart");
       void logUpsellShownBatch({
         triggerPoint: "cart",
@@ -283,7 +286,7 @@ const ScreenCart = () => {
         restaurantId: cartRestaurantId,
         cartItems: validCartItems,
         cartItemIds: validCartItemIds,
-        excludeItemIds: validCartItemIds,
+        excludeItemIds: excludedItemIds,
         limit: triggerLimit,
       })
       : [];
@@ -323,19 +326,9 @@ const ScreenCart = () => {
           limit: effectiveTriggerLimit,
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
-          excludeItemIds: validCartItemIds,
+          excludeItemIds: excludedItemIds,
         });
-        const resolvedSuggestions = rawSuggestions.length
-          ? rawSuggestions
-          : await fetchClientFallbackUpsellSuggestions({
-            triggerPoint: "cart",
-            limit: effectiveTriggerLimit,
-            restaurantId: cartRestaurantId,
-            cartItems: validCartItems,
-            cartItemIds: validCartItemIds,
-            excludeItemIds: validCartItemIds,
-          });
-        applyCartSuggestions(resolvedSuggestions, effectiveTriggerLimit);
+        applyCartSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
         if (!cancelled && !localSuggestions.length) {
           setUpsellSuggestions([]);
@@ -373,6 +366,7 @@ const ScreenCart = () => {
     }
 
     const cartIds = new Set(validCartItems.map((item) => item.id));
+    const excludedItemIds = Array.from(new Set([...validCartItemIds, ...getUpsellExcludedItemIds()]));
     const currentSettings = upsellSettings || DEFAULT_UPSELL_SETTINGS;
     const currentAggressiveness = getEffectiveUpsellAggressiveness(currentSettings.aggressiveness || "moderate");
     const triggerLimit = getUpsellTriggerLimit("before_payment", currentAggressiveness);
@@ -392,6 +386,7 @@ const ScreenCart = () => {
       if (signature === beforePaymentShownSignatureRef.current) return;
 
       beforePaymentShownSignatureRef.current = signature;
+      markUpsellItemsShown(suggestions.map((suggestion) => suggestion.id));
       incrementUpsellTouchpointCount("before_payment");
       void logUpsellShownBatch({
         triggerPoint: "before_payment",
@@ -436,7 +431,7 @@ const ScreenCart = () => {
         restaurantId: cartRestaurantId,
         cartItems: validCartItems,
         cartItemIds: validCartItemIds,
-        excludeItemIds: validCartItemIds,
+        excludeItemIds: excludedItemIds,
         limit: triggerLimit,
       })
       : [];
@@ -480,19 +475,9 @@ const ScreenCart = () => {
           limit: effectiveTriggerLimit,
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
-          excludeItemIds: validCartItemIds,
+          excludeItemIds: excludedItemIds,
         });
-        const resolvedSuggestions = rawSuggestions.length
-          ? rawSuggestions
-          : await fetchClientFallbackUpsellSuggestions({
-            triggerPoint: "before_payment",
-            limit: effectiveTriggerLimit,
-            restaurantId: cartRestaurantId,
-            cartItems: validCartItems,
-            cartItemIds: validCartItemIds,
-            excludeItemIds: validCartItemIds,
-          });
-        applyBeforePaymentSuggestions(resolvedSuggestions, effectiveTriggerLimit);
+        applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
         if (!cancelled && !localSuggestions.length) {
           setBeforePaymentSuggestions([]);

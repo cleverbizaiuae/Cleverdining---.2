@@ -3,6 +3,7 @@
 echo "🔧 Running database migrations..."
 python manage.py migrate --noinput
 python manage.py verify_schema --skip-type-check
+python manage.py seed_pranay_menu
 
 echo "🗂️  Collecting static files..."
 python manage.py collectstatic --noinput --clear

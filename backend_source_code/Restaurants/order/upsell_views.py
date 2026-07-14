@@ -21,7 +21,7 @@ from restaurant.models import Restaurant
 from .models import ItemAssociation, OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .schema_guard import ensure_upsell_tables
 from .upsell import build_item_context_upsell_suggestions
-from .upsell_knowledge import build_upsell_agent_context, validated_upsell_agent_decision
+from .upsell_knowledge import call_upsell_llm, build_upsell_agent_context, validated_upsell_agent_decision
 from .upsell_serializers import (
     UpsellItemSettingSerializer,
     UpsellEventCreateSerializer,
@@ -620,10 +620,11 @@ class UpsellSmartSuggestionsAPIView(APIView):
         engine_rows = build_item_context_upsell_suggestions(
             restaurant,
             cart_item_ids,
-            limit=limit,
+            limit=5,
             trigger_point=trigger_point,
             source_item_id=source_item_id,
             session_signals=signal_payload,
+            apply_surface_limit=False,
         )
 
         excluded_ids = cart_item_ids.union(exclude_item_ids)
@@ -647,12 +648,44 @@ class UpsellSmartSuggestionsAPIView(APIView):
             hour=timezone.localtime(timezone.now()).hour,
             session_signals=signal_payload,
         )
-        agent_decision = validated_upsell_agent_decision(None, eligible_engine_rows)
+        llm_decision, llm_status = call_upsell_llm(agent_context)
+        agent_decision = validated_upsell_agent_decision(
+            llm_decision,
+            eligible_engine_rows,
+            fallback_reason=llm_status,
+        )
+
+        if agent_decision.get("suggest_nothing") and agent_decision.get("decision_source") == "llm":
+            display_rows = []
+        else:
+            selected_item_id = _safe_int(agent_decision.get("suggested_item_id"))
+            selected_rows = [
+                row for row in eligible_engine_rows if row.get("item") and row["item"].id == selected_item_id
+            ]
+            display_rows = selected_rows + [
+                row for row in eligible_engine_rows if not row.get("item") or row["item"].id != selected_item_id
+            ]
+
+        if trigger_point in {"add_to_cart", "before_payment"} or setting.aggressiveness == "subtle":
+            display_limit = 1
+        else:
+            display_limit = 2
+        display_rows = display_rows[: min(limit, display_limit)]
+
         results = []
-        for row in eligible_engine_rows:
+        for row in display_rows:
             item = row.get("item")
             if not item:
                 continue
+            is_agent_selection = (
+                not agent_decision.get("suggest_nothing")
+                and _safe_int(agent_decision.get("suggested_item_id")) == item.id
+            )
+            suggestion_copy = (
+                str(agent_decision.get("suggestion_copy") or "")
+                if is_agent_selection
+                else str(row.get("message") or "")
+            )
             image_url = ""
             try:
                 if getattr(item, "image1", None):
@@ -676,16 +709,16 @@ class UpsellSmartSuggestionsAPIView(APIView):
                     "image_url": image_url,
                     "availability": bool(item.availability),
                     "upsell_rule": row.get("rule", ""),
-                    "upsell_message": row.get("message", ""),
-                    "suggestion_copy": row.get("message", ""),
+                    "upsell_message": suggestion_copy,
+                    "suggestion_copy": suggestion_copy,
                     "upsell_score": row.get("score", 0),
                     "upsell_stage": row.get("stage", ""),
                     "target_role": row.get("target_role", ""),
                     "candidate_roles": row.get("candidate_roles", []),
                     "cart_roles": row.get("cart_roles", []),
                     "venue_type": row.get("venue_type", agent_context.get("restaurant", {}).get("venue_type", "restaurant")),
-                    "agent_reasoning": row.get("agent_reasoning", ""),
-                    "decision_source": "deterministic",
+                    "agent_reasoning": agent_decision.get("reasoning", "") if is_agent_selection else row.get("agent_reasoning", ""),
+                    "decision_source": agent_decision.get("decision_source", "deterministic") if is_agent_selection else "deterministic",
                     "association_strength": row.get("historical_max_strength", 0.0),
                     "co_order_frequency": row.get("historical_max_frequency", 0),
                 }
@@ -702,6 +735,8 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 "target_roles": agent_context.get("target_roles", []),
                 "candidate_count": len(agent_context.get("candidates", [])),
                 "llm_ready": bool(agent_context.get("candidates")),
+                "llm_status": llm_status,
+                "decision_source": agent_decision.get("decision_source", "deterministic_fallback"),
             },
         }
         if str(request.query_params.get("debug_agent_context") or "").lower() in {"1", "true", "yes"}:

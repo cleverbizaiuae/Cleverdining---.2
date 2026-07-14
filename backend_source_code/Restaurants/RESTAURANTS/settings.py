@@ -451,8 +451,22 @@ VAPI_API=env('VAPI_API', default='')
 STRIPE_SECRET_KEY=env('STRIPE_SECRET_KEY', default='')
 STRIPE_WEBHOOK_SECRET=env('STRIPE_WEBHOOK_SECRET', default='')
 
-# OpenAI Configuration
+# LLM configuration. The model is used only for the final upsell judgment/copy
+# step; backend rules and response validation remain authoritative.
 OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
+UPSELL_LLM_ENABLED = env.bool('UPSELL_LLM_ENABLED', default=True)
+UPSELL_LLM_PROVIDER = env('UPSELL_LLM_PROVIDER', default='vertex').strip().lower()
+VERTEX_UPSELL_PROJECT_ID = env('VERTEX_UPSELL_PROJECT_ID', default='')
+VERTEX_UPSELL_LOCATION = env('VERTEX_UPSELL_LOCATION', default='us-central1')
+VERTEX_UPSELL_MODEL = env('VERTEX_UPSELL_MODEL', default='openai/gpt-oss-20b-maas')
+VERTEX_UPSELL_SERVICE_ACCOUNT_JSON = env('VERTEX_UPSELL_SERVICE_ACCOUNT_JSON', default='')
+VERTEX_UPSELL_TIMEOUT_SECONDS = env.float('VERTEX_UPSELL_TIMEOUT_SECONDS', default=3.0)
+VERTEX_UPSELL_MAX_OUTPUT_TOKENS = env.int('VERTEX_UPSELL_MAX_OUTPUT_TOKENS', default=220)
+OLLAMA_BASE_URL = env('OLLAMA_BASE_URL', default='')
+OLLAMA_API_KEY = env('OLLAMA_API_KEY', default='')
+OLLAMA_UPSELL_MODEL = env('OLLAMA_UPSELL_MODEL', default='qwen3:4b-instruct')
+OLLAMA_UPSELL_TIMEOUT_SECONDS = env.float('OLLAMA_UPSELL_TIMEOUT_SECONDS', default=2.0)
+OLLAMA_KEEP_ALIVE = env('OLLAMA_KEEP_ALIVE', default='10m')
 # Database configuration - supports both SQLite (local) and PostgreSQL (Docker)
 USE_SQLITE = env.bool('USE_SQLITE', default=False)
 

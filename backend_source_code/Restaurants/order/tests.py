@@ -1,6 +1,8 @@
 import shutil
 import tempfile
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+import requests
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -14,8 +16,12 @@ from restaurant.models import BrandConfig, Restaurant
 
 from .models import UpsellEvent
 from .upsell import build_item_context_upsell_suggestions
-from .upsell_knowledge import validated_upsell_agent_decision
-from .upsell_views import UpsellAnalyticsAPIView
+from .upsell_knowledge import (
+    build_upsell_agent_context,
+    call_upsell_llm,
+    validated_upsell_agent_decision,
+)
+from .upsell_views import UpsellAnalyticsAPIView, UpsellSmartSuggestionsAPIView
 
 
 class PayBeforeOrderFlowTests(TestCase):
@@ -355,3 +361,186 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         self.assertEqual(decision["decision_source"], "deterministic_fallback")
         self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
+
+    def _agent_context(self, rows):
+        setting = self.restaurant.upsell_setting
+        return build_upsell_agent_context(
+            restaurant=self.restaurant,
+            setting=setting,
+            cart_items=[self.burger],
+            candidate_rows=rows,
+            trigger_point="cart",
+            hour=13,
+        )
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="vertex",
+        VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
+        VERTEX_UPSELL_LOCATION="us-central1",
+        VERTEX_UPSELL_MODEL="openai/gpt-oss-20b-maas",
+        VERTEX_UPSELL_SERVICE_ACCOUNT_JSON='{"type":"service_account"}',
+        VERTEX_UPSELL_TIMEOUT_SECONDS=1.0,
+    )
+    def test_vertex_decision_is_structured_and_validated(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[-1]["item"]
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"DRINK_COLD",'
+                    '"reason":null,"reasoning":"Best valid match.",'
+                    '"suggestion_copy":"A crisp finish for your meal.","confidence":0.91}'
+                )
+                % (chosen.id, chosen.item_name)}
+            }]
+        }
+        session = Mock()
+        session.post.return_value = response
+
+        with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(decision["suggested_item_id"], chosen.id)
+        self.assertEqual(decision["suggestion_copy"], "A crisp finish for your meal.")
+        self.assertEqual(
+            session.post.call_args.args[0],
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/cleverdining-prod/locations/"
+            "us-central1/endpoints/openapi/chat/completions",
+        )
+        request_json = session.post.call_args.kwargs["json"]
+        self.assertEqual(request_json["model"], "openai/gpt-oss-20b-maas")
+        self.assertEqual(request_json["response_format"], {"type": "json_object"})
+        self.assertEqual(request_json["temperature"], 0)
+        self.assertLessEqual(request_json["max_tokens"], 350)
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="vertex",
+        VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
+        VERTEX_UPSELL_SERVICE_ACCOUNT_JSON='{"type":"service_account"}',
+    )
+    def test_vertex_timeout_uses_deterministic_fallback(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        session = Mock()
+        session.post.side_effect = requests.Timeout
+        with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        self.assertEqual(llm_status, "timeout")
+        self.assertEqual(decision["decision_source"], "deterministic_fallback")
+        self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="vertex",
+        VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
+        VERTEX_UPSELL_SERVICE_ACCOUNT_JSON='{"type":"service_account"}',
+    )
+    def test_vertex_can_suggest_nothing(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":true,"suggested_item_id":null,'
+                    '"suggested_item_name":null,"target_role":null,'
+                    '"reason":"The order is complete.","reasoning":"Nothing adds value.",'
+                    '"suggestion_copy":null,"confidence":0.95}'
+                )}
+            }]
+        }
+        session = Mock()
+        session.post.return_value = response
+        with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        self.assertTrue(decision["suggest_nothing"])
+        self.assertEqual(decision["decision_source"], "llm")
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="vertex",
+        VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
+        VERTEX_UPSELL_SERVICE_ACCOUNT_JSON="",
+    )
+    def test_missing_vertex_credentials_does_not_make_network_request(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        with patch("order.upsell_knowledge._get_vertex_authorized_session") as session:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        self.assertIsNone(raw_decision)
+        self.assertEqual(llm_status, "missing_vertex_credentials")
+        session.assert_not_called()
+
+    def test_smart_suggestions_applies_valid_llm_choice_and_copy(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        chosen = rows[-1]["item"]
+        request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "cart",
+                "limit": 2,
+            },
+        )
+        llm_response = {
+            "suggest_nothing": False,
+            "suggested_item_id": chosen.id,
+            "suggested_item_name": chosen.item_name,
+            "target_role": rows[-1]["target_role"],
+            "reasoning": "Best valid candidate for this cart.",
+            "suggestion_copy": "A lighter finish for your order.",
+            "confidence": 0.92,
+            "_llm_provider": "vertex_maas",
+            "_llm_model": "openai/gpt-oss-20b-maas",
+        }
+
+        with patch("order.upsell_views.call_upsell_llm", return_value=(llm_response, "ok")):
+            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["id"], chosen.id)
+        self.assertEqual(response.data["results"][0]["suggestion_copy"], "A lighter finish for your order.")
+        self.assertEqual(response.data["results"][0]["decision_source"], "llm")
+        self.assertEqual(response.data["knowledge_base"]["llm_status"], "ok")

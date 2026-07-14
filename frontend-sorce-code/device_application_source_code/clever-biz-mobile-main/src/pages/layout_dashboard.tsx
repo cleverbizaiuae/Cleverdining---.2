@@ -22,8 +22,10 @@ import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import {
   incrementUpsellTouchpointCount,
+  getUpsellExcludedItemIds,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
+  markUpsellItemsShown,
   trackUpsellCategoryDecline,
   trackUpsellCategoryView,
 } from "../lib/upsellSession";
@@ -218,6 +220,7 @@ const MenuPageUpsellHost = ({
       if (shownSignatureRef.current === signature) return;
       shownSignatureRef.current = signature;
 
+      markUpsellItemsShown(shownItems.map((suggestion) => suggestion.id));
       incrementUpsellTouchpointCount("add_to_cart");
       void logUpsellShownBatch({
         triggerPoint: "add_to_cart",
@@ -260,6 +263,7 @@ const MenuPageUpsellHost = ({
       const cartItemIds = nextCart
         .map((cartItem) => Number(cartItem.id))
         .filter((id) => Number.isInteger(id) && id > 0);
+      const excludedItemIds = Array.from(new Set([...cartItemIds, ...getUpsellExcludedItemIds()]));
       setTriggerItem(item);
       setCartMetrics(metrics);
       sourceItemIdRef.current = Number(item.id);
@@ -282,10 +286,10 @@ const MenuPageUpsellHost = ({
         candidates: menuCandidates,
         cartItems: nextCart,
         cartItemIds,
-        excludeItemIds: cartItemIds,
+        excludeItemIds: excludedItemIds,
         restaurantId: Number(item.restaurant || 0) || undefined,
-        limit: 2,
-      }).slice(0, 2);
+        limit: 1,
+      }).slice(0, 1);
 
       if (fallbackSuggestions.length) {
         setSuggestions(fallbackSuggestions);
@@ -310,13 +314,18 @@ const MenuPageUpsellHost = ({
             restaurantId: Number(item.restaurant || 0) || undefined,
             limit: 6,
             cartItemIds,
-            excludeItemIds: cartItemIds,
+            excludeItemIds: excludedItemIds,
           });
         })
         .then((rawSuggestions) => {
           if (requestSeqRef.current !== requestId) return;
-          const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 2) : [];
-          if (!remoteSuggestions.length) return;
+          const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 1) : [];
+          if (!remoteSuggestions.length) {
+            setSuggestions([]);
+            setOpen(false);
+            activeRef.current = false;
+            return;
+          }
           setSuggestions(remoteSuggestions);
           activeRef.current = true;
           setOpen(true);

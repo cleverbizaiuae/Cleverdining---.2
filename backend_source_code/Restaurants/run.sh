@@ -5,6 +5,7 @@ set -o errexit
 # Run migrations at runtime
 python manage.py migrate --noinput
 python manage.py verify_schema --skip-type-check
+python manage.py seed_pranay_menu
 
 # Start ASGI server (HTTP + WebSocket compatible).
 # Gunicorn supervises Uvicorn workers and restarts them cleanly if one wedges.

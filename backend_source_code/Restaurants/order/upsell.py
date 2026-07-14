@@ -324,6 +324,13 @@ def _item_roles(item: Item, role_categories: Dict[str, Set[int]]) -> Set[str]:
         if category_id in category_ids or (sub_category_id and sub_category_id in category_ids):
             roles.add(role)
 
+    # An explicit restaurant category role is authoritative for eligibility.
+    # Culinary keywords still influence pairing scores via _item_profiles(),
+    # but must not turn tiramisu into a drink because it contains espresso or
+    # turn a shake into a dessert when the restaurant lists it as a beverage.
+    if roles:
+        return roles
+
     roles.update(knowledge_roles_to_engine_roles(classify_item_roles(item)))
 
     if roles:
@@ -656,6 +663,7 @@ def _build_upsell_suggestions_for_items(
     trigger_point: str = "cart",
     source_item_id: Optional[int] = None,
     session_signals: Optional[Dict] = None,
+    apply_surface_limit: bool = True,
 ) -> List[Dict]:
     """
     Shared AI upsell engine.
@@ -1015,6 +1023,9 @@ def _build_upsell_suggestions_for_items(
         )
         results = [top_override] + [row for row in results if row["item"].id != top_override["item"].id]
 
+    if not apply_surface_limit:
+        return results[:limit]
+
     if trigger_point in {"add_to_cart", "before_payment"}:
         settings_limit = 1
     elif setting.aggressiveness == "subtle":
@@ -1036,6 +1047,7 @@ def build_item_context_upsell_suggestions(
     trigger_point: str = "cart",
     source_item_id: Optional[int] = None,
     session_signals: Optional[Dict] = None,
+    apply_surface_limit: bool = True,
 ) -> List[Dict]:
     normalized_ids = []
     seen_ids: Set[int] = set()
@@ -1072,6 +1084,7 @@ def build_item_context_upsell_suggestions(
         trigger_point=trigger_point,
         source_item_id=source_item_id,
         session_signals=session_signals,
+        apply_surface_limit=apply_surface_limit,
     )
 
 
