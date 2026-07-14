@@ -78,14 +78,16 @@ class DeviceListErrorTests(TestCase):
         )
 
     @patch("device.views.Device.objects.filter", side_effect=RuntimeError("database unavailable"))
-    def test_database_errors_are_not_returned_as_empty_success(self, _filter):
+    def test_database_errors_return_explicit_resilient_error_payload(self, _filter):
         request = self.factory.get("/owners/devices/")
         force_authenticate(request, user=self.owner)
 
         response = SimpleDeviceListView.as_view()(request)
 
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["code"], "table_list_failed")
+        self.assertEqual(response.data["results"], [])
+        self.assertEqual(response.data["error"], "Unable to load tables.")
         self.assertNotIn("database unavailable", str(response.data))
 
     def test_owner_device_list_does_not_select_optional_restaurant_columns(self):
