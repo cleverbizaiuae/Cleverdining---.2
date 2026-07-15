@@ -1,4 +1,7 @@
-# AI Upsell on Google Cloud Vertex AI
+# Optional AI Upsell Provider: Google Cloud Vertex AI
+
+> This provider is retained as an optional integration. Production now defaults
+> to OpenRouter's free router; see `docs/AI_UPSELL_OPENROUTER.md`.
 
 ## Production architecture
 
@@ -18,9 +21,10 @@ used immediately.
 
 ## Why Vertex MaaS
 
-Production uses `openai/gpt-oss-20b-maas`, an Apache 2.0 open-weight model
-served by Google Cloud Vertex AI. MaaS has no always-on GPU or idle instance.
-Billing is token-based, and this integration caps output at 220 tokens.
+When explicitly enabled, this integration uses `openai/gpt-oss-20b-maas`, an
+Apache 2.0 open-weight model served by Google Cloud Vertex AI. MaaS has no
+always-on GPU or idle instance. Billing is token-based, and this integration
+caps output at 220 tokens.
 
 Do not deploy the Cloud Run GPU/Ollama alternative for normal production
 traffic unless usage becomes high enough that dedicated compute is cheaper.
@@ -62,7 +66,8 @@ service needs no Google credentials when the model is disabled.
 ## Optional local provider
 
 For local development only, set `UPSELL_LLM_PROVIDER=ollama` and configure the
-existing `OLLAMA_*` variables. Production should remain on Vertex MaaS.
+existing `OLLAMA_*` variables. Use `UPSELL_LLM_PROVIDER=openrouter` for the
+current production configuration.
 
 ## Verification
 

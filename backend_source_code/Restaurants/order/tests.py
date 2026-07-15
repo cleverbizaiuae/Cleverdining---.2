@@ -375,6 +375,94 @@ class UpsellKnowledgeEngineTests(TestCase):
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="openrouter/free",
+        OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
+    )
+    def test_openrouter_free_decision_is_structured_and_validated(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[-1]["item"]
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "model": "qwen/qwen3-4b:free",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"DRINK_COLD",'
+                    '"reason":null,"reasoning":"Best valid match.",'
+                    '"suggestion_copy":"A crisp finish for your meal.","confidence":0.91}'
+                )
+                % (chosen.id, chosen.item_name)}
+            }],
+        }
+
+        with patch("order.upsell_knowledge.requests.post", return_value=response) as post:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(decision["suggested_item_id"], chosen.id)
+        self.assertEqual(raw_decision["_llm_provider"], "openrouter")
+        self.assertEqual(raw_decision["_llm_model"], "qwen/qwen3-4b:free")
+        self.assertEqual(post.call_args.args[0], "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
+        self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
+            "CleverDining AI Upsell",
+        )
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+    )
+    def test_openrouter_timeout_uses_deterministic_fallback(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        with patch("order.upsell_knowledge.requests.post", side_effect=requests.Timeout):
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        self.assertEqual(llm_status, "timeout")
+        self.assertEqual(decision["decision_source"], "deterministic_fallback")
+        self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="",
+    )
+    def test_missing_openrouter_key_does_not_make_network_request(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        with patch("order.upsell_knowledge.requests.post") as post:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        self.assertIsNone(raw_decision)
+        self.assertEqual(llm_status, "missing_openrouter_key")
+        post.assert_not_called()
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
         UPSELL_LLM_PROVIDER="vertex",
         VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
         VERTEX_UPSELL_LOCATION="us-central1",

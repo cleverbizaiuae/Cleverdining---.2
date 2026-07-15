@@ -613,7 +613,7 @@ def _ollama_response_text(payload: Mapping[str, Any]) -> str:
     return str(message.get("content") or "").strip() if isinstance(message, Mapping) else ""
 
 
-def _vertex_response_text(payload: Mapping[str, Any]) -> str:
+def _openai_compatible_response_text(payload: Mapping[str, Any]) -> str:
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices or not isinstance(choices[0], Mapping):
         return ""
@@ -726,6 +726,75 @@ def _call_ollama_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[s
     return decision, "ok"
 
 
+def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    api_key = str(getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()
+    model = str(getattr(settings, "OPENROUTER_UPSELL_MODEL", "openrouter/free") or "openrouter/free").strip()
+    if not api_key:
+        return None, "missing_openrouter_key"
+    if len(api_key) < 20 or re.search(r"\s", api_key):
+        logger.warning("Upsell LLM disabled for invalid OpenRouter API key format")
+        return None, "invalid_openrouter_key"
+    if not re.fullmatch(r"[A-Za-z0-9._:/-]+", model):
+        logger.warning("Upsell LLM disabled for invalid OpenRouter model name")
+        return None, "invalid_model"
+
+    timeout = max(
+        0.5,
+        min(float(getattr(settings, "OPENROUTER_UPSELL_TIMEOUT_SECONDS", 3.0) or 3.0), 8.0),
+    )
+    max_tokens = max(
+        80,
+        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 220) or 220), 350),
+    )
+    request_payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": str(context.get("system_prompt") or UPSELL_SYSTEM_PROMPT)},
+            {
+                "role": "user",
+                "content": str(context.get("user_message") or build_upsell_agent_user_message(context)),
+            },
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://officialcleverdiningcustomer.netlify.app",
+        "X-OpenRouter-Title": "CleverDining AI Upsell",
+    }
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=request_payload,
+            timeout=timeout,
+        )
+    except requests.Timeout:
+        return None, "timeout"
+    except requests.RequestException:
+        logger.warning("Upsell OpenRouter request failed", exc_info=True)
+        return None, "network_error"
+
+    if response.status_code < 200 or response.status_code >= 300:
+        logger.warning("Upsell OpenRouter request returned HTTP %s", response.status_code)
+        return None, f"http_{response.status_code}"
+    try:
+        response_payload = response.json()
+    except ValueError:
+        return None, "invalid_response"
+
+    decision = _parse_llm_json(_openai_compatible_response_text(response_payload))
+    if not decision:
+        return None, "invalid_json"
+    decision["_llm_provider"] = "openrouter"
+    decision["_llm_model"] = str(response_payload.get("model") or model)
+    return decision, "ok"
+
+
 def _call_vertex_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     project_id = str(getattr(settings, "VERTEX_UPSELL_PROJECT_ID", "") or "").strip()
     location = str(getattr(settings, "VERTEX_UPSELL_LOCATION", "us-central1") or "us-central1").strip()
@@ -789,7 +858,7 @@ def _call_vertex_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[s
     except ValueError:
         return None, "invalid_response"
 
-    decision = _parse_llm_json(_vertex_response_text(response_payload))
+    decision = _parse_llm_json(_openai_compatible_response_text(response_payload))
     if not decision:
         return None, "invalid_json"
     decision["_llm_provider"] = "vertex_maas"
@@ -804,7 +873,9 @@ def call_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]
     if not bool(getattr(settings, "UPSELL_LLM_ENABLED", True)):
         return None, "disabled"
 
-    provider = str(getattr(settings, "UPSELL_LLM_PROVIDER", "vertex") or "vertex").strip().lower()
+    provider = str(getattr(settings, "UPSELL_LLM_PROVIDER", "openrouter") or "openrouter").strip().lower()
+    if provider == "openrouter":
+        return _call_openrouter_upsell_llm(context)
     if provider == "vertex":
         return _call_vertex_upsell_llm(context)
     if provider == "ollama":
