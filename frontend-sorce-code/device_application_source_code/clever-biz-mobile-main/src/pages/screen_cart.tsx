@@ -328,7 +328,11 @@ const ScreenCart = () => {
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
         });
-        applyCartSuggestions(rawSuggestions, effectiveTriggerLimit);
+        // An empty delayed response must not erase a valid suggestion that was
+        // already rendered from the complete cached menu.
+        if (rawSuggestions.length || !localSuggestions.length) {
+          applyCartSuggestions(rawSuggestions, effectiveTriggerLimit);
+        }
       } catch {
         if (!cancelled && !localSuggestions.length) {
           setUpsellSuggestions([]);
@@ -477,7 +481,9 @@ const ScreenCart = () => {
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
         });
-        applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
+        if (rawSuggestions.length || !localSuggestions.length) {
+          applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
+        }
       } catch {
         if (!cancelled && !localSuggestions.length) {
           setBeforePaymentSuggestions([]);

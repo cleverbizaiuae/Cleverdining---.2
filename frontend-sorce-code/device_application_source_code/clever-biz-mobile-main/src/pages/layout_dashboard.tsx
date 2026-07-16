@@ -321,9 +321,13 @@ const MenuPageUpsellHost = ({
           if (requestSeqRef.current !== requestId) return;
           const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 1) : [];
           if (!remoteSuggestions.length) {
-            setSuggestions([]);
-            setOpen(false);
-            activeRef.current = false;
+            // Keep the immediate local recommendation visible when the remote
+            // service is rate-limited or returns no replacement candidate.
+            if (!fallbackSuggestions.length) {
+              setSuggestions([]);
+              setOpen(false);
+              activeRef.current = false;
+            }
             return;
           }
           setSuggestions(remoteSuggestions);
