@@ -15,8 +15,6 @@ import {
   Eye,
   Moon,
   ChevronDown,
-  CreditCard,
-  Activity,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency, getActiveRestaurantRegion } from "@/lib/utils";
@@ -250,28 +248,6 @@ const ScreenRestaurantOrderList = () => {
       ? availableGateways.map((gateway) => (gateway.provider || gateway.code) as GatewayProvider)
       : regionGatewayOptions
   ).filter(Boolean);
-
-  const testGateway = async (provider: GatewayProvider) => {
-    try {
-      await axiosInstance.post(`/api/payment-providers/${provider}/test/`);
-      toast.success(`${providerLabel(provider)} connection verified`);
-      invalidateApiCache("api/payment-providers");
-      fetchGateways();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || `Failed to verify ${providerLabel(provider)}`);
-    }
-  };
-
-  const disconnectGateway = async (provider: GatewayProvider) => {
-    try {
-      await axiosInstance.delete(`/api/payment-providers/${provider}/`);
-      toast.success(`${providerLabel(provider)} disconnected`);
-      invalidateApiCache("api/payment-providers");
-      fetchGateways();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || `Failed to disconnect ${providerLabel(provider)}`);
-    }
-  };
 
   // --- LOGIC ---
 
@@ -674,90 +650,6 @@ const ScreenRestaurantOrderList = () => {
             </div>
           </div>
         </div>
-
-        {(userRole === 'owner' || userRole === 'manager') && availableGateways.length > 0 && (
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/60">
-            <div className="flex items-center gap-2 mb-3">
-              <CreditCard size={16} className="text-[#0055FE]" />
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Payment providers</p>
-                <p className="text-xs text-slate-500">Only Super Admin enabled providers appear here.</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {availableGateways.map((gateway: any) => {
-                const provider = (gateway.provider || gateway.code) as GatewayProvider;
-                const credentialsConfigured = Boolean(gateway.credentialsConfigured);
-                const connectionStatus = gateway.connectionStatus || "not_configured";
-                const connected = connectionStatus === "connected";
-                const active = gateway.is_active || gateway.isActive;
-                const statusLabel =
-                  connectionStatus === "error"
-                    ? "Validation failed"
-                    : connectionStatus === "disabled" || gateway.isEnabled === false
-                      ? "Disabled"
-                      : connected
-                        ? "Connected"
-                        : credentialsConfigured
-                          ? "Configured"
-                          : "Not configured";
-                const statusClass =
-                  connectionStatus === "error"
-                    ? "bg-red-50 text-red-700 border-red-200"
-                    : connectionStatus === "disabled" || gateway.isEnabled === false
-                      ? "bg-slate-100 text-slate-500 border-slate-200"
-                      : connected
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : credentialsConfigured
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200";
-                return (
-                  <div key={provider} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-                          {gateway.logoUrl ? (
-                            <img src={gateway.logoUrl} alt="" className="w-full h-full object-contain p-1" />
-                          ) : (
-                            <span className="text-xs font-bold text-slate-500">{providerLabel(provider).slice(0, 2).toUpperCase()}</span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{gateway.providerName || providerLabel(provider)}</p>
-                          <p className="text-[11px] text-slate-500 truncate">
-                            {statusLabel} {active ? "· Active" : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${statusClass}`}>
-                        {statusLabel}
-                      </span>
-                    </div>
-                    {gateway.lastError && connectionStatus === "error" && (
-                      <p className="mt-2 text-[11px] text-red-600 line-clamp-2" title={gateway.lastError}>
-                        {gateway.lastError}
-                      </p>
-                    )}
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button onClick={() => handleAddGateway(provider)} className="h-8 rounded-lg bg-[#0055FE] text-white text-xs font-medium hover:bg-[#0047D1]">
-                        Configure
-                      </button>
-                      <button onClick={() => testGateway(provider)} disabled={!connected} className="h-8 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 disabled:opacity-50">
-                        Test
-                      </button>
-                      <button onClick={() => disconnectGateway(provider)} disabled={!connected} className="h-8 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 disabled:opacity-50">
-                        Disconnect
-                      </button>
-                      <button onClick={() => toast("Provider logs will show recent API and webhook failures when events exist.")} className="h-8 rounded-lg border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 flex items-center justify-center gap-1">
-                        <Activity size={12} /> Logs
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Mobile cards */}
         <div className="divide-y divide-slate-100 md:hidden">
