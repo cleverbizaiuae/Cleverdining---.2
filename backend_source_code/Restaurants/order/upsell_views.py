@@ -591,10 +591,13 @@ class UpsellSmartSuggestionsAPIView(APIView):
 
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
         session_cap = {"subtle": 2, "moderate": 4, "aggressive": 6}.get(setting.aggressiveness, 4)
-        if session_id:
+        # The menu popup is intentionally evaluated after every add-to-cart
+        # action. Cart and pre-payment surfaces keep independent session caps.
+        if session_id and trigger_point != "add_to_cart":
             shown_count = UpsellEvent.objects.filter(
                 restaurant=restaurant,
                 session_id=session_id,
+                trigger_point=trigger_point,
                 action="shown",
             ).count()
             if shown_count >= session_cap:

@@ -761,7 +761,7 @@ const LayoutDashboard = () => {
 
     try {
       let url = "/api/customer/items/";
-      const params = [];
+      const params = ["page_size=500"];
 
       if (targetId) {
         params.push(`restaurant_id=${targetId}`);
@@ -808,8 +808,8 @@ const LayoutDashboard = () => {
     try {
       if (!targetId) return;
       const response = await cachedGet(
-        `/api/customer/items/?restaurant_id=${targetId}`,
-        { timeout: 2500 },
+        `/api/customer/items/?restaurant_id=${targetId}&page_size=500`,
+        { timeout: 4000 },
         { ttlMs: 30_000 }
       );
       const nextItems = normalizeListPayload<FoodItemTypes>(response.data);

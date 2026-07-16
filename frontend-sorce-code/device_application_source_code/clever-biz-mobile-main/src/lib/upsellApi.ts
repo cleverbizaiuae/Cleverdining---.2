@@ -437,7 +437,7 @@ export async function fetchUpsellSuggestions(params: {
       "/api/upsell/smart-suggestions",
       {
         params: commonParams,
-        timeout: 2500,
+        timeout: 4000,
         headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
       },
       { ttlMs: 2_000 }
@@ -451,7 +451,7 @@ export async function fetchUpsellSuggestions(params: {
           "/api/customer/cart/upsell_suggestions/",
           {
             params: commonParams,
-            timeout: 2500,
+            timeout: 3500,
             headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
           },
           { ttlMs: 2_000 }
@@ -516,7 +516,7 @@ export async function fetchClientFallbackUpsellSuggestions(params: {
     try {
       const response = await cachedGet(
         "/api/customer/items/",
-        { params: { restaurant_id: restaurantId }, timeout: 2500 },
+        { params: { restaurant_id: restaurantId, page_size: 500 }, timeout: 4000 },
         { ttlMs: 20_000 }
       );
       candidates = extractSuggestionArray(response.data);
@@ -537,7 +537,7 @@ export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
   const sessionToken = localStorage.getItem("guest_session_token");
   const response = await cachedGet("/api/upsell/settings", {
     params: sessionToken ? { guest_session_token: sessionToken } : undefined,
-    timeout: 2500,
+    timeout: 3500,
     headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
   }, { ttlMs: 20_000 });
   return {

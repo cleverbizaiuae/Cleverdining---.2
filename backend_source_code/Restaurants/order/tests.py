@@ -632,3 +632,63 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(response.data["results"][0]["suggestion_copy"], "A lighter finish for your order.")
         self.assertEqual(response.data["results"][0]["decision_source"], "llm")
         self.assertEqual(response.data["knowledge_base"]["llm_status"], "ok")
+
+    def test_add_to_cart_remains_available_while_cart_cap_is_surface_specific(self):
+        session_id = "surface-specific-cap"
+        for index in range(4):
+            UpsellEvent.objects.create(
+                restaurant=self.restaurant,
+                session_id=session_id,
+                trigger_point="add_to_cart",
+                action="shown",
+                upsell_item=self.cola,
+                upsell_item_name=f"Cola {index}",
+            )
+
+        add_request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "add_to_cart",
+                "session_id": session_id,
+            },
+        )
+        with patch("order.upsell_views.call_upsell_llm", return_value=(None, "disabled")):
+            add_response = UpsellSmartSuggestionsAPIView.as_view()(add_request)
+
+        self.assertEqual(add_response.status_code, 200)
+        self.assertGreater(add_response.data["count"], 0)
+        self.assertEqual(
+            add_response.data["agent_decision"]["decision_source"],
+            "deterministic_fallback",
+        )
+
+        for index in range(4):
+            UpsellEvent.objects.create(
+                restaurant=self.restaurant,
+                session_id=session_id,
+                trigger_point="cart",
+                action="shown",
+                upsell_item=self.cola,
+                upsell_item_name=f"Cart Cola {index}",
+            )
+
+        cart_request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "trigger_point": "cart",
+                "session_id": session_id,
+            },
+        )
+        cart_response = UpsellSmartSuggestionsAPIView.as_view()(cart_request)
+
+        self.assertEqual(cart_response.status_code, 200)
+        self.assertEqual(cart_response.data["count"], 0)
+        self.assertEqual(
+            cart_response.data["agent_decision"]["decision_source"],
+            "backend_session_cap",
+        )

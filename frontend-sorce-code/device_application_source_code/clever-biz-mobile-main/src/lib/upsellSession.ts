@@ -180,7 +180,6 @@ export function getUpsellExcludedItemIds(): number[] {
   const values = [
     ...readJson<number[]>(DISMISSED_ITEMS_KEY, []),
     ...readJson<number[]>(ACCEPTED_ITEMS_KEY, []),
-    ...readJson<number[]>(SHOWN_ITEMS_KEY, []),
   ];
   return Array.from(
     new Set(values.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))
