@@ -271,7 +271,7 @@ export async function fetchUpsellSuggestions(params: {
     "/api/upsell/smart-suggestions",
     {
       params: commonParams,
-      timeout: 4000,
+      timeout: 12000,
       headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
     },
     { ttlMs: 2_000 }

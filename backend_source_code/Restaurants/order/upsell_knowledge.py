@@ -141,6 +141,7 @@ ROLE_KEYWORDS: Dict[str, Sequence[str]] = {
         "muffin",
         "croissant",
         "mochi",
+        "tiramisu",
     ),
     ROLE_STARTER: (
         "starter",
@@ -256,7 +257,8 @@ NON-NEGOTIABLE RESPONSIBILITY SPLIT
 - You own the final recommendation judgment and the customer-facing wording.
 - Never invent, substitute, search for, or return an item outside the supplied candidate shortlist.
 - Backend scores are evidence, not the final answer. Judge the complete moment and choose the best fit.
-- If no candidate is genuinely useful, return suggest_nothing=true. Do not force a recommendation.
+- A non-empty shortlist means the backend has already found valid complementary choices. Select the
+  best candidate instead of returning suggest_nothing merely because the choice is close or uncertain.
 
 ITEM ROLES
 Use only these roles: MAIN, DRINK_COLD, DRINK_HOT, DESSERT, STARTER, SIDE, SHISHA, CIGAR, ADDON.
@@ -271,7 +273,8 @@ DECISION FRAMEWORK, IN ORDER
 5. Avoid repetitive product families. Do not keep choosing shakes or near-identical drinks when another
    candidate fills the meal more naturally.
 6. Match the configured tone: friendly, premium, or minimal.
-7. Return suggest_nothing=true when the meal is complete, confidence is weak, or every option feels forced.
+7. Return suggest_nothing=true only when the shortlist is empty or every candidate conflicts with an
+   explicit rule in the supplied context. Otherwise choose the best valid candidate.
 
 TRIGGER BEHAVIOR
 - add_to_cart: choose one immediate complement to the just-added item. It appears in a bottom sheet.
@@ -380,16 +383,54 @@ def _item_blob(item: Any) -> str:
     return " ".join(_normalize_text(part) for part in parts if part)
 
 
+def _item_identity_blob(item: Any) -> str:
+    """Return identity fields without free-form descriptions or parent category labels."""
+    sub_category = getattr(item, "sub_category", None)
+    raw_tags = getattr(item, "tags", []) or []
+    tags = " ".join(str(tag) for tag in raw_tags if isinstance(tag, (str, int, float)))
+    parts = [
+        getattr(item, "item_name", ""),
+        getattr(sub_category, "Category_name", "") if sub_category else "",
+        getattr(sub_category, "category_type", "") if sub_category else "",
+        tags,
+    ]
+    return " ".join(_normalize_text(part) for part in parts if part)
+
+
 def classify_item_roles(item: Any) -> Set[str]:
     blob = _item_blob(item)
-    roles: Set[str] = set()
+    identity_blob = _item_identity_blob(item)
     category = getattr(item, "category", None)
     category_type = _normalize_text(getattr(category, "category_type", ""))
     category_name = _normalize_text(getattr(category, "Category_name", ""))
 
-    category_hint = CATEGORY_TYPE_ROLE_HINTS.get(category_type) or CATEGORY_TYPE_ROLE_HINTS.get(category_name)
+    # A specific category name (for example Shisha) is more informative than a
+    # broad category_type such as premium. Category metadata is authoritative:
+    # descriptions often mention pairings such as espresso or fries and must not
+    # turn one menu item into several cart roles.
+    category_hint = CATEGORY_TYPE_ROLE_HINTS.get(category_name) or CATEGORY_TYPE_ROLE_HINTS.get(category_type)
     if category_hint:
-        roles.add(category_hint)
+        if category_hint != ROLE_DRINK_COLD:
+            return {category_hint}
+
+        cold_markers = (
+            "iced",
+            "cold",
+            "shake",
+            "smoothie",
+            "mocktail",
+            "cocktail",
+            "soda",
+            "cola",
+            "juice",
+            "water",
+            "lemonade",
+        )
+        is_cold = any(marker in identity_blob for marker in cold_markers)
+        is_hot = _text_has_any(identity_blob, ROLE_KEYWORDS[ROLE_DRINK_HOT])
+        return {ROLE_DRINK_HOT if is_hot and not is_cold else ROLE_DRINK_COLD}
+
+    roles: Set[str] = set()
 
     if _text_has_any(blob, ROLE_KEYWORDS[ROLE_DRINK_COLD]):
         roles.add(ROLE_DRINK_COLD)
@@ -401,12 +442,6 @@ def classify_item_roles(item: Any) -> Set[str]:
     for role in (ROLE_MAIN, ROLE_DESSERT, ROLE_STARTER, ROLE_SIDE, ROLE_SHISHA, ROLE_CIGAR, ROLE_ADDON):
         if _text_has_any(blob, ROLE_KEYWORDS[role]):
             roles.add(role)
-
-    # Generic drink categories should become cold drinks unless the item text is clearly hot.
-    if category_hint == ROLE_DRINK_COLD and ROLE_DRINK_HOT in roles and ROLE_DRINK_COLD not in roles:
-        roles.discard(ROLE_DRINK_COLD)
-    if category_hint == ROLE_DRINK_COLD and ROLE_DRINK_HOT not in roles:
-        roles.add(ROLE_DRINK_COLD)
 
     return roles
 
@@ -441,8 +476,10 @@ def infer_venue_type(restaurant: Any, menu_items: Iterable[Any] = ()) -> str:
         getattr(restaurant, "name", ""),
         getattr(restaurant, "location", ""),
     ]
-    for item in list(menu_items)[:80]:
-        text_parts.append(_item_blob(item))
+    # Do not infer the entire venue from the current cart. A tiramisu mentioning
+    # espresso, for example, must not turn a general restaurant into a cafe.
+    # Restaurants can set venue_type explicitly; otherwise use stable restaurant
+    # metadata and fall back conservatively to the general restaurant policy.
     blob = " ".join(_normalize_text(part) for part in text_parts if part)
 
     for venue_type, keywords in VENUE_KEYWORDS.items():
@@ -807,15 +844,30 @@ def _call_ollama_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[s
 
 def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     api_key = str(getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()
-    model = str(getattr(settings, "OPENROUTER_UPSELL_MODEL", "openrouter/free") or "openrouter/free").strip()
+    primary_model = str(
+        getattr(settings, "OPENROUTER_UPSELL_MODEL", "openrouter/free") or "openrouter/free"
+    ).strip()
     if not api_key:
         return None, "missing_openrouter_key"
     if len(api_key) < 20 or re.search(r"\s", api_key):
         logger.warning("Upsell LLM disabled for invalid OpenRouter API key format")
         return None, "invalid_openrouter_key"
-    if not re.fullmatch(r"[A-Za-z0-9._:/-]+", model):
+    if not re.fullmatch(r"[A-Za-z0-9._:/-]+", primary_model):
         logger.warning("Upsell LLM disabled for invalid OpenRouter model name")
         return None, "invalid_model"
+
+    fallback_models_raw = str(
+        getattr(settings, "OPENROUTER_UPSELL_FALLBACK_MODELS", "openrouter/free") or "openrouter/free"
+    )
+    models: List[str] = []
+    for candidate_model in [primary_model, *fallback_models_raw.split(","), "openrouter/free"]:
+        candidate_model = candidate_model.strip()
+        if not candidate_model or candidate_model in models:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9._:/-]+", candidate_model):
+            logger.warning("Ignoring invalid OpenRouter fallback model name")
+            continue
+        models.append(candidate_model)
 
     timeout = max(
         0.5,
@@ -825,53 +877,69 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         300,
         min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 300) or 300), 350),
     )
-    request_payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": str(context.get("system_prompt") or UPSELL_SYSTEM_PROMPT)},
-            {
-                "role": "user",
-                "content": str(context.get("user_message") or build_upsell_agent_user_message(context)),
-            },
-        ],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.2,
-        "max_tokens": max_tokens,
-        "stream": False,
-    }
+    messages = [
+        {"role": "system", "content": str(context.get("system_prompt") or UPSELL_SYSTEM_PROMPT)},
+        {
+            "role": "user",
+            "content": str(context.get("user_message") or build_upsell_agent_user_message(context)),
+        },
+    ]
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://officialcleverdiningcustomer.netlify.app",
         "X-OpenRouter-Title": "CleverDining AI Upsell",
     }
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=request_payload,
-            timeout=timeout,
-        )
-    except requests.Timeout:
-        return None, "timeout"
-    except requests.RequestException:
-        logger.warning("Upsell OpenRouter request failed", exc_info=True)
-        return None, "network_error"
+    last_status = "network_error"
+    for index, model in enumerate(models):
+        request_payload = {
+            "model": model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        attempt_timeout = timeout if index == 0 else max(timeout, 6.0)
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=request_payload,
+                timeout=attempt_timeout,
+            )
+        except requests.Timeout:
+            last_status = "timeout"
+            logger.warning("Upsell OpenRouter model %s timed out", model)
+            continue
+        except requests.RequestException:
+            last_status = "network_error"
+            logger.warning("Upsell OpenRouter model %s request failed", model, exc_info=True)
+            continue
 
-    if response.status_code < 200 or response.status_code >= 300:
-        logger.warning("Upsell OpenRouter request returned HTTP %s", response.status_code)
-        return None, f"http_{response.status_code}"
-    try:
-        response_payload = response.json()
-    except ValueError:
-        return None, "invalid_response"
+        if response.status_code < 200 or response.status_code >= 300:
+            last_status = f"http_{response.status_code}"
+            logger.warning("Upsell OpenRouter model %s returned HTTP %s", model, response.status_code)
+            # Authentication and permission failures apply to every model.
+            if response.status_code in {401, 403}:
+                break
+            continue
+        try:
+            response_payload = response.json()
+        except ValueError:
+            last_status = "invalid_response"
+            continue
 
-    decision = _parse_llm_json(_openai_compatible_response_text(response_payload))
-    if not decision:
-        return None, "invalid_json"
-    decision["_llm_provider"] = "openrouter"
-    decision["_llm_model"] = str(response_payload.get("model") or model)
-    return decision, "ok"
+        decision = _parse_llm_json(_openai_compatible_response_text(response_payload))
+        if not decision:
+            last_status = "invalid_json"
+            logger.warning("Upsell OpenRouter model %s returned invalid JSON", model)
+            continue
+        decision["_llm_provider"] = "openrouter"
+        decision["_llm_model"] = str(response_payload.get("model") or model)
+        return decision, "ok"
+
+    return None, last_status
 
 
 def _call_vertex_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:

@@ -19,6 +19,8 @@ from .upsell import build_item_context_upsell_suggestions
 from .upsell_knowledge import (
     build_upsell_agent_context,
     call_upsell_llm,
+    classify_item_roles,
+    infer_venue_type,
     validated_upsell_agent_decision,
 )
 from .upsell_views import UpsellAnalyticsAPIView, UpsellSmartSuggestionsAPIView
@@ -257,6 +259,18 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(rows[0]["item"].category.category_type, "drink")
         self.assertNotIn("main", self._result_roles(rows))
 
+    def test_category_is_authoritative_over_pairing_words_in_description(self):
+        tiramisu = self._item(
+            "Classic Tiramisu",
+            self.dessert_category,
+            "classic-tiramisu",
+            "Mascarpone dessert layered with espresso-soaked sponge.",
+            "24.00",
+        )
+
+        self.assertEqual(classify_item_roles(tiramisu), {"DESSERT"})
+        self.assertEqual(infer_venue_type(self.restaurant, [tiramisu]), "restaurant")
+
     def test_main_and_drink_suggests_dessert_or_starter_not_existing_roles(self):
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
@@ -487,6 +501,53 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
             "CleverDining AI Upsell",
+        )
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
+        OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
+        OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
+    )
+    def test_openrouter_rate_limit_uses_free_router_for_final_llm_decision(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        rate_limited = Mock(status_code=429)
+        fallback_response = Mock(status_code=200)
+        fallback_response.json.return_value = {
+            "model": "qwen/qwen3-4b:free",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Best valid complement.",'
+                    '"suggestion_copy":"A refreshing match to round out your meal.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }],
+        }
+
+        with patch(
+            "order.upsell_knowledge.requests.post",
+            side_effect=[rate_limited, fallback_response],
+        ) as post:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(decision["suggested_item_id"], chosen.id)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["json"]["model"] for call in post.call_args_list],
+            ["nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free"],
         )
 
     @override_settings(
