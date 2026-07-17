@@ -87,6 +87,31 @@ const refreshAccessToken = (refreshToken: string) => {
   return refreshRequest;
 };
 
+const getRequestAccessToken = (request: RetryableRequest) => {
+  const headers = request.headers as
+    | (Record<string, unknown> & { get?: (name: string) => unknown })
+    | undefined;
+  const authorization = headers?.get?.("Authorization") ?? headers?.Authorization;
+  const value = String(authorization || "");
+  return value.startsWith("Bearer ") ? value.slice(7) : null;
+};
+
+const validateCurrentAccessToken = async (accessToken: string) => {
+  try {
+    await axios.get(`${API_BASE_URL}/profile/`, {
+      timeout: 8000,
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    return "valid" as const;
+  } catch (error: unknown) {
+    // Only an explicit authentication rejection proves that the session is
+    // invalid. Network, CORS, and server failures must not log mobile users out.
+    return axios.isAxiosError(error) && error.response?.status === 401
+      ? "invalid" as const
+      : "unknown" as const;
+  }
+};
+
 // Response interceptor to handle token refresh
 axiosInstance.interceptors.response.use(
   (response) => response,
@@ -131,6 +156,24 @@ axiosInstance.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${access}`;
       return axiosInstance(originalRequest);
     } catch (refreshError) {
+      const requestAccessToken = getRequestAccessToken(originalRequest);
+      const currentAccessToken = localStorage.getItem("accessToken");
+
+      // A newer login or refresh may have completed while this request was in
+      // flight. Retry with that token instead of clearing the new session.
+      if (currentAccessToken && currentAccessToken !== requestAccessToken) {
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${currentAccessToken}`;
+        return axiosInstance(originalRequest);
+      }
+
+      if (currentAccessToken) {
+        const accessStatus = await validateCurrentAccessToken(currentAccessToken);
+        if (accessStatus !== "invalid") {
+          return Promise.reject(refreshError);
+        }
+      }
+
       redirectToLogin();
       return Promise.reject(refreshError);
     }

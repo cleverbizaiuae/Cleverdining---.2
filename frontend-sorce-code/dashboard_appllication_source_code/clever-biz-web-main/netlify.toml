@@ -60,50 +60,50 @@
 [[headers]]
   for = "/*.html"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/login"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/restaurant/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/restaurant"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/staff/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/staff"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/chef/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/chef"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/superadmin/*"

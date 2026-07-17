@@ -16,17 +16,27 @@ const InstallPrompt = lazy(() =>
 );
 
 const updateSW = registerSW({
-  // Let the first render and initial route data win the network race.
-  // The SW still registers after window load and keeps auto-updating.
-  immediate: false,
+  // iOS can keep a previously installed dashboard shell alive after deploys.
+  // Register immediately and explicitly check so mobile sessions receive the
+  // same auth bundle as desktop without waiting for Safari's update interval.
+  immediate: true,
   onNeedRefresh() {
     updateSW(true);
+  },
+  onRegisteredSW(_swUrl, registration) {
+    registration?.update().catch(() => undefined);
   },
 });
 
 if ("caches" in window) {
   window.addEventListener("load", () => {
-    caches.delete("dashboard-static-assets").catch(() => undefined);
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys
+          .filter((key) => key.startsWith("dashboard-static-assets"))
+          .map((key) => caches.delete(key)),
+      ))
+      .catch(() => undefined);
   });
 }
 

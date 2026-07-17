@@ -145,13 +145,14 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] }
             }
           },
-          // Local JS/CSS route chunks: serve quickly, but refresh in the background.
-          // CacheFirst kept old lazy route chunks alive for too long after deploys.
+          // Prefer the current deployment on every JS/CSS request. The cache is
+          // retained only as an offline fallback for installed mobile PWAs.
           {
             urlPattern: /\.(?:js|css)$/i,
-            handler: "StaleWhileRevalidate",
+            handler: "NetworkFirst",
             options: {
-              cacheName: "dashboard-static-assets-v2",
+              cacheName: "dashboard-static-assets-v3",
+              networkTimeoutSeconds: 5,
               expiration: { maxEntries: 120, maxAgeSeconds: 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
