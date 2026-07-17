@@ -1,5 +1,5 @@
 // src/lib/axios.ts
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 import { captureApiFailure } from "../monitoring/sentry";
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
@@ -21,6 +21,13 @@ const API_BASE_URL = normalizeBaseUrl(
 
 const REFRESH_TOKEN_ENDPOINT = `${API_BASE_URL}/token/refresh/`;
 
+type RetryableRequest = AxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+let refreshRequest: Promise<string> | null = null;
+let authRedirectStarted = false;
+
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
@@ -37,11 +44,54 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
+const redirectToLogin = () => {
+  if (authRedirectStarted) return;
+  authRedirectStarted = true;
+
+  const isSuperAdmin = Boolean(localStorage.getItem("superAdminAuth"));
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("userInfo");
+
+  if (isSuperAdmin) {
+    localStorage.removeItem("superAdminAuth");
+    localStorage.removeItem("superAdminToken");
+    window.location.assign("/superadmin/login");
+    return;
+  }
+
+  window.location.assign("/login");
+};
+
+const refreshAccessToken = (refreshToken: string) => {
+  if (!refreshRequest) {
+    refreshRequest = axios
+      .post(REFRESH_TOKEN_ENDPOINT, { refresh: refreshToken })
+      .then((response) => {
+        const access = response.data?.access;
+        if (!access) throw new Error("Token refresh response did not include an access token");
+
+        localStorage.setItem("accessToken", access);
+        // SimpleJWT rotates and blacklists refresh tokens in production.
+        // Persist the replacement or the next refresh will log the user out.
+        if (response.data?.refresh) {
+          localStorage.setItem("refreshToken", response.data.refresh);
+        }
+        return access as string;
+      })
+      .finally(() => {
+        refreshRequest = null;
+      });
+  }
+
+  return refreshRequest;
+};
+
 // Response interceptor to handle token refresh
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as RetryableRequest | undefined;
 
     captureApiFailure(error, {
       feature: "api",
@@ -50,52 +100,40 @@ axiosInstance.interceptors.response.use(
       status: error?.response?.status,
     });
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (refreshToken) {
-          const response = await axios.post(REFRESH_TOKEN_ENDPOINT, {
-            refresh: refreshToken,
-          });
-
-          const { access } = response.data;
-          localStorage.setItem("accessToken", access);
-
-          // Retry the original request with new token
-          originalRequest.headers.Authorization = `Bearer ${access}`;
-          return axiosInstance(originalRequest);
-        }
-      } catch (refreshError) {
-        // Refresh token failed, redirect to login
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("userInfo");
-
-        // Handle Super Admin Logout
-        if (localStorage.getItem("superAdminAuth")) {
-          localStorage.removeItem("superAdminAuth");
-          localStorage.removeItem("superAdminToken");
-          window.location.href = "/superadmin/login";
-        } else {
-          window.location.href = "/login";
-        }
-      }
-    } else if (error.response?.status === 401) {
-      // Direct 401 without refresh possibility (e.g. invalid super admin token)
-      if (localStorage.getItem("superAdminAuth")) {
-        localStorage.removeItem("superAdminAuth");
-        localStorage.removeItem("superAdminToken");
-        window.location.href = "/superadmin/login";
-      } else {
-        // Only clear/redirect if we were logged in or trying to be
-        localStorage.removeItem("accessToken");
-        window.location.href = "/login";
-      }
+    if (error.response?.status !== 401 || !originalRequest) {
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
+    const isLoginRequest = /\/(?:login|token\/refresh)\/?$/.test(originalRequest.url || "");
+    if (isLoginRequest) {
+      return Promise.reject(error);
+    }
+
+    // A retried request can still be unauthorized because that endpoint is not
+    // permitted for this role. That must not destroy an otherwise valid session.
+    if (originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    const isSuperAdmin = Boolean(localStorage.getItem("superAdminAuth"));
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    if (isSuperAdmin || !refreshToken) {
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+
+    try {
+      const access = await refreshAccessToken(refreshToken);
+      originalRequest.headers = originalRequest.headers || {};
+      originalRequest.headers.Authorization = `Bearer ${access}`;
+      return axiosInstance(originalRequest);
+    } catch (refreshError) {
+      redirectToLogin();
+      return Promise.reject(refreshError);
+    }
   }
 );
 
