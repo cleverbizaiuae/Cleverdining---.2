@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from category.models import Category
 from item.models import Item
-from order.models import Cart, ItemAssociation, UpsellItemSetting, UpsellRule, UpsellSetting
+from order.models import Cart, ItemAssociation, OrderItem, UpsellItemSetting, UpsellRule, UpsellSetting
 from core.region_config import normalize_region
 from .upsell_knowledge import (
     ROLE_ADDON,
@@ -702,7 +703,32 @@ def _build_upsell_suggestions_for_items(
     if not available_items:
         return []
 
-    item_setting_rows = UpsellItemSetting.objects.filter(restaurant=restaurant, item_id__in=[item.id for item in available_items]).values(
+    available_item_ids = [item.id for item in available_items]
+    now = timezone.now()
+    recent_order_counts: Dict[int, Dict[str, int]] = {}
+    order_history_rows = (
+        OrderItem.objects.filter(
+            order__restaurant=restaurant,
+            order__created_time__gte=now - timedelta(days=30),
+            item_id__in=available_item_ids,
+        )
+        .exclude(order__status="cancelled")
+        .values("item_id")
+        .annotate(
+            order_count_30d=Sum("quantity"),
+            order_count_7d=Sum(
+                "quantity",
+                filter=Q(order__created_time__gte=now - timedelta(days=7)),
+            ),
+        )
+    )
+    for row in order_history_rows:
+        recent_order_counts[int(row["item_id"])] = {
+            "order_count_7d": int(row.get("order_count_7d") or 0),
+            "order_count_30d": int(row.get("order_count_30d") or 0),
+        }
+
+    item_setting_rows = UpsellItemSetting.objects.filter(restaurant=restaurant, item_id__in=available_item_ids).values(
         "item_id", "enabled", "inventory_priority"
     )
     disabled_item_ids: Set[int] = set()
@@ -953,6 +979,7 @@ def _build_upsell_suggestions_for_items(
             continue
 
         label, message = _copy_for_pairing(cart_source_items, candidate, setting, stage, reasons)
+        candidate_order_counts = recent_order_counts.get(candidate.id, {})
         results.append(
             {
                 "item": candidate,
@@ -974,6 +1001,9 @@ def _build_upsell_suggestions_for_items(
                 "historical_max_strength": float(historical.get("max_strength", 0.0)) if historical else 0.0,
                 "historical_max_frequency": int(historical.get("max_frequency", 0.0)) if historical else 0,
                 "historical_total_frequency": float(historical.get("total_frequency", 0.0)) if historical else 0.0,
+                "historical_acceptance_rate": historical_acceptance_rate,
+                "order_count_7d": int(candidate_order_counts.get("order_count_7d", 0)),
+                "order_count_30d": int(candidate_order_counts.get("order_count_30d", 0)),
             }
         )
 

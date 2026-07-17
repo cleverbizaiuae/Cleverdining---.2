@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from decimal import Decimal
 from typing import Optional
@@ -21,7 +22,12 @@ from restaurant.models import Restaurant
 from .models import ItemAssociation, OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .schema_guard import ensure_upsell_tables
 from .upsell import build_item_context_upsell_suggestions
-from .upsell_knowledge import call_upsell_llm, build_upsell_agent_context, validated_upsell_agent_decision
+from .upsell_knowledge import (
+    build_upsell_agent_context,
+    call_upsell_llm,
+    classify_item_roles,
+    validated_upsell_agent_decision,
+)
 from .upsell_serializers import (
     UpsellItemSettingSerializer,
     UpsellEventCreateSerializer,
@@ -29,6 +35,9 @@ from .upsell_serializers import (
     UpsellSettingSerializer,
     build_item_stats_map,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_upsell_schema() -> None:
@@ -591,16 +600,23 @@ class UpsellSmartSuggestionsAPIView(APIView):
 
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
         session_cap = {"subtle": 2, "moderate": 4, "aggressive": 6}.get(setting.aggressiveness, 4)
+        session_events = UpsellEvent.objects.none()
+        suggestions_shown = 0
+        surface_shown_count = 0
+        declined_item_ids = set()
+        if session_id:
+            session_events = UpsellEvent.objects.filter(restaurant=restaurant, session_id=session_id)
+            suggestions_shown = session_events.filter(action="shown").count()
+            surface_shown_count = session_events.filter(trigger_point=trigger_point, action="shown").count()
+            declined_item_ids = set(
+                session_events.filter(action__in=["declined", "dismissed"])
+                .exclude(upsell_item_id__isnull=True)
+                .values_list("upsell_item_id", flat=True)
+            )
         # The menu popup is intentionally evaluated after every add-to-cart
         # action. Cart and pre-payment surfaces keep independent session caps.
         if session_id and trigger_point != "add_to_cart":
-            shown_count = UpsellEvent.objects.filter(
-                restaurant=restaurant,
-                session_id=session_id,
-                trigger_point=trigger_point,
-                action="shown",
-            ).count()
-            if shown_count >= session_cap:
+            if surface_shown_count >= session_cap:
                 return Response(
                     {
                         "results": [],
@@ -614,10 +630,24 @@ class UpsellSmartSuggestionsAPIView(APIView):
                     }
                 )
 
+        declined_roles = set()
+        if declined_item_ids:
+            declined_items = Item.objects.select_related("category", "sub_category").filter(
+                restaurant=restaurant,
+                id__in=declined_item_ids,
+            )
+            for declined_item in declined_items:
+                declined_roles.update(classify_item_roles(declined_item))
+
+        effective_excluded_item_ids = exclude_item_ids.union(declined_item_ids)
         signal_payload = {
             "category_declines": _parse_signal_counts(request.query_params.get("category_declines")),
             "category_views": _parse_signal_counts(request.query_params.get("category_views")),
             "recently_removed_category_ids": _parse_signal_id_set(request.query_params.get("removed_categories")),
+            "suggestions_shown": suggestions_shown,
+            "declined_roles": sorted(declined_roles),
+            "declined_item_ids": sorted(declined_item_ids),
+            "excluded_item_ids": sorted(effective_excluded_item_ids),
         }
 
         engine_rows = build_item_context_upsell_suggestions(
@@ -630,7 +660,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
             apply_surface_limit=False,
         )
 
-        excluded_ids = cart_item_ids.union(exclude_item_ids)
+        excluded_ids = cart_item_ids.union(effective_excluded_item_ids)
         eligible_engine_rows = [
             row
             for row in engine_rows
@@ -649,6 +679,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
             candidate_rows=eligible_engine_rows,
             trigger_point=trigger_point,
             hour=timezone.localtime(timezone.now()).hour,
+            source_item_id=source_item_id,
             session_signals=signal_payload,
         )
         llm_decision, llm_status = call_upsell_llm(agent_context)
@@ -656,6 +687,22 @@ class UpsellSmartSuggestionsAPIView(APIView):
             llm_decision,
             eligible_engine_rows,
             llm_status=llm_status,
+        )
+        logger.info(
+            "CleverDining upsell agent decision",
+            extra={
+                "restaurant_id": restaurant.id,
+                "session_id": session_id,
+                "trigger_point": trigger_point,
+                "candidate_ids": [candidate.get("id") for candidate in agent_context.get("candidates", [])],
+                "decision_source": agent_decision.get("decision_source"),
+                "suggested_item_id": agent_decision.get("suggested_item_id"),
+                "suggest_nothing": agent_decision.get("suggest_nothing"),
+                "llm_status": llm_status,
+                "llm_provider": agent_decision.get("llm_provider", ""),
+                "llm_model": agent_decision.get("llm_model", ""),
+                "reasoning": agent_decision.get("reasoning", ""),
+            },
         )
 
         if agent_decision.get("suggest_nothing"):

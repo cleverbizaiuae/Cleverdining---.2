@@ -363,6 +363,72 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(decision["decision_source"], "llm_invalid")
         self.assertNotIn("suggested_item_id", decision)
 
+    def test_llm_cannot_fall_back_to_backend_copy_when_copy_is_missing(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]
+
+        decision = validated_upsell_agent_decision(
+            {
+                "suggest_nothing": False,
+                "suggested_item_id": chosen["item"].id,
+                "suggested_item_name": chosen["item"].item_name,
+                "target_role": chosen["target_role"],
+                "reason": None,
+                "reasoning": "This is the strongest fit.",
+                "suggestion_copy": None,
+                "confidence": 0.9,
+            },
+            rows,
+            llm_status="ok",
+        )
+
+        self.assertTrue(decision["suggest_nothing"])
+        self.assertEqual(decision["decision_source"], "llm_invalid")
+        self.assertNotIn("suggestion_copy", decision)
+
+    def test_agent_context_matches_documented_request_sections(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="add_to_cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        context = build_upsell_agent_context(
+            restaurant=self.restaurant,
+            setting=self.restaurant.upsell_setting,
+            cart_items=[self.burger],
+            candidate_rows=rows,
+            trigger_point="add_to_cart",
+            hour=13,
+            source_item_id=self.burger.id,
+            session_signals={
+                "suggestions_shown": 1,
+                "declined_roles": ["DESSERT"],
+                "declined_item_ids": [self.ice_cream.id],
+                "excluded_item_ids": [self.ice_cream.id],
+            },
+        )
+
+        self.assertLessEqual(len(context["candidates"]), 5)
+        self.assertEqual(context["trigger"]["source_item_id"], self.burger.id)
+        self.assertEqual(context["session"]["suggestions_shown"], 1)
+        self.assertIn("DESSERT", context["session"]["declined_roles"])
+        self.assertIn("current_time", context["restaurant"])
+        self.assertIn("current_day", context["restaurant"])
+        self.assertIn("smart_rules", context)
+        self.assertIn("pairing_summary", context)
+        self.assertIn("acceptance_rate", context["candidates"][0])
+        self.assertIn("order_count_7d", context["candidates"][0])
+        self.assertIn("VALID CANDIDATE SHORTLIST", context["user_message"])
+
     def _agent_context(self, rows):
         setting = self.restaurant.upsell_setting
         return build_upsell_agent_context(
@@ -416,6 +482,8 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_args.args[0], "https://openrouter.ai/api/v1/chat/completions")
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
+        self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.2)
+        self.assertGreaterEqual(post.call_args.kwargs["json"]["max_tokens"], 300)
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
             "CleverDining AI Upsell",
@@ -513,7 +581,8 @@ class UpsellKnowledgeEngineTests(TestCase):
         request_json = session.post.call_args.kwargs["json"]
         self.assertEqual(request_json["model"], "openai/gpt-oss-20b-maas")
         self.assertEqual(request_json["response_format"], {"type": "json_object"})
-        self.assertEqual(request_json["temperature"], 0)
+        self.assertEqual(request_json["temperature"], 0.2)
+        self.assertGreaterEqual(request_json["max_tokens"], 300)
         self.assertLessEqual(request_json["max_tokens"], 350)
 
     @override_settings(
@@ -622,6 +691,7 @@ class UpsellKnowledgeEngineTests(TestCase):
             "suggested_item_id": chosen.id,
             "suggested_item_name": chosen.item_name,
             "target_role": rows[-1]["target_role"],
+            "reason": None,
             "reasoning": "Best valid candidate for this cart.",
             "suggestion_copy": "A lighter finish for your order.",
             "confidence": 0.92,
