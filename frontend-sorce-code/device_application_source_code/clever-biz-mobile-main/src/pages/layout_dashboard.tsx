@@ -291,12 +291,9 @@ const MenuPageUpsellHost = ({
         limit: 1,
       }).slice(0, 1);
 
-      if (fallbackSuggestions.length) {
-        setSuggestions(fallbackSuggestions);
-        activeRef.current = true;
-        setOpen(true);
-        recordShown(fallbackSuggestions, item, cartItemIds, metrics, "local_fallback");
-      }
+      // Keep the deterministic client fallback hidden while the backend makes
+      // the final decision. Showing it now and replacing it later causes the
+      // visible recommendation to change inside an already-open sheet.
 
       void fetchUpsellSettings()
         .then((settingsSnapshot) => {
@@ -321,13 +318,11 @@ const MenuPageUpsellHost = ({
           if (requestSeqRef.current !== requestId) return;
           const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 1) : [];
           if (!remoteSuggestions.length) {
-            // Keep the immediate local recommendation visible when the remote
-            // service is rate-limited or returns no replacement candidate.
-            if (!fallbackSuggestions.length) {
-              setSuggestions([]);
-              setOpen(false);
-              activeRef.current = false;
-            }
+            // An empty successful response can be an intentional "suggest
+            // nothing" decision and must not be overridden by the client.
+            setSuggestions([]);
+            setOpen(false);
+            activeRef.current = false;
             return;
           }
           setSuggestions(remoteSuggestions);
@@ -336,7 +331,19 @@ const MenuPageUpsellHost = ({
           recordShown(remoteSuggestions, item, cartItemIds, metrics, "remote");
         })
         .catch(() => {
-          // Local fallback already handled the visible recommendation.
+          if (requestSeqRef.current !== requestId) return;
+          // Only use the client fallback after the remote request has fully
+          // failed. Nothing remains in flight that can replace this item.
+          if (fallbackSuggestions.length) {
+            setSuggestions(fallbackSuggestions);
+            activeRef.current = true;
+            setOpen(true);
+            recordShown(fallbackSuggestions, item, cartItemIds, metrics, "local_fallback");
+            return;
+          }
+          setSuggestions([]);
+          setOpen(false);
+          activeRef.current = false;
         });
     },
     [menuCandidates, recordShown, settings]
