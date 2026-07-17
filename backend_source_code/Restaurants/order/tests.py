@@ -340,7 +340,7 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         self.assertEqual(rows, [])
 
-    def test_invalid_llm_decision_falls_back_to_top_candidate(self):
+    def test_invalid_llm_decision_returns_no_recommendation(self):
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],
@@ -359,8 +359,9 @@ class UpsellKnowledgeEngineTests(TestCase):
             rows,
         )
 
-        self.assertEqual(decision["decision_source"], "deterministic_fallback")
-        self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
+        self.assertTrue(decision["suggest_nothing"])
+        self.assertEqual(decision["decision_source"], "llm_invalid")
+        self.assertNotIn("suggested_item_id", decision)
 
     def _agent_context(self, rows):
         setting = self.restaurant.upsell_setting
@@ -406,7 +407,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         with patch("order.upsell_knowledge.requests.post", return_value=response) as post:
             raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
 
-        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertEqual(llm_status, "ok")
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(decision["suggested_item_id"], chosen.id)
@@ -425,7 +426,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         UPSELL_LLM_PROVIDER="openrouter",
         OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
     )
-    def test_openrouter_timeout_uses_deterministic_fallback(self):
+    def test_openrouter_timeout_returns_no_recommendation(self):
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],
@@ -436,10 +437,12 @@ class UpsellKnowledgeEngineTests(TestCase):
         with patch("order.upsell_knowledge.requests.post", side_effect=requests.Timeout):
             raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
 
-        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertEqual(llm_status, "timeout")
-        self.assertEqual(decision["decision_source"], "deterministic_fallback")
-        self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
+        self.assertTrue(decision["suggest_nothing"])
+        self.assertEqual(decision["decision_source"], "llm_unavailable")
+        self.assertEqual(decision["llm_status"], "timeout")
+        self.assertNotIn("suggested_item_id", decision)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,
@@ -497,7 +500,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
             raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
 
-        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertEqual(llm_status, "ok")
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(decision["suggested_item_id"], chosen.id)
@@ -519,7 +522,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
         VERTEX_UPSELL_SERVICE_ACCOUNT_JSON='{"type":"service_account"}',
     )
-    def test_vertex_timeout_uses_deterministic_fallback(self):
+    def test_vertex_timeout_returns_no_recommendation(self):
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],
@@ -532,10 +535,12 @@ class UpsellKnowledgeEngineTests(TestCase):
         with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
             raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
 
-        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertEqual(llm_status, "timeout")
-        self.assertEqual(decision["decision_source"], "deterministic_fallback")
-        self.assertEqual(decision["suggested_item_id"], rows[0]["item"].id)
+        self.assertTrue(decision["suggest_nothing"])
+        self.assertEqual(decision["decision_source"], "llm_unavailable")
+        self.assertEqual(decision["llm_status"], "timeout")
+        self.assertNotIn("suggested_item_id", decision)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,
@@ -567,7 +572,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
             raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
 
-        decision = validated_upsell_agent_decision(raw_decision, rows, fallback_reason=llm_status)
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertTrue(decision["suggest_nothing"])
         self.assertEqual(decision["decision_source"], "llm")
 
@@ -628,9 +633,13 @@ class UpsellKnowledgeEngineTests(TestCase):
             response = UpsellSmartSuggestionsAPIView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], chosen.id)
         self.assertEqual(response.data["results"][0]["suggestion_copy"], "A lighter finish for your order.")
         self.assertEqual(response.data["results"][0]["decision_source"], "llm")
+        self.assertTrue(
+            all(row["decision_source"] == "llm" for row in response.data["results"])
+        )
         self.assertEqual(response.data["knowledge_base"]["llm_status"], "ok")
 
     def test_add_to_cart_remains_available_while_cart_cap_is_surface_specific(self):
@@ -659,10 +668,10 @@ class UpsellKnowledgeEngineTests(TestCase):
             add_response = UpsellSmartSuggestionsAPIView.as_view()(add_request)
 
         self.assertEqual(add_response.status_code, 200)
-        self.assertGreater(add_response.data["count"], 0)
+        self.assertEqual(add_response.data["count"], 0)
         self.assertEqual(
             add_response.data["agent_decision"]["decision_source"],
-            "deterministic_fallback",
+            "llm_unavailable",
         )
 
         for index in range(4):

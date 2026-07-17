@@ -10,8 +10,6 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
-  buildClientUpsellSuggestions,
-  getRememberedMenuUpsellCandidates,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
@@ -278,24 +276,7 @@ const ScreenCart = () => {
       return;
     }
 
-    const rememberedCandidates = getRememberedMenuUpsellCandidates();
-    const localSuggestions = rememberedCandidates.length
-      ? buildClientUpsellSuggestions({
-        candidates: rememberedCandidates,
-        triggerPoint: "cart",
-        restaurantId: cartRestaurantId,
-        cartItems: validCartItems,
-        cartItemIds: validCartItemIds,
-        excludeItemIds: excludedItemIds,
-        limit: triggerLimit,
-      })
-      : [];
-
-    if (localSuggestions.length) {
-      applyCartSuggestions(localSuggestions);
-    } else {
-      setUpsellLoading(true);
-    }
+    setUpsellLoading(true);
 
     const loadCartUpsells = async () => {
       try {
@@ -328,13 +309,9 @@ const ScreenCart = () => {
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
         });
-        // An empty delayed response must not erase a valid suggestion that was
-        // already rendered from the complete cached menu.
-        if (rawSuggestions.length || !localSuggestions.length) {
-          applyCartSuggestions(rawSuggestions, effectiveTriggerLimit);
-        }
+        applyCartSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
-        if (!cancelled && !localSuggestions.length) {
+        if (!cancelled) {
           setUpsellSuggestions([]);
           cartShownSignatureRef.current = "";
         }
@@ -427,24 +404,7 @@ const ScreenCart = () => {
       return;
     }
 
-    const rememberedCandidates = getRememberedMenuUpsellCandidates();
-    const localSuggestions = rememberedCandidates.length
-      ? buildClientUpsellSuggestions({
-        candidates: rememberedCandidates,
-        triggerPoint: "before_payment",
-        restaurantId: cartRestaurantId,
-        cartItems: validCartItems,
-        cartItemIds: validCartItemIds,
-        excludeItemIds: excludedItemIds,
-        limit: triggerLimit,
-      })
-      : [];
-
-    if (localSuggestions.length) {
-      applyBeforePaymentSuggestions(localSuggestions);
-    } else {
-      setBeforePaymentLoading(true);
-    }
+    setBeforePaymentLoading(true);
 
     const loadBeforePaymentUpsell = async () => {
       try {
@@ -481,11 +441,9 @@ const ScreenCart = () => {
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
         });
-        if (rawSuggestions.length || !localSuggestions.length) {
-          applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
-        }
+        applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
-        if (!cancelled && !localSuggestions.length) {
+        if (!cancelled) {
           setBeforePaymentSuggestions([]);
           beforePaymentShownSignatureRef.current = "";
         }

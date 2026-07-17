@@ -1329,124 +1329,15 @@ class CartViewSet(viewsets.ModelViewSet):
         if not cart:
             return Response({'cart_id': None, 'suggestions': []})
 
-        try:
-            limit = int(request.query_params.get('limit', 4))
-        except (TypeError, ValueError):
-            limit = 4
-
-        from .upsell import build_cart_upsell_suggestions
-        from .models import UpsellEvent, UpsellSetting
-        from item.serializers import ItemSerializer
-
-        trigger_point = request.query_params.get('trigger_point', 'cart')
-        if trigger_point not in {'add_to_cart', 'cart', 'before_payment'}:
-            trigger_point = 'cart'
-        try:
-            source_item_id = int(request.query_params.get('source_item_id')) if request.query_params.get('source_item_id') else None
-        except (TypeError, ValueError):
-            source_item_id = None
-        session_id = str(request.query_params.get('session_id') or request.query_params.get('sessionId') or '').strip()[:120]
-        setting, _ = UpsellSetting.objects.get_or_create(restaurant=session.device.restaurant)
-        session_cap = {'subtle': 2, 'moderate': 4, 'aggressive': 6}.get(setting.aggressiveness, 4)
-        # The menu popup is intentionally evaluated after every add-to-cart
-        # action. Cart and pre-payment surfaces keep independent session caps.
-        if session_id and trigger_point != 'add_to_cart':
-            shown_count = UpsellEvent.objects.filter(
-                restaurant=session.device.restaurant,
-                session_id=session_id,
-                trigger_point=trigger_point,
-                action='shown',
-            ).count()
-            if shown_count >= session_cap:
-                return Response({
-                    'cart_id': cart.id,
-                    'suggestions': [],
-                    'agent_decision': {
-                        'suggest_nothing': True,
-                        'reason': 'Session cap reached.',
-                        'decision_source': 'backend_session_cap',
-                    },
-                })
-
-        # Compact signal transport over query params:
-        # category_views=1:2,5:1
-        # category_declines=3:2
-        # removed_categories=4,7
-        def _parse_id_counts(raw_value):
-            parsed = {}
-            if not raw_value:
-                return parsed
-            for chunk in str(raw_value).split(','):
-                value = chunk.strip()
-                if not value:
-                    continue
-                if ':' in value:
-                    category_id_raw, count_raw = value.split(':', 1)
-                    try:
-                            parsed[int(category_id_raw)] = max(0.0, float(count_raw))
-                    except (TypeError, ValueError):
-                        continue
-                else:
-                    try:
-                        parsed[int(value)] = 1.0
-                    except (TypeError, ValueError):
-                        continue
-            return parsed
-
-        def _parse_id_list(raw_value):
-            values = []
-            if not raw_value:
-                return values
-            for chunk in str(raw_value).split(','):
-                value = chunk.strip()
-                if not value:
-                    continue
-                try:
-                    values.append(int(value))
-                except (TypeError, ValueError):
-                    continue
-            return values
-
-        session_signals = {
-            'category_views': _parse_id_counts(request.query_params.get('category_views')),
-            'category_declines': _parse_id_counts(request.query_params.get('category_declines')),
-            'recently_removed_category_ids': _parse_id_list(request.query_params.get('removed_categories')),
-        }
-
-        raw_suggestions = build_cart_upsell_suggestions(
-            cart,
-            limit=limit,
-            trigger_point=trigger_point,
-            source_item_id=source_item_id,
-            session_signals=session_signals,
-        )
-        if not raw_suggestions:
-            return Response({'cart_id': cart.id, 'suggestions': []})
-
-        item_serializer = ItemSerializer(
-            [entry['item'] for entry in raw_suggestions],
-            many=True,
-            context={'request': request},
-        )
-
-        suggestions = []
-        for item_data, meta in zip(item_serializer.data, raw_suggestions):
-            suggestions.append({
-                **item_data,
-                'upsell_rule': meta['rule'],
-                'upsell_message': meta['message'],
-                'suggestion_copy': meta['message'],
-                'upsell_score': meta['score'],
-                'upsell_stage': meta.get('stage'),
-                'target_role': meta.get('target_role', ''),
-                'candidate_roles': meta.get('candidate_roles', []),
-                'cart_roles': meta.get('cart_roles', []),
-                'venue_type': meta.get('venue_type', 'restaurant'),
-                'agent_reasoning': meta.get('agent_reasoning', ''),
-                'decision_source': 'deterministic',
-            })
-
+        # Deterministic recommendations from this compatibility endpoint are
+        # retired. Only /api/upsell/smart-suggestions may return an LLM-chosen
+        # customer-facing item.
         return Response({
             'cart_id': cart.id,
-            'suggestions': suggestions,
+            'suggestions': [],
+            'agent_decision': {
+                'suggest_nothing': True,
+                'reason': 'The legacy deterministic upsell endpoint is disabled.',
+                'decision_source': 'legacy_endpoint_disabled',
+            },
         })

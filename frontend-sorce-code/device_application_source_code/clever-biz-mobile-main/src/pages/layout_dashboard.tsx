@@ -32,11 +32,9 @@ import {
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
-  buildClientUpsellSuggestions,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
-  rememberMenuUpsellCandidates,
   type UpsellSettingsSnapshot,
   type UpsellSuggestion,
 } from "../lib/upsellApi";
@@ -145,13 +143,7 @@ const writeMenuCache = (restaurantId: number | null | undefined, kind: "categori
   }
 };
 
-const MenuPageUpsellHost = ({
-  pendingDetail,
-  menuCandidates,
-}: {
-  pendingDetail: MenuItemAddedDetail | null;
-  menuCandidates: FoodItemTypes[];
-}) => {
+const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDetail | null }) => {
   const { addToCart } = useCart();
   const location = useLocation();
   const currencyCode = getSessionCurrencyCode();
@@ -208,7 +200,7 @@ const MenuPageUpsellHost = ({
       item: any,
       cartItemIds: number[],
       metrics: { cartValueAtTime: number; cartItemCount: number },
-      source: "local_fallback" | "remote"
+      source: "llm"
     ) => {
       if (!shownItems.length) return;
       const signature = [
@@ -280,21 +272,6 @@ const MenuPageUpsellHost = ({
         return;
       }
 
-      const fallbackSuggestions = buildClientUpsellSuggestions({
-        triggerPoint: "add_to_cart",
-        sourceItem: item,
-        candidates: menuCandidates,
-        cartItems: nextCart,
-        cartItemIds,
-        excludeItemIds: excludedItemIds,
-        restaurantId: Number(item.restaurant || 0) || undefined,
-        limit: 1,
-      }).slice(0, 1);
-
-      // Keep the deterministic client fallback hidden while the backend makes
-      // the final decision. Showing it now and replacing it later causes the
-      // visible recommendation to change inside an already-open sheet.
-
       void fetchUpsellSettings()
         .then((settingsSnapshot) => {
           if (requestSeqRef.current !== requestId) return [];
@@ -328,25 +305,16 @@ const MenuPageUpsellHost = ({
           setSuggestions(remoteSuggestions);
           activeRef.current = true;
           setOpen(true);
-          recordShown(remoteSuggestions, item, cartItemIds, metrics, "remote");
+          recordShown(remoteSuggestions, item, cartItemIds, metrics, "llm");
         })
         .catch(() => {
           if (requestSeqRef.current !== requestId) return;
-          // Only use the client fallback after the remote request has fully
-          // failed. Nothing remains in flight that can replace this item.
-          if (fallbackSuggestions.length) {
-            setSuggestions(fallbackSuggestions);
-            activeRef.current = true;
-            setOpen(true);
-            recordShown(fallbackSuggestions, item, cartItemIds, metrics, "local_fallback");
-            return;
-          }
           setSuggestions([]);
           setOpen(false);
           activeRef.current = false;
         });
     },
-    [menuCandidates, recordShown, settings]
+    [recordShown, settings]
   );
 
   useEffect(() => {
@@ -633,7 +601,6 @@ const LayoutDashboard = () => {
   };
 
   const [items, setItems] = useState<FoodItemTypes[]>([]);
-  const [upsellMenuCandidates, setUpsellMenuCandidates] = useState<FoodItemTypes[]>([]);
   const [search, setSearch] = useState("");
   const searchTimeout = useRef<any>(null);
   const [tableName, setTableName] = useState("");
@@ -766,8 +733,6 @@ const LayoutDashboard = () => {
     }
     if (!items.length && cachedItems.length) {
       setItems(cachedItems);
-      setUpsellMenuCandidates(cachedItems);
-      rememberMenuUpsellCandidates(cachedItems);
     }
 
     try {
@@ -791,9 +756,7 @@ const LayoutDashboard = () => {
         setItems(nextItems);
       }
       if (nextItems.length) {
-        rememberMenuUpsellCandidates(nextItems);
         if (!search.trim()) {
-          setUpsellMenuCandidates(nextItems);
           writeMenuCache(targetId, "items", nextItems);
         }
       }
@@ -801,40 +764,6 @@ const LayoutDashboard = () => {
       console.warn("Failed to fetch items", error);
     } finally {
       setItemsLoaded(true);
-    }
-  };
-
-  const fetchUpsellCandidateItems = async () => {
-    const targetId = getRestaurantIdFromStorage() || restaurantId;
-    const cachedItems = readMenuCache<FoodItemTypes>(targetId, "items");
-    if (cachedItems.length) {
-      setUpsellMenuCandidates(cachedItems);
-      rememberMenuUpsellCandidates(cachedItems);
-      if (!items.length) {
-        setItems(cachedItems);
-        setItemsLoaded(true);
-      }
-    }
-
-    try {
-      if (!targetId) return;
-      const response = await cachedGet(
-        `/api/customer/items/?restaurant_id=${targetId}&page_size=500`,
-        { timeout: 4000 },
-        { ttlMs: 30_000 }
-      );
-      const nextItems = normalizeListPayload<FoodItemTypes>(response.data);
-      if (nextItems.length) {
-        setUpsellMenuCandidates(nextItems);
-        rememberMenuUpsellCandidates(nextItems);
-        writeMenuCache(targetId, "items", nextItems);
-        if (!items.length) {
-          setItems(nextItems);
-          setItemsLoaded(true);
-        }
-      }
-    } catch {
-      // The current visible category remains available as a smaller fallback.
     }
   };
 
@@ -851,10 +780,6 @@ const LayoutDashboard = () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
   }, [search, selectedCategory, categories, categoriesLoaded, lastUpdate]);
-
-  useEffect(() => {
-    void fetchUpsellCandidateItems();
-  }, [restaurantId, lastUpdate]);
 
   useEffect(() => {
     if (!categories.length) return;
@@ -1254,10 +1179,7 @@ const LayoutDashboard = () => {
         {/* 6. Bottom Navigation - Hide on success/checkout pages */}
         {!location.pathname.includes('/success') && !location.pathname.includes('/checkout') && <BottomNav />}
         {!isSubRoute && (
-          <MenuPageUpsellHost
-            pendingDetail={menuUpsellDetail}
-            menuCandidates={upsellMenuCandidates.length ? upsellMenuCandidates : items}
-          />
+          <MenuPageUpsellHost pendingDetail={menuUpsellDetail} />
         )}
         </div>
       </div>

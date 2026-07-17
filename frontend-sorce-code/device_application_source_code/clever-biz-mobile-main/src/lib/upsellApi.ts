@@ -226,169 +226,6 @@ const getSessionRestaurantId = (): number | undefined => {
   }
 };
 
-const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
-
-const itemHaystack = (item: Partial<UpsellSuggestion> | CartLikeItem) =>
-  `${normalizeText((item as Partial<UpsellSuggestion>).item_name)} ${normalizeText((item as Partial<UpsellSuggestion>).description)} ${normalizeText((item as Partial<UpsellSuggestion>).category_name)}`;
-
-const hasAny = (item: Partial<UpsellSuggestion> | CartLikeItem, keywords: string[]) => {
-  const haystack = itemHaystack(item);
-  return keywords.some((keyword) => haystack.includes(keyword));
-};
-
-type FallbackRole = "main" | "drink" | "dessert" | "starter" | "side";
-
-const fallbackRoles = (item: Partial<UpsellSuggestion> | CartLikeItem): Set<FallbackRole> => {
-  const roles = new Set<FallbackRole>();
-  if (hasAny(item, ["main", "burger", "pizza", "pasta", "steak", "chicken", "beef", "biryani", "rice", "meat", "entree", "meal"])) {
-    roles.add("main");
-  }
-  if (hasAny(item, ["drink", "beverage", "shake", "smoothie", "juice", "cola", "coke", "pepsi", "fanta", "sprite", "coffee", "tea", "water", "lemonade", "mocktail", "cocktail"])) {
-    roles.add("drink");
-  }
-  if (hasAny(item, ["dessert", "sweet", "cake", "brownie", "ice cream", "ice-cream", "gelato", "sundae", "sorbet", "kunafa", "baklava", "waffle", "pastry"])) {
-    roles.add("dessert");
-  }
-  if (hasAny(item, ["starter", "appetizer", "appetiser", "salad", "soup", "wings", "hummus", "mezze", "bruschetta", "nachos"])) {
-    roles.add("starter");
-  }
-  if (hasAny(item, ["side", "fries", "chips", "coleslaw", "slaw", "bread", "sauce", "dip"])) {
-    roles.add("side");
-  }
-  return roles;
-};
-
-const fallbackGapPriority = (
-  cartItems: Array<Partial<UpsellSuggestion> | CartLikeItem>
-): FallbackRole[] => {
-  const cartRoles = new Set<FallbackRole>();
-  cartItems.forEach((item) => fallbackRoles(item).forEach((role) => cartRoles.add(role)));
-  const hasMain = cartRoles.has("main");
-  const hasDrink = cartRoles.has("drink");
-  const hasDessert = cartRoles.has("dessert");
-  const hasSide = cartRoles.has("side") || cartRoles.has("starter");
-
-  if (hasMain && hasDrink && hasDessert && hasSide) return [];
-  if (hasMain && !hasDrink) return ["drink", "side", "dessert", "starter"];
-  if (hasMain && hasDrink && !hasDessert) return ["dessert", "side", "starter"];
-  if (hasMain && hasDessert && !hasDrink) return ["drink", "side", "starter"];
-  if (hasMain && hasDrink && hasDessert) return ["side", "starter"];
-  if (hasDrink && !hasMain) return ["main", "starter", "dessert"];
-  if (hasDessert && !hasDrink) return ["drink", "side", "starter"];
-  if (hasSide && !hasMain) return ["main", "drink", "dessert"];
-  return ["drink", "dessert", "side", "starter", "main"];
-};
-
-const scoreFallbackCandidate = (
-  candidate: UpsellSuggestion,
-  sourceItem?: Partial<UpsellSuggestion> | CartLikeItem,
-  cartItems: Array<Partial<UpsellSuggestion> | CartLikeItem> = [],
-  gapRank = 0,
-) => {
-  let score = 10;
-  const source = sourceItem || cartItems[0];
-  const sourceRoles = source ? fallbackRoles(source) : new Set<FallbackRole>();
-  const candidateRoleSet = fallbackRoles(candidate);
-  const pairingScores = [0];
-  if (sourceRoles.has("main") && candidateRoleSet.has("drink")) pairingScores.push(80);
-  if (sourceRoles.has("main") && candidateRoleSet.has("dessert")) pairingScores.push(65);
-  if (sourceRoles.has("main") && (candidateRoleSet.has("side") || candidateRoleSet.has("starter"))) pairingScores.push(45);
-  if (sourceRoles.has("drink") && candidateRoleSet.has("main")) pairingScores.push(55);
-  if (!sourceRoles.has("main") && !sourceRoles.has("drink") && candidateRoleSet.size > 0) pairingScores.push(35);
-  score += Math.max(...pairingScores);
-  score += Math.max(0, 40 - gapRank * 12);
-  if (candidate.category && source && candidate.category !== (source as CartLikeItem).category) score += 15;
-  score += Math.max(0, 1000 - safeNumber(candidate.price)) / 1000;
-  return score;
-};
-
-export function rememberMenuUpsellCandidates(candidates: unknown[]) {
-  try {
-    if (Array.isArray(candidates) && candidates.length) {
-      sessionStorage.setItem("cb:menu_items", JSON.stringify(candidates));
-    }
-  } catch {
-    // Non-blocking.
-  }
-}
-
-const readCachedMenuItems = (): unknown[] => {
-  try {
-    const raw = sessionStorage.getItem("cb:menu_items");
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-export function getRememberedMenuUpsellCandidates(): unknown[] {
-  return readCachedMenuItems();
-}
-
-export function buildClientUpsellSuggestions(params: {
-  candidates: unknown[];
-  triggerPoint: UpsellTriggerPoint;
-  sourceItem?: Partial<UpsellSuggestion> | CartLikeItem;
-  cartItems?: Array<Partial<UpsellSuggestion> | CartLikeItem>;
-  cartItemIds?: number[];
-  excludeItemIds?: number[];
-  restaurantId?: number;
-  limit?: number;
-}): UpsellSuggestion[] {
-  const disabledItems = getDisabledUpsellItems();
-  const excludedItems = new Set(
-    [...(params.cartItemIds || []), ...(params.excludeItemIds || [])]
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value > 0)
-  );
-  const cartItems = params.cartItems || [];
-  const cartRoleSet = new Set<FallbackRole>();
-  cartItems.forEach((item) => fallbackRoles(item).forEach((role) => cartRoleSet.add(role)));
-  const gapPriority = fallbackGapPriority(cartItems);
-  if (cartItems.length > 0 && gapPriority.length === 0) return [];
-  const sourceRestaurantId = Number(params.restaurantId || (params.sourceItem as UpsellSuggestion | undefined)?.restaurant || getSessionRestaurantId());
-
-  const ranked = params.candidates
-    .map((candidate) => normalizeUpsellSuggestion(candidate))
-    .filter((candidate): candidate is UpsellSuggestion => {
-      if (!candidate) return false;
-      if (candidate.availability === false) return false;
-      if (excludedItems.has(candidate.id)) return false;
-      if (disabledItems.has(candidate.id)) return false;
-      const candidateRestaurantId = Number(candidate.restaurant || 0);
-      if (sourceRestaurantId > 0 && candidateRestaurantId > 0 && candidateRestaurantId !== sourceRestaurantId) return false;
-      return true;
-    })
-    .map((candidate) => {
-      const roles = fallbackRoles(candidate);
-      const overlapsCart = Array.from(roles).some((role) => cartRoleSet.has(role));
-      const gapRank = Math.min(...Array.from(roles).map((role) => gapPriority.indexOf(role)).filter((rank) => rank >= 0), 99);
-      return { candidate, roles, overlapsCart, gapRank };
-    })
-    .filter(({ roles, overlapsCart, gapRank }) => roles.size === 0 || (!overlapsCart && gapRank < 99));
-
-  const recognizedGapRanks = ranked.filter(({ roles, gapRank }) => roles.size > 0 && gapRank < 99).map(({ gapRank }) => gapRank);
-  const bestGapRank = recognizedGapRanks.length ? Math.min(...recognizedGapRanks) : 99;
-
-  return ranked
-    .filter(({ roles, gapRank }) => bestGapRank === 99 || roles.size === 0 || gapRank === bestGapRank)
-    .map(({ candidate, gapRank }) => ({
-      candidate,
-      score: scoreFallbackCandidate(candidate, params.sourceItem, cartItems, gapRank === 99 ? 4 : gapRank),
-    }))
-    .sort((a, b) => b.score - a.score || safeNumber(a.candidate.price) - safeNumber(b.candidate.price))
-    .map(({ candidate }, index) => ({
-      ...candidate,
-      upsell_rule: candidate.upsell_rule || (index === 0 ? "Perfect with your order" : "Also worth adding"),
-      upsell_message: candidate.upsell_message || "Recommended to complete this order.",
-      suggestion_copy: candidate.suggestion_copy || candidate.upsell_message || "Recommended to complete this order.",
-      decision_source: candidate.decision_source || "client_fallback",
-    }))
-    .slice(0, params.limit ?? 2);
-}
-
 export function summarizeCart(items: CartLikeItem[]) {
   const cartValue = items.reduce((sum, item) => sum + getEffectiveItemPrice(item) * Math.max(1, Number(item.quantity || 1)), 0);
   const cartItemCount = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 1)), 0);
@@ -430,44 +267,16 @@ export async function fetchUpsellSuggestions(params: {
     ...signalParams,
   };
 
-  let rawSuggestions: unknown[] = [];
-  let requestSucceeded = false;
-  try {
-    const response = await cachedGet(
-      "/api/upsell/smart-suggestions",
-      {
-        params: commonParams,
-        timeout: 4000,
-        headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
-      },
-      { ttlMs: 2_000 }
-    );
-    rawSuggestions = extractSuggestionArray(response.data);
-    requestSucceeded = true;
-  } catch {
-    if (cartItemIds) {
-      try {
-        const response = await cachedGet(
-          "/api/customer/cart/upsell_suggestions/",
-          {
-            params: commonParams,
-            timeout: 3500,
-            headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
-          },
-          { ttlMs: 2_000 }
-        );
-        rawSuggestions = extractSuggestionArray(response.data);
-        requestSucceeded = true;
-      } catch {
-        rawSuggestions = [];
-      }
-    } else {
-      rawSuggestions = [];
-    }
-  }
-  if (!requestSucceeded) {
-    throw new Error("Upsell suggestion services are unavailable");
-  }
+  const response = await cachedGet(
+    "/api/upsell/smart-suggestions",
+    {
+      params: commonParams,
+      timeout: 4000,
+      headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
+    },
+    { ttlMs: 2_000 }
+  );
+  const rawSuggestions = extractSuggestionArray(response.data);
 
   const mergedById = new Map<number, UpsellSuggestion>();
   for (const rawItem of rawSuggestions) {
@@ -482,55 +291,14 @@ export async function fetchUpsellSuggestions(params: {
       .map((value) => Number(value))
       .filter((value) => Number.isInteger(value) && value > 0)
   );
-  const strongHistorical = merged
-    .filter((item) => Number(item.association_strength || 0) >= 0.5 && Number(item.co_order_frequency || 0) >= 10)
-    .sort((a, b) => Number(b.association_strength || 0) - Number(a.association_strength || 0));
-  if (strongHistorical.length > 0) {
-    const topHistorical = strongHistorical[0] as UpsellSuggestion;
-    const remaining = merged.filter((item) => item.id !== topHistorical.id);
-    merged.splice(0, merged.length, topHistorical, ...remaining);
-  }
-
   return merged.filter((item: UpsellSuggestion) => {
     if (!item || !Number.isInteger(item.id)) return false;
+    if (item.decision_source !== "llm") return false;
     if (item.availability === false) return false;
     if (excludedItems.has(item.id)) return false;
     if (disabledItems.has(item.id)) return false;
     return true;
   }).slice(0, params.limit ?? 2) as UpsellSuggestion[];
-}
-
-export async function fetchClientFallbackUpsellSuggestions(params: {
-  triggerPoint: UpsellTriggerPoint;
-  sourceItem?: Partial<UpsellSuggestion> | CartLikeItem;
-  cartItems?: Array<Partial<UpsellSuggestion> | CartLikeItem>;
-  cartItemIds?: number[];
-  excludeItemIds?: number[];
-  restaurantId?: number;
-  limit?: number;
-}) {
-  const restaurantId = Number(params.restaurantId || (params.sourceItem as UpsellSuggestion | undefined)?.restaurant || getSessionRestaurantId());
-  let candidates = readCachedMenuItems();
-
-  if (!candidates.length && Number.isInteger(restaurantId) && restaurantId > 0) {
-    try {
-      const response = await cachedGet(
-        "/api/customer/items/",
-        { params: { restaurant_id: restaurantId, page_size: 500 }, timeout: 4000 },
-        { ttlMs: 20_000 }
-      );
-      candidates = extractSuggestionArray(response.data);
-      rememberMenuUpsellCandidates(candidates);
-    } catch {
-      candidates = readCachedMenuItems();
-    }
-  }
-
-  return buildClientUpsellSuggestions({
-    ...params,
-    candidates,
-    restaurantId,
-  });
 }
 
 export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {

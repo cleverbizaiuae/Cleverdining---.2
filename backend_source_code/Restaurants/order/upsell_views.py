@@ -655,18 +655,15 @@ class UpsellSmartSuggestionsAPIView(APIView):
         agent_decision = validated_upsell_agent_decision(
             llm_decision,
             eligible_engine_rows,
-            fallback_reason=llm_status,
+            llm_status=llm_status,
         )
 
-        if agent_decision.get("suggest_nothing") and agent_decision.get("decision_source") == "llm":
+        if agent_decision.get("suggest_nothing"):
             display_rows = []
         else:
             selected_item_id = _safe_int(agent_decision.get("suggested_item_id"))
-            selected_rows = [
+            display_rows = [
                 row for row in eligible_engine_rows if row.get("item") and row["item"].id == selected_item_id
-            ]
-            display_rows = selected_rows + [
-                row for row in eligible_engine_rows if not row.get("item") or row["item"].id != selected_item_id
             ]
 
         if trigger_point in {"add_to_cart", "before_payment"} or setting.aggressiveness == "subtle":
@@ -721,7 +718,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
                     "cart_roles": row.get("cart_roles", []),
                     "venue_type": row.get("venue_type", agent_context.get("restaurant", {}).get("venue_type", "restaurant")),
                     "agent_reasoning": agent_decision.get("reasoning", "") if is_agent_selection else row.get("agent_reasoning", ""),
-                    "decision_source": agent_decision.get("decision_source", "deterministic") if is_agent_selection else "deterministic",
+                    "decision_source": "llm",
                     "association_strength": row.get("historical_max_strength", 0.0),
                     "co_order_frequency": row.get("historical_max_frequency", 0),
                 }
@@ -739,7 +736,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 "candidate_count": len(agent_context.get("candidates", [])),
                 "llm_ready": bool(agent_context.get("candidates")),
                 "llm_status": llm_status,
-                "decision_source": agent_decision.get("decision_source", "deterministic_fallback"),
+                "decision_source": agent_decision.get("decision_source", "llm_unavailable"),
             },
         }
         if str(request.query_params.get("debug_agent_context") or "").lower() in {"1", "true", "yes"}:

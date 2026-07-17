@@ -884,34 +884,18 @@ def call_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]
     return None, "invalid_provider"
 
 
-def fallback_upsell_agent_decision(
-    candidate_rows: Sequence[Mapping[str, Any]],
-    *,
-    reason: str = "llm_unavailable",
-) -> Dict[str, Any]:
-    if not candidate_rows:
-        return {
-            "suggest_nothing": True,
-            "reason": "No valid candidates after backend filtering.",
-            "reasoning": "The deterministic engine found no eligible candidate.",
-            "confidence": 0.95,
-            "decision_source": "deterministic_fallback",
-        }
-
-    row = candidate_rows[0]
-    item = row.get("item")
-    target_role = row.get("target_role") or default_knowledge_role_for_engine_role(str(row.get("engine_role") or "premium"))
-    item_name = getattr(item, "item_name", "")
-    message = row.get("message") or f"Add {item_name}?"
+def no_upsell_agent_decision(*, reason: str) -> Dict[str, Any]:
+    """Return no recommendation when the LLM did not make a valid decision."""
+    decision_source = "llm_invalid" if reason == "invalid_llm_item" else "llm_unavailable"
+    if reason == "no_candidates":
+        decision_source = "no_candidates"
     return {
-        "suggest_nothing": False,
-        "suggested_item_id": getattr(item, "id", None),
-        "suggested_item_name": item_name,
-        "target_role": target_role,
-        "reasoning": row.get("agent_reasoning") or f"Backend fallback selected top-ranked candidate because {reason}.",
-        "suggestion_copy": message,
-        "confidence": 0.78,
-        "decision_source": "deterministic_fallback",
+        "suggest_nothing": True,
+        "reason": "No validated LLM recommendation is available.",
+        "reasoning": f"No customer-facing recommendation was produced because the LLM status was {reason}.",
+        "confidence": 0.0,
+        "decision_source": decision_source,
+        "llm_status": reason,
     }
 
 
@@ -919,10 +903,10 @@ def validated_upsell_agent_decision(
     llm_decision: Optional[Mapping[str, Any]],
     candidate_rows: Sequence[Mapping[str, Any]],
     *,
-    fallback_reason: str = "llm_not_called",
+    llm_status: str = "llm_not_called",
 ) -> Dict[str, Any]:
     if not llm_decision:
-        return fallback_upsell_agent_decision(candidate_rows, reason=fallback_reason)
+        return no_upsell_agent_decision(reason=llm_status)
 
     if bool(llm_decision.get("suggest_nothing")):
         return {
@@ -939,7 +923,7 @@ def validated_upsell_agent_decision(
     suggested_id = str(llm_decision.get("suggested_item_id") or "")
     selected = valid_by_id.get(suggested_id)
     if not selected:
-        return fallback_upsell_agent_decision(candidate_rows, reason="invalid_llm_item")
+        return no_upsell_agent_decision(reason="invalid_llm_item")
 
     item = selected.get("item")
     return {
