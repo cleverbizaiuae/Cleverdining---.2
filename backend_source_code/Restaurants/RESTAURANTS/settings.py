@@ -467,10 +467,8 @@ OPENROUTER_UPSELL_FAST_FREE_MODELS = env(
 OPENROUTER_UPSELL_PAID_FALLBACK_MODELS = env(
     'OPENROUTER_UPSELL_PAID_FALLBACK_MODELS',
     default=(
-        'microsoft/phi-4,'
-        'ibm-granite/granite-4.1-8b,'
+        'mistralai/mistral-nemo,'
         'meta-llama/llama-3.1-8b-instruct,'
-        'mistralai/mistral-small-24b-instruct-2501,'
         'openai/gpt-oss-20b'
     ),
 )
@@ -487,7 +485,7 @@ OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS = env.float(
     'OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS',
     default=4.0,
 )
-OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS = env.int('OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS', default=220)
+OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS = env.int('OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS', default=180)
 UPSELL_LLM_DECISION_CACHE_SECONDS = env.int('UPSELL_LLM_DECISION_CACHE_SECONDS', default=300)
 VERTEX_UPSELL_PROJECT_ID = env('VERTEX_UPSELL_PROJECT_ID', default='')
 VERTEX_UPSELL_LOCATION = env('VERTEX_UPSELL_LOCATION', default='us-central1')

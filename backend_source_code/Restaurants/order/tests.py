@@ -499,7 +499,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.2)
-        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 220)
+        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 180)
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
             "CleverDining AI Upsell",
@@ -652,8 +652,8 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(post.call_count, 1)
         self.assertEqual(
-            post.call_args.kwargs["json"]["models"],
-            ["mistralai/mistral-nemo"],
+            post.call_args.kwargs["json"]["model"],
+            "mistralai/mistral-nemo",
         )
         cache.delete("upsell:openrouter:free-rate-limited")
 
@@ -698,8 +698,8 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(post.call_count, 1)
         self.assertEqual(
-            post.call_args.kwargs["json"]["models"],
-            ["mistralai/mistral-nemo"],
+            post.call_args.kwargs["json"]["model"],
+            "mistralai/mistral-nemo",
         )
         self.assertEqual(
             post.call_args.kwargs["json"]["provider"]["sort"],

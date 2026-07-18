@@ -877,10 +877,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             settings,
             "OPENROUTER_UPSELL_PAID_FALLBACK_MODELS",
             (
-                "microsoft/phi-4,"
-                "ibm-granite/granite-4.1-8b,"
+                "mistralai/mistral-nemo,"
                 "meta-llama/llama-3.1-8b-instruct,"
-                "mistralai/mistral-small-24b-instruct-2501,"
                 "openai/gpt-oss-20b"
             ),
         )
@@ -928,8 +926,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         ),
     )
     max_tokens = max(
-        160,
-        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 220) or 220), 300),
+        140,
+        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 180) or 180), 180),
     )
     messages = [
         {"role": "system", "content": str(context.get("system_prompt") or UPSELL_SYSTEM_PROMPT)},
@@ -948,16 +946,16 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     rate_limited_free_models = 0
     total_free_models = sum(1 for model in models if is_free_model(model))
     request_deadline = time.monotonic() + total_timeout
-    routed_models = [
+    low_latency_route = [
         model.strip()
         for model in low_latency_models
         if model.strip() in models and not is_free_model(model.strip())
-    ] if prefer_low_latency else []
-    fallback_models = [model for model in models if model not in routed_models]
+    ][:1] if prefer_low_latency else []
+    fallback_models = [model for model in models if model not in low_latency_route]
 
-    if routed_models:
+    if low_latency_route:
         request_payload = {
-            "models": routed_models,
+            "model": low_latency_route[0],
             "messages": messages,
             "response_format": {"type": "json_object"},
             "temperature": 0.2,
@@ -1006,7 +1004,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
                     if decision:
                         decision["_llm_provider"] = "openrouter"
                         decision["_llm_model"] = str(
-                            response_payload.get("model") or routed_models[0]
+                            response_payload.get("model") or low_latency_route[0]
                         )
                         return decision, "ok"
                     last_status = "invalid_json"
