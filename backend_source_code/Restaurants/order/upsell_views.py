@@ -682,7 +682,13 @@ class UpsellSmartSuggestionsAPIView(APIView):
             source_item_id=source_item_id,
             session_signals=signal_payload,
         )
-        llm_decision, llm_status = call_upsell_llm(agent_context, cache_scope=session_id)
+        # Identical validated contexts can reuse a recent LLM decision across
+        # sessions. Cart, candidate, pricing, score, and availability changes
+        # are all represented in the cache key.
+        llm_decision, llm_status = call_upsell_llm(
+            agent_context,
+            cache_scope=f"restaurant:{restaurant.id}",
+        )
         agent_decision = validated_upsell_agent_decision(
             llm_decision,
             eligible_engine_rows,

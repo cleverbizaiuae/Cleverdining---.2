@@ -651,7 +651,10 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(llm_status, "ok")
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(post.call_count, 1)
-        self.assertEqual(post.call_args.kwargs["json"]["model"], "mistralai/mistral-nemo")
+        self.assertEqual(
+            post.call_args.kwargs["json"]["models"],
+            ["mistralai/mistral-nemo"],
+        )
         cache.delete("upsell:openrouter:free-rate-limited")
 
     @override_settings(
@@ -695,8 +698,16 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(post.call_count, 1)
         self.assertEqual(
-            post.call_args.kwargs["json"]["model"],
-            "mistralai/mistral-nemo",
+            post.call_args.kwargs["json"]["models"],
+            ["mistralai/mistral-nemo"],
+        )
+        self.assertEqual(
+            post.call_args.kwargs["json"]["provider"]["sort"],
+            {"by": "latency", "partition": "none"},
+        )
+        self.assertEqual(
+            post.call_args.kwargs["json"]["provider"]["max_price"],
+            {"prompt": 0.2, "completion": 0.8},
         )
         self.assertLessEqual(post.call_args.kwargs["timeout"], 1.0)
 

@@ -467,9 +467,11 @@ OPENROUTER_UPSELL_FAST_FREE_MODELS = env(
 OPENROUTER_UPSELL_PAID_FALLBACK_MODELS = env(
     'OPENROUTER_UPSELL_PAID_FALLBACK_MODELS',
     default=(
-        'mistralai/mistral-nemo,'
+        'microsoft/phi-4,'
+        'ibm-granite/granite-4.1-8b,'
         'meta-llama/llama-3.1-8b-instruct,'
-        'qwen/qwen-2.5-7b-instruct'
+        'mistralai/mistral-small-24b-instruct-2501,'
+        'openai/gpt-oss-20b'
     ),
 )
 OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS = env.bool(
@@ -483,7 +485,7 @@ OPENROUTER_UPSELL_FREE_RATE_LIMIT_COOLDOWN_SECONDS = env.int(
 OPENROUTER_UPSELL_TIMEOUT_SECONDS = env.float('OPENROUTER_UPSELL_TIMEOUT_SECONDS', default=3.0)
 OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS = env.float(
     'OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS',
-    default=4.5,
+    default=4.0,
 )
 OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS = env.int('OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS', default=220)
 UPSELL_LLM_DECISION_CACHE_SECONDS = env.int('UPSELL_LLM_DECISION_CACHE_SECONDS', default=300)

@@ -877,9 +877,11 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             settings,
             "OPENROUTER_UPSELL_PAID_FALLBACK_MODELS",
             (
-                "mistralai/mistral-nemo,"
+                "microsoft/phi-4,"
+                "ibm-granite/granite-4.1-8b,"
                 "meta-llama/llama-3.1-8b-instruct,"
-                "qwen/qwen-2.5-7b-instruct"
+                "mistralai/mistral-small-24b-instruct-2501,"
+                "openai/gpt-oss-20b"
             ),
         )
         or ""
@@ -921,7 +923,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     total_timeout = max(
         timeout,
         min(
-            float(getattr(settings, "OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS", 4.5) or 4.5),
+            float(getattr(settings, "OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS", 4.0) or 4.0),
             8.0,
         ),
     )
@@ -946,7 +948,71 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     rate_limited_free_models = 0
     total_free_models = sum(1 for model in models if is_free_model(model))
     request_deadline = time.monotonic() + total_timeout
-    for model in models:
+    routed_models = [
+        model.strip()
+        for model in low_latency_models
+        if model.strip() in models and not is_free_model(model.strip())
+    ] if prefer_low_latency else []
+    fallback_models = [model for model in models if model not in routed_models]
+
+    if routed_models:
+        request_payload = {
+            "models": routed_models,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+            "stream": False,
+            "provider": {
+                "sort": {"by": "latency", "partition": "none"},
+                "preferred_max_latency": {"p90": 3},
+                "max_price": {"prompt": 0.2, "completion": 0.8},
+                "require_parameters": True,
+            },
+        }
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=request_payload,
+                timeout=min(timeout, total_timeout),
+            )
+        except requests.Timeout:
+            response = None
+            last_status = "timeout"
+            logger.warning("Upsell OpenRouter latency-routed request timed out")
+        except requests.RequestException:
+            response = None
+            last_status = "network_error"
+            logger.warning("Upsell OpenRouter latency-routed request failed", exc_info=True)
+
+        if response is not None:
+            if response.status_code in {401, 403}:
+                return None, f"http_{response.status_code}"
+            if response.status_code < 200 or response.status_code >= 300:
+                last_status = f"http_{response.status_code}"
+                logger.warning(
+                    "Upsell OpenRouter latency router returned HTTP %s",
+                    response.status_code,
+                )
+            else:
+                try:
+                    response_payload = response.json()
+                except ValueError:
+                    response_payload = None
+                    last_status = "invalid_response"
+                if response_payload:
+                    decision = _parse_llm_json(_openai_compatible_response_text(response_payload))
+                    if decision:
+                        decision["_llm_provider"] = "openrouter"
+                        decision["_llm_model"] = str(
+                            response_payload.get("model") or routed_models[0]
+                        )
+                        return decision, "ok"
+                    last_status = "invalid_json"
+                    logger.warning("Upsell OpenRouter latency router returned invalid JSON")
+
+    for model in fallback_models:
         remaining_time = request_deadline - time.monotonic()
         if remaining_time < 0.5:
             last_status = "timeout"
