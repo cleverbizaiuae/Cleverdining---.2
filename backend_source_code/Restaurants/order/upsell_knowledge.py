@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -863,6 +864,14 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     fallback_models_raw = str(
         getattr(settings, "OPENROUTER_UPSELL_FALLBACK_MODELS", "openrouter/free") or "openrouter/free"
     )
+    fast_free_models_raw = str(
+        getattr(
+            settings,
+            "OPENROUTER_UPSELL_FAST_FREE_MODELS",
+            "meta-llama/llama-3.2-3b-instruct:free",
+        )
+        or ""
+    )
     paid_fallback_models_raw = str(
         getattr(
             settings,
@@ -875,13 +884,14 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         )
         or ""
     )
+    fast_free_models = fast_free_models_raw.split(",")
     free_models = [primary_model, *fallback_models_raw.split(","), "openrouter/free"]
     low_latency_models = paid_fallback_models_raw.split(",")
     prefer_low_latency = bool(
         getattr(settings, "OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS", True)
     )
     model_priority = (
-        [*low_latency_models, *free_models]
+        [*fast_free_models, *low_latency_models, *free_models]
         if prefer_low_latency
         else [*free_models, *low_latency_models]
     )
@@ -1083,22 +1093,96 @@ def _call_vertex_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[s
     return decision, "ok"
 
 
-def call_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+def _upsell_llm_decision_cache_key(context: Mapping[str, Any], cache_scope: str) -> str:
+    restaurant = context.get("restaurant") if isinstance(context.get("restaurant"), Mapping) else {}
+    settings_context = context.get("settings") if isinstance(context.get("settings"), Mapping) else {}
+    cart = context.get("cart") if isinstance(context.get("cart"), list) else []
+    candidates = context.get("candidates") if isinstance(context.get("candidates"), list) else []
+    payload = {
+        "scope": cache_scope,
+        "restaurant": {
+            "id": restaurant.get("id"),
+            "venue_type": restaurant.get("venue_type"),
+            "current_day": restaurant.get("current_day"),
+            "current_hour": restaurant.get("current_hour"),
+        },
+        "settings": {
+            "strategy": settings_context.get("strategy"),
+            "aggressiveness": settings_context.get("aggressiveness"),
+            "tone": settings_context.get("tone"),
+        },
+        "cart": sorted(
+            (
+                {
+                    "id": item.get("id"),
+                    "name": item.get("name"),
+                    "price": item.get("price"),
+                    "roles": item.get("roles"),
+                }
+                for item in cart
+                if isinstance(item, Mapping)
+            ),
+            key=lambda item: int(item.get("id") or 0),
+        ),
+        "target_roles": context.get("target_roles") or [],
+        "candidates": [
+            {
+                "id": candidate.get("id"),
+                "name": candidate.get("name"),
+                "price": candidate.get("price"),
+                "target_role": candidate.get("target_role"),
+                "score": candidate.get("score"),
+                "pairing_score": candidate.get("pairing_score"),
+                "acceptance_rate": candidate.get("acceptance_rate"),
+            }
+            for candidate in candidates
+            if isinstance(candidate, Mapping)
+        ],
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+    return f"upsell:llm-decision:v1:{digest}"
+
+
+def call_upsell_llm(
+    context: Mapping[str, Any],
+    *,
+    cache_scope: str = "",
+) -> Tuple[Optional[Dict[str, Any]], str]:
     """Call the configured model for shortlist judgment only."""
     if not context.get("candidates"):
         return None, "no_candidates"
     if not bool(getattr(settings, "UPSELL_LLM_ENABLED", True)):
         return None, "disabled"
 
+    decision_cache_key = ""
+    if cache_scope:
+        decision_cache_key = _upsell_llm_decision_cache_key(context, cache_scope)
+        cached_decision = cache.get(decision_cache_key)
+        if isinstance(cached_decision, Mapping):
+            decision = dict(cached_decision)
+            decision["_llm_cache_hit"] = True
+            return decision, "ok"
+
     provider = str(getattr(settings, "UPSELL_LLM_PROVIDER", "openrouter") or "openrouter").strip().lower()
     if provider == "openrouter":
-        return _call_openrouter_upsell_llm(context)
-    if provider == "vertex":
-        return _call_vertex_upsell_llm(context)
-    if provider == "ollama":
-        return _call_ollama_upsell_llm(context)
-    logger.warning("Upsell LLM disabled for unsupported provider %s", provider)
-    return None, "invalid_provider"
+        decision, status = _call_openrouter_upsell_llm(context)
+    elif provider == "vertex":
+        decision, status = _call_vertex_upsell_llm(context)
+    elif provider == "ollama":
+        decision, status = _call_ollama_upsell_llm(context)
+    else:
+        logger.warning("Upsell LLM disabled for unsupported provider %s", provider)
+        return None, "invalid_provider"
+
+    if decision_cache_key and decision and status == "ok":
+        cache_seconds = max(
+            30,
+            min(int(getattr(settings, "UPSELL_LLM_DECISION_CACHE_SECONDS", 300) or 300), 1800),
+        )
+        cache.set(decision_cache_key, dict(decision), timeout=cache_seconds)
+    return decision, status
 
 
 def no_upsell_agent_decision(*, reason: str) -> Dict[str, Any]:

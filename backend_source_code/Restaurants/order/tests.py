@@ -694,8 +694,58 @@ class UpsellKnowledgeEngineTests(TestCase):
         decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(post.call_count, 1)
-        self.assertEqual(post.call_args.kwargs["json"]["model"], "mistralai/mistral-nemo")
+        self.assertEqual(
+            post.call_args.kwargs["json"]["model"],
+            "meta-llama/llama-3.2-3b-instruct:free",
+        )
         self.assertLessEqual(post.call_args.kwargs["timeout"], 1.0)
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
+        OPENROUTER_UPSELL_FAST_FREE_MODELS="meta-llama/llama-3.2-3b-instruct:free",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODELS="",
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=True,
+        UPSELL_LLM_DECISION_CACHE_SECONDS=300,
+    )
+    def test_openrouter_reuses_llm_decision_across_surfaces_for_same_session_cart(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Best valid complement.",'
+                    '"suggestion_copy":"A refreshing match for your meal.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }],
+        }
+        context = self._agent_context(rows)
+        cache_scope = f"cache-test-{self.restaurant.id}"
+
+        with patch("order.upsell_knowledge.requests.post", return_value=response) as post:
+            first_decision, first_status = call_upsell_llm(context, cache_scope=cache_scope)
+            context["trigger_point"] = "add_to_cart"
+            context["trigger"]["point"] = "add_to_cart"
+            second_decision, second_status = call_upsell_llm(context, cache_scope=cache_scope)
+
+        self.assertEqual(first_status, "ok")
+        self.assertEqual(second_status, "ok")
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(first_decision["suggested_item_id"], chosen.id)
+        self.assertEqual(second_decision["suggested_item_id"], chosen.id)
+        self.assertTrue(second_decision["_llm_cache_hit"])
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,

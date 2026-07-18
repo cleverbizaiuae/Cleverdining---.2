@@ -682,7 +682,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
             source_item_id=source_item_id,
             session_signals=signal_payload,
         )
-        llm_decision, llm_status = call_upsell_llm(agent_context)
+        llm_decision, llm_status = call_upsell_llm(agent_context, cache_scope=session_id)
         agent_decision = validated_upsell_agent_decision(
             llm_decision,
             eligible_engine_rows,
