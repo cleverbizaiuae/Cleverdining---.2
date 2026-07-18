@@ -563,12 +563,12 @@ class UpsellKnowledgeEngineTests(TestCase):
             "model": "qwen/qwen3-4b:free",
             "choices": [{
                 "message": {"content": (
-                    '{"suggest_nothing":false,"suggested_item_id":%d,'
-                    '"suggested_item_name":"%s","target_role":"DRINK_COLD",'
+                    '{"suggest_nothing":false,"suggested_item_id":"%d",'
+                    '"suggested_item_name":"non-canonical name","target_role":null,'
                     '"reason":null,"reasoning":"Best valid match.",'
-                    '"suggestion_copy":"A crisp finish for your meal.","confidence":0.91}'
+                    '"suggestion_copy":"A crisp finish for your meal.","confidence":"0.91"}'
                 )
-                % (chosen.id, chosen.item_name)}
+                % chosen.id}
             }],
         }
 
@@ -579,13 +579,16 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(llm_status, "ok")
         self.assertEqual(decision["decision_source"], "llm")
         self.assertEqual(decision["suggested_item_id"], chosen.id)
+        self.assertEqual(raw_decision["suggested_item_name"], chosen.item_name)
+        self.assertEqual(raw_decision["target_role"], rows[-1]["target_role"])
+        self.assertEqual(raw_decision["confidence"], 0.91)
         self.assertEqual(raw_decision["_llm_provider"], "openrouter")
         self.assertEqual(raw_decision["_llm_model"], "qwen/qwen3-4b:free")
         self.assertEqual(post.call_args.args[0], "https://openrouter.ai/api/v1/chat/completions")
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.2)
-        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 140)
+        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 220)
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
             "CleverDining AI Upsell",
@@ -799,6 +802,14 @@ class UpsellKnowledgeEngineTests(TestCase):
             post.call_args.kwargs["json"]["provider"]["max_price"],
             {"prompt": 0.2, "completion": 0.8},
         )
+        response_format = post.call_args.kwargs["json"]["response_format"]
+        self.assertEqual(response_format["type"], "json_schema")
+        self.assertTrue(response_format["json_schema"]["strict"])
+        self.assertEqual(
+            response_format["json_schema"]["schema"]["additionalProperties"],
+            False,
+        )
+        self.assertTrue(post.call_args.kwargs["json"]["provider"]["require_parameters"])
         self.assertLessEqual(post.call_args.kwargs["timeout"], 1.0)
 
     @override_settings(
@@ -1173,7 +1184,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         request_decision.assert_called_once()
         self.assertTrue(request_decision.call_args.kwargs["background"])
 
-    def test_add_to_cart_remains_available_while_cart_cap_is_surface_specific(self):
+    def test_add_and_passive_cart_remain_available_while_prepayment_is_capped(self):
         session_id = "surface-specific-cap"
         for index in range(4):
             UpsellEvent.objects.create(
@@ -1224,11 +1235,40 @@ class UpsellKnowledgeEngineTests(TestCase):
                 "session_id": session_id,
             },
         )
-        cart_response = UpsellSmartSuggestionsAPIView.as_view()(cart_request)
+        with patch("order.upsell_views.call_upsell_llm", return_value=(None, "disabled")):
+            cart_response = UpsellSmartSuggestionsAPIView.as_view()(cart_request)
 
         self.assertEqual(cart_response.status_code, 200)
         self.assertEqual(cart_response.data["count"], 0)
         self.assertEqual(
             cart_response.data["agent_decision"]["decision_source"],
+            "llm_unavailable",
+        )
+
+        for index in range(4):
+            UpsellEvent.objects.create(
+                restaurant=self.restaurant,
+                session_id=session_id,
+                trigger_point="before_payment",
+                action="shown",
+                upsell_item=self.cola,
+                upsell_item_name=f"Prepayment Cola {index}",
+            )
+
+        before_payment_request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "trigger_point": "before_payment",
+                "session_id": session_id,
+            },
+        )
+        before_payment_response = UpsellSmartSuggestionsAPIView.as_view()(before_payment_request)
+
+        self.assertEqual(before_payment_response.status_code, 200)
+        self.assertEqual(before_payment_response.data["count"], 0)
+        self.assertEqual(
+            before_payment_response.data["agent_decision"]["decision_source"],
             "backend_session_cap",
         )

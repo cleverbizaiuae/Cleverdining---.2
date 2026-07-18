@@ -305,6 +305,17 @@ UPSELL_DECISION_JSON_SCHEMA: Dict[str, Any] = {
 }
 
 
+def _openrouter_structured_response_format() -> Dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "cleverdining_upsell_decision",
+            "strict": True,
+            "schema": UPSELL_DECISION_JSON_SCHEMA,
+        },
+    }
+
+
 def _normalize_text(value: Any) -> str:
     return str(value or "").strip().lower()
 
@@ -761,6 +772,93 @@ def _parse_llm_json(raw_text: str) -> Optional[Dict[str, Any]]:
     return dict(parsed) if isinstance(parsed, Mapping) else None
 
 
+def _canonicalize_llm_decision_for_context(
+    decision: Optional[Mapping[str, Any]],
+    context: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Normalize model formatting without changing its recommendation choice."""
+    if not isinstance(decision, Mapping) or not isinstance(decision.get("suggest_nothing"), bool):
+        return None
+
+    provider = str(decision.get("_llm_provider") or "")
+    model = str(decision.get("_llm_model") or "")
+    try:
+        confidence = float(decision.get("confidence"))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    confidence = max(0.0, min(confidence, 1.0))
+
+    reasoning = " ".join(str(decision.get("reasoning") or "").split()).strip()
+    if bool(decision.get("suggest_nothing")):
+        reason = " ".join(str(decision.get("reason") or reasoning).split()).strip()
+        if not reason:
+            return None
+        return {
+            "suggest_nothing": True,
+            "suggested_item_id": None,
+            "suggested_item_name": None,
+            "target_role": None,
+            "reason": reason,
+            "reasoning": reasoning or reason,
+            "suggestion_copy": None,
+            "confidence": confidence,
+            "_llm_provider": provider,
+            "_llm_model": model,
+        }
+
+    try:
+        selected_id = int(decision.get("suggested_item_id"))
+    except (TypeError, ValueError):
+        return None
+    candidates = [
+        candidate
+        for candidate in (context.get("candidates") or [])
+        if isinstance(candidate, Mapping)
+    ]
+    selected = next(
+        (candidate for candidate in candidates if int(candidate.get("id") or 0) == selected_id),
+        None,
+    )
+    if not selected:
+        return None
+
+    valid_roles = {
+        str(role)
+        for role in (selected.get("roles") or [])
+        if str(role) in ALL_KNOWLEDGE_ROLES
+    }
+    selected_target = str(selected.get("target_role") or "")
+    if selected_target in ALL_KNOWLEDGE_ROLES:
+        valid_roles.add(selected_target)
+    target_role = str(decision.get("target_role") or "")
+    if target_role not in valid_roles:
+        target_role = selected_target if selected_target in valid_roles else next(iter(sorted(valid_roles)), "")
+    if not target_role:
+        return None
+
+    suggestion_copy = " ".join(str(decision.get("suggestion_copy") or "").split()).strip()
+    copy_words = re.findall(r"\b[\w'-]+\b", suggestion_copy)
+    if not suggestion_copy or _FORBIDDEN_COPY_WORDS.search(suggestion_copy):
+        return None
+    if len(copy_words) > 15:
+        suggestion_copy = " ".join(copy_words[:15]) + "."
+    if not reasoning:
+        reasoning = suggestion_copy.rstrip(".!?")
+
+    return {
+        "suggest_nothing": False,
+        "suggested_item_id": selected_id,
+        "suggested_item_name": str(selected.get("name") or "").strip(),
+        "target_role": target_role,
+        "reason": None,
+        "reasoning": reasoning,
+        "suggestion_copy": suggestion_copy,
+        "confidence": confidence,
+        "_llm_provider": provider,
+        "_llm_model": model,
+    }
+
+
 def _call_ollama_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     base_url = str(getattr(settings, "OLLAMA_BASE_URL", "") or "").strip().rstrip("/")
     if not base_url:
@@ -905,8 +1003,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         ),
     )
     max_tokens = max(
-        120,
-        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 140) or 140), 140),
+        180,
+        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 220) or 220), 260),
     )
     messages = [
         {"role": "system", "content": str(context.get("system_prompt") or UPSELL_SYSTEM_PROMPT)},
@@ -936,7 +1034,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         request_payload = {
             "model": low_latency_route[0],
             "messages": messages,
-            "response_format": {"type": "json_object"},
+            "response_format": _openrouter_structured_response_format(),
             "temperature": 0.2,
             "max_tokens": max_tokens,
             "stream": False,
@@ -1186,7 +1284,7 @@ def _upsell_llm_decision_cache_key(context: Mapping[str, Any], cache_scope: str)
     digest = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     ).hexdigest()
-    return f"upsell:llm-decision:v1:{digest}"
+    return f"upsell:llm-decision:v2:{digest}"
 
 
 def call_upsell_llm(
@@ -1219,6 +1317,11 @@ def call_upsell_llm(
     else:
         logger.warning("Upsell LLM disabled for unsupported provider %s", provider)
         return None, "invalid_provider"
+
+    if decision and status == "ok":
+        decision = _canonicalize_llm_decision_for_context(decision, context)
+        if not decision:
+            return None, "invalid_llm_response"
 
     if decision_cache_key and decision and status == "ok":
         cache_seconds = max(

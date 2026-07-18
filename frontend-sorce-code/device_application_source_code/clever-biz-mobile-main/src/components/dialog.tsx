@@ -10,8 +10,10 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import { OptimizedImage } from "./OptimizedImage";
 import { CheckCircle2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import {
+  prefetchUpsellSuggestions,
   summarizeCart,
 } from "../lib/upsellApi";
+import { getUpsellExcludedItemIds } from "../lib/upsellSession";
 import { getEffectiveItemPrice, getLineTotal, hasItemDiscount } from "../utils/pricing";
 
 interface ModalProps {
@@ -123,6 +125,27 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       cancelled = true;
     };
   }, [isOpen, itemId, initialItem]);
+
+  useEffect(() => {
+    if (!isOpen || !hasValidItem) return;
+    const cartItemIds = Array.from(
+      new Set(
+        [...cart.map((entry) => Number(entry.id)), Number(item.id)]
+          .filter((id) => Number.isInteger(id) && id > 0)
+      )
+    );
+    const excludeItemIds = Array.from(
+      new Set([...cartItemIds, ...getUpsellExcludedItemIds()])
+    );
+    prefetchUpsellSuggestions({
+      triggerPoint: "add_to_cart",
+      sourceItemId: Number(item.id),
+      restaurantId: Number(item.restaurant || 0) || undefined,
+      limit: 6,
+      cartItemIds,
+      excludeItemIds,
+    });
+  }, [cart, hasValidItem, isOpen, item]);
 
   const showAddedToCartToast = (qty: number, name: string) => {
     toast.custom(

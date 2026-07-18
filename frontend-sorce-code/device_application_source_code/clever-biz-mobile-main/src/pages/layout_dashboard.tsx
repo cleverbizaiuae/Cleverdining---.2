@@ -35,6 +35,7 @@ import {
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
+  prefetchUpsellSuggestions,
   type UpsellSettingsSnapshot,
   type UpsellSuggestion,
 } from "../lib/upsellApi";
@@ -318,6 +319,13 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       const settingsPromise = settings
         ? Promise.resolve(settings)
         : fetchUpsellSettings().catch(() => null);
+      prefetchUpsellSuggestions({
+        triggerPoint: "cart",
+        restaurantId: Number(item.restaurant || 0) || undefined,
+        limit: 2,
+        cartItemIds,
+        excludeItemIds: excludedItemIds,
+      });
       const suggestionPromise = fetchUpsellSuggestions({
         triggerPoint: "add_to_cart",
         sourceItemId: Number(item.id),

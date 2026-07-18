@@ -72,11 +72,12 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
-const UPSELL_POLL_INTERVAL_MS = 400;
-const UPSELL_POLL_WINDOW_MS = 18_000;
-
-const wait = (milliseconds: number) =>
-  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+const UPSELL_REQUEST_TIMEOUT_MS = 9_000;
+const UPSELL_RESULT_CACHE_MS = 2 * 60_000;
+const upsellResultRequests = new Map<
+  string,
+  { expiresAt: number; request: Promise<UpsellSuggestion[]> }
+>();
 
 const UPSELL_LOG_DISABLED_UNTIL_KEY = "cb:upsell_log_disabled_until";
 const recentLogKeys = new Map<string, number>();
@@ -241,7 +242,7 @@ export function summarizeCart(items: CartLikeItem[]) {
   };
 }
 
-export async function fetchUpsellSuggestions(params: {
+export type UpsellSuggestionRequest = {
   triggerPoint: UpsellTriggerPoint;
   limit?: number;
   sourceItemId?: number;
@@ -249,7 +250,35 @@ export async function fetchUpsellSuggestions(params: {
   cartItemIds?: number[];
   excludeItemIds?: number[];
   stage?: string;
-}) {
+};
+
+const sortedPositiveIds = (values?: number[]) =>
+  Array.from(
+    new Set(
+      (values || [])
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    )
+  ).sort((left, right) => left - right);
+
+const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
+  const restaurantId = Number(params.restaurantId || getSessionRestaurantId() || 0);
+  const signals = getUpsellSignalsQueryParams();
+  return JSON.stringify({
+    triggerPoint: params.triggerPoint,
+    limit: Number(params.limit || 2),
+    sourceItemId: Number(params.sourceItemId || 0),
+    restaurantId,
+    cartItemIds: sortedPositiveIds(params.cartItemIds),
+    excludeItemIds: sortedPositiveIds(params.excludeItemIds),
+    stage: params.stage || "",
+    signals,
+  });
+};
+
+const fetchUpsellSuggestionsRemote = async (
+  params: UpsellSuggestionRequest
+): Promise<UpsellSuggestion[]> => {
   const signalParams = getUpsellSignalsQueryParams();
   const sessionToken = localStorage.getItem("guest_session_token");
   const cartItemIds = toCsv(params.cartItemIds);
@@ -270,45 +299,23 @@ export async function fetchUpsellSuggestions(params: {
     guest_session_token: sessionToken || undefined,
     session_id: getUpsellSessionId(),
     sessionId: getUpsellSessionId(),
-    async_llm: 1,
     ...signalParams,
   };
 
   const headers = sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined;
-  const deadline = Date.now() + UPSELL_POLL_WINDOW_MS;
-  let responseData: unknown;
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await axiosInstance.get("/api/upsell/smart-suggestions", {
-        params: commonParams,
-        timeout: 3_000,
-        headers,
-      });
-      const payload = response.data && typeof response.data === "object"
-        ? response.data as Record<string, unknown>
-        : {};
-      if (response.status !== 202 && payload.pending !== true) {
-        responseData = response.data;
-        break;
-      }
-      const retryAfter = Math.max(
-        350,
-        Math.min(safeNumber(payload.retry_after_ms) || UPSELL_POLL_INTERVAL_MS, 1_200),
-      );
-      await wait(retryAfter);
-    } catch (error) {
-      const status = Number((error as { response?: { status?: number } })?.response?.status || 0);
-      if (status > 0 && status < 500 && status !== 429) throw error;
-      await wait(UPSELL_POLL_INTERVAL_MS);
-    }
-  }
-
-  if (responseData === undefined) {
+  const response = await axiosInstance.get("/api/upsell/smart-suggestions", {
+    params: commonParams,
+    timeout: UPSELL_REQUEST_TIMEOUT_MS,
+    headers,
+  });
+  const payload = response.data && typeof response.data === "object"
+    ? response.data as Record<string, unknown>
+    : {};
+  if (response.status === 202 || payload.pending === true) {
     throw new Error("Upsell recommendation is still pending.");
   }
 
-  const rawSuggestions = extractSuggestionArray(responseData);
+  const rawSuggestions = extractSuggestionArray(response.data);
 
   const mergedById = new Map<number, UpsellSuggestion>();
   for (const rawItem of rawSuggestions) {
@@ -331,6 +338,36 @@ export async function fetchUpsellSuggestions(params: {
     if (disabledItems.has(item.id)) return false;
     return true;
   }).slice(0, params.limit ?? 2) as UpsellSuggestion[];
+};
+
+export function fetchUpsellSuggestions(
+  params: UpsellSuggestionRequest
+): Promise<UpsellSuggestion[]> {
+  const key = getUpsellRequestKey(params);
+  const now = Date.now();
+  const cached = upsellResultRequests.get(key);
+  if (cached && cached.expiresAt > now) return cached.request;
+
+  const request = fetchUpsellSuggestionsRemote(params).catch((error) => {
+    upsellResultRequests.delete(key);
+    throw error;
+  });
+  upsellResultRequests.set(key, {
+    expiresAt: now + UPSELL_RESULT_CACHE_MS,
+    request,
+  });
+  if (upsellResultRequests.size > 80) {
+    for (const [entryKey, entry] of upsellResultRequests.entries()) {
+      if (entry.expiresAt <= now) upsellResultRequests.delete(entryKey);
+    }
+  }
+  return request;
+}
+
+export function prefetchUpsellSuggestions(params: UpsellSuggestionRequest): void {
+  void fetchUpsellSuggestions(params).catch(() => {
+    // Prefetch is an optimization; the add action will retry on failure.
+  });
 }
 
 export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {

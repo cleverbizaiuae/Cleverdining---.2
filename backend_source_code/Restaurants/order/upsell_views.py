@@ -614,9 +614,9 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 .exclude(upsell_item_id__isnull=True)
                 .values_list("upsell_item_id", flat=True)
             )
-        # The menu popup is intentionally evaluated after every add-to-cart
-        # action. Cart and pre-payment surfaces keep independent session caps.
-        if session_id and trigger_point != "add_to_cart":
+        # Passive cart recommendations remain available while the cart is open.
+        # Session caps apply only to the interruptive pre-payment prompt.
+        if session_id and trigger_point == "before_payment":
             if surface_shown_count >= session_cap:
                 return Response(
                     {
