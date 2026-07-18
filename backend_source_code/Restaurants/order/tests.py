@@ -499,7 +499,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.2)
-        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 180)
+        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 140)
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
             "CleverDining AI Upsell",
