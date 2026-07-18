@@ -891,7 +891,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         getattr(settings, "OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS", True)
     )
     model_priority = (
-        [*fast_free_models, *low_latency_models, *free_models]
+        [*low_latency_models, *fast_free_models, *free_models]
         if prefer_low_latency
         else [*free_models, *low_latency_models]
     )

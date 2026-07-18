@@ -696,7 +696,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_count, 1)
         self.assertEqual(
             post.call_args.kwargs["json"]["model"],
-            "meta-llama/llama-3.2-3b-instruct:free",
+            "mistralai/mistral-nemo",
         )
         self.assertLessEqual(post.call_args.kwargs["timeout"], 1.0)
 
