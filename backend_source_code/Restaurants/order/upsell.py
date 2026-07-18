@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 from zoneinfo import ZoneInfo
 
+from django.conf import settings as django_settings
+from django.core.cache import cache
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -13,6 +15,11 @@ from category.models import Category
 from item.models import Item
 from order.models import Cart, ItemAssociation, OrderItem, UpsellItemSetting, UpsellRule, UpsellSetting
 from core.region_config import normalize_region
+from .upsell_cache import (
+    UPSELL_CACHE_SCHEMA_VERSION,
+    get_restaurant_upsell_cache_versions,
+    stable_cache_digest,
+)
 from .upsell_knowledge import (
     ROLE_ADDON,
     classify_cart_roles,
@@ -169,9 +176,121 @@ def _item_profiles(item: Item) -> Set[str]:
     return profiles
 
 
+def _menu_item_intelligence(
+    item: Item,
+    role_categories: Dict[str, Set[int]],
+) -> Dict[str, Any]:
+    return {
+        "engine_roles": sorted(_item_roles(item, role_categories)),
+        "knowledge_roles": sorted(classify_item_roles(item)),
+        "profiles": sorted(_item_profiles(item)),
+        "effective_price": str(_effective_item_price(item)),
+    }
+
+
+def _menu_intelligence_cache_key(
+    restaurant_id: int,
+    menu_generation: int,
+    config_generation: int,
+) -> str:
+    return (
+        f"upsell:menu-intelligence:{UPSELL_CACHE_SCHEMA_VERSION}:"
+        f"{restaurant_id}:{menu_generation}:{config_generation}"
+    )
+
+
+def get_restaurant_menu_intelligence(restaurant, setting: Optional[UpsellSetting] = None) -> Dict[str, Any]:
+    """Return versioned menu metadata and pair compatibility prepared ahead of LLM calls."""
+    if setting is None:
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
+
+    menu_generation, config_generation = get_restaurant_upsell_cache_versions(restaurant.id)
+    cache_key = _menu_intelligence_cache_key(
+        restaurant.id,
+        menu_generation,
+        config_generation,
+    )
+    cached = cache.get(cache_key)
+    if isinstance(cached, Mapping) and isinstance(cached.get("items"), Mapping):
+        result = dict(cached)
+        result["cache_hit"] = True
+        return result
+
+    role_categories = _derive_role_categories(restaurant.id, setting)
+    menu_items = list(
+        Item.objects.select_related("category", "sub_category")
+        .filter(restaurant=restaurant, availability=True)
+        .order_by("item_name", "id")
+    )
+    item_metadata = {
+        str(item.id): _menu_item_intelligence(item, role_categories)
+        for item in menu_items
+    }
+
+    # Pair compatibility is menu-derived and stable until an item/category changes.
+    # The backend uses it only to build the valid shortlist; it never becomes the
+    # final customer-facing recommendation.
+    pair_compatibility: Dict[str, Dict[str, int]] = {}
+    for source in menu_items:
+        compatible: Dict[str, int] = {}
+        for candidate in menu_items:
+            if source.id == candidate.id:
+                continue
+            points = _culinary_profile_points_from_sets(
+                set(item_metadata[str(source.id)]["profiles"]),
+                set(item_metadata[str(candidate.id)]["profiles"]),
+            )
+            if points > 0:
+                compatible[str(candidate.id)] = points
+        if compatible:
+            pair_compatibility[str(source.id)] = compatible
+
+    intelligence = {
+        "schema_version": UPSELL_CACHE_SCHEMA_VERSION,
+        "restaurant_id": restaurant.id,
+        "menu_generation": menu_generation,
+        "config_generation": config_generation,
+        "available_item_ids": [item.id for item in menu_items],
+        "role_categories": {
+            role: sorted(category_ids)
+            for role, category_ids in role_categories.items()
+        },
+        "items": item_metadata,
+        "pair_compatibility": pair_compatibility,
+        "cache_hit": False,
+    }
+    timeout = max(
+        300,
+        min(
+            int(getattr(django_settings, "UPSELL_MENU_INTELLIGENCE_CACHE_SECONDS", 86400) or 86400),
+            604800,
+        ),
+    )
+    cache.set(cache_key, intelligence, timeout=timeout)
+    return intelligence
+
+
+def warm_restaurant_upsell_intelligence(restaurant_id: int) -> Dict[str, Any]:
+    from restaurant.models import Restaurant
+
+    restaurant = Restaurant.objects.filter(id=restaurant_id).first()
+    if not restaurant:
+        return {}
+    setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
+    return get_restaurant_menu_intelligence(restaurant, setting)
+
+
 def _culinary_profile_points(source_item: Item, candidate: Item) -> int:
-    source_profiles = _item_profiles(source_item)
-    candidate_profiles = _item_profiles(candidate)
+    return _culinary_profile_points_from_sets(
+        _item_profiles(source_item),
+        _item_profiles(candidate),
+    )
+
+
+def _culinary_profile_points_from_sets(
+    source_profiles: Set[str],
+    candidate_profiles: Set[str],
+) -> int:
     best = 0
     for source_profile in source_profiles:
         ranked_targets = FOOD_PROFILE_PAIRINGS.get(source_profile, ())
@@ -578,6 +697,19 @@ def _tiebreaker_points(item_id: int) -> int:
 
 
 def _active_manual_rules(restaurant_id: int) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]], Set[int]]:
+    _, config_generation = get_restaurant_upsell_cache_versions(restaurant_id)
+    cache_key = (
+        f"upsell:manual-rules:{UPSELL_CACHE_SCHEMA_VERSION}:"
+        f"{restaurant_id}:{config_generation}"
+    )
+    cached = cache.get(cache_key)
+    if isinstance(cached, Mapping):
+        return (
+            {int(key): {int(value) for value in values} for key, values in cached.get("pair", {}).items()},
+            {int(key): {int(value) for value in values} for key, values in cached.get("block", {}).items()},
+            {int(value) for value in cached.get("global", [])},
+        )
+
     pair_rules: Dict[int, Set[int]] = {}
     block_rules: Dict[int, Set[int]] = {}
     global_block_targets: Set[int] = set()
@@ -598,6 +730,15 @@ def _active_manual_rules(restaurant_id: int) -> Tuple[Dict[int, Set[int]], Dict[
             block_rules.setdefault(source_item_id, set()).add(target_item_id)
         elif rule["type"] == "global_block":
             global_block_targets.add(target_item_id)
+    cache.set(
+        cache_key,
+        {
+            "pair": {str(key): sorted(values) for key, values in pair_rules.items()},
+            "block": {str(key): sorted(values) for key, values in block_rules.items()},
+            "global": sorted(global_block_targets),
+        },
+        timeout=3600,
+    )
     return pair_rules, block_rules, global_block_targets
 
 
@@ -608,6 +749,24 @@ def _historical_signals_by_target(
 ) -> Dict[int, Dict[str, float]]:
     if not source_item_ids:
         return {}
+
+    cache_key = (
+        f"upsell:association-signals:{UPSELL_CACHE_SCHEMA_VERSION}:"
+        + stable_cache_digest(
+            {
+                "restaurant_id": restaurant_id,
+                "source_item_ids": sorted(source_item_ids),
+                "excluded_target_ids": sorted(excluded_target_ids),
+            }
+        )
+    )
+    cached = cache.get(cache_key)
+    if isinstance(cached, Mapping):
+        return {
+            int(item_id): {str(key): float(value) for key, value in metrics.items()}
+            for item_id, metrics in cached.items()
+            if isinstance(metrics, Mapping)
+        }
 
     rows = (
         ItemAssociation.objects.filter(restaurant_id=restaurant_id, source_item_id__in=source_item_ids)
@@ -651,7 +810,114 @@ def _historical_signals_by_target(
     for metrics in result.values():
         shown = metrics["times_shown"]
         metrics["acceptance_rate"] = (metrics["times_accepted"] / shown) if shown > 0 else 0.0
+    dynamic_timeout = max(
+        15,
+        min(
+            int(getattr(django_settings, "UPSELL_DYNAMIC_STATS_CACHE_SECONDS", 60) or 60),
+            300,
+        ),
+    )
+    cache.set(cache_key, result, timeout=dynamic_timeout)
     return result
+
+
+def _recent_order_counts(
+    restaurant_id: int,
+    available_item_ids: Sequence[int],
+) -> Dict[int, Dict[str, int]]:
+    if not available_item_ids:
+        return {}
+    cache_key = (
+        f"upsell:order-counts:{UPSELL_CACHE_SCHEMA_VERSION}:"
+        + stable_cache_digest(
+            {
+                "restaurant_id": restaurant_id,
+                "available_item_ids": sorted(int(item_id) for item_id in available_item_ids),
+            }
+        )
+    )
+    cached = cache.get(cache_key)
+    if isinstance(cached, Mapping):
+        return {
+            int(item_id): {
+                "order_count_7d": int(counts.get("order_count_7d") or 0),
+                "order_count_30d": int(counts.get("order_count_30d") or 0),
+            }
+            for item_id, counts in cached.items()
+            if isinstance(counts, Mapping)
+        }
+
+    now = timezone.now()
+    result: Dict[int, Dict[str, int]] = {}
+    rows = (
+        OrderItem.objects.filter(
+            order__restaurant_id=restaurant_id,
+            order__created_time__gte=now - timedelta(days=30),
+            item_id__in=available_item_ids,
+        )
+        .exclude(order__status="cancelled")
+        .values("item_id")
+        .annotate(
+            order_count_30d=Sum("quantity"),
+            order_count_7d=Sum(
+                "quantity",
+                filter=Q(order__created_time__gte=now - timedelta(days=7)),
+            ),
+        )
+    )
+    for row in rows:
+        result[int(row["item_id"])] = {
+            "order_count_7d": int(row.get("order_count_7d") or 0),
+            "order_count_30d": int(row.get("order_count_30d") or 0),
+        }
+    timeout = max(
+        15,
+        min(
+            int(getattr(django_settings, "UPSELL_DYNAMIC_STATS_CACHE_SECONDS", 60) or 60),
+            300,
+        ),
+    )
+    cache.set(cache_key, result, timeout=timeout)
+    return result
+
+
+def _upsell_item_flags(
+    restaurant_id: int,
+    available_item_ids: Sequence[int],
+) -> Tuple[Set[int], Set[int]]:
+    menu_generation, config_generation = get_restaurant_upsell_cache_versions(restaurant_id)
+    cache_key = (
+        f"upsell:item-flags:{UPSELL_CACHE_SCHEMA_VERSION}:"
+        f"{restaurant_id}:{menu_generation}:{config_generation}"
+    )
+    cached = cache.get(cache_key)
+    if isinstance(cached, Mapping):
+        return (
+            {int(item_id) for item_id in cached.get("disabled", [])},
+            {int(item_id) for item_id in cached.get("inventory_priority", [])},
+        )
+
+    rows = UpsellItemSetting.objects.filter(
+        restaurant_id=restaurant_id,
+        item_id__in=available_item_ids,
+    ).values("item_id", "enabled", "inventory_priority")
+    disabled_item_ids: Set[int] = set()
+    inventory_priority_ids: Set[int] = set()
+    for row in rows:
+        item_id = int(row["item_id"])
+        if not row.get("enabled", True):
+            disabled_item_ids.add(item_id)
+        if row.get("inventory_priority"):
+            inventory_priority_ids.add(item_id)
+    cache.set(
+        cache_key,
+        {
+            "disabled": sorted(disabled_item_ids),
+            "inventory_priority": sorted(inventory_priority_ids),
+        },
+        timeout=3600,
+    )
+    return disabled_item_ids, inventory_priority_ids
 
 
 def _build_upsell_suggestions_for_items(
@@ -686,7 +952,13 @@ def _build_upsell_suggestions_for_items(
         return []
 
     signals = _parse_signals(session_signals)
-    role_categories = _derive_role_categories(restaurant.id, setting)
+    menu_intelligence = get_restaurant_menu_intelligence(restaurant, setting)
+    role_categories = {
+        role: {int(category_id) for category_id in category_ids}
+        for role, category_ids in menu_intelligence.get("role_categories", {}).items()
+    }
+    item_intelligence = menu_intelligence.get("items", {})
+    pair_compatibility = menu_intelligence.get("pair_compatibility", {})
     prioritized_categories = _parse_prioritized_category_ids(setting)
     pair_rules, block_rules, global_block_targets = _active_manual_rules(restaurant.id)
 
@@ -694,56 +966,38 @@ def _build_upsell_suggestions_for_items(
     if not trigger_source_item:
         trigger_source_item = cart_source_items[-1] if cart_source_items else None
 
-    available_items = list(
-        Item.objects.select_related("category", "sub_category")
-        .filter(restaurant=restaurant, availability=True)
-        .exclude(id__in=cart_item_ids)
-        .order_by("item_name")
-    )
+    available_ids = [
+        int(item_id)
+        for item_id in menu_intelligence.get("available_item_ids", [])
+        if int(item_id) not in cart_item_ids
+    ]
+    available_by_id = {
+        item.id: item
+        for item in Item.objects.select_related("category", "sub_category").filter(
+            restaurant=restaurant,
+            availability=True,
+            id__in=available_ids,
+        )
+    }
+    available_items = [available_by_id[item_id] for item_id in available_ids if item_id in available_by_id]
     if not available_items:
         return []
 
     available_item_ids = [item.id for item in available_items]
-    now = timezone.now()
-    recent_order_counts: Dict[int, Dict[str, int]] = {}
-    order_history_rows = (
-        OrderItem.objects.filter(
-            order__restaurant=restaurant,
-            order__created_time__gte=now - timedelta(days=30),
-            item_id__in=available_item_ids,
-        )
-        .exclude(order__status="cancelled")
-        .values("item_id")
-        .annotate(
-            order_count_30d=Sum("quantity"),
-            order_count_7d=Sum(
-                "quantity",
-                filter=Q(order__created_time__gte=now - timedelta(days=7)),
-            ),
-        )
+    recent_order_counts = _recent_order_counts(restaurant.id, available_item_ids)
+    disabled_item_ids, inventory_priority_ids = _upsell_item_flags(
+        restaurant.id,
+        available_item_ids,
     )
-    for row in order_history_rows:
-        recent_order_counts[int(row["item_id"])] = {
-            "order_count_7d": int(row.get("order_count_7d") or 0),
-            "order_count_30d": int(row.get("order_count_30d") or 0),
-        }
-
-    item_setting_rows = UpsellItemSetting.objects.filter(restaurant=restaurant, item_id__in=available_item_ids).values(
-        "item_id", "enabled", "inventory_priority"
-    )
-    disabled_item_ids: Set[int] = set()
-    inventory_priority_ids: Set[int] = set()
-    for row in item_setting_rows:
-        item_id = int(row["item_id"])
-        if not row.get("enabled", True):
-            disabled_item_ids.add(item_id)
-        if row.get("inventory_priority"):
-            inventory_priority_ids.add(item_id)
 
     cart_role_set: Set[str] = set()
     for cart_item in cart_source_items:
-        cart_role_set.update(_item_roles(cart_item, role_categories))
-    cart_knowledge_roles = classify_cart_roles(cart_source_items)
+        metadata = item_intelligence.get(str(cart_item.id), {})
+        cart_role_set.update(metadata.get("engine_roles") or _item_roles(cart_item, role_categories))
+    cart_knowledge_roles: Set[str] = set()
+    for cart_item in cart_source_items:
+        metadata = item_intelligence.get(str(cart_item.id), {})
+        cart_knowledge_roles.update(metadata.get("knowledge_roles") or classify_item_roles(cart_item))
     has_main = "main" in cart_role_set
     has_drink = "drinks" in cart_role_set
     has_starter = "starters" in cart_role_set
@@ -794,12 +1048,15 @@ def _build_upsell_suggestions_for_items(
         if candidate.id in blocked_target_ids:
             continue
 
-        candidate_roles = _item_roles(candidate, role_categories)
+        candidate_metadata = item_intelligence.get(str(candidate.id), {})
+        candidate_roles = set(candidate_metadata.get("engine_roles") or _item_roles(candidate, role_categories))
         if generic_unknown_menu and not candidate_roles:
             candidate_roles = {"premium"}
         if not candidate_roles:
             continue
-        candidate_knowledge_roles = classify_item_roles(candidate)
+        candidate_knowledge_roles = set(
+            candidate_metadata.get("knowledge_roles") or classify_item_roles(candidate)
+        )
         if generic_unknown_menu and not candidate_knowledge_roles:
             candidate_knowledge_roles = {ROLE_ADDON}
 
@@ -847,7 +1104,9 @@ def _build_upsell_suggestions_for_items(
 
         culinary_points = 0
         for cart_source in cart_source_items:
-            culinary_points += _culinary_profile_points(cart_source, candidate)
+            culinary_points += int(
+                pair_compatibility.get(str(cart_source.id), {}).get(str(candidate.id), 0)
+            )
             if culinary_points >= 36:
                 culinary_points = 36
                 break
@@ -881,7 +1140,7 @@ def _build_upsell_suggestions_for_items(
             reasons["pair"] = reasons.get("pair", 0) + category_pair_points
 
         time_points = 0
-        candidate_profiles = _item_profiles(candidate)
+        candidate_profiles = set(candidate_metadata.get("profiles") or _item_profiles(candidate))
         if 6 <= hour < 11:
             if {"coffee", "tea"} & candidate_profiles:
                 time_points = 10
@@ -921,7 +1180,10 @@ def _build_upsell_suggestions_for_items(
             score += time_points
             reasons["time"] = reasons.get("time", 0) + time_points
 
-        candidate_price = _effective_item_price(candidate)
+        try:
+            candidate_price = Decimal(str(candidate_metadata.get("effective_price")))
+        except Exception:
+            candidate_price = _effective_item_price(candidate)
         if cart_total > 0:
             ratio = candidate_price / cart_total
             if Decimal("0.10") <= ratio <= Decimal("0.45"):
@@ -1069,6 +1331,71 @@ def _build_upsell_suggestions_for_items(
     return results[:effective_limit]
 
 
+def _serialize_candidate_rows(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    serialized: List[Dict[str, Any]] = []
+    for row in rows:
+        item = row.get("item")
+        item_id = getattr(item, "id", None)
+        if not item_id:
+            continue
+        payload = {key: value for key, value in row.items() if key != "item"}
+        payload["item_id"] = int(item_id)
+        serialized.append(payload)
+    return serialized
+
+
+def _rehydrate_candidate_rows(
+    restaurant_id: int,
+    rows: Sequence[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    item_ids = [int(row.get("item_id") or 0) for row in rows if int(row.get("item_id") or 0) > 0]
+    items_by_id = {
+        item.id: item
+        for item in Item.objects.select_related("category", "sub_category").filter(
+            restaurant_id=restaurant_id,
+            availability=True,
+            id__in=item_ids,
+        )
+    }
+    hydrated: List[Dict[str, Any]] = []
+    for row in rows:
+        item_id = int(row.get("item_id") or 0)
+        item = items_by_id.get(item_id)
+        if not item:
+            continue
+        payload = {key: value for key, value in row.items() if key != "item_id"}
+        payload["item"] = item
+        hydrated.append(payload)
+    return hydrated
+
+
+def _candidate_shortlist_cache_key(
+    restaurant,
+    normalized_ids: Sequence[int],
+    *,
+    limit: int,
+    trigger_point: str,
+    source_item_id: Optional[int],
+    session_signals: Optional[Dict],
+    apply_surface_limit: bool,
+) -> str:
+    menu_generation, config_generation = get_restaurant_upsell_cache_versions(restaurant.id)
+    payload = {
+        "schema": UPSELL_CACHE_SCHEMA_VERSION,
+        "restaurant_id": restaurant.id,
+        "menu_generation": menu_generation,
+        "config_generation": config_generation,
+        "cart_item_ids": list(normalized_ids),
+        "limit": int(limit),
+        "trigger_point": trigger_point,
+        "source_item_id": source_item_id,
+        "signals": session_signals or {},
+        "surface_limit": bool(apply_surface_limit),
+        "hour": _current_hour_for_restaurant(getattr(restaurant, "timezone", "UTC")),
+    }
+    return f"upsell:candidate-shortlist:{UPSELL_CACHE_SCHEMA_VERSION}:{stable_cache_digest(payload)}"
+
+
 def build_item_context_upsell_suggestions(
     restaurant,
     cart_item_ids: Iterable[int],
@@ -1093,6 +1420,19 @@ def build_item_context_upsell_suggestions(
     if not normalized_ids:
         return []
 
+    shortlist_cache_key = _candidate_shortlist_cache_key(
+        restaurant,
+        normalized_ids,
+        limit=limit,
+        trigger_point=trigger_point,
+        source_item_id=source_item_id,
+        session_signals=session_signals,
+        apply_surface_limit=apply_surface_limit,
+    )
+    cached_rows = cache.get(shortlist_cache_key)
+    if isinstance(cached_rows, list):
+        return _rehydrate_candidate_rows(restaurant.id, cached_rows)
+
     items_by_id = {
         item.id: item
         for item in Item.objects.select_related("category", "sub_category").filter(
@@ -1105,7 +1445,7 @@ def build_item_context_upsell_suggestions(
         return []
 
     cart_total = sum((_effective_item_price(item) for item in cart_source_items), Decimal("0"))
-    return _build_upsell_suggestions_for_items(
+    rows = _build_upsell_suggestions_for_items(
         restaurant,
         cart_source_items,
         {item.id for item in cart_source_items},
@@ -1116,6 +1456,27 @@ def build_item_context_upsell_suggestions(
         session_signals=session_signals,
         apply_surface_limit=apply_surface_limit,
     )
+    timeout = max(
+        30,
+        min(
+            int(getattr(django_settings, "UPSELL_CANDIDATE_CACHE_SECONDS", 180) or 180),
+            900,
+        ),
+    )
+    # A restaurant's first request may create its default UpsellSetting while
+    # the shortlist is built. Recompute the key so the cached result uses the
+    # post-create configuration generation.
+    shortlist_cache_key = _candidate_shortlist_cache_key(
+        restaurant,
+        normalized_ids,
+        limit=limit,
+        trigger_point=trigger_point,
+        source_item_id=source_item_id,
+        session_signals=session_signals,
+        apply_surface_limit=apply_surface_limit,
+    )
+    cache.set(shortlist_cache_key, _serialize_candidate_rows(rows), timeout=timeout)
+    return rows
 
 
 def build_cart_upsell_suggestions(

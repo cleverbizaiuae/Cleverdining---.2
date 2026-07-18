@@ -709,7 +709,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 {
                     "status": "pending",
                     "pending": True,
-                    "retry_after_ms": 650,
+                    "retry_after_ms": 400,
                     "results": [],
                     "suggestions": [],
                     "count": 0,

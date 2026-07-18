@@ -276,7 +276,15 @@ def _redis_available(redis_url=None, redis_host=None):
         return False
 
 
-if REDIS_URL and _redis_available(redis_url=REDIS_URL):
+_REDIS_URL_AVAILABLE = bool(REDIS_URL and _redis_available(redis_url=REDIS_URL))
+_REDIS_HOST_AVAILABLE = bool(
+    not _REDIS_URL_AVAILABLE
+    and REDIS_HOST
+    and REDIS_HOST != 'localhost'
+    and _redis_available(redis_host=REDIS_HOST)
+)
+
+if _REDIS_URL_AVAILABLE:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -286,7 +294,7 @@ if REDIS_URL and _redis_available(redis_url=REDIS_URL):
         },
     }
     print(f"[STARTUP] ✅ CHANNEL_LAYERS = RedisChannelLayer (REDIS_URL={REDIS_URL[:30]}...)")
-elif REDIS_HOST and REDIS_HOST != 'localhost' and _redis_available(redis_host=REDIS_HOST):
+elif _REDIS_HOST_AVAILABLE:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -306,6 +314,33 @@ else:
     import sys
     print("[STARTUP] ⚠️⚠️⚠️ CHANNEL_LAYERS = InMemoryChannelLayer — REAL-TIME UPDATES MAY NOT WORK ACROSS PROCESSES!", file=sys.stderr)
     print("[STARTUP] ⚠️ Fix REDIS_URL/REDIS_HOST to restore multi-process real-time messaging.", file=sys.stderr)
+
+
+if _REDIS_URL_AVAILABLE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "KEY_PREFIX": "cleverdining",
+            "TIMEOUT": 300,
+        }
+    }
+elif _REDIS_HOST_AVAILABLE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": f"redis://{REDIS_HOST}:6379/1",
+            "KEY_PREFIX": "cleverdining",
+            "TIMEOUT": 300,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "cleverdining-local-cache",
+        }
+    }
 
 
 # Database
@@ -486,7 +521,11 @@ OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS = env.float(
     default=4.0,
 )
 OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS = env.int('OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS', default=140)
-UPSELL_LLM_DECISION_CACHE_SECONDS = env.int('UPSELL_LLM_DECISION_CACHE_SECONDS', default=300)
+UPSELL_LLM_DECISION_CACHE_SECONDS = env.int('UPSELL_LLM_DECISION_CACHE_SECONDS', default=900)
+UPSELL_MENU_INTELLIGENCE_CACHE_SECONDS = env.int('UPSELL_MENU_INTELLIGENCE_CACHE_SECONDS', default=86400)
+UPSELL_CANDIDATE_CACHE_SECONDS = env.int('UPSELL_CANDIDATE_CACHE_SECONDS', default=180)
+UPSELL_DYNAMIC_STATS_CACHE_SECONDS = env.int('UPSELL_DYNAMIC_STATS_CACHE_SECONDS', default=60)
+UPSELL_WARM_ON_MENU_CHANGE = env.bool('UPSELL_WARM_ON_MENU_CHANGE', default=True)
 VERTEX_UPSELL_PROJECT_ID = env('VERTEX_UPSELL_PROJECT_ID', default='')
 VERTEX_UPSELL_LOCATION = env('VERTEX_UPSELL_LOCATION', default='us-central1')
 VERTEX_UPSELL_MODEL = env('VERTEX_UPSELL_MODEL', default='openai/gpt-oss-20b-maas')

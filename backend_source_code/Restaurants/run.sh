@@ -6,6 +6,7 @@ set -o errexit
 python manage.py migrate --noinput
 python manage.py verify_schema --skip-type-check
 python manage.py seed_pranay_menu
+python manage.py warm_upsell_intelligence
 
 # Start ASGI server (HTTP + WebSocket compatible).
 # Gunicorn supervises Uvicorn workers and restarts them cleanly if one wedges.

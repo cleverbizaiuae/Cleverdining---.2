@@ -16,8 +16,11 @@ from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
 from .models import UpsellEvent
-from .upsell import build_item_context_upsell_suggestions
+from . import upsell as upsell_module
+from .upsell import build_item_context_upsell_suggestions, get_restaurant_menu_intelligence
+from .upsell_cache import get_restaurant_upsell_cache_versions
 from .upsell_knowledge import (
+    _upsell_llm_decision_cache_key,
     build_upsell_agent_context,
     call_upsell_llm,
     classify_item_roles,
@@ -247,6 +250,88 @@ class UpsellKnowledgeEngineTests(TestCase):
             item = row["item"]
             roles.append(item.category.category_type)
         return roles
+
+    def test_menu_intelligence_is_cached_and_invalidated_after_item_change(self):
+        first_versions = get_restaurant_upsell_cache_versions(self.restaurant.id)
+        first = get_restaurant_menu_intelligence(self.restaurant)
+        second = get_restaurant_menu_intelligence(self.restaurant)
+
+        self.assertFalse(first["cache_hit"])
+        self.assertTrue(second["cache_hit"])
+        self.assertIn(str(self.lemonade.id), second["items"])
+        self.assertIn(str(self.cola.id), second["pair_compatibility"].get(str(self.burger.id), {}))
+
+        self.lemonade.availability = False
+        self.lemonade.save(update_fields=["availability", "updated_time"])
+
+        next_versions = get_restaurant_upsell_cache_versions(self.restaurant.id)
+        refreshed = get_restaurant_menu_intelligence(self.restaurant)
+        self.assertGreater(next_versions[0], first_versions[0])
+        self.assertFalse(refreshed["cache_hit"])
+        self.assertNotIn(str(self.lemonade.id), refreshed["items"])
+
+    def test_candidate_shortlist_is_reused_for_identical_cart_context(self):
+        original_builder = upsell_module._build_upsell_suggestions_for_items
+        with patch(
+            "order.upsell._build_upsell_suggestions_for_items",
+            wraps=original_builder,
+        ) as builder:
+            first = build_item_context_upsell_suggestions(
+                self.restaurant,
+                [self.burger.id],
+                trigger_point="cart",
+                source_item_id=self.burger.id,
+                limit=5,
+                apply_surface_limit=False,
+            )
+            second = build_item_context_upsell_suggestions(
+                self.restaurant,
+                [self.burger.id],
+                trigger_point="cart",
+                source_item_id=self.burger.id,
+                limit=5,
+                apply_surface_limit=False,
+            )
+
+        self.assertEqual(builder.call_count, 1)
+        self.assertEqual(
+            [row["item"].id for row in first],
+            [row["item"].id for row in second],
+        )
+
+    def test_menu_version_prevents_stale_llm_decision_reuse(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        first_context = self._agent_context(rows)
+        first_key = _upsell_llm_decision_cache_key(
+            first_context,
+            f"restaurant:{self.restaurant.id}",
+        )
+
+        self.cola.price = "11.00"
+        self.cola.save(update_fields=["price", "updated_time"])
+        refreshed_rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        next_context = self._agent_context(refreshed_rows)
+        next_key = _upsell_llm_decision_cache_key(
+            next_context,
+            f"restaurant:{self.restaurant.id}",
+        )
+
+        self.assertNotEqual(first_context["knowledge_version"], next_context["knowledge_version"])
+        self.assertNotEqual(first_key, next_key)
 
     def test_main_only_suggests_drink_and_never_another_main(self):
         rows = build_item_context_upsell_suggestions(

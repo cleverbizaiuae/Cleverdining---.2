@@ -72,7 +72,7 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
-const UPSELL_POLL_INTERVAL_MS = 650;
+const UPSELL_POLL_INTERVAL_MS = 400;
 const UPSELL_POLL_WINDOW_MS = 18_000;
 
 const wait = (milliseconds: number) =>

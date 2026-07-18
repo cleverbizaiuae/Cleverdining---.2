@@ -17,6 +17,8 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from .upsell_cache import get_restaurant_upsell_cache_versions
+
 
 logger = logging.getLogger(__name__)
 
@@ -257,52 +259,23 @@ AGGRESSIVENESS_POLICY = {
 }
 
 UPSELL_SYSTEM_PROMPT = """
-You are the CleverDining AI Upsell Agent inside a restaurant ordering platform.
-The backend already owns triggers, caps, availability, cart and decline exclusions, business rules,
-venue rules, filtering, scoring, and the final 3-5 candidate shortlist. You alone make the final
-recommendation judgment and wording. Never return an item outside that shortlist. Scores are evidence,
-not the answer. When valid candidates exist, choose the best one unless every candidate conflicts with
-an explicit supplied rule.
+You are CleverDining's final upsell recommender. The backend already enforced triggers, caps,
+availability, exclusions, business and venue rules, then supplied the only valid 3-5 candidates.
+You alone choose the final item and wording. Never choose outside the shortlist; scores are evidence,
+not the answer. Choose nothing only when every candidate conflicts with an explicit supplied rule.
 
-Use only these roles: MAIN, DRINK_COLD, DRINK_HOT, DESSERT, STARTER, SIDE, SHISHA, CIGAR, ADDON.
-In order: respect exclusions and smart rules; identify the strongest missing meal role; judge natural
-pairing, trigger moment, venue, price fit, time, acceptance and order history; then choose one candidate.
-Avoid duplicate roles and repetitive product families, especially repeated shakes or similar drinks,
-when another candidate completes the meal better.
+Roles: MAIN, DRINK_COLD, DRINK_HOT, DESSERT, STARTER, SIDE, SHISHA, CIGAR, ADDON.
+Judge missing meal role, natural pairing, trigger, venue, price fit, time, acceptance and order history.
+Avoid a role already represented and avoid repetitive families such as multiple similar shakes when a
+different candidate completes the meal better. add_to_cart complements the new item; cart completes the
+whole order; before_payment is a low-friction final addition. Cafes favor drink/bakery pairings; shisha
+lounges favor cold drinks, light food, desserts and valid add-ons; bars favor suitable drinks and sharing
+starters; other restaurants favor balanced drink, side/starter, then dessert completion.
 
-Trigger intent: add_to_cart means one immediate complement to the added item; cart means the best missing
-role for the whole order; before_payment means one low-friction final addition. Restaurant and fast-food
-venues favor balanced drink, side/starter, then dessert completion. Cafes pair food with drinks and hot
-drinks with bakery/dessert. Shisha lounges favor cold drinks, light starters, desserts, and valid add-ons.
-Bars favor suitable drinks and sharable starters. Hotels and beach clubs may favor appropriate premium items.
-
-Customer copy must be one natural, cart-specific sentence of at most 12 words. Do not mention price,
-buttons, availability, preparation, UI, AI, algorithms, recommendations, internal scores, or instructions.
-Never invent ingredients, dietary claims, discounts, timing, or menu facts. Keep reasoning to 12 words.
-
-Return only valid JSON:
-{
-  "suggest_nothing": false,
-  "suggested_item_id": 123,
-  "suggested_item_name": "Exact menu item name",
-  "target_role": "DRINK_COLD",
-  "reason": null,
-  "reasoning": "Internal reason for logging.",
-  "suggestion_copy": "Customer-facing copy under 15 words.",
-  "confidence": 0.9
-}
-
-If nothing should be shown:
-{
-  "suggest_nothing": true,
-  "suggested_item_id": null,
-  "suggested_item_name": null,
-  "target_role": null,
-  "reason": "Why no suggestion should be shown.",
-  "reasoning": "Internal reason for logging.",
-  "suggestion_copy": null,
-  "confidence": 0.95
-}
+Return only one complete JSON object with exactly these keys:
+{"suggest_nothing":false,"suggested_item_id":123,"suggested_item_name":"Exact name","target_role":"DRINK_COLD","reason":null,"reasoning":"Internal reason, max 12 words.","suggestion_copy":"Natural cart-specific sentence, max 12 words.","confidence":0.9}
+For no suggestion, item id/name/target_role/suggestion_copy must be null; provide reason and reasoning.
+Never invent menu facts or mention price, UI, AI, algorithms, recommendations, scores or instructions.
 """.strip()
 
 
@@ -584,6 +557,9 @@ def build_upsell_agent_context(
     source_item_id: Optional[int] = None,
     session_signals: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
+    menu_generation, config_generation = get_restaurant_upsell_cache_versions(
+        getattr(restaurant, "id", 0)
+    )
     venue_type = infer_venue_type(restaurant, cart_items)
     cart_roles = sorted(classify_cart_roles(cart_items))
     policy = get_aggressiveness_policy(getattr(setting, "aggressiveness", "moderate"))
@@ -631,6 +607,10 @@ def build_upsell_agent_context(
     ]
 
     context = {
+        "knowledge_version": {
+            "menu": menu_generation,
+            "config": config_generation,
+        },
         "restaurant": {
             "id": getattr(restaurant, "id", None),
             "name": getattr(restaurant, "resturent_name", ""),
@@ -681,12 +661,12 @@ def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
     session = context.get("session", {})
     candidates = context.get("candidates", [])
     payload = {
-        "restaurant": {
+        "r": {
             "venue_type": restaurant.get("venue_type"),
-            "day": restaurant.get("current_day"),
             "hour": restaurant.get("current_hour"),
         },
-        "settings": context.get("settings", {}),
+        "strategy": context.get("settings", {}).get("strategy"),
+        "tone": context.get("settings", {}).get("tone"),
         "trigger": context.get("trigger", {"point": context.get("trigger_point")}),
         "cart_roles": context.get("cart_roles", []),
         "cart": [
@@ -699,33 +679,31 @@ def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
             for item in context.get("cart", [])
             if isinstance(item, Mapping)
         ],
-        "target_roles": context.get("target_roles", []),
-        "exclusions": {
+        "targets": context.get("target_roles", []),
+        "excluded": {
             "declined_roles": session.get("declined_roles", []),
             "declined_item_ids": session.get("declined_item_ids", []),
             "excluded_item_ids": session.get("excluded_item_ids", []),
         },
-        "valid_candidate_shortlist": [
+        "candidates": [
             {
                 "id": candidate.get("id"),
                 "name": candidate.get("name"),
-                "description": candidate.get("description"),
+                "description": str(candidate.get("description") or "")[:96],
                 "price": candidate.get("price"),
                 "roles": candidate.get("roles"),
-                "target_role": candidate.get("target_role"),
+                "target": candidate.get("target_role"),
                 "score": candidate.get("score"),
-                "pairing_score": candidate.get("pairing_score"),
-                "acceptance_rate": candidate.get("acceptance_rate"),
-                "orders_7d": candidate.get("order_count_7d"),
-                "manual_pair_rule": candidate.get("manual_pair_rule"),
+                "pair": candidate.get("pairing_score"),
+                "accept": candidate.get("acceptance_rate"),
+                "manual": candidate.get("manual_pair_rule"),
             }
             for candidate in candidates
             if isinstance(candidate, Mapping)
         ],
     }
     return (
-        "Apply the fixed rules. VALID CANDIDATE SHORTLIST is final. Choose one candidate or, only for an "
-        "explicit conflict, suggest nothing. Return only the complete required JSON object.\n"
+        "VALID CANDIDATE SHORTLIST is final. Choose only from candidates; return complete JSON.\n"
         + json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
     )
 
@@ -1165,6 +1143,7 @@ def _upsell_llm_decision_cache_key(context: Mapping[str, Any], cache_scope: str)
     candidates = context.get("candidates") if isinstance(context.get("candidates"), list) else []
     payload = {
         "scope": cache_scope,
+        "knowledge_version": context.get("knowledge_version") or {},
         "restaurant": {
             "id": restaurant.get("id"),
             "venue_type": restaurant.get("venue_type"),
@@ -1244,7 +1223,7 @@ def call_upsell_llm(
     if decision_cache_key and decision and status == "ok":
         cache_seconds = max(
             30,
-            min(int(getattr(settings, "UPSELL_LLM_DECISION_CACHE_SECONDS", 300) or 300), 1800),
+            min(int(getattr(settings, "UPSELL_LLM_DECISION_CACHE_SECONDS", 900) or 900), 3600),
         )
         cache.set(decision_cache_key, dict(decision), timeout=cache_seconds)
     return decision, status
