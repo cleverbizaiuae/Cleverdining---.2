@@ -959,8 +959,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             "max_tokens": max_tokens,
             "stream": False,
             "provider": {
-                "sort": {"by": "latency", "partition": "none"},
-                "preferred_max_latency": {"p90": 3},
+                "order": ["deepinfra"],
+                "allow_fallbacks": False,
                 "max_price": {"prompt": 0.2, "completion": 0.8},
                 "require_parameters": True,
             },

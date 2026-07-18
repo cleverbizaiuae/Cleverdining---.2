@@ -702,9 +702,10 @@ class UpsellKnowledgeEngineTests(TestCase):
             "mistralai/mistral-nemo",
         )
         self.assertEqual(
-            post.call_args.kwargs["json"]["provider"]["sort"],
-            {"by": "latency", "partition": "none"},
+            post.call_args.kwargs["json"]["provider"]["order"],
+            ["deepinfra"],
         )
+        self.assertFalse(post.call_args.kwargs["json"]["provider"]["allow_fallbacks"])
         self.assertEqual(
             post.call_args.kwargs["json"]["provider"]["max_price"],
             {"prompt": 0.2, "completion": 0.8},
