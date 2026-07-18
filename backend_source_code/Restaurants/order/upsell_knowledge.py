@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
@@ -22,6 +23,9 @@ logger = logging.getLogger(__name__)
 _vertex_session_lock = threading.Lock()
 _vertex_session = None
 _vertex_session_fingerprint = ""
+
+_upsell_llm_jobs_lock = threading.Lock()
+_upsell_llm_jobs: Set[str] = set()
 
 _OPENROUTER_FREE_RATE_LIMIT_CACHE_KEY = "upsell:openrouter:free-rate-limited"
 
@@ -959,8 +963,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             "max_tokens": max_tokens,
             "stream": False,
             "provider": {
-                "order": ["deepinfra"],
-                "allow_fallbacks": False,
+                "sort": {"by": "latency", "partition": "none"},
+                "preferred_max_latency": {"p90": 3},
                 "max_price": {"prompt": 0.2, "completion": 0.8},
                 "require_parameters": True,
             },
@@ -1244,6 +1248,73 @@ def call_upsell_llm(
         )
         cache.set(decision_cache_key, dict(decision), timeout=cache_seconds)
     return decision, status
+
+
+def request_upsell_llm_decision(
+    context: Mapping[str, Any],
+    *,
+    cache_scope: str,
+    background: bool = False,
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Return a cached decision or start one non-blocking LLM request."""
+    if not background:
+        return call_upsell_llm(context, cache_scope=cache_scope)
+    if not context.get("candidates"):
+        return None, "no_candidates"
+    if not bool(getattr(settings, "UPSELL_LLM_ENABLED", True)):
+        return None, "disabled"
+
+    decision_cache_key = _upsell_llm_decision_cache_key(context, cache_scope)
+    cached_decision = cache.get(decision_cache_key)
+    if isinstance(cached_decision, Mapping):
+        decision = dict(cached_decision)
+        decision["_llm_cache_hit"] = True
+        return decision, "ok"
+
+    job_status_key = f"{decision_cache_key}:job-status"
+    previous_status = cache.get(job_status_key)
+    if isinstance(previous_status, str):
+        return None, previous_status
+
+    with _upsell_llm_jobs_lock:
+        if decision_cache_key in _upsell_llm_jobs:
+            return None, "pending"
+        _upsell_llm_jobs.add(decision_cache_key)
+
+    cache.set(job_status_key, "pending", timeout=30)
+    context_snapshot = copy.deepcopy(dict(context))
+
+    def resolve_decision() -> None:
+        try:
+            decision, llm_status = call_upsell_llm(
+                context_snapshot,
+                cache_scope=cache_scope,
+            )
+            if decision and llm_status == "ok":
+                cache.delete(job_status_key)
+            else:
+                cache.set(job_status_key, llm_status, timeout=15)
+        except Exception:
+            logger.exception("Background upsell LLM decision failed")
+            cache.set(job_status_key, "internal_error", timeout=15)
+        finally:
+            with _upsell_llm_jobs_lock:
+                _upsell_llm_jobs.discard(decision_cache_key)
+
+    try:
+        threading.Thread(
+            target=resolve_decision,
+            name=f"upsell-llm-{decision_cache_key[-10:]}",
+            daemon=True,
+        ).start()
+    except Exception:
+        with _upsell_llm_jobs_lock:
+            _upsell_llm_jobs.discard(decision_cache_key)
+        cache.set(job_status_key, "internal_error", timeout=15)
+        logger.exception("Could not start background upsell LLM decision")
+        return None, "internal_error"
+
+    return None, "pending"
 
 
 def no_upsell_agent_decision(*, reason: str) -> Dict[str, Any]:

@@ -22,6 +22,7 @@ from .upsell_knowledge import (
     call_upsell_llm,
     classify_item_roles,
     infer_venue_type,
+    request_upsell_llm_decision,
     validated_upsell_agent_decision,
 )
 from .upsell_views import UpsellAnalyticsAPIView, UpsellSmartSuggestionsAPIView
@@ -702,10 +703,13 @@ class UpsellKnowledgeEngineTests(TestCase):
             "mistralai/mistral-nemo",
         )
         self.assertEqual(
-            post.call_args.kwargs["json"]["provider"]["order"],
-            ["deepinfra"],
+            post.call_args.kwargs["json"]["provider"]["sort"],
+            {"by": "latency", "partition": "none"},
         )
-        self.assertFalse(post.call_args.kwargs["json"]["provider"]["allow_fallbacks"])
+        self.assertEqual(
+            post.call_args.kwargs["json"]["provider"]["preferred_max_latency"],
+            {"p90": 3},
+        )
         self.assertEqual(
             post.call_args.kwargs["json"]["provider"]["max_price"],
             {"prompt": 0.2, "completion": 0.8},
@@ -758,6 +762,79 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(first_decision["suggested_item_id"], chosen.id)
         self.assertEqual(second_decision["suggested_item_id"], chosen.id)
         self.assertTrue(second_decision["_llm_cache_hit"])
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="openrouter/free",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODELS="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=True,
+        UPSELL_LLM_DECISION_CACHE_SECONDS=300,
+    )
+    def test_background_llm_decision_is_single_flight_then_cached(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "model": "mistralai/mistral-nemo",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Best valid complement.",'
+                    '"suggestion_copy":"A refreshing match for your meal.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }],
+        }
+        deferred_threads = []
+
+        class DeferredThread:
+            def __init__(self, *, target, **kwargs):
+                self.target = target
+                deferred_threads.append(self)
+
+            def start(self):
+                return None
+
+        context = self._agent_context(rows)
+        cache_scope = f"background-cache-test-{self.restaurant.id}"
+        with patch("order.upsell_knowledge.threading.Thread", DeferredThread), patch(
+            "order.upsell_knowledge.requests.post",
+            return_value=response,
+        ) as post:
+            first_decision, first_status = request_upsell_llm_decision(
+                context,
+                cache_scope=cache_scope,
+                background=True,
+            )
+            second_decision, second_status = request_upsell_llm_decision(
+                context,
+                cache_scope=cache_scope,
+                background=True,
+            )
+            deferred_threads[0].target()
+            cached_decision, cached_status = request_upsell_llm_decision(
+                context,
+                cache_scope=cache_scope,
+                background=True,
+            )
+
+        self.assertIsNone(first_decision)
+        self.assertIsNone(second_decision)
+        self.assertEqual(first_status, "pending")
+        self.assertEqual(second_status, "pending")
+        self.assertEqual(len(deferred_threads), 1)
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(cached_status, "ok")
+        self.assertEqual(cached_decision["suggested_item_id"], chosen.id)
+        self.assertTrue(cached_decision["_llm_cache_hit"])
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,
@@ -981,6 +1058,35 @@ class UpsellKnowledgeEngineTests(TestCase):
             all(row["decision_source"] == "llm" for row in response.data["results"])
         )
         self.assertEqual(response.data["knowledge_base"]["llm_status"], "ok")
+
+    def test_smart_suggestions_returns_pending_without_a_deterministic_result(self):
+        request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "add_to_cart",
+                "async_llm": "1",
+            },
+        )
+
+        with patch(
+            "order.upsell_views.request_upsell_llm_decision",
+            return_value=(None, "pending"),
+        ) as request_decision:
+            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 202)
+        self.assertTrue(response.data["pending"])
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+        self.assertEqual(
+            response.data["agent_decision"]["decision_source"],
+            "llm_pending",
+        )
+        request_decision.assert_called_once()
+        self.assertTrue(request_decision.call_args.kwargs["background"])
 
     def test_add_to_cart_remains_available_while_cart_cap_is_surface_specific(self):
         session_id = "surface-specific-cap"

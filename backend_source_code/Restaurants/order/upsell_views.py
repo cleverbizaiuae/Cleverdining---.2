@@ -26,6 +26,7 @@ from .upsell_knowledge import (
     build_upsell_agent_context,
     call_upsell_llm,
     classify_item_roles,
+    request_upsell_llm_decision,
     validated_upsell_agent_decision,
 )
 from .upsell_serializers import (
@@ -685,10 +686,50 @@ class UpsellSmartSuggestionsAPIView(APIView):
         # Identical validated contexts can reuse a recent LLM decision across
         # sessions. Cart, candidate, pricing, score, and availability changes
         # are all represented in the cache key.
-        llm_decision, llm_status = call_upsell_llm(
-            agent_context,
-            cache_scope=f"restaurant:{restaurant.id}",
-        )
+        cache_scope = f"restaurant:{restaurant.id}"
+        async_llm = str(
+            request.query_params.get("async_llm")
+            or request.query_params.get("asyncLlm")
+            or ""
+        ).strip().lower() in {"1", "true", "yes"}
+        if async_llm:
+            llm_decision, llm_status = request_upsell_llm_decision(
+                agent_context,
+                cache_scope=cache_scope,
+                background=True,
+            )
+        else:
+            llm_decision, llm_status = call_upsell_llm(
+                agent_context,
+                cache_scope=cache_scope,
+            )
+
+        if llm_status == "pending":
+            return Response(
+                {
+                    "status": "pending",
+                    "pending": True,
+                    "retry_after_ms": 650,
+                    "results": [],
+                    "suggestions": [],
+                    "count": 0,
+                    "agent_decision": {
+                        "suggest_nothing": False,
+                        "decision_source": "llm_pending",
+                        "llm_status": "pending",
+                    },
+                    "knowledge_base": {
+                        "venue_type": agent_context.get("restaurant", {}).get("venue_type", "restaurant"),
+                        "cart_roles": agent_context.get("cart_roles", []),
+                        "target_roles": agent_context.get("target_roles", []),
+                        "candidate_count": len(agent_context.get("candidates", [])),
+                        "llm_ready": bool(agent_context.get("candidates")),
+                        "llm_status": "pending",
+                        "decision_source": "llm_pending",
+                    },
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
         agent_decision = validated_upsell_agent_decision(
             llm_decision,
             eligible_engine_rows,

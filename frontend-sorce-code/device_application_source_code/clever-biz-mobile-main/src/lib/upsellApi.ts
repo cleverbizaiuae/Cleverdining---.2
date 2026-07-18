@@ -72,6 +72,12 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
+const UPSELL_POLL_INTERVAL_MS = 650;
+const UPSELL_POLL_WINDOW_MS = 18_000;
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+
 const UPSELL_LOG_DISABLED_UNTIL_KEY = "cb:upsell_log_disabled_until";
 const recentLogKeys = new Map<string, number>();
 let activeLogRequests = 0;
@@ -264,19 +270,45 @@ export async function fetchUpsellSuggestions(params: {
     guest_session_token: sessionToken || undefined,
     session_id: getUpsellSessionId(),
     sessionId: getUpsellSessionId(),
+    async_llm: 1,
     ...signalParams,
   };
 
-  const response = await cachedGet(
-    "/api/upsell/smart-suggestions",
-    {
-      params: commonParams,
-      timeout: 6500,
-      headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
-    },
-    { ttlMs: 2_000 }
-  );
-  const rawSuggestions = extractSuggestionArray(response.data);
+  const headers = sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined;
+  const deadline = Date.now() + UPSELL_POLL_WINDOW_MS;
+  let responseData: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await axiosInstance.get("/api/upsell/smart-suggestions", {
+        params: commonParams,
+        timeout: 3_000,
+        headers,
+      });
+      const payload = response.data && typeof response.data === "object"
+        ? response.data as Record<string, unknown>
+        : {};
+      if (response.status !== 202 && payload.pending !== true) {
+        responseData = response.data;
+        break;
+      }
+      const retryAfter = Math.max(
+        350,
+        Math.min(safeNumber(payload.retry_after_ms) || UPSELL_POLL_INTERVAL_MS, 1_200),
+      );
+      await wait(retryAfter);
+    } catch (error) {
+      const status = Number((error as { response?: { status?: number } })?.response?.status || 0);
+      if (status > 0 && status < 500 && status !== 429) throw error;
+      await wait(UPSELL_POLL_INTERVAL_MS);
+    }
+  }
+
+  if (responseData === undefined) {
+    throw new Error("Upsell recommendation is still pending.");
+  }
+
+  const rawSuggestions = extractSuggestionArray(responseData);
 
   const mergedById = new Map<number, UpsellSuggestion>();
   for (const rawItem of rawSuggestions) {
