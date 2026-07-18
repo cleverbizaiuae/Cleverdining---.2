@@ -460,6 +460,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         UPSELL_LLM_PROVIDER="openrouter",
         OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
         OPENROUTER_UPSELL_MODEL="openrouter/free",
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=False,
         OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
     )
     def test_openrouter_free_decision_is_structured_and_validated(self):
@@ -498,7 +499,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.2)
-        self.assertGreaterEqual(post.call_args.kwargs["json"]["max_tokens"], 300)
+        self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 220)
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
             "CleverDining AI Upsell",
@@ -510,6 +511,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
         OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
         OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=False,
         OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
     )
     def test_openrouter_rate_limit_uses_free_router_for_final_llm_decision(self):
@@ -561,6 +563,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         OPENROUTER_UPSELL_PAID_FALLBACK_MODELS=(
             "mistralai/mistral-nemo,meta-llama/llama-3.1-8b-instruct"
         ),
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=False,
         OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
     )
     def test_openrouter_free_quota_uses_low_cost_llm_for_final_decision(self):
@@ -650,6 +653,49 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_count, 1)
         self.assertEqual(post.call_args.kwargs["json"]["model"], "mistralai/mistral-nemo")
         cache.delete("upsell:openrouter:free-rate-limited")
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
+        OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODELS="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=True,
+        OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
+        OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS=2.0,
+    )
+    def test_openrouter_prefers_low_latency_model_for_customer_requests(self):
+        cache.delete("upsell:openrouter:free-rate-limited")
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "model": "mistralai/mistral-nemo",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Best valid complement.",'
+                    '"suggestion_copy":"A refreshing match for your meal.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }],
+        }
+
+        with patch("order.upsell_knowledge.requests.post", return_value=response) as post:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
+        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "mistralai/mistral-nemo")
+        self.assertLessEqual(post.call_args.kwargs["timeout"], 1.0)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,

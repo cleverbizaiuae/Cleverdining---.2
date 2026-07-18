@@ -123,12 +123,16 @@ const normalizeListPayload = <T,>(payload: any): T[] => {
 };
 
 const getMenuCacheKey = (restaurantId: number | null | undefined, kind: "categories" | "items") =>
-  `cb:menu:${restaurantId || "unknown"}:${kind}`;
+  `cb:menu:v2:${restaurantId || "unknown"}:${kind}`;
+
+const MENU_CACHE_MAX_AGE_MS = 5 * 60_000;
 
 const readMenuCache = <T,>(restaurantId: number | null | undefined, kind: "categories" | "items"): T[] => {
   try {
-    const parsed = JSON.parse(localStorage.getItem(getMenuCacheKey(restaurantId, kind)) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(localStorage.getItem(getMenuCacheKey(restaurantId, kind)) || "null");
+    if (!parsed || !Array.isArray(parsed.rows) || !Number.isFinite(Number(parsed.savedAt))) return [];
+    if (Date.now() - Number(parsed.savedAt) > MENU_CACHE_MAX_AGE_MS) return [];
+    return parsed.rows as T[];
   } catch {
     return [];
   }
@@ -137,10 +141,49 @@ const readMenuCache = <T,>(restaurantId: number | null | undefined, kind: "categ
 const writeMenuCache = (restaurantId: number | null | undefined, kind: "categories" | "items", value: unknown[]) => {
   if (!restaurantId || !Array.isArray(value) || value.length === 0) return;
   try {
-    localStorage.setItem(getMenuCacheKey(restaurantId, kind), JSON.stringify(value));
+    localStorage.setItem(
+      getMenuCacheKey(restaurantId, kind),
+      JSON.stringify({ savedAt: Date.now(), rows: value })
+    );
   } catch {
     // Local cache is an enhancement only.
   }
+};
+
+const MenuCartReconciler = ({
+  items,
+  restaurantId,
+  ready,
+}: {
+  items: FoodItemTypes[];
+  restaurantId: number | null;
+  ready: boolean;
+}) => {
+  const { reconcileCartWithMenu } = useCart();
+
+  useEffect(() => {
+    if (!ready || !restaurantId || !items.length) return;
+    reconcileCartWithMenu(
+      items.map((item) => ({
+        id: item.id,
+        item_name: item.item_name,
+        price: String(item.price),
+        discount_percentage: Number(item.discount_percentage || 0),
+        description: item.description || "",
+        slug: item.slug || "",
+        category: Number(item.category || 0),
+        restaurant: Number(item.restaurant || restaurantId || 0),
+        category_name: item.category_name || "",
+        image1: item.image1 || "",
+        availability: item.availability !== false,
+        video: item.video || "",
+        restaurant_name: item.restaurant_name || "",
+      })),
+      restaurantId
+    );
+  }, [items, ready, reconcileCartWithMenu, restaurantId]);
+
+  return null;
 };
 
 const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDetail | null }) => {
@@ -272,27 +315,28 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         return;
       }
 
-      void fetchUpsellSettings()
-        .then((settingsSnapshot) => {
+      const settingsPromise = settings
+        ? Promise.resolve(settings)
+        : fetchUpsellSettings().catch(() => null);
+      const suggestionPromise = fetchUpsellSuggestions({
+        triggerPoint: "add_to_cart",
+        sourceItemId: Number(item.id),
+        restaurantId: Number(item.restaurant || 0) || undefined,
+        limit: 6,
+        cartItemIds,
+        excludeItemIds: excludedItemIds,
+      });
+
+      void Promise.all([settingsPromise, suggestionPromise])
+        .then(([settingsSnapshot, rawSuggestions]) => {
           if (requestSeqRef.current !== requestId) return [];
-          setSettings(settingsSnapshot);
-          if (!settingsSnapshot.enabled || !settingsSnapshot.show_after_add_to_cart) {
+          if (settingsSnapshot) setSettings(settingsSnapshot);
+          if (settingsSnapshot && (!settingsSnapshot.enabled || !settingsSnapshot.show_after_add_to_cart)) {
             setOpen(false);
             setSuggestions([]);
             activeRef.current = false;
             return [];
           }
-          return fetchUpsellSuggestions({
-            triggerPoint: "add_to_cart",
-            sourceItemId: Number(item.id),
-            restaurantId: Number(item.restaurant || 0) || undefined,
-            limit: 6,
-            cartItemIds,
-            excludeItemIds: excludedItemIds,
-          });
-        })
-        .then((rawSuggestions) => {
-          if (requestSeqRef.current !== requestId) return;
           const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 1) : [];
           if (!remoteSuggestions.length) {
             // An empty successful response can be an intentional "suggest
@@ -306,6 +350,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           activeRef.current = true;
           setOpen(true);
           recordShown(remoteSuggestions, item, cartItemIds, metrics, "llm");
+          return remoteSuggestions;
         })
         .catch(() => {
           if (requestSeqRef.current !== requestId) return;
@@ -932,6 +977,11 @@ const LayoutDashboard = () => {
 
   return (
     <CartProvider>
+      <MenuCartReconciler
+        items={items}
+        restaurantId={getRestaurantIdFromStorage() || restaurantId}
+        ready={itemsLoaded && !search.trim()}
+      />
       <div
         className="flex min-h-screen justify-center overflow-hidden bg-slate-100 text-foreground"
         style={{ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties}

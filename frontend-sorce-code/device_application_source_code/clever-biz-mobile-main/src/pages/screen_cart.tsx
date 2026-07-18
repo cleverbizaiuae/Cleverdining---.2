@@ -280,7 +280,20 @@ const ScreenCart = () => {
 
     const loadCartUpsells = async () => {
       try {
-        const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
+        const settingsPromise = upsellSettings
+          ? Promise.resolve(upsellSettings)
+          : fetchUpsellSettings().catch(() => null);
+        const suggestionsPromise = fetchUpsellSuggestions({
+          triggerPoint: "cart",
+          limit: triggerLimit,
+          restaurantId: cartRestaurantId,
+          cartItemIds: validCartItemIds,
+          excludeItemIds: excludedItemIds,
+        });
+        const [settingsSnapshot, rawSuggestions] = await Promise.all([
+          settingsPromise,
+          suggestionsPromise,
+        ]);
         if (cancelled) return;
 
         if (settingsSnapshot) {
@@ -302,19 +315,10 @@ const ScreenCart = () => {
           return;
         }
 
-        const rawSuggestions = await fetchUpsellSuggestions({
-          triggerPoint: "cart",
-          limit: effectiveTriggerLimit,
-          restaurantId: cartRestaurantId,
-          cartItemIds: validCartItemIds,
-          excludeItemIds: excludedItemIds,
-        });
         applyCartSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
-        if (!cancelled) {
-          setUpsellSuggestions([]);
-          cartShownSignatureRef.current = "";
-        }
+        // Keep the last valid LLM result visible during transient mobile
+        // network failures. A later cart change will request fresh context.
       } finally {
         if (!cancelled) {
           setUpsellLoading(false);

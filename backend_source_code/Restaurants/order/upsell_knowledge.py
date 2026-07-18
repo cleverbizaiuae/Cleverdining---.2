@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import threading
+import time
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
@@ -874,13 +875,18 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         )
         or ""
     )
+    free_models = [primary_model, *fallback_models_raw.split(","), "openrouter/free"]
+    low_latency_models = paid_fallback_models_raw.split(",")
+    prefer_low_latency = bool(
+        getattr(settings, "OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS", True)
+    )
+    model_priority = (
+        [*low_latency_models, *free_models]
+        if prefer_low_latency
+        else [*free_models, *low_latency_models]
+    )
     models: List[str] = []
-    for candidate_model in [
-        primary_model,
-        *fallback_models_raw.split(","),
-        "openrouter/free",
-        *paid_fallback_models_raw.split(","),
-    ]:
+    for candidate_model in model_priority:
         candidate_model = candidate_model.strip()
         if not candidate_model or candidate_model in models:
             continue
@@ -902,9 +908,16 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         0.5,
         min(float(getattr(settings, "OPENROUTER_UPSELL_TIMEOUT_SECONDS", 3.0) or 3.0), 8.0),
     )
+    total_timeout = max(
+        timeout,
+        min(
+            float(getattr(settings, "OPENROUTER_UPSELL_TOTAL_TIMEOUT_SECONDS", 4.5) or 4.5),
+            8.0,
+        ),
+    )
     max_tokens = max(
-        300,
-        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 300) or 300), 350),
+        160,
+        min(int(getattr(settings, "OPENROUTER_UPSELL_MAX_OUTPUT_TOKENS", 220) or 220), 300),
     )
     messages = [
         {"role": "system", "content": str(context.get("system_prompt") or UPSELL_SYSTEM_PROMPT)},
@@ -922,7 +935,12 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     last_status = "network_error"
     rate_limited_free_models = 0
     total_free_models = sum(1 for model in models if is_free_model(model))
-    for index, model in enumerate(models):
+    request_deadline = time.monotonic() + total_timeout
+    for model in models:
+        remaining_time = request_deadline - time.monotonic()
+        if remaining_time < 0.5:
+            last_status = "timeout"
+            break
         request_payload = {
             "model": model,
             "messages": messages,
@@ -931,7 +949,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             "max_tokens": max_tokens,
             "stream": False,
         }
-        attempt_timeout = timeout if index == 0 else max(timeout, 6.0)
+        attempt_timeout = max(0.5, min(timeout, remaining_time))
         try:
             response = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",

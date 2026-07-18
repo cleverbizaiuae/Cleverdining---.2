@@ -27,6 +27,7 @@ export type CartItem = {
 type CartContextType = {
   cart: CartItem[];
   addToCart: (item: Omit<CartItem, "quantity">, quantity?: number) => Promise<boolean>;
+  reconcileCartWithMenu: (items: Omit<CartItem, "quantity">[], restaurantId?: number | null) => void;
   removeFromCart: (id: number) => void;
   incrementQuantity: (id: number) => void;
   decrementQuantity: (id: number) => void;
@@ -233,6 +234,39 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     return true;
   }, []);
 
+  const reconcileCartWithMenu = React.useCallback((menuItems: Omit<CartItem, "quantity">[], restaurantId?: number | null) => {
+    const availableById = new Map(
+      menuItems
+        .filter((item) => item && Number.isInteger(item.id) && item.id > 0 && item.availability !== false)
+        .map((item) => [item.id, item])
+    );
+    if (!availableById.size) return;
+
+    setCart((current) => {
+      const next = current.flatMap((cartItem) => {
+        const liveItem = availableById.get(cartItem.id);
+        if (liveItem) {
+          return [{ ...liveItem, quantity: cartItem.quantity } as CartItem];
+        }
+
+        const belongsToCurrentRestaurant =
+          !restaurantId || !cartItem.restaurant || Number(cartItem.restaurant) === Number(restaurantId);
+        return belongsToCurrentRestaurant ? [] : [cartItem];
+      });
+
+      const unchanged =
+        next.length === current.length &&
+        next.every((item, index) =>
+          item.id === current[index]?.id &&
+          item.quantity === current[index]?.quantity &&
+          item.item_name === current[index]?.item_name &&
+          item.price === current[index]?.price &&
+          item.availability === current[index]?.availability
+        );
+      return unchanged ? current : next;
+    });
+  }, []);
+
   const removeFromCart = React.useCallback(async (id: number) => {
     setCart((prev) => {
       const target = prev.find((i) => i.id === id);
@@ -290,11 +324,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const value = React.useMemo(() => ({
     cart,
     addToCart,
+    reconcileCartWithMenu,
     removeFromCart,
     incrementQuantity,
     decrementQuantity,
     clearCart
-  }), [cart, addToCart, removeFromCart, incrementQuantity, decrementQuantity, clearCart]);
+  }), [cart, addToCart, reconcileCartWithMenu, removeFromCart, incrementQuantity, decrementQuantity, clearCart]);
 
   return (
     <CartContext.Provider value={value}>
