@@ -862,16 +862,24 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     fallback_models_raw = str(
         getattr(settings, "OPENROUTER_UPSELL_FALLBACK_MODELS", "openrouter/free") or "openrouter/free"
     )
-    paid_fallback_model = str(
-        getattr(settings, "OPENROUTER_UPSELL_PAID_FALLBACK_MODEL", "mistralai/mistral-nemo")
-        or "mistralai/mistral-nemo"
-    ).strip()
+    paid_fallback_models_raw = str(
+        getattr(
+            settings,
+            "OPENROUTER_UPSELL_PAID_FALLBACK_MODELS",
+            (
+                "mistralai/mistral-nemo,"
+                "meta-llama/llama-3.1-8b-instruct,"
+                "qwen/qwen-2.5-7b-instruct"
+            ),
+        )
+        or ""
+    )
     models: List[str] = []
     for candidate_model in [
         primary_model,
         *fallback_models_raw.split(","),
         "openrouter/free",
-        paid_fallback_model,
+        *paid_fallback_models_raw.split(","),
     ]:
         candidate_model = candidate_model.strip()
         if not candidate_model or candidate_model in models:

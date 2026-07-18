@@ -460,9 +460,13 @@ UPSELL_LLM_PROVIDER = env('UPSELL_LLM_PROVIDER', default='openrouter').strip().l
 OPENROUTER_API_KEY = env('OPENROUTER_API_KEY', default='')
 OPENROUTER_UPSELL_MODEL = env('OPENROUTER_UPSELL_MODEL', default='openrouter/free')
 OPENROUTER_UPSELL_FALLBACK_MODELS = env('OPENROUTER_UPSELL_FALLBACK_MODELS', default='openrouter/free')
-OPENROUTER_UPSELL_PAID_FALLBACK_MODEL = env(
-    'OPENROUTER_UPSELL_PAID_FALLBACK_MODEL',
-    default='mistralai/mistral-nemo',
+OPENROUTER_UPSELL_PAID_FALLBACK_MODELS = env(
+    'OPENROUTER_UPSELL_PAID_FALLBACK_MODELS',
+    default=(
+        'mistralai/mistral-nemo,'
+        'meta-llama/llama-3.1-8b-instruct,'
+        'qwen/qwen-2.5-7b-instruct'
+    ),
 )
 OPENROUTER_UPSELL_FREE_RATE_LIMIT_COOLDOWN_SECONDS = env.int(
     'OPENROUTER_UPSELL_FREE_RATE_LIMIT_COOLDOWN_SECONDS',

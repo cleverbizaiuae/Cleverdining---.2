@@ -558,7 +558,9 @@ class UpsellKnowledgeEngineTests(TestCase):
         OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
         OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
         OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
-        OPENROUTER_UPSELL_PAID_FALLBACK_MODEL="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODELS=(
+            "mistralai/mistral-nemo,meta-llama/llama-3.1-8b-instruct"
+        ),
         OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
     )
     def test_openrouter_free_quota_uses_low_cost_llm_for_final_decision(self):
@@ -572,9 +574,10 @@ class UpsellKnowledgeEngineTests(TestCase):
         )
         chosen = rows[0]["item"]
         rate_limited = Mock(status_code=429)
+        unavailable_model = Mock(status_code=404)
         paid_response = Mock(status_code=200)
         paid_response.json.return_value = {
-            "model": "mistralai/mistral-nemo",
+            "model": "meta-llama/llama-3.1-8b-instruct",
             "choices": [{
                 "message": {"content": (
                     '{"suggest_nothing":false,"suggested_item_id":%d,'
@@ -587,7 +590,7 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         with patch(
             "order.upsell_knowledge.requests.post",
-            side_effect=[rate_limited, rate_limited, paid_response],
+            side_effect=[rate_limited, rate_limited, unavailable_model, paid_response],
         ) as post:
             raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
 
@@ -601,6 +604,7 @@ class UpsellKnowledgeEngineTests(TestCase):
                 "nvidia/nemotron-3-super-120b-a12b:free",
                 "openrouter/free",
                 "mistralai/mistral-nemo",
+                "meta-llama/llama-3.1-8b-instruct",
             ],
         )
         self.assertTrue(cache.get("upsell:openrouter:free-rate-limited"))
@@ -611,7 +615,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
         OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
         OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
-        OPENROUTER_UPSELL_PAID_FALLBACK_MODEL="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODELS="mistralai/mistral-nemo",
         OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
     )
     def test_openrouter_cooldown_skips_known_rate_limited_free_models(self):
