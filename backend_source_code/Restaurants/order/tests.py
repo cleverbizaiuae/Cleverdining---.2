@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
@@ -512,6 +513,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
     )
     def test_openrouter_rate_limit_uses_free_router_for_final_llm_decision(self):
+        cache.delete("upsell:openrouter:free-rate-limited")
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],
@@ -549,6 +551,101 @@ class UpsellKnowledgeEngineTests(TestCase):
             [call.kwargs["json"]["model"] for call in post.call_args_list],
             ["nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free"],
         )
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
+        OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODEL="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
+    )
+    def test_openrouter_free_quota_uses_low_cost_llm_for_final_decision(self):
+        cache.delete("upsell:openrouter:free-rate-limited")
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        rate_limited = Mock(status_code=429)
+        paid_response = Mock(status_code=200)
+        paid_response.json.return_value = {
+            "model": "mistralai/mistral-nemo",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Best valid complement.",'
+                    '"suggestion_copy":"A refreshing match for your meal.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }],
+        }
+
+        with patch(
+            "order.upsell_knowledge.requests.post",
+            side_effect=[rate_limited, rate_limited, paid_response],
+        ) as post:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(decision["suggested_item_id"], chosen.id)
+        self.assertEqual(
+            [call.kwargs["json"]["model"] for call in post.call_args_list],
+            [
+                "nvidia/nemotron-3-super-120b-a12b:free",
+                "openrouter/free",
+                "mistralai/mistral-nemo",
+            ],
+        )
+        self.assertTrue(cache.get("upsell:openrouter:free-rate-limited"))
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="nvidia/nemotron-3-super-120b-a12b:free",
+        OPENROUTER_UPSELL_FALLBACK_MODELS="openrouter/free",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODEL="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_TIMEOUT_SECONDS=1.0,
+    )
+    def test_openrouter_cooldown_skips_known_rate_limited_free_models(self):
+        cache.set("upsell:openrouter:free-rate-limited", True, timeout=300)
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        paid_response = Mock(status_code=200)
+        paid_response.json.return_value = {
+            "model": "mistralai/mistral-nemo",
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Best valid complement.",'
+                    '"suggestion_copy":"A refreshing match for your meal.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }],
+        }
+
+        with patch("order.upsell_knowledge.requests.post", return_value=paid_response) as post:
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "mistralai/mistral-nemo")
+        cache.delete("upsell:openrouter:free-rate-limited")
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,

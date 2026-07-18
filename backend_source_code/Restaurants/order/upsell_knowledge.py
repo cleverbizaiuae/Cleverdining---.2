@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 _vertex_session_lock = threading.Lock()
 _vertex_session = None
 _vertex_session_fingerprint = ""
+
+_OPENROUTER_FREE_RATE_LIMIT_CACHE_KEY = "upsell:openrouter:free-rate-limited"
 
 
 ROLE_MAIN = "MAIN"
@@ -859,8 +862,17 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     fallback_models_raw = str(
         getattr(settings, "OPENROUTER_UPSELL_FALLBACK_MODELS", "openrouter/free") or "openrouter/free"
     )
+    paid_fallback_model = str(
+        getattr(settings, "OPENROUTER_UPSELL_PAID_FALLBACK_MODEL", "mistralai/mistral-nemo")
+        or "mistralai/mistral-nemo"
+    ).strip()
     models: List[str] = []
-    for candidate_model in [primary_model, *fallback_models_raw.split(","), "openrouter/free"]:
+    for candidate_model in [
+        primary_model,
+        *fallback_models_raw.split(","),
+        "openrouter/free",
+        paid_fallback_model,
+    ]:
         candidate_model = candidate_model.strip()
         if not candidate_model or candidate_model in models:
             continue
@@ -868,6 +880,15 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             logger.warning("Ignoring invalid OpenRouter fallback model name")
             continue
         models.append(candidate_model)
+
+    def is_free_model(model_name: str) -> bool:
+        return model_name == "openrouter/free" or model_name.endswith(":free")
+
+    free_rate_limited = bool(cache.get(_OPENROUTER_FREE_RATE_LIMIT_CACHE_KEY))
+    if free_rate_limited:
+        models = [model for model in models if not is_free_model(model)]
+    if not models:
+        return None, "http_429" if free_rate_limited else "invalid_model"
 
     timeout = max(
         0.5,
@@ -891,6 +912,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         "X-OpenRouter-Title": "CleverDining AI Upsell",
     }
     last_status = "network_error"
+    rate_limited_free_models = 0
+    total_free_models = sum(1 for model in models if is_free_model(model))
     for index, model in enumerate(models):
         request_payload = {
             "model": model,
@@ -920,6 +943,25 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
         if response.status_code < 200 or response.status_code >= 300:
             last_status = f"http_{response.status_code}"
             logger.warning("Upsell OpenRouter model %s returned HTTP %s", model, response.status_code)
+            if is_free_model(model):
+                if response.status_code == 429:
+                    rate_limited_free_models += 1
+                    if rate_limited_free_models == total_free_models:
+                        cooldown = max(
+                            30,
+                            min(
+                                int(
+                                    getattr(
+                                        settings,
+                                        "OPENROUTER_UPSELL_FREE_RATE_LIMIT_COOLDOWN_SECONDS",
+                                        300,
+                                    )
+                                    or 300
+                                ),
+                                900,
+                            ),
+                        )
+                        cache.set(_OPENROUTER_FREE_RATE_LIMIT_CACHE_KEY, True, timeout=cooldown)
             # Authentication and permission failures apply to every model.
             if response.status_code in {401, 403}:
                 break
@@ -937,6 +979,8 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             continue
         decision["_llm_provider"] = "openrouter"
         decision["_llm_model"] = str(response_payload.get("model") or model)
+        if is_free_model(model):
+            cache.delete(_OPENROUTER_FREE_RATE_LIMIT_CACHE_KEY)
         return decision, "ok"
 
     return None, last_status
