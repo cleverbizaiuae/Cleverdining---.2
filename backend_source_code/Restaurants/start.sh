@@ -7,7 +7,9 @@ python manage.py seed_pranay_menu
 python manage.py warm_upsell_intelligence
 # Persistent LLM decisions are warmed in the background so deploy health does
 # not wait on the external provider. Customer requests reuse these decisions.
-python manage.py warm_upsell_decisions --workers "${UPSELL_WARM_WORKERS:-2}" &
+python manage.py warm_upsell_decisions \
+  --workers "${UPSELL_WARM_WORKERS:-2}" \
+  --batch-size "${UPSELL_WARM_BATCH_SIZE:-6}" &
 
 echo "🗂️  Collecting static files..."
 python manage.py collectstatic --noinput --clear

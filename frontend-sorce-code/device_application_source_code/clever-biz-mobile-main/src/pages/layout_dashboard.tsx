@@ -187,6 +187,39 @@ const MenuCartReconciler = ({
   return null;
 };
 
+const MenuUpsellPrimer = ({ items }: { items: FoodItemTypes[] }) => {
+  const { cart } = useCart();
+  const cartItemIds = useMemo(
+    () => cart.map((item) => Number(item.id)).filter((id) => Number.isInteger(id) && id > 0),
+    [cart]
+  );
+  const cartFingerprint = cartItemIds.join(",");
+
+  useEffect(() => {
+    if (!items.length) return;
+    const timers = items
+      .filter((item) => item.availability !== false && Number(item.id) > 0)
+      .slice(0, 8)
+      .map((item, index) => window.setTimeout(() => {
+        const nextCartItemIds = Array.from(new Set([...cartItemIds, Number(item.id)]));
+        prefetchUpsellSuggestions({
+          triggerPoint: "add_to_cart",
+          sourceItemId: Number(item.id),
+          restaurantId: Number(item.restaurant || 0) || undefined,
+          limit: 6,
+          cartItemIds: nextCartItemIds,
+          excludeItemIds: Array.from(
+            new Set([...nextCartItemIds, ...getUpsellExcludedItemIds()])
+          ),
+        });
+      }, 200 + index * 220));
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [cartFingerprint, items]);
+
+  return null;
+};
+
 const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDetail | null }) => {
   const { addToCart } = useCart();
   const location = useLocation();
@@ -991,6 +1024,7 @@ const LayoutDashboard = () => {
         restaurantId={getRestaurantIdFromStorage() || restaurantId}
         ready={itemsLoaded && !search.trim()}
       />
+      {!isSubRoute && <MenuUpsellPrimer items={filteredItems} />}
       <div
         className="flex min-h-screen justify-center overflow-hidden bg-slate-100 text-foreground"
         style={{ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties}

@@ -1,3 +1,4 @@
+import json
 import shutil
 import tempfile
 from unittest.mock import Mock, patch
@@ -19,6 +20,10 @@ from .models import UpsellEvent, UpsellLLMDecision
 from . import upsell as upsell_module
 from .upsell import build_item_context_upsell_suggestions, get_restaurant_menu_intelligence
 from .upsell_cache import get_restaurant_upsell_cache_versions
+from .upsell_precompute import (
+    build_precomputed_source_context,
+    precompute_source_item_upsell_batch,
+)
 from .upsell_knowledge import (
     _upsell_llm_decision_cache_key,
     build_upsell_agent_context,
@@ -298,6 +303,56 @@ class UpsellKnowledgeEngineTests(TestCase):
             [row["item"].id for row in first],
             [row["item"].id for row in second],
         )
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="openrouter",
+        OPENROUTER_API_KEY="sk-or-v1-test-key-that-is-long-enough",
+        OPENROUTER_UPSELL_MODEL="openrouter/free",
+        OPENROUTER_UPSELL_PAID_FALLBACK_MODELS="mistralai/mistral-nemo",
+        OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=True,
+    )
+    def test_batch_warm_persists_multiple_llm_decisions_with_one_request(self):
+        prepared = [
+            build_precomputed_source_context(self.restaurant, source_item)
+            for source_item in (self.burger, self.pizza)
+        ]
+        decisions = []
+        for source_item, entry in zip((self.burger, self.pizza), prepared):
+            candidate = entry["context"]["candidates"][0]
+            decisions.append({
+                "source_item_id": source_item.id,
+                "suggest_nothing": False,
+                "suggested_item_id": candidate["id"],
+                "suggested_item_name": candidate["name"],
+                "target_role": candidate["target_role"],
+                "reason": None,
+                "reasoning": "Best valid complement.",
+                "suggestion_copy": "A balanced addition for your order.",
+                "confidence": 0.9,
+            })
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "model": "mistralai/mistral-nemo",
+            "choices": [{"message": {"content": json.dumps({"decisions": decisions})}}],
+        }
+
+        with patch("order.upsell_knowledge.requests.post", return_value=response) as post:
+            result = precompute_source_item_upsell_batch(
+                self.restaurant.id,
+                [self.burger.id, self.pizza.id],
+                force_refresh=True,
+            )
+
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual([row["status"] for row in result["results"]], ["ok", "ok"])
+        self.assertEqual(
+            set(UpsellLLMDecision.objects.values_list("source_item_id", flat=True)),
+            {self.burger.id, self.pizza.id},
+        )
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["model"], "mistralai/mistral-nemo")
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
 
     def test_menu_version_prevents_stale_llm_decision_reuse(self):
         rows = build_item_context_upsell_suggestions(

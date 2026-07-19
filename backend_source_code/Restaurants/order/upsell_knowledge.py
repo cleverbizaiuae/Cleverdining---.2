@@ -1164,6 +1164,195 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
     return None, last_status
 
 
+def call_openrouter_upsell_llm_batch(
+    contexts: Sequence[Mapping[str, Any]],
+) -> Tuple[Dict[int, Dict[str, Any]], str]:
+    """Ask the LLM to judge several independently validated shortlists at once."""
+    api_key = str(getattr(settings, "OPENROUTER_API_KEY", "") or "").strip()
+    if not api_key:
+        return {}, "missing_openrouter_key"
+    if len(api_key) < 20 or re.search(r"\s", api_key):
+        return {}, "invalid_openrouter_key"
+
+    context_by_source: Dict[int, Mapping[str, Any]] = {}
+    batch_entries: List[Dict[str, Any]] = []
+    for context in contexts:
+        source_item_id = _context_source_item_id(context)
+        candidates = [
+            candidate
+            for candidate in (context.get("candidates") or [])
+            if isinstance(candidate, Mapping)
+        ]
+        if not source_item_id or not candidates or source_item_id in context_by_source:
+            continue
+        context_by_source[source_item_id] = context
+        batch_entries.append(
+            {
+                "source_item_id": source_item_id,
+                "venue_type": (context.get("restaurant") or {}).get("venue_type"),
+                "strategy": (context.get("settings") or {}).get("strategy"),
+                "tone": (context.get("settings") or {}).get("tone"),
+                "cart": [
+                    {
+                        "id": item.get("id"),
+                        "name": item.get("name"),
+                        "price": item.get("price"),
+                        "roles": item.get("roles"),
+                    }
+                    for item in (context.get("cart") or [])
+                    if isinstance(item, Mapping)
+                ],
+                "target_roles": context.get("target_roles") or [],
+                "candidates": [
+                    {
+                        "id": candidate.get("id"),
+                        "name": candidate.get("name"),
+                        "description": str(candidate.get("description") or "")[:80],
+                        "price": candidate.get("price"),
+                        "roles": candidate.get("roles"),
+                        "target_role": candidate.get("target_role"),
+                        "score": candidate.get("score"),
+                        "pairing_score": candidate.get("pairing_score"),
+                        "acceptance_rate": candidate.get("acceptance_rate"),
+                    }
+                    for candidate in candidates
+                ],
+            }
+        )
+    if not batch_entries:
+        return {}, "no_candidates"
+
+    primary_model = str(
+        getattr(settings, "OPENROUTER_UPSELL_MODEL", "openrouter/free") or "openrouter/free"
+    ).strip()
+    paid_models = str(
+        getattr(settings, "OPENROUTER_UPSELL_PAID_FALLBACK_MODELS", "mistralai/mistral-nemo")
+        or ""
+    ).split(",")
+    free_models = str(
+        getattr(settings, "OPENROUTER_UPSELL_FALLBACK_MODELS", "openrouter/free")
+        or ""
+    ).split(",")
+    prefer_low_latency = bool(
+        getattr(settings, "OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS", True)
+    )
+    model_priority = (
+        [*paid_models, primary_model, *free_models]
+        if prefer_low_latency
+        else [primary_model, *free_models, *paid_models]
+    )
+    models: List[str] = []
+    free_rate_limited = bool(cache.get(_OPENROUTER_FREE_RATE_LIMIT_CACHE_KEY))
+    for model in model_priority:
+        model = model.strip()
+        if not model or model in models or not re.fullmatch(r"[A-Za-z0-9._:/-]+", model):
+            continue
+        if free_rate_limited and (model == "openrouter/free" or model.endswith(":free")):
+            continue
+        models.append(model)
+    if not models:
+        return {}, "invalid_model"
+
+    timeout = max(
+        4.0,
+        min(
+            float(getattr(settings, "OPENROUTER_UPSELL_BATCH_TIMEOUT_SECONDS", 20.0) or 20.0),
+            60.0,
+        ),
+    )
+    max_tokens = max(
+        600,
+        min(
+            int(getattr(settings, "OPENROUTER_UPSELL_BATCH_MAX_OUTPUT_TOKENS", 1400) or 1400),
+            4000,
+        ),
+    )
+    batch_prompt = (
+        "The backend has already applied every business rule and supplied independent valid "
+        "candidate shortlists. For each source_item_id, you alone choose the final item and copy. "
+        "Never choose outside that entry's candidates. Prefer a missing meal role and varied, "
+        "natural pairings. Return one decision for every source_item_id. Each decision must include "
+        "source_item_id plus exactly the standard upsell keys. Output only JSON as "
+        "{\"decisions\":[...]} with no markdown.\n"
+        + json.dumps({"entries": batch_entries}, ensure_ascii=True, separators=(",", ":"))
+    )
+    messages = [
+        {"role": "system", "content": UPSELL_SYSTEM_PROMPT},
+        {"role": "user", "content": batch_prompt},
+    ]
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://officialcleverdiningcustomer.netlify.app",
+        "X-OpenRouter-Title": "CleverDining AI Upsell Warmup",
+    }
+    last_status = "network_error"
+    for model in models:
+        request_payload = {
+            "model": model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=request_payload,
+                timeout=timeout,
+            )
+        except requests.Timeout:
+            last_status = "timeout"
+            continue
+        except requests.RequestException:
+            logger.warning("Upsell OpenRouter batch request failed", exc_info=True)
+            last_status = "network_error"
+            continue
+
+        if response.status_code < 200 or response.status_code >= 300:
+            last_status = f"http_{response.status_code}"
+            if response.status_code in {401, 403}:
+                break
+            continue
+        try:
+            response_payload = response.json()
+        except ValueError:
+            last_status = "invalid_response"
+            continue
+        parsed = _parse_llm_json(_openai_compatible_response_text(response_payload))
+        raw_decisions = parsed.get("decisions") if isinstance(parsed, Mapping) else None
+        if not isinstance(raw_decisions, list):
+            last_status = "invalid_json"
+            continue
+
+        resolved: Dict[int, Dict[str, Any]] = {}
+        response_model = str(response_payload.get("model") or model)
+        for raw_decision in raw_decisions:
+            if not isinstance(raw_decision, Mapping):
+                continue
+            try:
+                source_item_id = int(raw_decision.get("source_item_id") or 0)
+            except (TypeError, ValueError):
+                continue
+            context = context_by_source.get(source_item_id)
+            if not context or source_item_id in resolved:
+                continue
+            decision = dict(raw_decision)
+            decision.pop("source_item_id", None)
+            decision["_llm_provider"] = "openrouter"
+            decision["_llm_model"] = response_model
+            canonical = _canonicalize_llm_decision_for_context(decision, context)
+            if canonical:
+                resolved[source_item_id] = canonical
+        if resolved:
+            return resolved, "ok"
+        last_status = "invalid_llm_response"
+
+    return {}, last_status
+
+
 def _call_vertex_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     project_id = str(getattr(settings, "VERTEX_UPSELL_PROJECT_ID", "") or "").strip()
     location = str(getattr(settings, "VERTEX_UPSELL_LOCATION", "us-central1") or "us-central1").strip()
@@ -1499,6 +1688,15 @@ def _load_persisted_upsell_llm_decision(
     except DatabaseError:
         logger.warning("Could not read persistent upsell decision", exc_info=True)
         return None
+
+
+def load_precomputed_upsell_llm_decision(
+    context: Mapping[str, Any],
+    *,
+    cache_scope: str,
+) -> Optional[Dict[str, Any]]:
+    """Read an existing validated decision without ever invoking a provider."""
+    return _load_persisted_upsell_llm_decision(context, cache_scope=cache_scope)
 
 
 def call_upsell_llm(
