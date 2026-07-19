@@ -7,7 +7,7 @@ import logging
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 from zoneinfo import ZoneInfo
@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.utils import timezone
 
 from .upsell_cache import get_restaurant_upsell_cache_versions
@@ -1287,10 +1288,224 @@ def _upsell_llm_decision_cache_key(context: Mapping[str, Any], cache_scope: str)
     return f"upsell:llm-decision:v2:{digest}"
 
 
+def _persistent_upsell_context_payload(
+    context: Mapping[str, Any],
+    cache_scope: str,
+) -> Dict[str, Any]:
+    """Stable context used for precomputed decisions; wall-clock time is excluded."""
+    restaurant = context.get("restaurant") if isinstance(context.get("restaurant"), Mapping) else {}
+    settings_context = context.get("settings") if isinstance(context.get("settings"), Mapping) else {}
+    cart = context.get("cart") if isinstance(context.get("cart"), list) else []
+    candidates = context.get("candidates") if isinstance(context.get("candidates"), list) else []
+    return {
+        "scope": cache_scope,
+        "restaurant": {
+            "id": restaurant.get("id"),
+            "venue_type": restaurant.get("venue_type"),
+        },
+        "settings": {
+            "strategy": settings_context.get("strategy"),
+            "aggressiveness": settings_context.get("aggressiveness"),
+            "tone": settings_context.get("tone"),
+        },
+        "cart": sorted(
+            (
+                {
+                    "id": item.get("id"),
+                    "name": item.get("name"),
+                    "price": item.get("price"),
+                    "roles": item.get("roles"),
+                }
+                for item in cart
+                if isinstance(item, Mapping)
+            ),
+            key=lambda item: int(item.get("id") or 0),
+        ),
+        "target_roles": context.get("target_roles") or [],
+        "candidates": [
+            {
+                "id": candidate.get("id"),
+                "name": candidate.get("name"),
+                "price": candidate.get("price"),
+                "roles": candidate.get("roles"),
+                "target_role": candidate.get("target_role"),
+            }
+            for candidate in candidates
+            if isinstance(candidate, Mapping)
+        ],
+    }
+
+
+def _persistent_upsell_context_key(context: Mapping[str, Any], cache_scope: str) -> str:
+    payload = _persistent_upsell_context_payload(context, cache_scope)
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+
+
+def _persistent_settings_signature(context: Mapping[str, Any]) -> str:
+    settings_context = context.get("settings") if isinstance(context.get("settings"), Mapping) else {}
+    payload = {
+        "strategy": settings_context.get("strategy"),
+        "aggressiveness": settings_context.get("aggressiveness"),
+        "tone": settings_context.get("tone"),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+
+
+def _context_source_item_id(context: Mapping[str, Any]) -> Optional[int]:
+    trigger = context.get("trigger") if isinstance(context.get("trigger"), Mapping) else {}
+    try:
+        source_item_id = int(trigger.get("source_item_id") or 0)
+    except (TypeError, ValueError):
+        return None
+    return source_item_id if source_item_id > 0 else None
+
+
+def _context_cart_item_ids(context: Mapping[str, Any]) -> List[int]:
+    cart = context.get("cart") if isinstance(context.get("cart"), list) else []
+    item_ids: List[int] = []
+    for item in cart:
+        if not isinstance(item, Mapping):
+            continue
+        try:
+            item_id = int(item.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if item_id > 0 and item_id not in item_ids:
+            item_ids.append(item_id)
+    return item_ids
+
+
+def persist_upsell_llm_decision(
+    context: Mapping[str, Any],
+    decision: Mapping[str, Any],
+    *,
+    cache_scope: str,
+    source_item_id: Optional[int] = None,
+) -> bool:
+    """Persist only an LLM-produced decision; request-time validation still applies."""
+    restaurant = context.get("restaurant") if isinstance(context.get("restaurant"), Mapping) else {}
+    try:
+        restaurant_id = int(restaurant.get("id") or 0)
+    except (TypeError, ValueError):
+        return False
+    if restaurant_id <= 0 or not isinstance(decision, Mapping):
+        return False
+
+    canonical = _canonicalize_llm_decision_for_context(decision, context)
+    if not canonical:
+        return False
+    try:
+        selected_item_id = int(canonical.get("suggested_item_id") or 0) or None
+    except (TypeError, ValueError):
+        selected_item_id = None
+    candidate_ids = [
+        int(candidate.get("id"))
+        for candidate in (context.get("candidates") or [])
+        if isinstance(candidate, Mapping) and str(candidate.get("id") or "").isdigit()
+    ]
+    resolved_source_item_id = source_item_id or _context_source_item_id(context)
+    cache_days = max(
+        1,
+        min(int(getattr(settings, "UPSELL_LLM_PERSISTENT_CACHE_DAYS", 7) or 7), 30),
+    )
+    try:
+        from .models import UpsellLLMDecision
+
+        UpsellLLMDecision.objects.update_or_create(
+            context_key=_persistent_upsell_context_key(context, cache_scope),
+            defaults={
+                "restaurant_id": restaurant_id,
+                "source_item_id": resolved_source_item_id,
+                "selected_item_id": selected_item_id,
+                "settings_signature": _persistent_settings_signature(context),
+                "candidate_ids": candidate_ids,
+                "decision": canonical,
+                "expires_at": timezone.now() + timedelta(days=cache_days),
+            },
+        )
+    except DatabaseError:
+        logger.warning("Persistent upsell decision table is unavailable", exc_info=True)
+        return False
+    return True
+
+
+def _load_persisted_upsell_llm_decision(
+    context: Mapping[str, Any],
+    *,
+    cache_scope: str,
+) -> Optional[Dict[str, Any]]:
+    restaurant = context.get("restaurant") if isinstance(context.get("restaurant"), Mapping) else {}
+    try:
+        restaurant_id = int(restaurant.get("id") or 0)
+    except (TypeError, ValueError):
+        return None
+    if restaurant_id <= 0:
+        return None
+
+    try:
+        from .models import UpsellLLMDecision
+
+        now = timezone.now()
+        record = UpsellLLMDecision.objects.filter(
+            restaurant_id=restaurant_id,
+            context_key=_persistent_upsell_context_key(context, cache_scope),
+            expires_at__gt=now,
+        ).first()
+        cache_source = "exact"
+        if record and isinstance(record.decision, Mapping):
+            decision = _canonicalize_llm_decision_for_context(record.decision, context)
+            if decision:
+                decision["_llm_persistent_cache_hit"] = True
+                decision["_llm_persistent_cache_source"] = cache_source
+                return decision
+
+        cart_item_ids = _context_cart_item_ids(context)
+        source_item_id = _context_source_item_id(context)
+        if source_item_id and source_item_id in cart_item_ids:
+            cart_item_ids.remove(source_item_id)
+            cart_item_ids.insert(0, source_item_id)
+        if cart_item_ids:
+            records = list(
+                UpsellLLMDecision.objects.filter(
+                    restaurant_id=restaurant_id,
+                    source_item_id__in=cart_item_ids,
+                    settings_signature=_persistent_settings_signature(context),
+                    expires_at__gt=now,
+                )
+                .order_by("-updated_at")
+                [:50]
+            )
+            records.sort(
+                key=lambda candidate_record: (
+                    0 if candidate_record.source_item_id == source_item_id else 1,
+                    -candidate_record.updated_at.timestamp(),
+                )
+            )
+            for candidate_record in records:
+                if not isinstance(candidate_record.decision, Mapping):
+                    continue
+                decision = _canonicalize_llm_decision_for_context(candidate_record.decision, context)
+                if not decision:
+                    continue
+                decision["_llm_persistent_cache_hit"] = True
+                decision["_llm_persistent_cache_source"] = "cart_source_item"
+                decision["_llm_persistent_source_item_id"] = candidate_record.source_item_id
+                return decision
+        return None
+    except DatabaseError:
+        logger.warning("Could not read persistent upsell decision", exc_info=True)
+        return None
+
+
 def call_upsell_llm(
     context: Mapping[str, Any],
     *,
     cache_scope: str = "",
+    force_refresh: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], str]:
     """Call the configured model for shortlist judgment only."""
     if not context.get("candidates"):
@@ -1299,13 +1514,26 @@ def call_upsell_llm(
         return None, "disabled"
 
     decision_cache_key = ""
-    if cache_scope:
+    if cache_scope and not force_refresh:
         decision_cache_key = _upsell_llm_decision_cache_key(context, cache_scope)
         cached_decision = cache.get(decision_cache_key)
         if isinstance(cached_decision, Mapping):
             decision = dict(cached_decision)
             decision["_llm_cache_hit"] = True
             return decision, "ok"
+        persisted_decision = _load_persisted_upsell_llm_decision(
+            context,
+            cache_scope=cache_scope,
+        )
+        if persisted_decision:
+            cache_seconds = max(
+                30,
+                min(int(getattr(settings, "UPSELL_LLM_DECISION_CACHE_SECONDS", 900) or 900), 3600),
+            )
+            cache.set(decision_cache_key, dict(persisted_decision), timeout=cache_seconds)
+            return persisted_decision, "ok"
+    elif cache_scope:
+        decision_cache_key = _upsell_llm_decision_cache_key(context, cache_scope)
 
     provider = str(getattr(settings, "UPSELL_LLM_PROVIDER", "openrouter") or "openrouter").strip().lower()
     if provider == "openrouter":
@@ -1329,6 +1557,11 @@ def call_upsell_llm(
             min(int(getattr(settings, "UPSELL_LLM_DECISION_CACHE_SECONDS", 900) or 900), 3600),
         )
         cache.set(decision_cache_key, dict(decision), timeout=cache_seconds)
+        persist_upsell_llm_decision(
+            context,
+            decision,
+            cache_scope=cache_scope,
+        )
     return decision, status
 
 

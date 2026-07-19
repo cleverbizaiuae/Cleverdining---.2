@@ -236,3 +236,43 @@ class ItemAssociation(models.Model):
             f"{self.restaurant_id}:{self.source_item_id}->{self.target_item_id}"
             f" freq={self.co_order_frequency}"
         )
+
+
+class UpsellLLMDecision(models.Model):
+    """Persistent, precomputed LLM judgment for a validated candidate context."""
+
+    restaurant = models.ForeignKey(
+        Restaurant,
+        on_delete=models.CASCADE,
+        related_name="upsell_llm_decisions",
+    )
+    context_key = models.CharField(max_length=64, unique=True)
+    source_item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="upsell_llm_source_decisions",
+        null=True,
+        blank=True,
+    )
+    selected_item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="upsell_llm_selected_decisions",
+        null=True,
+        blank=True,
+    )
+    settings_signature = models.CharField(max_length=64, db_index=True)
+    candidate_ids = models.JSONField(default=list, blank=True)
+    decision = models.JSONField(default=dict)
+    expires_at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["restaurant", "source_item", "expires_at"]),
+            models.Index(fields=["restaurant", "settings_signature", "expires_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.restaurant_id}:{self.source_item_id or 'cart'}->{self.selected_item_id or 'none'}"

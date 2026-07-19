@@ -72,8 +72,10 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
-const UPSELL_REQUEST_TIMEOUT_MS = 9_000;
+const UPSELL_REQUEST_TIMEOUT_MS = 4_000;
 const UPSELL_RESULT_CACHE_MS = 2 * 60_000;
+const UPSELL_PERSISTED_RESULT_CACHE_MS = 15 * 60_000;
+const UPSELL_PERSISTED_RESULT_PREFIX = "cb:upsell_result:v1:";
 const upsellResultRequests = new Map<
   string,
   { expiresAt: number; request: Promise<UpsellSuggestion[]> }
@@ -276,6 +278,62 @@ const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
   });
 };
 
+const shortCacheHash = (value: string) => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+};
+
+const getPersistedResultKey = (requestKey: string) =>
+  `${UPSELL_PERSISTED_RESULT_PREFIX}${shortCacheHash(requestKey)}`;
+
+const writePersistedUpsellResult = (
+  requestKey: string,
+  suggestions: UpsellSuggestion[]
+) => {
+  try {
+    localStorage.setItem(
+      getPersistedResultKey(requestKey),
+      JSON.stringify({
+        requestKey,
+        expiresAt: Date.now() + UPSELL_PERSISTED_RESULT_CACHE_MS,
+        suggestions,
+      })
+    );
+  } catch {
+    // Persistent caching is an optimization only.
+  }
+};
+
+const readPersistedUpsellResult = (
+  requestKey: string
+): UpsellSuggestion[] | null => {
+  try {
+    const storageKey = getPersistedResultKey(requestKey);
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      requestKey?: string;
+      expiresAt?: number;
+      suggestions?: unknown[];
+    };
+    if (parsed.requestKey !== requestKey || Number(parsed.expiresAt || 0) <= Date.now()) {
+      localStorage.removeItem(storageKey);
+      return null;
+    }
+    const disabledItems = getDisabledUpsellItems();
+    return (parsed.suggestions || [])
+      .map(normalizeUpsellSuggestion)
+      .filter((item): item is UpsellSuggestion => Boolean(item))
+      .filter((item) => item.availability !== false && !disabledItems.has(item.id));
+  } catch {
+    return null;
+  }
+};
+
 const fetchUpsellSuggestionsRemote = async (
   params: UpsellSuggestionRequest
 ): Promise<UpsellSuggestion[]> => {
@@ -348,10 +406,25 @@ export function fetchUpsellSuggestions(
   const cached = upsellResultRequests.get(key);
   if (cached && cached.expiresAt > now) return cached.request;
 
-  const request = fetchUpsellSuggestionsRemote(params).catch((error) => {
-    upsellResultRequests.delete(key);
-    throw error;
-  });
+  const persisted = readPersistedUpsellResult(key);
+  if (persisted) {
+    const request = Promise.resolve(persisted.slice(0, params.limit ?? 2));
+    upsellResultRequests.set(key, {
+      expiresAt: now + UPSELL_RESULT_CACHE_MS,
+      request,
+    });
+    return request;
+  }
+
+  const request = fetchUpsellSuggestionsRemote(params)
+    .then((suggestions) => {
+      writePersistedUpsellResult(key, suggestions);
+      return suggestions;
+    })
+    .catch((error) => {
+      upsellResultRequests.delete(key);
+      throw error;
+    });
   upsellResultRequests.set(key, {
     expiresAt: now + UPSELL_RESULT_CACHE_MS,
     request,

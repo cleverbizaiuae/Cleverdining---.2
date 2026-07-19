@@ -321,6 +321,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         : fetchUpsellSettings().catch(() => null);
       prefetchUpsellSuggestions({
         triggerPoint: "cart",
+        sourceItemId: Number(item.id),
         restaurantId: Number(item.restaurant || 0) || undefined,
         limit: 2,
         cartItemIds,

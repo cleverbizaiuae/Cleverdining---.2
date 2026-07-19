@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from django.db import connection
 
-from .models import ItemAssociation, Order, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
+from .models import (
+    ItemAssociation,
+    Order,
+    UpsellEvent,
+    UpsellItemSetting,
+    UpsellLLMDecision,
+    UpsellRule,
+    UpsellSetting,
+)
 
 
 def ensure_order_notes_column() -> bool:
@@ -58,6 +66,7 @@ def ensure_upsell_tables() -> bool:
             UpsellEvent,
             UpsellItemSetting,
             ItemAssociation,
+            UpsellLLMDecision,
         ]
 
         created_any = False

@@ -285,6 +285,7 @@ const ScreenCart = () => {
           : fetchUpsellSettings().catch(() => null);
         const suggestionsPromise = fetchUpsellSuggestions({
           triggerPoint: "cart",
+          sourceItemId: validCartItems[validCartItems.length - 1]?.id,
           limit: triggerLimit,
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,

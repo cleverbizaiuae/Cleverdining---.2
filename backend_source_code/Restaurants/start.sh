@@ -5,6 +5,9 @@ python manage.py migrate --noinput
 python manage.py verify_schema --skip-type-check
 python manage.py seed_pranay_menu
 python manage.py warm_upsell_intelligence
+# Persistent LLM decisions are warmed in the background so deploy health does
+# not wait on the external provider. Customer requests reuse these decisions.
+python manage.py warm_upsell_decisions --workers "${UPSELL_WARM_WORKERS:-2}" &
 
 echo "🗂️  Collecting static files..."
 python manage.py collectstatic --noinput --clear
