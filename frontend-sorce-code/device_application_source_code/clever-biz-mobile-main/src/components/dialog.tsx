@@ -10,6 +10,7 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import { OptimizedImage } from "./OptimizedImage";
 import { CheckCircle2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import {
+  fetchUpsellSuggestions,
   prefetchUpsellSuggestions,
   summarizeCart,
 } from "../lib/upsellApi";
@@ -137,13 +138,29 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     const excludeItemIds = Array.from(
       new Set([...cartItemIds, ...getUpsellExcludedItemIds()])
     );
-    prefetchUpsellSuggestions({
+    void fetchUpsellSuggestions({
       triggerPoint: "add_to_cart",
       sourceItemId: Number(item.id),
       restaurantId: Number(item.restaurant || 0) || undefined,
       limit: 6,
       cartItemIds,
       excludeItemIds,
+    }).then((menuSuggestions) => {
+      prefetchUpsellSuggestions({
+        triggerPoint: "cart",
+        sourceItemId: Number(item.id),
+        restaurantId: Number(item.restaurant || 0) || undefined,
+        limit: 2,
+        cartItemIds,
+        excludeItemIds: Array.from(
+          new Set([
+            ...excludeItemIds,
+            ...menuSuggestions.map((suggestion) => suggestion.id),
+          ])
+        ),
+      });
+    }).catch(() => {
+      // The live add action can retry if this background warm misses.
     });
   }, [cart, hasValidItem, isOpen, item]);
 

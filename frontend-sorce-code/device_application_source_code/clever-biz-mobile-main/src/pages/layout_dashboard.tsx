@@ -202,15 +202,32 @@ const MenuUpsellPrimer = ({ items }: { items: FoodItemTypes[] }) => {
       .slice(0, 8)
       .map((item, index) => window.setTimeout(() => {
         const nextCartItemIds = Array.from(new Set([...cartItemIds, Number(item.id)]));
-        prefetchUpsellSuggestions({
+        const excludeItemIds = Array.from(
+          new Set([...nextCartItemIds, ...getUpsellExcludedItemIds()])
+        );
+        void fetchUpsellSuggestions({
           triggerPoint: "add_to_cart",
           sourceItemId: Number(item.id),
           restaurantId: Number(item.restaurant || 0) || undefined,
           limit: 6,
           cartItemIds: nextCartItemIds,
-          excludeItemIds: Array.from(
-            new Set([...nextCartItemIds, ...getUpsellExcludedItemIds()])
-          ),
+          excludeItemIds,
+        }).then((menuSuggestions) => {
+          prefetchUpsellSuggestions({
+            triggerPoint: "cart",
+            sourceItemId: Number(item.id),
+            restaurantId: Number(item.restaurant || 0) || undefined,
+            limit: 2,
+            cartItemIds: nextCartItemIds,
+            excludeItemIds: Array.from(
+              new Set([
+                ...excludeItemIds,
+                ...menuSuggestions.map((suggestion) => suggestion.id),
+              ])
+            ),
+          });
+        }).catch(() => {
+          // The item-detail prefetch and the live add action can retry.
         });
       }, 200 + index * 220));
 

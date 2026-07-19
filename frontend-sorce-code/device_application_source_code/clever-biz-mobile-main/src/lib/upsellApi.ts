@@ -263,11 +263,14 @@ const sortedPositiveIds = (values?: number[]) =>
     )
   ).sort((left, right) => left - right);
 
+const getUpsellFetchLimit = (triggerPoint: UpsellTriggerPoint) =>
+  triggerPoint === "add_to_cart" ? 6 : 2;
+
 const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
   const restaurantId = Number(params.restaurantId || getSessionRestaurantId() || 0);
   return JSON.stringify({
     triggerPoint: params.triggerPoint,
-    limit: Number(params.limit || 2),
+    limit: getUpsellFetchLimit(params.triggerPoint),
     sourceItemId: Number(params.sourceItemId || 0),
     restaurantId,
     cartItemIds: sortedPositiveIds(params.cartItemIds),
@@ -343,7 +346,7 @@ const fetchUpsellSuggestionsRemote = async (
   const commonParams = {
     trigger_point: params.triggerPoint,
     triggerPoint: params.triggerPoint,
-    limit: params.limit ?? 2,
+    limit: getUpsellFetchLimit(params.triggerPoint),
     restaurant_id: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined,
     restaurantId: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined,
     source_item_id: params.sourceItemId,
@@ -393,7 +396,7 @@ const fetchUpsellSuggestionsRemote = async (
     if (excludedItems.has(item.id)) return false;
     if (disabledItems.has(item.id)) return false;
     return true;
-  }).slice(0, params.limit ?? 2) as UpsellSuggestion[];
+  }).slice(0, getUpsellFetchLimit(params.triggerPoint)) as UpsellSuggestion[];
 };
 
 export function fetchUpsellSuggestions(
