@@ -265,7 +265,6 @@ const sortedPositiveIds = (values?: number[]) =>
 
 const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
   const restaurantId = Number(params.restaurantId || getSessionRestaurantId() || 0);
-  const signals = getUpsellSignalsQueryParams();
   return JSON.stringify({
     triggerPoint: params.triggerPoint,
     limit: Number(params.limit || 2),
@@ -274,7 +273,6 @@ const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
     cartItemIds: sortedPositiveIds(params.cartItemIds),
     excludeItemIds: sortedPositiveIds(params.excludeItemIds),
     stage: params.stage || "",
-    signals,
   });
 };
 
