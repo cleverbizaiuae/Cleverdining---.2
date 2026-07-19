@@ -392,6 +392,16 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           activeRef.current = true;
           setOpen(true);
           recordShown(remoteSuggestions, item, cartItemIds, metrics, "llm");
+          prefetchUpsellSuggestions({
+            triggerPoint: "cart",
+            sourceItemId: Number(item.id),
+            restaurantId: Number(item.restaurant || 0) || undefined,
+            limit: 2,
+            cartItemIds,
+            excludeItemIds: Array.from(
+              new Set([...cartItemIds, ...getUpsellExcludedItemIds()])
+            ),
+          });
           return remoteSuggestions;
         })
         .catch(() => {
