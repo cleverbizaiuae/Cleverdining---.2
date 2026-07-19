@@ -584,6 +584,10 @@ def build_upsell_agent_context(
         target_roles = get_gap_priority(set(cart_roles), venue_type=venue_type, hour=hour)
 
     candidate_payloads = [_candidate_payload(row) for row in list(candidate_rows)[:5]]
+    recommendation_required = bool(candidate_payloads) and trigger_point in {
+        "add_to_cart",
+        "cart",
+    }
     signals = dict(session_signals or {})
     local_now = _local_restaurant_now(restaurant)
     trigger_item = next(
@@ -640,6 +644,7 @@ def build_upsell_agent_context(
             "session_cap": policy["session_cap"],
         },
         "trigger_point": trigger_point,
+        "recommendation_required": recommendation_required,
         "trigger": {
             "point": trigger_point,
             "source_item_id": getattr(trigger_item, "id", source_item_id),
@@ -680,6 +685,7 @@ def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
         "strategy": context.get("settings", {}).get("strategy"),
         "tone": context.get("settings", {}).get("tone"),
         "trigger": context.get("trigger", {"point": context.get("trigger_point")}),
+        "recommendation_required": bool(context.get("recommendation_required")),
         "cart_roles": context.get("cart_roles", []),
         "cart": [
             {
@@ -714,8 +720,15 @@ def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
             if isinstance(candidate, Mapping)
         ],
     }
+    selection_instruction = (
+        "A recommendation is required for this surface. The shortlist contains only valid items, "
+        "so set suggest_nothing=false and choose exactly one candidate."
+        if context.get("recommendation_required")
+        else "Choose nothing only if every candidate conflicts with an explicit supplied rule."
+    )
     return (
-        "VALID CANDIDATE SHORTLIST is final. Choose only from candidates; return complete JSON.\n"
+        "VALID CANDIDATE SHORTLIST is final. Choose only from candidates; return complete JSON. "
+        f"{selection_instruction}\n"
         + json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
     )
 
@@ -791,6 +804,8 @@ def _canonicalize_llm_decision_for_context(
 
     reasoning = " ".join(str(decision.get("reasoning") or "").split()).strip()
     if bool(decision.get("suggest_nothing")):
+        if context.get("recommendation_required"):
+            return None
         reason = " ".join(str(decision.get("reason") or reasoning).split()).strip()
         if not reason:
             return None
@@ -888,7 +903,7 @@ def _call_ollama_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[s
         "think": False,
         "format": UPSELL_DECISION_JSON_SCHEMA,
         "keep_alive": keep_alive,
-        "options": {"temperature": 0.2, "num_predict": 300},
+        "options": {"temperature": 0.0, "num_predict": 300},
     }
     headers = {"Content-Type": "application/json"}
     api_key = str(getattr(settings, "OLLAMA_API_KEY", "") or "").strip()
@@ -1036,7 +1051,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             "model": low_latency_route[0],
             "messages": messages,
             "response_format": _openrouter_structured_response_format(),
-            "temperature": 0.2,
+            "temperature": 0.0,
             "max_tokens": max_tokens,
             "stream": False,
             "provider": {
@@ -1097,7 +1112,7 @@ def _call_openrouter_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Di
             "model": model,
             "messages": messages,
             "response_format": {"type": "json_object"},
-            "temperature": 0.2,
+            "temperature": 0.0,
             "max_tokens": max_tokens,
             "stream": False,
         }
@@ -1292,7 +1307,7 @@ def call_openrouter_upsell_llm_batch(
             "model": model,
             "messages": messages,
             "response_format": {"type": "json_object"},
-            "temperature": 0.1,
+            "temperature": 0.0,
             "max_tokens": max_tokens,
             "stream": False,
         }
@@ -1391,7 +1406,7 @@ def _call_vertex_upsell_llm(context: Mapping[str, Any]) -> Tuple[Optional[Dict[s
             },
         ],
         "response_format": {"type": "json_object"},
-        "temperature": 0.2,
+        "temperature": 0.0,
         "max_tokens": max_tokens,
         "stream": False,
     }
@@ -1431,6 +1446,8 @@ def _upsell_llm_decision_cache_key(context: Mapping[str, Any], cache_scope: str)
     candidates = context.get("candidates") if isinstance(context.get("candidates"), list) else []
     payload = {
         "scope": cache_scope,
+        "trigger_point": context.get("trigger_point"),
+        "recommendation_required": bool(context.get("recommendation_required")),
         "knowledge_version": context.get("knowledge_version") or {},
         "restaurant": {
             "id": restaurant.get("id"),
@@ -1488,6 +1505,8 @@ def _persistent_upsell_context_payload(
     candidates = context.get("candidates") if isinstance(context.get("candidates"), list) else []
     return {
         "scope": cache_scope,
+        "trigger_point": context.get("trigger_point"),
+        "recommendation_required": bool(context.get("recommendation_required")),
         "restaurant": {
             "id": restaurant.get("id"),
             "venue_type": restaurant.get("venue_type"),
@@ -1734,20 +1753,34 @@ def call_upsell_llm(
         decision_cache_key = _upsell_llm_decision_cache_key(context, cache_scope)
 
     provider = str(getattr(settings, "UPSELL_LLM_PROVIDER", "openrouter") or "openrouter").strip().lower()
-    if provider == "openrouter":
-        decision, status = _call_openrouter_upsell_llm(context)
-    elif provider == "vertex":
-        decision, status = _call_vertex_upsell_llm(context)
-    elif provider == "ollama":
-        decision, status = _call_ollama_upsell_llm(context)
-    else:
+
+    def invoke_provider() -> Tuple[Optional[Dict[str, Any]], str]:
+        if provider == "openrouter":
+            return _call_openrouter_upsell_llm(context)
+        if provider == "vertex":
+            return _call_vertex_upsell_llm(context)
+        if provider == "ollama":
+            return _call_ollama_upsell_llm(context)
         logger.warning("Upsell LLM disabled for unsupported provider %s", provider)
         return None, "invalid_provider"
 
-    if decision and status == "ok":
-        decision = _canonicalize_llm_decision_for_context(decision, context)
-        if not decision:
-            return None, "invalid_llm_response"
+    decision: Optional[Dict[str, Any]] = None
+    status = "invalid_llm_response"
+    attempts = 2 if context.get("recommendation_required") else 1
+    for attempt in range(attempts):
+        raw_decision, status = invoke_provider()
+        if raw_decision and status == "ok":
+            decision = _canonicalize_llm_decision_for_context(raw_decision, context)
+            if decision:
+                break
+            status = "invalid_llm_response"
+        if status not in {"invalid_json", "invalid_llm_response"}:
+            break
+        if attempt + 1 < attempts:
+            logger.info("Retrying mandatory upsell LLM selection after %s", status)
+
+    if not decision or status != "ok":
+        return None, status
 
     if decision_cache_key and decision and status == "ok":
         cache_seconds = max(

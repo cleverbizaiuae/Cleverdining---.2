@@ -197,41 +197,43 @@ const MenuUpsellPrimer = ({ items }: { items: FoodItemTypes[] }) => {
 
   useEffect(() => {
     if (!items.length) return;
-    const timers = items
-      .filter((item) => item.availability !== false && Number(item.id) > 0)
-      .slice(0, 8)
-      .map((item, index) => window.setTimeout(() => {
+    let cancelled = false;
+    let timer: number | null = null;
+    const wait = (delayMs: number) => new Promise<void>((resolve) => {
+      timer = window.setTimeout(resolve, delayMs);
+    });
+    const primeVisibleItems = async () => {
+      await wait(180);
+      const visibleItems = items
+        .filter((item) => item.availability !== false && Number(item.id) > 0)
+        .slice(0, 8);
+      for (const item of visibleItems) {
+        if (cancelled) return;
         const nextCartItemIds = Array.from(new Set([...cartItemIds, Number(item.id)]));
         const excludeItemIds = Array.from(
           new Set([...nextCartItemIds, ...getUpsellExcludedItemIds()])
         );
-        void fetchUpsellSuggestions({
-          triggerPoint: "add_to_cart",
-          sourceItemId: Number(item.id),
-          restaurantId: Number(item.restaurant || 0) || undefined,
-          limit: 6,
-          cartItemIds: nextCartItemIds,
-          excludeItemIds,
-        }).then((menuSuggestions) => {
-          prefetchUpsellSuggestions({
-            triggerPoint: "cart",
+        try {
+          await fetchUpsellSuggestions({
+            triggerPoint: "add_to_cart",
             sourceItemId: Number(item.id),
             restaurantId: Number(item.restaurant || 0) || undefined,
-            limit: 2,
+            limit: 6,
             cartItemIds: nextCartItemIds,
-            excludeItemIds: Array.from(
-              new Set([
-                ...excludeItemIds,
-                ...menuSuggestions.map((suggestion) => suggestion.id),
-              ])
-            ),
+            excludeItemIds,
           });
-        }).catch(() => {
-          // The item-detail prefetch and the live add action can retry.
-        });
-      }, 200 + index * 220));
+        } catch {
+          // The selected item detail and live add request will retry.
+        }
+        if (!cancelled) await wait(120);
+      }
+    };
+    void primeVisibleItems();
 
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [cartFingerprint, items]);
 
   return null;
@@ -242,6 +244,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
   const location = useLocation();
   const currencyCode = getSessionCurrencyCode();
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<UpsellSuggestion[]>([]);
   const [triggerItem, setTriggerItem] = useState<any>(null);
   const [settings, setSettings] = useState<UpsellSettingsSnapshot | null>(null);
@@ -272,6 +275,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
     requestSeqRef.current += 1;
     activeRef.current = false;
     pendingActionRef.current = null;
+    setLoading(false);
     setOpen(false);
     setSuggestions([]);
     setTriggerItem(null);
@@ -361,10 +365,16 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
 
       if (!shouldRender) {
         activeRef.current = false;
+        setLoading(false);
         setOpen(false);
         setSuggestions([]);
         return;
       }
+
+      activeRef.current = true;
+      setLoading(true);
+      setSuggestions([]);
+      setOpen(true);
 
       const settingsPromise = settings
         ? Promise.resolve(settings)
@@ -383,6 +393,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           if (requestSeqRef.current !== requestId) return [];
           if (settingsSnapshot) setSettings(settingsSnapshot);
           if (settingsSnapshot && (!settingsSnapshot.enabled || !settingsSnapshot.show_after_add_to_cart)) {
+            setLoading(false);
             setOpen(false);
             setSuggestions([]);
             activeRef.current = false;
@@ -390,13 +401,14 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           }
           const remoteSuggestions = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 1) : [];
           if (!remoteSuggestions.length) {
-            // An empty successful response can be an intentional "suggest
-            // nothing" decision and must not be overridden by the client.
+            // Mandatory add-to-cart decisions never use a client-side item fallback.
             setSuggestions([]);
+            setLoading(false);
             setOpen(false);
             activeRef.current = false;
             return;
           }
+          setLoading(false);
           setSuggestions(remoteSuggestions);
           activeRef.current = true;
           setOpen(true);
@@ -420,6 +432,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         .catch(() => {
           if (requestSeqRef.current !== requestId) return;
           setSuggestions([]);
+          setLoading(false);
           setOpen(false);
           activeRef.current = false;
         });
@@ -453,6 +466,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
     requestSeqRef.current += 1;
     pendingActionRef.current = null;
     activeRef.current = false;
+    setLoading(false);
     setOpen(false);
     setSuggestions([]);
     setTriggerItem(null);
@@ -608,6 +622,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
   return (
     <UpsellBottomSheet
       open={open}
+      loading={loading}
       suggestions={suggestions}
       triggerItem={triggerItem}
       currencyCode={currencyCode}
@@ -615,6 +630,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       onDeclineSingle={declineSuggestion}
       onDismissSingle={dismissSingle}
       onDismissMany={dismissMany}
+      onClose={closeActiveSheet}
       onExited={handleExited}
     />
   );

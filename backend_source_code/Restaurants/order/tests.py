@@ -584,6 +584,8 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertIn("acceptance_rate", context["candidates"][0])
         self.assertIn("order_count_7d", context["candidates"][0])
         self.assertIn("VALID CANDIDATE SHORTLIST", context["user_message"])
+        self.assertTrue(context["recommendation_required"])
+        self.assertIn("choose exactly one candidate", context["user_message"])
 
     def _agent_context(self, rows):
         setting = self.restaurant.upsell_setting
@@ -642,7 +644,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(post.call_args.args[0], "https://openrouter.ai/api/v1/chat/completions")
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openrouter/free")
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
-        self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.2)
+        self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.0)
         self.assertEqual(post.call_args.kwargs["json"]["max_tokens"], 220)
         self.assertEqual(
             post.call_args.kwargs["headers"]["X-OpenRouter-Title"],
@@ -877,7 +879,8 @@ class UpsellKnowledgeEngineTests(TestCase):
         OPENROUTER_UPSELL_PREFER_LOW_LATENCY_MODELS=True,
         UPSELL_LLM_DECISION_CACHE_SECONDS=300,
     )
-    def test_openrouter_reuses_llm_decision_across_surfaces_for_same_session_cart(self):
+    def test_openrouter_keeps_surface_decisions_in_separate_caches(self):
+        cache.clear()
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],
@@ -886,22 +889,26 @@ class UpsellKnowledgeEngineTests(TestCase):
             limit=4,
         )
         chosen = rows[0]["item"]
-        response = Mock(status_code=200)
-        response.json.return_value = {
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
-            "choices": [{
-                "message": {"content": (
-                    '{"suggest_nothing":false,"suggested_item_id":%d,'
-                    '"suggested_item_name":"%s","target_role":"%s",'
-                    '"reason":null,"reasoning":"Best valid complement.",'
-                    '"suggestion_copy":"A refreshing match for your meal.","confidence":0.9}'
-                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
-            }],
-        }
+        second_chosen = rows[1]["item"]
+        responses = []
+        for row, copy in ((rows[0], "A refreshing match for your meal."), (rows[1], "A balanced addition for your order.")):
+            response = Mock(status_code=200)
+            response.json.return_value = {
+                "model": "meta-llama/llama-3.2-3b-instruct:free",
+                "choices": [{
+                    "message": {"content": (
+                        '{"suggest_nothing":false,"suggested_item_id":%d,'
+                        '"suggested_item_name":"%s","target_role":"%s",'
+                        '"reason":null,"reasoning":"Best valid complement.",'
+                        '"suggestion_copy":"%s","confidence":0.9}'
+                    ) % (row["item"].id, row["item"].item_name, row["target_role"], copy)}
+                }],
+            }
+            responses.append(response)
         context = self._agent_context(rows)
         cache_scope = f"cache-test-{self.restaurant.id}"
 
-        with patch("order.upsell_knowledge.requests.post", return_value=response) as post:
+        with patch("order.upsell_knowledge.requests.post", side_effect=responses) as post:
             first_decision, first_status = call_upsell_llm(context, cache_scope=cache_scope)
             context["trigger_point"] = "add_to_cart"
             context["trigger"]["point"] = "add_to_cart"
@@ -909,10 +916,10 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         self.assertEqual(first_status, "ok")
         self.assertEqual(second_status, "ok")
-        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_count, 2)
         self.assertEqual(first_decision["suggested_item_id"], chosen.id)
-        self.assertEqual(second_decision["suggested_item_id"], chosen.id)
-        self.assertTrue(second_decision["_llm_cache_hit"])
+        self.assertEqual(second_decision["suggested_item_id"], second_chosen.id)
+        self.assertNotIn("_llm_cache_hit", second_decision)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,
@@ -1208,7 +1215,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         request_json = session.post.call_args.kwargs["json"]
         self.assertEqual(request_json["model"], "openai/gpt-oss-20b-maas")
         self.assertEqual(request_json["response_format"], {"type": "json_object"})
-        self.assertEqual(request_json["temperature"], 0.2)
+        self.assertEqual(request_json["temperature"], 0.0)
         self.assertGreaterEqual(request_json["max_tokens"], 300)
         self.assertLessEqual(request_json["max_tokens"], 350)
 
@@ -1265,12 +1272,68 @@ class UpsellKnowledgeEngineTests(TestCase):
         }
         session = Mock()
         session.post.return_value = response
+        context = build_upsell_agent_context(
+            restaurant=self.restaurant,
+            setting=self.restaurant.upsell_setting,
+            cart_items=[self.burger],
+            candidate_rows=rows,
+            trigger_point="before_payment",
+            hour=13,
+            source_item_id=self.burger.id,
+        )
         with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
-            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+            raw_decision, llm_status = call_upsell_llm(context)
 
         decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
         self.assertTrue(decision["suggest_nothing"])
         self.assertEqual(decision["decision_source"], "llm")
+
+    @override_settings(
+        UPSELL_LLM_ENABLED=True,
+        UPSELL_LLM_PROVIDER="vertex",
+        VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
+        VERTEX_UPSELL_SERVICE_ACCOUNT_JSON='{"type":"service_account"}',
+    )
+    def test_mandatory_cart_retries_llm_that_suggests_nothing(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=4,
+        )
+        chosen = rows[0]["item"]
+        no_suggestion = Mock(status_code=200)
+        no_suggestion.json.return_value = {
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":true,"suggested_item_id":null,'
+                    '"suggested_item_name":null,"target_role":null,'
+                    '"reason":"The order is complete.","reasoning":"Nothing adds value.",'
+                    '"suggestion_copy":null,"confidence":0.95}'
+                )}
+            }]
+        }
+        selected = Mock(status_code=200)
+        selected.json.return_value = {
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Completes the current order.",'
+                    '"suggestion_copy":"A balanced addition for your order.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }]
+        }
+        session = Mock()
+        session.post.side_effect = [no_suggestion, selected]
+
+        with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
+            raw_decision, llm_status = call_upsell_llm(self._agent_context(rows))
+
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(raw_decision["suggested_item_id"], chosen.id)
+        self.assertEqual(session.post.call_count, 2)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Gem, Plus, X } from "lucide-react";
+import { Gem, Loader2, Plus, X } from "lucide-react";
 import type { UpsellSuggestion } from "../lib/upsellApi";
 import { OptimizedImage } from "./OptimizedImage";
 import { getEffectiveItemPrice } from "../utils/pricing";
 
 type Props = {
   open: boolean;
+  loading?: boolean;
   suggestions: UpsellSuggestion[];
   triggerItem?: {
     item_name?: string;
@@ -19,6 +20,7 @@ type Props = {
   onDeclineSingle: (suggestion: UpsellSuggestion) => void;
   onDismissSingle: (suggestion: UpsellSuggestion) => void;
   onDismissMany: (suggestions: UpsellSuggestion[]) => void;
+  onClose?: () => void;
   onExited?: () => void;
 };
 
@@ -92,6 +94,7 @@ const getContextualUpsellCopy = (
 
 export default function UpsellBottomSheet({
   open,
+  loading = false,
   suggestions,
   triggerItem,
   currencyCode,
@@ -99,6 +102,7 @@ export default function UpsellBottomSheet({
   onDeclineSingle,
   onDismissSingle,
   onDismissMany,
+  onClose,
   onExited,
 }: Props) {
   const [localDismissed, setLocalDismissed] = useState<number[]>([]);
@@ -121,7 +125,7 @@ export default function UpsellBottomSheet({
   const isMulti = shownItems.length > 1;
   const primaryItem = shownItems[0];
   const contextualCopy = getContextualUpsellCopy(primaryItem, triggerItem);
-  const label = contextualCopy.label;
+  const label = loading && !primaryItem ? "Perfect with your order" : contextualCopy.label;
 
   const handleDeclineSingle = (item: UpsellSuggestion) => {
     setLocalDismissed((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
@@ -134,7 +138,10 @@ export default function UpsellBottomSheet({
   };
 
   const handleDismissAll = () => {
-    if (!shownItems.length) return;
+    if (!shownItems.length) {
+      onClose?.();
+      return;
+    }
     setLocalDismissed(shownItems.map((item) => item.id));
     onDismissMany(shownItems);
   };
@@ -152,7 +159,7 @@ export default function UpsellBottomSheet({
 
   return (
     <AnimatePresence onExitComplete={onExited}>
-      {open && shownItems.length > 0 ? (
+      {open ? (
         <>
           <motion.div
             className="fixed left-0 right-0 top-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] bg-black/35 backdrop-blur-[2px]"
@@ -188,7 +195,12 @@ export default function UpsellBottomSheet({
               </button>
             </div>
 
-            {isMulti ? (
+            {loading && !primaryItem ? (
+              <div className="flex min-h-28 items-center justify-center gap-3 rounded-2xl bg-slate-50 px-4 text-sm font-medium text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin text-[#552500]" strokeWidth={1.8} />
+                Finding the best match...
+              </div>
+            ) : isMulti ? (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {shownItems.map((item) => (

@@ -72,7 +72,9 @@ const safeNumber = (value: unknown): number => {
   return 0;
 };
 
-const UPSELL_REQUEST_TIMEOUT_MS = 4_000;
+const UPSELL_REQUEST_TIMEOUT_MS = 7_000;
+const UPSELL_RESOLUTION_TIMEOUT_MS = 12_000;
+const UPSELL_RETRY_DELAY_MS = 250;
 const UPSELL_RESULT_CACHE_MS = 2 * 60_000;
 const UPSELL_PERSISTED_RESULT_CACHE_MS = 15 * 60_000;
 const UPSELL_PERSISTED_RESULT_PREFIX = "cb:upsell_result:v1:";
@@ -295,6 +297,7 @@ const writePersistedUpsellResult = (
   requestKey: string,
   suggestions: UpsellSuggestion[]
 ) => {
+  if (!suggestions.length) return;
   try {
     localStorage.setItem(
       getPersistedResultKey(requestKey),
@@ -326,13 +329,35 @@ const readPersistedUpsellResult = (
       return null;
     }
     const disabledItems = getDisabledUpsellItems();
-    return (parsed.suggestions || [])
+    const suggestions = (parsed.suggestions || [])
       .map(normalizeUpsellSuggestion)
       .filter((item): item is UpsellSuggestion => Boolean(item))
       .filter((item) => item.availability !== false && !disabledItems.has(item.id));
+    if (!suggestions.length) {
+      localStorage.removeItem(storageKey);
+      return null;
+    }
+    return suggestions;
   } catch {
     return null;
   }
+};
+
+const waitForUpsellRetry = (delayMs: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, delayMs));
+
+const isTransientUpsellError = (error: unknown) => {
+  const candidate = error as {
+    code?: string;
+    response?: { status?: number };
+  };
+  const status = Number(candidate?.response?.status || 0);
+  return (
+    !candidate?.response ||
+    candidate?.code === "ECONNABORTED" ||
+    candidate?.code === "ERR_NETWORK" ||
+    [408, 425, 429, 500, 502, 503, 504].includes(status)
+  );
 };
 
 const fetchUpsellSuggestionsRemote = async (
@@ -362,16 +387,39 @@ const fetchUpsellSuggestionsRemote = async (
   };
 
   const headers = sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined;
-  const response = await axiosInstance.get("/api/upsell/smart-suggestions", {
-    params: commonParams,
-    timeout: UPSELL_REQUEST_TIMEOUT_MS,
-    headers,
-  });
-  const payload = response.data && typeof response.data === "object"
-    ? response.data as Record<string, unknown>
-    : {};
-  if (response.status === 202 || payload.pending === true) {
-    throw new Error("Upsell recommendation is still pending.");
+  const startedAt = Date.now();
+  let attempt = 0;
+  let response: { data: unknown; status: number };
+  while (true) {
+    const remainingMs = UPSELL_RESOLUTION_TIMEOUT_MS - (Date.now() - startedAt);
+    if (remainingMs <= 0) {
+      throw new Error("Upsell recommendation timed out.");
+    }
+    try {
+      response = await axiosInstance.get("/api/upsell/smart-suggestions", {
+        params: {
+          ...commonParams,
+          async_llm: attempt > 0 ? "1" : undefined,
+        },
+        timeout: Math.max(1_200, Math.min(UPSELL_REQUEST_TIMEOUT_MS, remainingMs)),
+        headers,
+      });
+      const payload = response.data && typeof response.data === "object"
+        ? response.data as Record<string, unknown>
+        : {};
+      if (response.status !== 202 && payload.pending !== true) break;
+
+      const retryAfterMs = Math.max(
+        150,
+        Math.min(Number(payload.retry_after_ms || UPSELL_RETRY_DELAY_MS), 600)
+      );
+      attempt += 1;
+      await waitForUpsellRetry(retryAfterMs);
+    } catch (error) {
+      if (!isTransientUpsellError(error) || attempt >= 2) throw error;
+      attempt += 1;
+      await waitForUpsellRetry(UPSELL_RETRY_DELAY_MS * attempt);
+    }
   }
 
   const rawSuggestions = extractSuggestionArray(response.data);
@@ -419,7 +467,7 @@ export function fetchUpsellSuggestions(
 
   const request = fetchUpsellSuggestionsRemote(params)
     .then((suggestions) => {
-      writePersistedUpsellResult(key, suggestions);
+      if (suggestions.length) writePersistedUpsellResult(key, suggestions);
       return suggestions;
     })
     .catch((error) => {
