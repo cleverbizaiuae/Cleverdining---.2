@@ -218,7 +218,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       close();
       if (onAddToCart) onAddToCart(addedDetail);
       setIsAddingToCart(false);
-    }, 220);
+    }, 80);
   };
 
   return (

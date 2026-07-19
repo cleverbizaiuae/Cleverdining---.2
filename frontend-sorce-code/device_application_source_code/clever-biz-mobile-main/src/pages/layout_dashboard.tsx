@@ -352,14 +352,6 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       const settingsPromise = settings
         ? Promise.resolve(settings)
         : fetchUpsellSettings().catch(() => null);
-      prefetchUpsellSuggestions({
-        triggerPoint: "cart",
-        sourceItemId: Number(item.id),
-        restaurantId: Number(item.restaurant || 0) || undefined,
-        limit: 2,
-        cartItemIds,
-        excludeItemIds: excludedItemIds,
-      });
       const suggestionPromise = fetchUpsellSuggestions({
         triggerPoint: "add_to_cart",
         sourceItemId: Number(item.id),
@@ -399,7 +391,11 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
             limit: 2,
             cartItemIds,
             excludeItemIds: Array.from(
-              new Set([...cartItemIds, ...getUpsellExcludedItemIds()])
+              new Set([
+                ...cartItemIds,
+                ...getUpsellExcludedItemIds(),
+                ...remoteSuggestions.map((suggestion) => suggestion.id),
+              ])
             ),
           });
           return remoteSuggestions;
@@ -450,6 +446,19 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
     }
     toast.success(`${suggestion.item_name} added to cart`);
     markUpsellItemAccepted(suggestion.id);
+    const nextCartItemIds = Array.from(
+      new Set([...sourceItemIdsRef.current, suggestion.id])
+    );
+    prefetchUpsellSuggestions({
+      triggerPoint: "cart",
+      sourceItemId: suggestion.id,
+      restaurantId: Number(suggestion.restaurant || triggerItem?.restaurant || 0) || undefined,
+      limit: 2,
+      cartItemIds: nextCartItemIds,
+      excludeItemIds: Array.from(
+        new Set([...nextCartItemIds, ...getUpsellExcludedItemIds()])
+      ),
+    });
     void Promise.allSettled([
       logUpsellEvent({
         triggerPoint: "add_to_cart",
