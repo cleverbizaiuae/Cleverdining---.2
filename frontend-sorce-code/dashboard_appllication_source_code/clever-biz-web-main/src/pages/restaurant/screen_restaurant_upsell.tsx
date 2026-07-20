@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
@@ -395,6 +395,8 @@ const ScreenRestaurantUpsell = () => {
   const [newRule, setNewRule] = useState<NewRuleDraft>({ type: "pair" });
   const [addingRule, setAddingRule] = useState(false);
   const [hoverHour, setHoverHour] = useState<number | null>(null);
+  const settingsWriteQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingSettingsWritesRef = useRef(0);
 
   const userRole = useMemo(() => resolveUpsellUserRole(), []);
   const { fmt } = useRestaurantContext();
@@ -757,24 +759,41 @@ const ScreenRestaurantUpsell = () => {
     return normalized;
   };
 
+  const persistSettingsPatch = async (partial: Partial<UpsellSettings>) => {
+    const payload: Record<string, unknown> = { ...partial };
+    if (Object.prototype.hasOwnProperty.call(partial, "prioritized_categories_list")) {
+      payload.prioritized_categories = (partial.prioritized_categories_list || []).join(",");
+      delete payload.prioritized_categories_list;
+    }
+    await axiosInstance.patch("/api/upsell/settings", payload);
+    invalidateApiCache("upsell");
+  };
+
   const patchSettings = async (partial: Partial<UpsellSettings>, successMessage?: string) => {
-    const previous = settings;
-    const merged = normalizeSettings({ ...settings, ...partial });
-    setSettings(merged);
+    setSettings((previous) => normalizeSettings({ ...previous, ...partial }));
+    pendingSettingsWritesRef.current += 1;
+    setSavingSettings(true);
+    const queuedWrite = settingsWriteQueueRef.current
+      .catch(() => undefined)
+      .then(() => persistSettingsPatch(partial));
+    settingsWriteQueueRef.current = queuedWrite;
     try {
-      setSavingSettings(true);
-      await persistSettings(merged, { successMessage, suppressToast: !successMessage });
+      await queuedWrite;
+      if (successMessage) toast.success(successMessage);
     } catch {
-      setSettings(previous);
       toast.error("Failed to update upsell settings.");
+      invalidateApiCache("upsell");
+      await fetchUpsellData(false, "settings");
     } finally {
-      setSavingSettings(false);
+      pendingSettingsWritesRef.current = Math.max(0, pendingSettingsWritesRef.current - 1);
+      if (pendingSettingsWritesRef.current === 0) setSavingSettings(false);
     }
   };
 
   const handleSaveSettings = async () => {
     try {
       setSavingSettings(true);
+      await settingsWriteQueueRef.current.catch(() => undefined);
       await persistSettings(settings, { successMessage: "Upsell settings saved." });
     } catch {
       toast.error("Failed to save settings.");
@@ -788,9 +807,13 @@ const ScreenRestaurantUpsell = () => {
     setSettings((prev) => ({ ...prev, enabled: nextEnabled }));
     try {
       setMasterToggleSaving(true);
+      await settingsWriteQueueRef.current.catch(() => undefined);
       const response = await axiosInstance.put("/api/upsell/settings", { enabled: nextEnabled });
       invalidateApiCache("upsell");
-      setSettings((prev) => normalizeSettings({ ...prev, ...(response.data || {}) }));
+      setSettings((prev) => ({
+        ...prev,
+        enabled: Boolean(response.data?.enabled ?? nextEnabled),
+      }));
       toast.success(nextEnabled ? "AI Upsell enabled." : "AI Upsell disabled.");
     } catch {
       setSettings((prev) => ({ ...prev, enabled: rollback }));

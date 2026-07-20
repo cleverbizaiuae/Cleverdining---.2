@@ -48,6 +48,9 @@ export type UpsellSettingsSnapshot = {
   strategy?: string;
   aggressiveness?: "subtle" | "moderate" | "aggressive";
   tone?: string;
+  session_cap?: number;
+  menu_version?: number;
+  config_version?: number;
 };
 
 type CartLikeItem = {
@@ -78,10 +81,48 @@ const UPSELL_RETRY_DELAY_MS = 250;
 const UPSELL_RESULT_CACHE_MS = 2 * 60_000;
 const UPSELL_PERSISTED_RESULT_CACHE_MS = 15 * 60_000;
 const UPSELL_PERSISTED_RESULT_PREFIX = "cb:upsell_result:v1:";
+const UPSELL_CONFIG_VERSION_KEY = "cb:upsell_config_version";
 const upsellResultRequests = new Map<
   string,
   { expiresAt: number; request: Promise<UpsellSuggestion[]> }
 >();
+
+const clearPersistedUpsellResults = () => {
+  upsellResultRequests.clear();
+  try {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(UPSELL_PERSISTED_RESULT_PREFIX)) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Persistent caching is an optimization only.
+  }
+};
+
+const getKnownUpsellConfigVersion = (): number => {
+  try {
+    const version = Number(localStorage.getItem(UPSELL_CONFIG_VERSION_KEY) || 0);
+    return Number.isInteger(version) && version > 0 ? version : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const syncUpsellConfigVersion = (value: unknown) => {
+  const version = Number(value || 0);
+  if (!Number.isInteger(version) || version <= 0) return;
+  const previous = getKnownUpsellConfigVersion();
+  if (previous !== version) {
+    clearPersistedUpsellResults();
+    try {
+      localStorage.setItem(UPSELL_CONFIG_VERSION_KEY, String(version));
+    } catch {
+      // In-memory invalidation above is still sufficient for this page load.
+    }
+  }
+};
 
 const UPSELL_LOG_DISABLED_UNTIL_KEY = "cb:upsell_log_disabled_until";
 const recentLogKeys = new Map<string, number>();
@@ -278,6 +319,7 @@ const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
     cartItemIds: sortedPositiveIds(params.cartItemIds),
     excludeItemIds: sortedPositiveIds(params.excludeItemIds),
     stage: params.stage || "",
+    configVersion: getKnownUpsellConfigVersion(),
   });
 };
 
@@ -407,6 +449,10 @@ const fetchUpsellSuggestionsRemote = async (
       const payload = response.data && typeof response.data === "object"
         ? response.data as Record<string, unknown>
         : {};
+      const knowledgeBase = payload.knowledge_base && typeof payload.knowledge_base === "object"
+        ? payload.knowledge_base as Record<string, unknown>
+        : {};
+      syncUpsellConfigVersion(knowledgeBase.config_version);
       if (response.status !== 202 && payload.pending !== true) break;
 
       const retryAfterMs = Math.max(
@@ -448,14 +494,15 @@ const fetchUpsellSuggestionsRemote = async (
 };
 
 export function fetchUpsellSuggestions(
-  params: UpsellSuggestionRequest
+  params: UpsellSuggestionRequest,
+  options: { force?: boolean } = {},
 ): Promise<UpsellSuggestion[]> {
   const key = getUpsellRequestKey(params);
   const now = Date.now();
   const cached = upsellResultRequests.get(key);
-  if (cached && cached.expiresAt > now) return cached.request;
+  if (!options.force && cached && cached.expiresAt > now) return cached.request;
 
-  const persisted = readPersistedUpsellResult(key);
+  const persisted = options.force ? null : readPersistedUpsellResult(key);
   if (persisted) {
     const request = Promise.resolve(persisted.slice(0, params.limit ?? 2));
     upsellResultRequests.set(key, {
@@ -492,13 +539,16 @@ export function prefetchUpsellSuggestions(params: UpsellSuggestionRequest): void
   });
 }
 
-export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
+export async function fetchUpsellSettings(
+  options: { force?: boolean } = {},
+): Promise<UpsellSettingsSnapshot> {
   const sessionToken = localStorage.getItem("guest_session_token");
   const response = await cachedGet("/api/upsell/settings", {
     params: sessionToken ? { guest_session_token: sessionToken } : undefined,
     timeout: 3500,
     headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : undefined,
-  }, { ttlMs: 20_000 });
+  }, { ttlMs: 5_000, force: options.force });
+  syncUpsellConfigVersion(response.data?.config_version);
   return {
     enabled: Boolean(response.data?.enabled ?? true),
     show_after_add_to_cart: Boolean(response.data?.show_after_add_to_cart ?? true),
@@ -507,6 +557,9 @@ export async function fetchUpsellSettings(): Promise<UpsellSettingsSnapshot> {
     strategy: response.data?.strategy || "balanced",
     aggressiveness: response.data?.aggressiveness || "moderate",
     tone: response.data?.tone || "friendly",
+    session_cap: safeNumber(response.data?.session_cap) || undefined,
+    menu_version: safeNumber(response.data?.menu_version) || undefined,
+    config_version: safeNumber(response.data?.config_version) || undefined,
   };
 }
 

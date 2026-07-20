@@ -21,6 +21,7 @@ import { Facebook, Globe, Instagram, Loader2, Music2, Search, Twitter, UtensilsC
 import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import {
+  canShowUpsellSession,
   incrementUpsellTouchpointCount,
   getUpsellExcludedItemIds,
   markUpsellItemAccepted,
@@ -259,7 +260,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
 
   useEffect(() => {
     let cancelled = false;
-    fetchUpsellSettings()
+    fetchUpsellSettings({ force: true })
       .then((snapshot) => {
         if (!cancelled) setSettings(snapshot);
       })
@@ -311,7 +312,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       shownSignatureRef.current = signature;
 
       markUpsellItemsShown(shownItems.map((suggestion) => suggestion.id));
-      incrementUpsellTouchpointCount("add_to_cart");
+      incrementUpsellTouchpointCount("add_to_cart", shownItems.length);
       void logUpsellShownBatch({
         triggerPoint: "add_to_cart",
         suggestions: shownItems,
@@ -359,26 +360,17 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       sourceItemIdRef.current = Number(item.id);
       sourceItemIdsRef.current = cartItemIds;
 
-      const shouldRender =
+      const shouldOpenImmediately =
         (settings?.enabled ?? true) &&
-        (settings?.show_after_add_to_cart ?? true);
+        (settings?.show_after_add_to_cart ?? true) &&
+        canShowUpsellSession(settings?.aggressiveness || "moderate");
 
-      if (!shouldRender) {
-        activeRef.current = false;
-        setLoading(false);
-        setOpen(false);
-        setSuggestions([]);
-        return;
-      }
-
-      activeRef.current = true;
-      setLoading(true);
+      activeRef.current = shouldOpenImmediately;
+      setLoading(shouldOpenImmediately);
       setSuggestions([]);
-      setOpen(true);
+      setOpen(shouldOpenImmediately);
 
-      const settingsPromise = settings
-        ? Promise.resolve(settings)
-        : fetchUpsellSettings().catch(() => null);
+      const settingsPromise = fetchUpsellSettings({ force: true }).catch(() => null);
       const suggestionPromise = fetchUpsellSuggestions({
         triggerPoint: "add_to_cart",
         sourceItemId: Number(item.id),
@@ -386,13 +378,20 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         limit: 6,
         cartItemIds,
         excludeItemIds: excludedItemIds,
-      });
+      }, { force: true });
 
       void Promise.all([settingsPromise, suggestionPromise])
         .then(([settingsSnapshot, rawSuggestions]) => {
           if (requestSeqRef.current !== requestId) return [];
           if (settingsSnapshot) setSettings(settingsSnapshot);
-          if (settingsSnapshot && (!settingsSnapshot.enabled || !settingsSnapshot.show_after_add_to_cart)) {
+          if (
+            settingsSnapshot &&
+            (
+              !settingsSnapshot.enabled ||
+              !settingsSnapshot.show_after_add_to_cart ||
+              !canShowUpsellSession(settingsSnapshot.aggressiveness || "moderate")
+            )
+          ) {
             setLoading(false);
             setOpen(false);
             setSuggestions([]);

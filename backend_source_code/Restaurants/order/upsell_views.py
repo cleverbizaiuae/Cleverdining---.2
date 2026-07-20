@@ -22,6 +22,7 @@ from restaurant.models import Restaurant
 from .models import ItemAssociation, OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .schema_guard import ensure_upsell_tables
 from .upsell import build_item_context_upsell_suggestions
+from .upsell_cache import get_restaurant_upsell_cache_versions
 from .upsell_knowledge import (
     build_upsell_agent_context,
     call_upsell_llm,
@@ -39,6 +40,9 @@ from .upsell_serializers import (
 
 
 logger = logging.getLogger(__name__)
+
+
+UPSELL_SESSION_CAPS = {"subtle": 2, "moderate": 4, "aggressive": 6}
 
 
 def _ensure_upsell_schema() -> None:
@@ -335,6 +339,24 @@ def _get_pairing_intelligence_rows(restaurant: Restaurant, min_frequency: int = 
 class UpsellSettingsAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @staticmethod
+    def _response(setting: UpsellSetting) -> Response:
+        menu_version, config_version = get_restaurant_upsell_cache_versions(
+            setting.restaurant_id
+        )
+        payload = dict(UpsellSettingSerializer(setting).data)
+        payload.update(
+            {
+                "menu_version": menu_version,
+                "config_version": config_version,
+                "session_cap": UPSELL_SESSION_CAPS.get(setting.aggressiveness, 4),
+            }
+        )
+        response = Response(payload)
+        response["Cache-Control"] = "no-store, max-age=0"
+        response["Pragma"] = "no-cache"
+        return response
+
     def get(self, request):
         _ensure_upsell_schema()
         restaurant = None
@@ -346,7 +368,7 @@ class UpsellSettingsAPIView(APIView):
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
 
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
-        return Response(UpsellSettingSerializer(setting).data)
+        return self._response(setting)
 
     def put(self, request):
         _ensure_upsell_schema()
@@ -359,8 +381,8 @@ class UpsellSettingsAPIView(APIView):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
         serializer = UpsellSettingSerializer(setting, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        setting = serializer.save()
+        return self._response(setting)
 
     def patch(self, request):
         return self.put(request)
@@ -600,36 +622,61 @@ class UpsellSmartSuggestionsAPIView(APIView):
         session_id = str(request.query_params.get("session_id") or request.query_params.get("sessionId") or "").strip()[:120]
 
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
-        session_cap = {"subtle": 2, "moderate": 4, "aggressive": 6}.get(setting.aggressiveness, 4)
+        menu_version, config_version = get_restaurant_upsell_cache_versions(restaurant.id)
+        session_cap = UPSELL_SESSION_CAPS.get(setting.aggressiveness, 4)
         session_events = UpsellEvent.objects.none()
         suggestions_shown = 0
-        surface_shown_count = 0
         declined_item_ids = set()
         if session_id:
             session_events = UpsellEvent.objects.filter(restaurant=restaurant, session_id=session_id)
             suggestions_shown = session_events.filter(action="shown").count()
-            surface_shown_count = session_events.filter(trigger_point=trigger_point, action="shown").count()
             declined_item_ids = set(
                 session_events.filter(action__in=["declined", "dismissed"])
                 .exclude(upsell_item_id__isnull=True)
                 .values_list("upsell_item_id", flat=True)
             )
-        # Passive cart recommendations remain available while the cart is open.
-        # Session caps apply only to the interruptive pre-payment prompt.
-        if session_id and trigger_point == "before_payment":
-            if surface_shown_count >= session_cap:
-                return Response(
-                    {
-                        "results": [],
-                        "suggestions": [],
-                        "count": 0,
-                        "agent_decision": {
-                            "suggest_nothing": True,
-                            "reason": "Session cap reached.",
-                            "decision_source": "backend_session_cap",
-                        },
-                    }
-                )
+        trigger_setting_field = {
+            "add_to_cart": "show_after_add_to_cart",
+            "cart": "show_in_cart",
+            "before_payment": "show_before_payment",
+        }[trigger_point]
+        if not setting.enabled or not getattr(setting, trigger_setting_field, True):
+            return Response(
+                {
+                    "results": [],
+                    "suggestions": [],
+                    "count": 0,
+                    "agent_decision": {
+                        "suggest_nothing": True,
+                        "reason": "Upsell trigger disabled by restaurant settings.",
+                        "decision_source": "backend_settings",
+                    },
+                    "knowledge_base": {
+                        "menu_version": menu_version,
+                        "config_version": config_version,
+                        "decision_source": "backend_settings",
+                    },
+                }
+            )
+
+        if session_id and suggestions_shown >= session_cap:
+            return Response(
+                {
+                    "results": [],
+                    "suggestions": [],
+                    "count": 0,
+                    "agent_decision": {
+                        "suggest_nothing": True,
+                        "reason": "Session cap reached.",
+                        "decision_source": "backend_session_cap",
+                    },
+                    "knowledge_base": {
+                        "menu_version": menu_version,
+                        "config_version": config_version,
+                        "decision_source": "backend_session_cap",
+                    },
+                }
+            )
 
         declined_roles = set()
         if declined_item_ids:
@@ -719,6 +766,8 @@ class UpsellSmartSuggestionsAPIView(APIView):
                         "llm_status": "pending",
                     },
                     "knowledge_base": {
+                        "menu_version": menu_version,
+                        "config_version": config_version,
                         "venue_type": agent_context.get("restaurant", {}).get("venue_type", "restaurant"),
                         "cart_roles": agent_context.get("cart_roles", []),
                         "target_roles": agent_context.get("target_roles", []),
@@ -824,6 +873,8 @@ class UpsellSmartSuggestionsAPIView(APIView):
             "count": len(results),
             "agent_decision": agent_decision,
             "knowledge_base": {
+                "menu_version": menu_version,
+                "config_version": config_version,
                 "venue_type": agent_context.get("restaurant", {}).get("venue_type", "restaurant"),
                 "cart_roles": agent_context.get("cart_roles", []),
                 "target_roles": agent_context.get("target_roles", []),

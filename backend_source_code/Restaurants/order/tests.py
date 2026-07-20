@@ -16,7 +16,7 @@ from device.models import Device, GuestSession
 from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
-from .models import UpsellEvent, UpsellLLMDecision
+from .models import UpsellEvent, UpsellLLMDecision, UpsellRule, UpsellSetting
 from . import upsell as upsell_module
 from .upsell import build_item_context_upsell_suggestions, get_restaurant_menu_intelligence
 from .upsell_cache import get_restaurant_upsell_cache_versions
@@ -33,7 +33,11 @@ from .upsell_knowledge import (
     request_upsell_llm_decision,
     validated_upsell_agent_decision,
 )
-from .upsell_views import UpsellAnalyticsAPIView, UpsellSmartSuggestionsAPIView
+from .upsell_views import (
+    UpsellAnalyticsAPIView,
+    UpsellSettingsAPIView,
+    UpsellSmartSuggestionsAPIView,
+)
 
 
 class PayBeforeOrderFlowTests(TestCase):
@@ -304,6 +308,45 @@ class UpsellKnowledgeEngineTests(TestCase):
             [row["item"].id for row in second],
         )
 
+    def test_settings_response_is_versioned_and_not_browser_cached(self):
+        request = APIRequestFactory().get("/api/upsell/settings")
+        force_authenticate(request, user=self.owner)
+        response = UpsellSettingsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(response.data["config_version"], 0)
+        self.assertEqual(response.data["session_cap"], 4)
+        self.assertEqual(response["Cache-Control"], "no-store, max-age=0")
+
+    def test_setting_save_invalidates_cached_configuration(self):
+        before = get_restaurant_upsell_cache_versions(self.restaurant.id)
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        setting.tone = "minimal"
+        setting.save(update_fields=["tone", "updated_at"])
+        after = get_restaurant_upsell_cache_versions(self.restaurant.id)
+
+        self.assertGreater(after[1], before[1])
+
+    def test_always_suggest_rule_becomes_the_only_valid_shortlist(self):
+        UpsellRule.objects.create(
+            restaurant=self.restaurant,
+            type="pair",
+            source_item=self.burger,
+            target_item=self.ice_cream,
+        )
+
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="add_to_cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+
+        self.assertEqual([row["item"].id for row in rows], [self.ice_cream.id])
+        self.assertTrue(rows[0]["manual_pair"])
+
     @override_settings(
         UPSELL_LLM_ENABLED=True,
         UPSELL_LLM_PROVIDER="openrouter",
@@ -353,6 +396,9 @@ class UpsellKnowledgeEngineTests(TestCase):
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["model"], "mistralai/mistral-nemo")
         self.assertEqual(payload["response_format"], {"type": "json_object"})
+        batch_context = json.loads(payload["messages"][1]["content"].split("\n", 1)[1])
+        self.assertIn("strategy_rule", batch_context["entries"][0])
+        self.assertIn("tone_rule", batch_context["entries"][0])
 
     def test_menu_version_prevents_stale_llm_decision_reuse(self):
         rows = build_item_context_upsell_suggestions(
@@ -587,8 +633,26 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertTrue(context["recommendation_required"])
         self.assertIn("choose exactly one candidate", context["user_message"])
 
+    def test_agent_prompt_explicitly_carries_strategy_and_tone_rules(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        setting.strategy = "max_revenue"
+        setting.tone = "minimal"
+        setting.save(update_fields=["strategy", "tone", "updated_at"])
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        context = self._agent_context(rows)
+
+        self.assertIn("highest-priced", context["user_message"])
+        self.assertIn("short, direct", context["user_message"])
+
     def _agent_context(self, rows):
-        setting = self.restaurant.upsell_setting
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
         return build_upsell_agent_context(
             restaurant=self.restaurant,
             setting=setting,
@@ -1431,91 +1495,60 @@ class UpsellKnowledgeEngineTests(TestCase):
         request_decision.assert_called_once()
         self.assertTrue(request_decision.call_args.kwargs["background"])
 
-    def test_add_and_passive_cart_remain_available_while_prepayment_is_capped(self):
-        session_id = "surface-specific-cap"
-        for index in range(4):
-            UpsellEvent.objects.create(
-                restaurant=self.restaurant,
-                session_id=session_id,
-                trigger_point="add_to_cart",
-                action="shown",
-                upsell_item=self.cola,
-                upsell_item_name=f"Cola {index}",
+    def test_aggressiveness_cap_applies_across_every_upsell_surface(self):
+        for trigger_point in ("add_to_cart", "cart", "before_payment"):
+            session_id = f"global-cap-{trigger_point}"
+            for index in range(4):
+                UpsellEvent.objects.create(
+                    restaurant=self.restaurant,
+                    session_id=session_id,
+                    trigger_point="add_to_cart",
+                    action="shown",
+                    upsell_item=self.cola,
+                    upsell_item_name=f"Cola {index}",
+                )
+
+            request = APIRequestFactory().get(
+                "/api/upsell/smart-suggestions",
+                {
+                    "restaurant_id": self.restaurant.id,
+                    "cart_item_ids": str(self.burger.id),
+                    "source_item_id": self.burger.id,
+                    "trigger_point": trigger_point,
+                    "session_id": session_id,
+                },
             )
+            with patch("order.upsell_views.call_upsell_llm") as llm:
+                response = UpsellSmartSuggestionsAPIView.as_view()(request)
 
-        add_request = APIRequestFactory().get(
-            "/api/upsell/smart-suggestions",
-            {
-                "restaurant_id": self.restaurant.id,
-                "cart_item_ids": str(self.burger.id),
-                "source_item_id": self.burger.id,
-                "trigger_point": "add_to_cart",
-                "session_id": session_id,
-            },
-        )
-        with patch("order.upsell_views.call_upsell_llm", return_value=(None, "disabled")):
-            add_response = UpsellSmartSuggestionsAPIView.as_view()(add_request)
-
-        self.assertEqual(add_response.status_code, 200)
-        self.assertEqual(add_response.data["count"], 0)
-        self.assertEqual(
-            add_response.data["agent_decision"]["decision_source"],
-            "llm_unavailable",
-        )
-
-        for index in range(4):
-            UpsellEvent.objects.create(
-                restaurant=self.restaurant,
-                session_id=session_id,
-                trigger_point="cart",
-                action="shown",
-                upsell_item=self.cola,
-                upsell_item_name=f"Cart Cola {index}",
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data["count"], 0)
+            self.assertEqual(
+                response.data["agent_decision"]["decision_source"],
+                "backend_session_cap",
             )
+            llm.assert_not_called()
 
-        cart_request = APIRequestFactory().get(
+    def test_disabled_trigger_is_enforced_before_llm_selection(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        setting.show_in_cart = False
+        setting.save(update_fields=["show_in_cart", "updated_at"])
+        request = APIRequestFactory().get(
             "/api/upsell/smart-suggestions",
             {
                 "restaurant_id": self.restaurant.id,
                 "cart_item_ids": str(self.burger.id),
                 "trigger_point": "cart",
-                "session_id": session_id,
             },
         )
-        with patch("order.upsell_views.call_upsell_llm", return_value=(None, "disabled")):
-            cart_response = UpsellSmartSuggestionsAPIView.as_view()(cart_request)
 
-        self.assertEqual(cart_response.status_code, 200)
-        self.assertEqual(cart_response.data["count"], 0)
+        with patch("order.upsell_views.call_upsell_llm") as llm:
+            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
         self.assertEqual(
-            cart_response.data["agent_decision"]["decision_source"],
-            "llm_unavailable",
+            response.data["agent_decision"]["decision_source"],
+            "backend_settings",
         )
-
-        for index in range(4):
-            UpsellEvent.objects.create(
-                restaurant=self.restaurant,
-                session_id=session_id,
-                trigger_point="before_payment",
-                action="shown",
-                upsell_item=self.cola,
-                upsell_item_name=f"Prepayment Cola {index}",
-            )
-
-        before_payment_request = APIRequestFactory().get(
-            "/api/upsell/smart-suggestions",
-            {
-                "restaurant_id": self.restaurant.id,
-                "cart_item_ids": str(self.burger.id),
-                "trigger_point": "before_payment",
-                "session_id": session_id,
-            },
-        )
-        before_payment_response = UpsellSmartSuggestionsAPIView.as_view()(before_payment_request)
-
-        self.assertEqual(before_payment_response.status_code, 200)
-        self.assertEqual(before_payment_response.data["count"], 0)
-        self.assertEqual(
-            before_payment_response.data["agent_decision"]["decision_source"],
-            "backend_session_cap",
-        )
+        llm.assert_not_called()

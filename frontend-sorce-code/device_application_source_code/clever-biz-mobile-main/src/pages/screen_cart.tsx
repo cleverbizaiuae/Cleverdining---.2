@@ -19,8 +19,8 @@ import {
   type UpsellTriggerPoint,
 } from "../lib/upsellApi";
 import {
+  canShowUpsellSession,
   canShowUpsellTouchpoint,
-  getEffectiveUpsellAggressiveness,
   getUpsellExcludedItemIds,
   getUpsellSessionCap,
   getUpsellTriggerLimit,
@@ -225,9 +225,12 @@ const ScreenCart = () => {
     const cartIds = new Set(validCartItems.map((item) => item.id));
     const excludedItemIds = Array.from(new Set([...validCartItemIds, ...getUpsellExcludedItemIds()]));
     const currentSettings = upsellSettings || DEFAULT_UPSELL_SETTINGS;
-    const currentAggressiveness = getEffectiveUpsellAggressiveness(currentSettings.aggressiveness || "moderate");
+    const currentAggressiveness = currentSettings.aggressiveness || "moderate";
     const triggerLimit = getUpsellTriggerLimit("cart", currentAggressiveness);
-    const shouldRenderCart = currentSettings.enabled && currentSettings.show_in_cart;
+    const shouldRenderCart =
+      currentSettings.enabled &&
+      currentSettings.show_in_cart &&
+      canShowUpsellSession(currentAggressiveness);
 
     const recordCartShown = (suggestions: UpsellSuggestion[]) => {
       if (!suggestions.length) {
@@ -240,7 +243,7 @@ const ScreenCart = () => {
 
       cartShownSignatureRef.current = signature;
       markUpsellItemsShown(suggestions.map((suggestion) => suggestion.id));
-      incrementUpsellTouchpointCount("cart");
+      incrementUpsellTouchpointCount("cart", suggestions.length);
       void logUpsellShownBatch({
         triggerPoint: "cart",
         suggestions,
@@ -269,20 +272,11 @@ const ScreenCart = () => {
       recordCartShown(suggestions);
     };
 
-    if (!shouldRenderCart) {
-      setUpsellSuggestions([]);
-      setUpsellLoading(false);
-      cartShownSignatureRef.current = "";
-      return;
-    }
-
-    setUpsellLoading(true);
+    setUpsellLoading(shouldRenderCart);
 
     const loadCartUpsells = async () => {
       try {
-        const settingsPromise = upsellSettings
-          ? Promise.resolve(upsellSettings)
-          : fetchUpsellSettings().catch(() => null);
+        const settingsPromise = fetchUpsellSettings({ force: true }).catch(() => null);
         const suggestionsPromise = fetchUpsellSuggestions({
           triggerPoint: "cart",
           sourceItemId: validCartItems[validCartItems.length - 1]?.id,
@@ -290,7 +284,7 @@ const ScreenCart = () => {
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
-        });
+        }, { force: true });
         const [settingsSnapshot, rawSuggestions] = await Promise.all([
           settingsPromise,
           suggestionsPromise,
@@ -303,11 +297,12 @@ const ScreenCart = () => {
 
         const effectiveSettings: UpsellSettingsSnapshot = settingsSnapshot || currentSettings;
 
-        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(effectiveSettings.aggressiveness || "moderate");
+        const effectiveAggressiveness = effectiveSettings.aggressiveness || "moderate";
         const effectiveTriggerLimit = getUpsellTriggerLimit("cart", effectiveAggressiveness);
         const shouldRenderCart =
           effectiveSettings.enabled &&
-          effectiveSettings.show_in_cart;
+          effectiveSettings.show_in_cart &&
+          canShowUpsellSession(effectiveAggressiveness);
 
         if (!shouldRenderCart) {
           setUpsellSuggestions([]);
@@ -354,12 +349,13 @@ const ScreenCart = () => {
     const cartIds = new Set(validCartItems.map((item) => item.id));
     const excludedItemIds = Array.from(new Set([...validCartItemIds, ...getUpsellExcludedItemIds()]));
     const currentSettings = upsellSettings || DEFAULT_UPSELL_SETTINGS;
-    const currentAggressiveness = getEffectiveUpsellAggressiveness(currentSettings.aggressiveness || "moderate");
+    const currentAggressiveness = currentSettings.aggressiveness || "moderate";
     const triggerLimit = getUpsellTriggerLimit("before_payment", currentAggressiveness);
     const sessionLimit = getUpsellSessionCap(currentAggressiveness);
     const shouldRender =
       currentSettings.enabled &&
       currentSettings.show_before_payment &&
+      canShowUpsellSession(currentAggressiveness) &&
       canShowUpsellTouchpoint("before_payment", triggerLimit, sessionLimit);
 
     const recordBeforePaymentShown = (suggestions: UpsellSuggestion[]) => {
@@ -373,7 +369,7 @@ const ScreenCart = () => {
 
       beforePaymentShownSignatureRef.current = signature;
       markUpsellItemsShown(suggestions.map((suggestion) => suggestion.id));
-      incrementUpsellTouchpointCount("before_payment");
+      incrementUpsellTouchpointCount("before_payment", suggestions.length);
       void logUpsellShownBatch({
         triggerPoint: "before_payment",
         suggestions,
@@ -406,16 +402,13 @@ const ScreenCart = () => {
       setBeforePaymentSuggestions([]);
       setBeforePaymentLoading(false);
       beforePaymentShownSignatureRef.current = "";
-      return;
     }
 
-    setBeforePaymentLoading(true);
+    setBeforePaymentLoading(shouldRender);
 
     const loadBeforePaymentUpsell = async () => {
       try {
-        const settingsSnapshot =
-          upsellSettings ||
-          (await fetchUpsellSettings().catch(() => null));
+        const settingsSnapshot = await fetchUpsellSettings({ force: true }).catch(() => null);
 
         if (cancelled) return;
         if (settingsSnapshot) {
@@ -424,12 +417,13 @@ const ScreenCart = () => {
 
         const effectiveSettings: UpsellSettingsSnapshot = settingsSnapshot || currentSettings;
 
-        const effectiveAggressiveness = getEffectiveUpsellAggressiveness(effectiveSettings.aggressiveness || "moderate");
+        const effectiveAggressiveness = effectiveSettings.aggressiveness || "moderate";
         const effectiveTriggerLimit = getUpsellTriggerLimit("before_payment", effectiveAggressiveness);
         const effectiveSessionLimit = getUpsellSessionCap(effectiveAggressiveness);
         const shouldRenderRemote =
           effectiveSettings.enabled &&
           effectiveSettings.show_before_payment &&
+          canShowUpsellSession(effectiveAggressiveness) &&
           canShowUpsellTouchpoint("before_payment", effectiveTriggerLimit, effectiveSessionLimit);
 
         if (!shouldRenderRemote) {
@@ -445,7 +439,7 @@ const ScreenCart = () => {
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
-        });
+        }, { force: true });
         applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
         if (!cancelled) {

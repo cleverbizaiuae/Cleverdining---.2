@@ -259,6 +259,18 @@ AGGRESSIVENESS_POLICY = {
     },
 }
 
+STRATEGY_INSTRUCTIONS = {
+    "balanced": "Prefer the valid candidate with the strongest acceptance and pairing evidence.",
+    "max_revenue": "Within the required target role, prefer the highest-priced natural valid candidate.",
+    "move_stock": "Within the required target role, prefer valid low-selling or inventory-priority candidates.",
+}
+
+TONE_INSTRUCTIONS = {
+    "friendly": "Write warm, casual, helpful copy without pressure.",
+    "premium": "Write refined, understated copy with no hype or slang.",
+    "minimal": "Write short, direct copy with no filler.",
+}
+
 UPSELL_SYSTEM_PROMPT = """
 You are CleverDining's final upsell recommender. The backend already enforced triggers, caps,
 availability, exclusions, business and venue rules, then supplied the only valid 3-5 candidates.
@@ -267,6 +279,7 @@ not the answer. Choose nothing only when every candidate conflicts with an expli
 
 Roles: MAIN, DRINK_COLD, DRINK_HOT, DESSERT, STARTER, SIDE, SHISHA, CIGAR, ADDON.
 Judge missing meal role, natural pairing, trigger, venue, price fit, time, acceptance and order history.
+Follow the supplied strategy_rule when judging candidates and tone_rule when writing suggestion_copy.
 Avoid a role already represented and avoid repetitive families such as multiple similar shakes when a
 different candidate completes the meal better. add_to_cart complements the new item; cart completes the
 whole order; before_payment is a low-friction final addition. Cafes favor drink/bakery pairings; shisha
@@ -545,6 +558,7 @@ def _candidate_payload(row: Mapping[str, Any]) -> Dict[str, Any]:
         "co_order_frequency": int(row.get("historical_max_frequency") or 0),
         "order_count_7d": int(row.get("order_count_7d") or 0),
         "order_count_30d": int(row.get("order_count_30d") or 0),
+        "inventory_priority": bool(row.get("inventory_priority")),
         "backend_reason": row.get("agent_reasoning") or "",
         "manual_pair_rule": bool(row.get("manual_pair")),
     }
@@ -673,17 +687,38 @@ def build_upsell_agent_context(
     return context
 
 
+def _canonical_strategy_setting(value: Any) -> str:
+    strategy = _normalize_text(value) or "balanced"
+    return {
+        "highest_margin": "max_revenue",
+        "premium_experience": "max_revenue",
+        "margin": "max_revenue",
+        "inventory_movement": "move_stock",
+        "volume": "move_stock",
+        "highest_conversion": "balanced",
+    }.get(strategy, strategy)
+
+
+def _canonical_tone_setting(value: Any) -> str:
+    tone = _normalize_text(value) or "friendly"
+    return {"professional": "premium", "luxury_casual": "premium"}.get(tone, tone)
+
+
 def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
     restaurant = context.get("restaurant", {})
     session = context.get("session", {})
     candidates = context.get("candidates", [])
+    strategy = _canonical_strategy_setting(context.get("settings", {}).get("strategy"))
+    tone = _canonical_tone_setting(context.get("settings", {}).get("tone"))
     payload = {
         "r": {
             "venue_type": restaurant.get("venue_type"),
             "hour": restaurant.get("current_hour"),
         },
         "strategy": context.get("settings", {}).get("strategy"),
+        "strategy_rule": STRATEGY_INSTRUCTIONS.get(strategy, STRATEGY_INSTRUCTIONS["balanced"]),
         "tone": context.get("settings", {}).get("tone"),
+        "tone_rule": TONE_INSTRUCTIONS.get(tone, TONE_INSTRUCTIONS["friendly"]),
         "trigger": context.get("trigger", {"point": context.get("trigger_point")}),
         "recommendation_required": bool(context.get("recommendation_required")),
         "cart_roles": context.get("cart_roles", []),
@@ -714,6 +749,8 @@ def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
                 "score": candidate.get("score"),
                 "pair": candidate.get("pairing_score"),
                 "accept": candidate.get("acceptance_rate"),
+                "orders_30d": candidate.get("order_count_30d"),
+                "inventory_priority": candidate.get("inventory_priority"),
                 "manual": candidate.get("manual_pair_rule"),
             }
             for candidate in candidates
@@ -1201,12 +1238,19 @@ def call_openrouter_upsell_llm_batch(
         if not source_item_id or not candidates or source_item_id in context_by_source:
             continue
         context_by_source[source_item_id] = context
+        strategy = _canonical_strategy_setting((context.get("settings") or {}).get("strategy"))
+        tone = _canonical_tone_setting((context.get("settings") or {}).get("tone"))
         batch_entries.append(
             {
                 "source_item_id": source_item_id,
                 "venue_type": (context.get("restaurant") or {}).get("venue_type"),
                 "strategy": (context.get("settings") or {}).get("strategy"),
+                "strategy_rule": STRATEGY_INSTRUCTIONS.get(
+                    strategy,
+                    STRATEGY_INSTRUCTIONS["balanced"],
+                ),
                 "tone": (context.get("settings") or {}).get("tone"),
+                "tone_rule": TONE_INSTRUCTIONS.get(tone, TONE_INSTRUCTIONS["friendly"]),
                 "cart": [
                     {
                         "id": item.get("id"),
@@ -1229,6 +1273,8 @@ def call_openrouter_upsell_llm_batch(
                         "score": candidate.get("score"),
                         "pairing_score": candidate.get("pairing_score"),
                         "acceptance_rate": candidate.get("acceptance_rate"),
+                        "order_count_30d": candidate.get("order_count_30d"),
+                        "inventory_priority": candidate.get("inventory_priority"),
                     }
                     for candidate in candidates
                 ],
@@ -1483,6 +1529,8 @@ def _upsell_llm_decision_cache_key(context: Mapping[str, Any], cache_scope: str)
                 "score": candidate.get("score"),
                 "pairing_score": candidate.get("pairing_score"),
                 "acceptance_rate": candidate.get("acceptance_rate"),
+                "order_count_30d": candidate.get("order_count_30d"),
+                "inventory_priority": candidate.get("inventory_priority"),
             }
             for candidate in candidates
             if isinstance(candidate, Mapping)
@@ -1537,6 +1585,11 @@ def _persistent_upsell_context_payload(
                 "price": candidate.get("price"),
                 "roles": candidate.get("roles"),
                 "target_role": candidate.get("target_role"),
+                "score": candidate.get("score"),
+                "pairing_score": candidate.get("pairing_score"),
+                "acceptance_rate": candidate.get("acceptance_rate"),
+                "order_count_30d": candidate.get("order_count_30d"),
+                "inventory_priority": candidate.get("inventory_priority"),
             }
             for candidate in candidates
             if isinstance(candidate, Mapping)

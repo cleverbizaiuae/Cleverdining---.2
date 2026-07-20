@@ -196,6 +196,17 @@ export function getUpsellSessionCap(aggressiveness: UpsellAggressiveness = "mode
   return 4;
 }
 
+export function canShowUpsellSession(
+  aggressiveness: UpsellAggressiveness = "moderate",
+): boolean {
+  try {
+    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
+    return total < getUpsellSessionCap(aggressiveness);
+  } catch {
+    return true;
+  }
+}
+
 export function getEffectiveUpsellAggressiveness(aggressiveness: UpsellAggressiveness = "moderate"): UpsellAggressiveness {
   try {
     const declineScore = Number(sessionStorage.getItem(TOTAL_DECLINE_SCORE_KEY) || "0");
@@ -232,14 +243,18 @@ export function incrementAfterAddUpsellCount(): number {
   return incrementUpsellTouchpointCount("add_to_cart");
 }
 
-export function incrementUpsellTouchpointCount(triggerPoint: UpsellTouchpoint): number {
+export function incrementUpsellTouchpointCount(
+  triggerPoint: UpsellTouchpoint,
+  amount = 1,
+): number {
   try {
+    const incrementBy = Math.max(1, Math.floor(Number(amount) || 1));
     const storageKey = TOUCHPOINT_COUNTER_KEYS[triggerPoint];
     const current = Number(sessionStorage.getItem(storageKey) || "0");
-    const next = Number.isFinite(current) ? current + 1 : 1;
+    const next = Number.isFinite(current) ? current + incrementBy : incrementBy;
     sessionStorage.setItem(storageKey, String(next));
     const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
-    const nextTotal = Number.isFinite(total) ? total + 1 : 1;
+    const nextTotal = Number.isFinite(total) ? total + incrementBy : incrementBy;
     sessionStorage.setItem(TOTAL_COUNT_KEY, String(nextTotal));
     return next;
   } catch {

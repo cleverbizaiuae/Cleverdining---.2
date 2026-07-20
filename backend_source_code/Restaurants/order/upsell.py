@@ -1050,6 +1050,7 @@ def _build_upsell_suggestions_for_items(
 
         candidate_metadata = item_intelligence.get(str(candidate.id), {})
         candidate_roles = set(candidate_metadata.get("engine_roles") or _item_roles(candidate, role_categories))
+        is_manual_pair = candidate.id in pair_boost_targets
         if generic_unknown_menu and not candidate_roles:
             candidate_roles = {"premium"}
         if not candidate_roles:
@@ -1063,12 +1064,17 @@ def _build_upsell_suggestions_for_items(
         # The brief's highest-priority guard: do not suggest a role already in
         # the current cart. Pairing intelligence can rank candidates, not break
         # meal-composition rules.
-        if candidate_roles & cart_role_set:
+        if not is_manual_pair and candidate_roles & cart_role_set:
             if not candidate_knowledge_roles or (candidate_knowledge_roles & cart_knowledge_roles):
                 continue
-        if candidate_roles.isdisjoint(set(gaps)):
+        if not is_manual_pair and candidate_roles.isdisjoint(set(gaps)):
             continue
-        if target_knowledge_roles and candidate_knowledge_roles and candidate_knowledge_roles.isdisjoint(target_knowledge_roles):
+        if (
+            not is_manual_pair
+            and target_knowledge_roles
+            and candidate_knowledge_roles
+            and candidate_knowledge_roles.isdisjoint(target_knowledge_roles)
+        ):
             continue
 
         candidate_category_id = candidate.category_id
@@ -1079,12 +1085,22 @@ def _build_upsell_suggestions_for_items(
         score = 0
         reasons: Dict[str, int] = {}
 
-        matching_gap_rank = min((gap_rank.get(role, 99) for role in candidate_roles), default=99)
+        matching_gap_rank = (
+            0
+            if is_manual_pair
+            else min((gap_rank.get(role, 99) for role in candidate_roles), default=99)
+        )
         matching_target_roles = [role for role in knowledge_gaps if role in candidate_knowledge_roles]
         target_role = (
             matching_target_roles[0]
             if matching_target_roles
-            else default_knowledge_role_for_engine_role(min(candidate_roles, key=lambda role: gap_rank.get(role, 99)))
+            else (
+                sorted(candidate_knowledge_roles)[0]
+                if is_manual_pair and candidate_knowledge_roles
+                else default_knowledge_role_for_engine_role(
+                    min(candidate_roles, key=lambda role: gap_rank.get(role, 99))
+                )
+            )
         )
         if matching_gap_rank == 0:
             score += 55
@@ -1264,6 +1280,7 @@ def _build_upsell_suggestions_for_items(
                 "historical_max_frequency": int(historical.get("max_frequency", 0.0)) if historical else 0,
                 "historical_total_frequency": float(historical.get("total_frequency", 0.0)) if historical else 0.0,
                 "historical_acceptance_rate": historical_acceptance_rate,
+                "inventory_priority": candidate.id in inventory_priority_ids,
                 "order_count_7d": int(candidate_order_counts.get("order_count_7d", 0)),
                 "order_count_30d": int(candidate_order_counts.get("order_count_30d", 0)),
             }
@@ -1271,6 +1288,13 @@ def _build_upsell_suggestions_for_items(
 
     if not results:
         return []
+
+    # "Always Suggest" is a hard restaurant rule. Keep every normal safety
+    # filter, but give the LLM only the valid forced targets when such a rule
+    # applies to an item already in the cart.
+    manual_results = [row for row in results if row.get("manual_pair")]
+    if manual_results:
+        results = manual_results
 
     best_gap_rank = min(int(row.get("gap_rank", 99)) for row in results)
     results = [row for row in results if int(row.get("gap_rank", 99)) == best_gap_rank]
@@ -1291,6 +1315,8 @@ def _build_upsell_suggestions_for_items(
             key=lambda row: (
                 bool(row.get("manual_pair")),
                 -int(row.get("gap_rank", 99)),
+                bool(row.get("inventory_priority")),
+                -int(row.get("order_count_30d", 0)),
                 -float(row.get("historical_total_frequency", 0.0)),
                 row["score"],
             ),
