@@ -323,7 +323,7 @@ export default function CheckoutPage() {
       navigate('/dashboard/orders?payment=partial', { replace: true });
       return;
     }
-    navigate(`/dashboard/success/?session_id=${encodeURIComponent(result.transactionId || "")}`, {
+    navigate(`/thankyou?session_id=${encodeURIComponent(result.transactionId || "")}`, {
       replace: true,
       state: {
         orderId,

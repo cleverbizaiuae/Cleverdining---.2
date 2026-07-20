@@ -119,9 +119,11 @@ const SuccessPage = () => {
     const stripeSessionId = params.get("session_id");
     const checkoutSessionId = params.get("cko-session-id");
     const transactionId = params.get("transaction_id") || params.get("payment_id");
+    const orderId = params.get("order_id");
     return {
       sessionId: stripeSessionId || transactionId,
       checkoutSessionId,
+      orderId,
       hasGatewayReference: Boolean(stripeSessionId || checkoutSessionId || transactionId),
     };
   }, []);
@@ -173,7 +175,7 @@ const SuccessPage = () => {
     // Fetch restaurant info including Google Review URL
     const fetchRestaurantInfo = async () => {
       try {
-        const orderId = localStorage.getItem("pending_order_id");
+        const orderId = paymentParams.orderId || localStorage.getItem("pending_order_id");
         const guestToken = localStorage.getItem("guest_session_token");
 
         if (orderId && guestToken) {
@@ -210,7 +212,7 @@ const SuccessPage = () => {
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, []);
+  }, [paymentParams.orderId]);
 
   useEffect(() => {
     if (!paymentVerified || sessionCleanedRef.current) return;

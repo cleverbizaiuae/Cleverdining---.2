@@ -452,8 +452,14 @@ class ConfirmCashPaymentAPIView(APIView):
                         {
                             "type": "order_status_update",
                             "order_id": order.id,
-                            "status": 'paid', 
-                            "session_ended": True
+                            "status": 'paid',
+                            "payment_status": 'paid',
+                            "payment_method": 'cash',
+                            "session_ended": True,
+                            "session_id": session.id,
+                            "device_id": order.device_id,
+                            "restaurant_id": order.restaurant_id,
+                            "reason": "bill_paid"
                         }
                     )
                 except Exception as e:
@@ -466,8 +472,13 @@ class ConfirmCashPaymentAPIView(APIView):
                         {
                             "type": "order_status_update",
                             "order_id": order.id,
-                            "status": 'paid', 
-                            "session_ended": False
+                            "status": 'paid',
+                            "payment_status": 'paid',
+                            "payment_method": 'cash',
+                            "session_ended": False,
+                            "session_id": order.guest_session.id,
+                            "device_id": order.device_id,
+                            "restaurant_id": order.restaurant_id
                         }
                     )
                  except Exception as e:
@@ -543,12 +554,16 @@ class MyOrdersAPIView(generics.ListAPIView):
                 # Resilient lookup: try active first, fall back to most recent
                 session = GuestSession.objects.filter(session_token=session_token).order_by('-is_active', '-created_at').first()
                 if session:
-                    return base_qs.filter(
+                    queryset = base_qs.filter(
                         guest_session=session,
-                        status__in=['awaiting_payment', 'pending', 'preparing', 'served', 'delivered', 'awaiting_cash']
-                    ).exclude(
-                        payment_status='paid'
-                    ).order_by('-created_time')
+                        status__in=['awaiting_payment', 'pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash']
+                    )
+                    include_settled = str(self.request.query_params.get('include_settled', '')).lower() in {
+                        '1', 'true', 'yes'
+                    }
+                    if not include_settled:
+                        queryset = queryset.exclude(payment_status='paid')
+                    return queryset.order_by('-created_time')
                 return Order.objects.none()
 
             # Fallback to device_id REMOVED for security/isolation. 

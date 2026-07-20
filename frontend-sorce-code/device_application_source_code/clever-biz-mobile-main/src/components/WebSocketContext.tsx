@@ -225,6 +225,27 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
             return;
           }
 
+          const paymentCompleted =
+            data.reason === "bill_paid" ||
+            data.payment_status === "paid" ||
+            (data.type === "order_status_update" && data.session_ended && data.status === "paid");
+
+          if (paymentCompleted) {
+            const paidRestaurantId = firstString(data.restaurant_id, restaurant_id);
+            const paidOrderId = firstString(data.order_id);
+            if (paidRestaurantId) {
+              setLocalStorageSynced("last_paid_restaurant_id", paidRestaurantId);
+            }
+            if (paidOrderId) {
+              setLocalStorageSynced("pending_order_id", paidOrderId);
+            }
+
+            const params = new URLSearchParams({ payment: data.payment_method || "completed" });
+            if (paidOrderId) params.set("order_id", paidOrderId);
+            window.location.replace(`/thankyou?${params.toString()}`);
+            return;
+          }
+
           console.log("Session Ended via WebSocket");
           localStorage.removeItem("userInfo");
           localStorage.removeItem("guest_session_token");

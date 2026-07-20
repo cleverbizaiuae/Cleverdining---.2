@@ -278,6 +278,7 @@ const ScreenOrders = () => {
   const hasActiveBackendOrdersRef = useRef(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const sessionClearedRef = useRef(false);
+  const paymentCompletionStartedRef = useRef(false);
   const [highlightedOrderIds, setHighlightedOrderIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"list" | "games">("list");
 
@@ -373,6 +374,23 @@ const ScreenOrders = () => {
     knownOrderIdsRef.current = currentIds;
   }, [orders]);
 
+  const completePaymentFlow = useCallback((paidOrderId?: string, paymentMethod = "completed") => {
+    if (paymentCompletionStartedRef.current) return;
+    paymentCompletionStartedRef.current = true;
+    preloadThankYouPage();
+
+    if (tableInfo.restaurantId) {
+      setLocalStorageSynced("last_paid_restaurant_id", tableInfo.restaurantId);
+    }
+    if (paidOrderId) {
+      setLocalStorageSynced("pending_order_id", paidOrderId);
+    }
+
+    const params = new URLSearchParams({ payment: paymentMethod });
+    if (paidOrderId) params.set("order_id", paidOrderId);
+    window.location.replace(`/thankyou?${params.toString()}`);
+  }, [tableInfo.restaurantId]);
+
   const syncOrdersFromBackend = useCallback((backendList: BackendOrder[]) => {
     const mapped = backendList.map(mapBackendOrder);
     const mappedById = new Map(mapped.map((order) => [order.backendId, order]));
@@ -429,7 +447,11 @@ const ScreenOrders = () => {
       `/api/customer/uncomplete/orders/`,
       {
         headers: guestToken ? { "X-Guest-Session-Token": guestToken } : {},
-        params: tableInfo.deviceId ? { device_id: tableInfo.deviceId } : {},
+        params: {
+          ...(tableInfo.deviceId ? { device_id: tableInfo.deviceId } : {}),
+          include_settled: 1,
+          page_size: 100,
+        },
       },
       { ttlMs: 1_000 },
     );
@@ -443,8 +465,21 @@ const ScreenOrders = () => {
           ? payload.orders
           : [];
 
+    const mappedOrders = backendOrders.map(mapBackendOrder);
+    const activeUnpaidOrders = mappedOrders.filter((order) => !order.isFullyPaid && !order.shouldRemove);
+    const paidOrders = mappedOrders.filter((order) => order.isFullyPaid);
+    const pendingOrderId = localStorage.getItem("pending_order_id");
+    const hasTrackedPayment =
+      hasActiveBackendOrdersRef.current ||
+      Boolean(pendingOrderId && mappedOrders.some((order) => order.backendId === String(pendingOrderId)));
+
+    if (hasTrackedPayment && paidOrders.length > 0 && activeUnpaidOrders.length === 0) {
+      completePaymentFlow(paidOrders[0].backendId);
+      return;
+    }
+
     syncOrdersFromBackend(backendOrders);
-  }, [syncOrdersFromBackend, tableInfo.deviceId]);
+  }, [completePaymentFlow, syncOrdersFromBackend, tableInfo.deviceId]);
 
   const pollOrderStatus = useCallback(async () => {
     if (!hasActiveBackendOrdersRef.current) {
@@ -783,7 +818,7 @@ const ScreenOrders = () => {
         await clearSession();
         clearTreat();
         setIsCheckoutOpen(false);
-        navigate("/thankyou");
+        completePaymentFlow(undefined, paymentMethod);
       }, 2500);
       return;
     }

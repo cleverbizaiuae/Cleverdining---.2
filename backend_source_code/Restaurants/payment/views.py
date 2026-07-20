@@ -228,7 +228,7 @@ class CreateBulkCheckoutSessionView(APIView):
         if not provider:
             provider = request.query_params.get('provider')
         origin = request.headers.get('Origin') or 'https://officialcleverdiningcustomer.netlify.app'
-        default_success_url = f'{origin}/dashboard/success/'
+        default_success_url = f'{origin}/thankyou'
         split_success_url = f'{origin}/dashboard/success/?payment=partial'
 
         if split_count:
@@ -351,7 +351,7 @@ class CreateBulkCheckoutSessionView(APIView):
                  success_url = f"{backend_origin}/api/customer/payment/payme/return/"
                  cancel_url = f"{backend_origin}/api/customer/payment/payme/return/?status=cancelled"
              else:
-                 success_url = f'{origin}/dashboard/success/'
+                 success_url = f'{origin}/thankyou'
                  cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
 
              # Use latest unpaid order as anchor for session-wide checkout metadata.
@@ -427,7 +427,7 @@ class CreateCheckoutSessionView(APIView):
             success_url = f"{backend_origin}/api/customer/payment/payme/return/"
             cancel_url = f"{backend_origin}/api/customer/payment/payme/return/?status=cancelled"
         else:
-            success_url = f'{origin}/dashboard/success/'
+            success_url = f'{origin}/thankyou'
             # User requested redirection to Orders on cancel with status
             cancel_url = f'{origin}/dashboard/orders/?payment=cancelled'
 
@@ -654,7 +654,7 @@ class PayTabsReturnView(APIView):
                  success_url = _payment_client_url(
                      payment,
                      '_client_success_url',
-                     'https://officialcleverdiningcustomer.netlify.app/dashboard/success/',
+                     'https://officialcleverdiningcustomer.netlify.app/thankyou',
                  )
                  return redirect(_append_redirect_query(success_url, session_id=tran_ref))
             
@@ -717,8 +717,8 @@ class PaymeReturnView(APIView):
         success_url = _payment_client_url(
             payment,
             '_client_success_url',
-            'https://officialcleverdiningcustomer.netlify.app/dashboard/success/',
-        ) if payment else 'https://officialcleverdiningcustomer.netlify.app/dashboard/success/'
+            'https://officialcleverdiningcustomer.netlify.app/thankyou',
+        ) if payment else 'https://officialcleverdiningcustomer.netlify.app/thankyou'
         return redirect(
             _append_redirect_query(success_url, session_id=txn)
         )

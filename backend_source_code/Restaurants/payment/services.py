@@ -242,6 +242,10 @@ class PaymentService:
                     "type": "session_closed",
                     "session_id": session.id,
                     "table_id": order.device_id,
+                    "device_id": order.device_id,
+                    "restaurant_id": order.restaurant_id,
+                    "order_id": order.id,
+                    "payment_status": "paid",
                     "reason": "bill_paid"
                 }
             )
@@ -253,7 +257,14 @@ class PaymentService:
                 f"session_{session.id}",
                 {
                     "type": "session_closed",
-                    "message": "Session closed after payment"
+                    "message": "Session closed after payment",
+                    "session_id": session.id,
+                    "table_id": order.device_id,
+                    "device_id": order.device_id,
+                    "restaurant_id": order.restaurant_id,
+                    "order_id": order.id,
+                    "payment_status": "paid",
+                    "reason": "bill_paid"
                 }
             )
         except Exception as e:

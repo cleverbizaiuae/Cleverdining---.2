@@ -16,7 +16,7 @@ from device.models import Device, GuestSession
 from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
-from .models import UpsellEvent, UpsellLLMDecision, UpsellRule, UpsellSetting
+from .models import Order, UpsellEvent, UpsellLLMDecision, UpsellRule, UpsellSetting
 from . import upsell as upsell_module
 from .upsell import build_item_context_upsell_suggestions, get_restaurant_menu_intelligence
 from .upsell_cache import get_restaurant_upsell_cache_versions
@@ -120,6 +120,112 @@ class PayBeforeOrderFlowTests(TestCase):
         owner_response = self.client.get("/owners/orders/")
         owner_orders = owner_response.json()["results"]["orders"]
         self.assertEqual(len(owner_orders), 1)
+
+
+class PaymentCompletionNavigationTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="payment-completion-owner@example.com",
+            username="Payment Completion Owner",
+            password="test-password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Payment Completion Restaurant",
+            location="Dubai",
+            phone_number="+971500007777",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table Paid",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        self.session = GuestSession.objects.create(
+            device=self.device,
+            session_token="payment-completion-session",
+        )
+        self.order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            guest_session=self.session,
+            status="awaiting_cash",
+            payment_status="pending_cash",
+            total_price="42.00",
+        )
+        self.client = APIClient()
+
+    def test_cash_confirmation_notifies_guest_before_session_logout(self):
+        sent_events = []
+
+        def fake_async_to_sync(_callable):
+            def send(group, payload):
+                sent_events.append((group, payload))
+
+            return send
+
+        self.client.force_authenticate(self.owner)
+        with patch("order.views.async_to_sync", side_effect=fake_async_to_sync):
+            response = self.client.patch(f"/owners/orders/confirm-cash/{self.order.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.session.refresh_from_db()
+        self.assertEqual(self.order.payment_status, "paid")
+        self.assertFalse(self.session.is_active)
+
+        guest_events = [
+            payload
+            for group, payload in sent_events
+            if group == f"session_{self.session.id}" and payload.get("type") == "order_status_update"
+        ]
+        self.assertEqual(len(guest_events), 1)
+        self.assertEqual(guest_events[0]["reason"], "bill_paid")
+        self.assertEqual(guest_events[0]["payment_method"], "cash")
+        self.assertEqual(guest_events[0]["session_id"], self.session.id)
+        self.assertEqual(guest_events[0]["device_id"], self.device.id)
+
+    def test_paid_order_can_be_polled_for_completion_transition(self):
+        self.order.payment_status = "paid"
+        self.order.status = "delivered"
+        self.order.amount_paid = self.order.total_price
+        self.order.save(update_fields=["payment_status", "status", "amount_paid", "updated_time"])
+
+        hidden_response = self.client.get(
+            "/api/customer/uncomplete/orders/",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+        self.assertEqual(hidden_response.status_code, 200)
+        self.assertEqual(hidden_response.json()["results"], [])
+
+        transition_response = self.client.get(
+            "/api/customer/uncomplete/orders/?include_settled=1",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+        self.assertEqual(transition_response.status_code, 200)
+        results = transition_response.json()["results"]
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0]["is_fully_paid"])
+
+    @patch("payment.views.PaymentService.create_payment")
+    def test_card_checkout_uses_public_thank_you_return(self, create_payment):
+        create_payment.return_value = {
+            "url": "https://gateway.example/checkout",
+            "provider": "stripe",
+            "transaction_id": "txn-test",
+        }
+
+        response = self.client.post(
+            "/api/customer/create-bulk-checkout-session/",
+            {},
+            format="json",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+            HTTP_ORIGIN="https://customer.example",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(create_payment.call_args.kwargs["success_url"], "https://customer.example/thankyou")
 
 
 class UpsellAnalyticsImageTests(TestCase):
