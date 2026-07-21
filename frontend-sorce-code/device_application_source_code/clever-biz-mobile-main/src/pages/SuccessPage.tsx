@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Instagram,
   Music2,
+  RefreshCw,
   Star,
   Twitter,
 } from "lucide-react";
@@ -21,6 +22,23 @@ const firstNonEmpty = (...values: unknown[]) => {
   }
   return null;
 };
+
+const VERIFIED_PAYMENT_STATUSES = new Set([
+  "completed",
+  "paid",
+  "success",
+  "succeeded",
+  "captured",
+  "payment_received",
+  "payment_approved",
+]);
+
+const FAILED_PAYMENT_STATUSES = new Set([
+  "failed",
+  "declined",
+  "cancelled",
+  "canceled",
+]);
 
 const resolveStoredRestaurantId = (): string | null => {
   try {
@@ -127,8 +145,9 @@ const SuccessPage = () => {
       hasGatewayReference: Boolean(stripeSessionId || checkoutSessionId || transactionId),
     };
   }, []);
-  const paymentSessionId = paymentParams.sessionId || paymentParams.checkoutSessionId;
   const [paymentVerified, setPaymentVerified] = useState(!paymentParams.hasGatewayReference);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationRetry, setVerificationRetry] = useState(0);
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string>("");
   const [restaurantId, setRestaurantId] = useState<string | null>(() => resolveStoredRestaurantId());
@@ -142,27 +161,50 @@ const SuccessPage = () => {
     let cancelled = false;
 
     const verifySettlement = async () => {
-      try {
-        const verifyPayload = paymentParams.checkoutSessionId
-          ? { "cko-session-id": paymentParams.checkoutSessionId }
-          : { session_id: paymentParams.sessionId };
-        const response = await axiosInstance.post("/api/customer/payment/verify/", verifyPayload);
-        const remainingAmount = Number(response.data?.remaining_amount || 0);
-        if (response.data?.fully_paid === false || remainingAmount > 0) {
-          navigate("/dashboard/orders?payment=partial", { replace: true });
-          return;
+      setVerificationError(null);
+      let lastError = "Payment confirmation is taking longer than expected.";
+
+      for (let attempt = 0; attempt < 4 && !cancelled; attempt += 1) {
+        try {
+          const verifyPayload = paymentParams.checkoutSessionId
+            ? { "cko-session-id": paymentParams.checkoutSessionId }
+            : { session_id: paymentParams.sessionId };
+          const response = await axiosInstance.post("/api/customer/payment/verify/", verifyPayload);
+          const remainingAmount = Number(response.data?.remaining_amount || 0);
+          if (response.data?.fully_paid === false || remainingAmount > 0) {
+            navigate("/dashboard/orders?payment=partial", { replace: true });
+            return;
+          }
+
+          const paymentStatus = String(
+            response.data?.status || response.data?.payment_status || "",
+          ).toLowerCase();
+          if (response.data?.fully_paid === true || VERIFIED_PAYMENT_STATUSES.has(paymentStatus)) {
+            if (!cancelled) setPaymentVerified(true);
+            return;
+          }
+          if (FAILED_PAYMENT_STATUSES.has(paymentStatus)) {
+            lastError = "The payment was not completed. Please return to your orders and try again.";
+            break;
+          }
+        } catch (error) {
+          console.error("Failed to verify payment settlement:", error);
+          lastError = "We could not confirm the payment with the provider yet.";
         }
-      } catch (error) {
-        console.error("Failed to verify payment settlement:", error);
+
+        if (attempt < 3) {
+          await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+        }
       }
-      if (!cancelled) setPaymentVerified(true);
+
+      if (!cancelled) setVerificationError(lastError);
     };
 
     void verifySettlement();
     return () => {
       cancelled = true;
     };
-  }, [navigate, paymentParams]);
+  }, [navigate, paymentParams, verificationRetry]);
 
   useEffect(() => {
     // Prevent back navigation
@@ -259,6 +301,34 @@ const SuccessPage = () => {
     // Open in new tab/window (external)
     window.open(resolvedGoogleReviewUrl, "_blank", "noopener,noreferrer");
   };
+
+  if (!paymentVerified && verificationError) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="w-full max-w-sm text-center">
+          <h1 className="mb-3 text-2xl font-semibold">Confirming your payment</h1>
+          <p className="mb-6 text-sm leading-relaxed text-white/65">{verificationError}</p>
+          <div className="grid gap-3">
+            <button
+              type="button"
+              onClick={() => setVerificationRetry((current) => current + 1)}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 font-semibold text-slate-950"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry confirmation
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/orders", { replace: true })}
+              className="min-h-12 rounded-xl border border-white/20 px-4 font-semibold text-white"
+            >
+              Return to orders
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!paymentVerified) {
     return (
