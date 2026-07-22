@@ -7,19 +7,15 @@ import toast from "react-hot-toast";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import {
   TrendingUp,
-  ShoppingBag,
   Users,
+  DollarSign,
   Search,
   Plus,
   ArrowUpRight,
   ArrowDownRight,
   Calendar,
-  CalendarCheck,
-  Ban,
-  Table2,
-  UserCheck,
-  Receipt,
-  QrCode,
+  BarChart3,
+  LayoutGrid,
   FolderPlus,
   Layers,
   Pencil,
@@ -29,6 +25,8 @@ import {
   Lock,
   Video
 } from "lucide-react";
+import type { ScriptableContext } from "chart.js";
+import { Line } from "react-chartjs-2";
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
@@ -63,23 +61,21 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
 // 1. METRIC CARDS
 // Spec: Left: Title (slate-500), Value (slate-900), Change (green/red). Right: subtle line icon.
 const MetricCard = ({ title, value, subtext, icon: Icon, trend, isPositive = true }: any) => (
-  <div className="min-h-[140px] bg-white p-6 rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex justify-between items-start">
-    <div>
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">{title}</p>
-      <h3 className="text-2xl font-semibold text-slate-900 mb-2 leading-none">{value}</h3>
-      <div className="flex items-center gap-2">
+  <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-white p-5">
+    <div className="min-w-0 flex-1">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{title}</p>
+      <div className="mt-1 text-2xl font-semibold leading-none text-slate-900">{value}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {trend && (
-          <span className={`text-xs font-medium flex items-center ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-            {isPositive ? <ArrowUpRight size={13} strokeWidth={1.8} /> : <ArrowDownRight size={13} strokeWidth={1.8} />}
+          <span className={`inline-flex items-center text-xs font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+            {isPositive ? <ArrowUpRight className="mr-0.5 h-3 w-3" strokeWidth={1.8} /> : <ArrowDownRight className="mr-0.5 h-3 w-3" strokeWidth={1.8} />}
             {trend}
           </span>
         )}
         <span className="text-xs text-slate-400">{subtext}</span>
       </div>
     </div>
-    <div className="pt-1 text-slate-300">
-      <Icon size={20} strokeWidth={1.8} />
-    </div>
+    <Icon className="h-5 w-5 flex-shrink-0 text-slate-300" strokeWidth={1.8} />
   </div>
 );
 
@@ -114,6 +110,106 @@ const normalizeSalesAnalytics = (payload: any) => {
     revenue: rows.map((row: any) => toNumber(row.revenue || row.totalRevenue || row.total_revenue || row.sales || row.amount)),
     orders: rows.map((row: any) => toNumber(row.orders || row.totalOrders || row.total_orders || row.order_count || row.count)),
   };
+};
+
+const RESERVATIONS_CHART_DATA = [
+  { name: "Mon", reservations: 8, walkIns: 3 },
+  { name: "Tue", reservations: 5, walkIns: 1 },
+  { name: "Wed", reservations: 14, walkIns: 6 },
+  { name: "Thu", reservations: 10, walkIns: 4 },
+  { name: "Fri", reservations: 18, walkIns: 7 },
+  { name: "Sat", reservations: 22, walkIns: 9 },
+  { name: "Sun", reservations: 16, walkIns: 5 },
+];
+
+const ReservationsAnalyticsChart = () => {
+  const chartData = {
+    labels: RESERVATIONS_CHART_DATA.map((item) => item.name),
+    datasets: [
+      {
+        label: "Reservations",
+        data: RESERVATIONS_CHART_DATA.map((item) => item.reservations),
+        borderColor: "#0055FE",
+        borderWidth: 1.5,
+        backgroundColor: (context: ScriptableContext<"line">) => {
+          const chart = context.chart;
+          const gradient = chart.ctx.createLinearGradient(0, 0, 0, chart.chartArea?.bottom || 280);
+          gradient.addColorStop(0, "rgba(0, 85, 254, 0.08)");
+          gradient.addColorStop(1, "rgba(0, 85, 254, 0)");
+          return gradient;
+        },
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: "#0055FE",
+        pointHoverBorderColor: "#FFFFFF",
+        pointHoverBorderWidth: 2,
+      },
+      {
+        label: "Walk-ins",
+        data: RESERVATIONS_CHART_DATA.map((item) => item.walkIns),
+        borderColor: "#0EA5E9",
+        borderWidth: 1.5,
+        backgroundColor: (context: ScriptableContext<"line">) => {
+          const chart = context.chart;
+          const gradient = chart.ctx.createLinearGradient(0, 0, 0, chart.chartArea?.bottom || 280);
+          gradient.addColorStop(0, "rgba(14, 165, 233, 0.08)");
+          gradient.addColorStop(1, "rgba(14, 165, 233, 0)");
+          return gradient;
+        },
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: "#0EA5E9",
+        pointHoverBorderColor: "#FFFFFF",
+        pointHoverBorderWidth: 2,
+      },
+    ],
+  };
+
+  const options: any = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#FFFFFF",
+        titleColor: "#0F172A",
+        bodyColor: "#475569",
+        borderColor: "#E2E8F0",
+        borderWidth: 1,
+        padding: 12,
+        displayColors: true,
+        titleFont: { size: 12, weight: "bold", family: "Inter" },
+        bodyFont: { size: 12, family: "Inter" },
+        callbacks: {
+          label: (context: any) => `${context.dataset.label}: ${context.parsed.y ?? 0}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { color: "#94A3B8", font: { size: 11, family: "Inter" } },
+      },
+      y: {
+        beginAtZero: true,
+        border: { display: false },
+        grid: { color: "#F1F5F9", borderDash: [3, 3] },
+        ticks: { color: "#94A3B8", font: { size: 11, family: "Inter" }, precision: 0 },
+      },
+    },
+  };
+
+  return (
+    <div className="relative h-full w-full" role="img" aria-label="Weekly reservations and walk-ins chart">
+      <Line data={chartData} options={options} />
+    </div>
+  );
 };
 
 // 2. REVENUE CHART
@@ -164,6 +260,7 @@ const ScreenRestaurantDashboard = () => {
 
   const [timeRange, setTimeRange] = useState("year");
   const [compareEnabled, setCompareEnabled] = useState(true);
+  const [analyticsTab, setAnalyticsTab] = useState<"revenue" | "reservations">("revenue");
   const [selectedDate, setSelectedDate] = useState(formatInputDate(new Date()));
   const [dailyStats, setDailyStats] = useState<any>(null);
   const [dailyStatsLoading, setDailyStatsLoading] = useState(false);
@@ -171,7 +268,6 @@ const ScreenRestaurantDashboard = () => {
   const [salesAnalyticsLoading, setSalesAnalyticsLoading] = useState(false);
   const [dashboardUpsellStats, setDashboardUpsellStats] = useState<any>(null);
   const [reservationsToday, setReservationsToday] = useState(0);
-  const [noShowsToday, setNoShowsToday] = useState(0);
 
   const [isEdit, setIsEdit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -238,7 +334,6 @@ const ScreenRestaurantDashboard = () => {
         return value && String(value).slice(0, 10) === today;
       });
       setReservationsToday(todayRows.length);
-      setNoShowsToday(todayRows.filter((row: any) => String(row.status || "").toLowerCase() === "no_show").length);
     } catch (err) {
       console.warn("Failed to load reservation dashboard stats", err);
     }
@@ -386,7 +481,6 @@ const ScreenRestaurantDashboard = () => {
   const occupiedTables = (allDevices || []).filter((table: any) => ["occupied", "seated", "active", "in_use"].includes(String(table.status || table.table_status || "").toLowerCase())).length;
   const activeTables = occupiedTables || toNumber(dailyStats?.activeTables || dailyStats?.active_tables || dailyStats?.occupiedTables || dailyStats?.occupied_tables) || (allDevices?.length || 0);
   const teamMembersCount = toNumber(members?.length || dailyStats?.teamMembers || dailyStats?.team_members || activeStaff);
-  const qrScansToday = toNumber(dailyStats?.qrScans || dailyStats?.qr_scans || dailyStats?.qrScansToday || dailyStats?.qr_scans_today);
   const dashboardUpsellShown = toNumber(dashboardUpsellStats?.total_shown || dashboardUpsellStats?.shown || dashboardUpsellStats?.offers_shown);
   const dashboardUpsellAccepted = toNumber(dashboardUpsellStats?.total_accepted || dashboardUpsellStats?.accepted || dashboardUpsellStats?.add_to_cart);
   const dashboardUpsellAcceptance = toNumber(dashboardUpsellStats?.acceptance_rate || (dashboardUpsellShown > 0 ? (dashboardUpsellAccepted / dashboardUpsellShown) * 100 : 0));
@@ -493,70 +587,129 @@ const ScreenRestaurantDashboard = () => {
 
       {/* METRICS GRID - OWNER & MANAGER */}
       {(userRole === 'owner' || userRole === 'manager') && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard title="Total Revenue" value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : fmt(totalRevenue)} trend={`${analytics?.status?.weekly_growth || 0}%`} isPositive={(analytics?.status?.weekly_growth || 0) >= 0} subtext="Today" icon={TrendingUp} featured />
-          <MetricCard title="Total Orders" value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders} subtext="Today" trend="12%" isPositive={true} icon={ShoppingBag} />
-          <MetricCard title="Avg Order Value" value={statsLoading ? <div className="h-8 w-20 bg-slate-100 animate-pulse rounded" /> : fmt(averageOrderValue)} subtext="Revenue ÷ orders" trend="4.8%" isPositive={true} icon={Receipt} />
-          <MetricCard title="Active Tables" value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeTables} subtext="Occupied now" trend="0%" isPositive={true} icon={Table2} />
-          <MetricCard title="Team Members" value={teamMembersCount} subtext="Staff" trend="Active" isPositive={true} icon={UserCheck} />
-          <MetricCard title="Reservations" value={reservationsToday} subtext="Today" trend="Booked" isPositive={true} icon={CalendarCheck} />
-          <MetricCard title="No-Shows" value={noShowsToday} subtext="Today" trend={noShowsToday > 0 ? `${noShowsToday}` : "All good"} isPositive={noShowsToday === 0} icon={Ban} />
-          <MetricCard title="QR Scans" value={qrScansToday} subtext="Today" trend={qrScansToday > 0 ? `${qrScansToday}` : "Not tracked"} isPositive={true} icon={QrCode} />
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <MetricCard title="Total Revenue" value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : fmt(totalRevenue)} trend={`${analytics?.status?.weekly_growth || 0}%`} isPositive={(analytics?.status?.weekly_growth || 0) >= 0} subtext="Today" icon={DollarSign} featured />
+            <MetricCard title="Total Orders" value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders} subtext="Today" trend="8.2%" isPositive={true} icon={TrendingUp} />
+            <MetricCard title="Avg Order Value" value={statsLoading ? <div className="h-8 w-20 bg-slate-100 animate-pulse rounded" /> : fmt(averageOrderValue)} subtext="Today" trend="Per order" isPositive={true} icon={BarChart3} />
+            <MetricCard title="Active Tables" value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeTables} subtext="Occupied" trend="Right now" isPositive={true} icon={LayoutGrid} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <MetricCard title="Team Members" value={teamMembersCount} subtext="Staff" trend="Active" isPositive={true} icon={Users} />
+            <MetricCard title="Reservations" value={reservationsToday} subtext="Today" trend="Booked" isPositive={true} icon={Calendar} />
+          </div>
         </div>
       )}
 
 
-      {/* REVENUE CHART SECTION */}
+      {/* ANALYTICS CHART SECTION */}
       {(userRole === 'owner' || userRole === 'manager') && (
-        <div className="bg-white p-6 rounded-lg border border-slate-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Revenue Analytics</h3>
-              <p className="text-sm text-slate-500">Track sales for the selected date using live analytics</p>
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center" role="tablist" aria-label="Dashboard analytics">
+              <button
+                id="revenue-analytics-tab"
+                type="button"
+                role="tab"
+                aria-selected={analyticsTab === "revenue"}
+                aria-controls="revenue-analytics-panel"
+                onClick={() => setAnalyticsTab("revenue")}
+                className={`mr-5 flex items-center gap-1.5 border-b-2 px-1 py-3.5 text-xs font-semibold transition-colors ${analyticsTab === "revenue"
+                  ? "border-[#0055FE] text-[#0055FE]"
+                  : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+              >
+                <TrendingUp className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Revenue Overview
+              </button>
+              <button
+                id="reservations-analytics-tab"
+                type="button"
+                role="tab"
+                aria-selected={analyticsTab === "reservations"}
+                aria-controls="reservations-analytics-panel"
+                onClick={() => setAnalyticsTab("reservations")}
+                className={`flex items-center gap-1.5 border-b-2 px-1 py-3.5 text-xs font-semibold transition-colors ${analyticsTab === "reservations"
+                  ? "border-[#0055FE] text-[#0055FE]"
+                  : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+              >
+                <Calendar className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Reservations
+              </button>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
-                <Calendar size={14} strokeWidth={1.8} />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(event) => setSelectedDate(event.target.value)}
-                  className="bg-transparent outline-none"
-                />
-              </label>
-
-              {/* Compare Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors select-none bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <input
-                  type="checkbox"
-                  checked={compareEnabled}
-                  onChange={(e) => setCompareEnabled(e.target.checked)}
-                  className="accent-[#0055FE] w-3.5 h-3.5"
-                />
-                Compare
-              </label>
-
-              <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
-
-              <TimeRangeToggle value={timeRange} onChange={setTimeRange} />
-            </div>
-          </div>
-
-          <div className="h-80 w-full">
-            {salesAnalyticsLoading ? (
-              <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-400">Loading sales analytics...</div>
-            ) : (
-              <RevenueAnalyticsChart
-                labels={chartSource.labels}
-                data={chartSource.revenue}
-                orders={chartSource.orders}
-                comparisonData={analytics?.comparison?.revenue}
-                comparisonOrders={analytics?.comparison?.orders || []}
-                showComparison={compareEnabled}
+            <label className="mb-2 flex items-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 sm:my-2 sm:self-auto">
+              <Calendar size={14} strokeWidth={1.8} className="text-[#0055FE]" />
+              <span className="sr-only">Analytics date</span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="bg-transparent outline-none"
               />
-            )}
+            </label>
           </div>
+
+          {analyticsTab === "revenue" && (
+            <div
+              id="revenue-analytics-panel"
+              role="tabpanel"
+              aria-labelledby="revenue-analytics-tab"
+              className="p-6"
+            >
+              <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Revenue Analytics</h3>
+                  <p className="text-sm text-slate-500">Track sales for the selected date using live analytics</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Compare Toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors select-none bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={compareEnabled}
+                      onChange={(e) => setCompareEnabled(e.target.checked)}
+                      className="accent-[#0055FE] w-3.5 h-3.5"
+                    />
+                    Compare
+                  </label>
+
+                  <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+                  <TimeRangeToggle value={timeRange} onChange={setTimeRange} />
+                </div>
+              </div>
+
+              <div className="h-80 w-full">
+                {salesAnalyticsLoading ? (
+                  <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-400">Loading sales analytics...</div>
+                ) : (
+                  <RevenueAnalyticsChart
+                    labels={chartSource.labels}
+                    data={chartSource.revenue}
+                    orders={chartSource.orders}
+                    comparisonData={analytics?.comparison?.revenue}
+                    comparisonOrders={analytics?.comparison?.orders || []}
+                    showComparison={compareEnabled}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {analyticsTab === "reservations" && (
+            <div
+              id="reservations-analytics-panel"
+              role="tabpanel"
+              aria-labelledby="reservations-analytics-tab"
+              className="p-5"
+            >
+              <div className="h-[280px] w-full">
+                <ReservationsAnalyticsChart />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
