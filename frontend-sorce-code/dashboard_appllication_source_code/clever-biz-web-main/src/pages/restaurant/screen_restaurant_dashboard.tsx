@@ -25,7 +25,7 @@ import {
   Lock,
   Video
 } from "lucide-react";
-import type { ScriptableContext } from "chart.js";
+import type { ChartOptions, ScriptableContext } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { RevenueAnalyticsChart } from "@/components/analytics/RevenueAnalyticsChart";
 import { TimeRangeToggle } from "@/components/analytics/TimeRangeToggle";
@@ -84,7 +84,12 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const formatInputDate = (date: Date) => date.toISOString().slice(0, 10);
+const formatInputDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const normalizeSalesAnalytics = (payload: any) => {
   const rows = Array.isArray(payload)
@@ -112,23 +117,57 @@ const normalizeSalesAnalytics = (payload: any) => {
   };
 };
 
-const RESERVATIONS_CHART_DATA = [
-  { name: "Mon", reservations: 8, walkIns: 3 },
-  { name: "Tue", reservations: 5, walkIns: 1 },
-  { name: "Wed", reservations: 14, walkIns: 6 },
-  { name: "Thu", reservations: 10, walkIns: 4 },
-  { name: "Fri", reservations: 18, walkIns: 7 },
-  { name: "Sat", reservations: 22, walkIns: 9 },
-  { name: "Sun", reservations: 16, walkIns: 5 },
-];
+type ReservationChartPoint = {
+  date: string;
+  name: string;
+  reservations: number;
+  walkIns: number;
+};
 
-const ReservationsAnalyticsChart = () => {
+const getSelectedWeek = (dateValue: string): ReservationChartPoint[] => {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const selected = new Date(year, month - 1, day);
+  const monday = new Date(selected);
+  const dayOffset = (selected.getDay() + 6) % 7;
+  monday.setDate(selected.getDate() - dayOffset);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return {
+      date: formatInputDate(date),
+      name: date.toLocaleDateString("en-US", { weekday: "short" }),
+      reservations: 0,
+      walkIns: 0,
+    };
+  });
+};
+
+const getReservationRows = (payload: any): any[] => {
+  const raw = payload?.results || payload?.data || payload || [];
+  return Array.isArray(raw) ? raw : [];
+};
+
+const isWalkInReservation = (row: any) => {
+  const source = String(row?.source || row?.booking_source || row?.source_type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return source === "walk_in" || source === "walkin";
+};
+
+const isActiveReservation = (row: any) => {
+  const status = String(row?.status || "").trim().toLowerCase();
+  return !["cancel", "cancelled", "no_show"].includes(status);
+};
+
+const ReservationsAnalyticsChart = ({ data }: { data: ReservationChartPoint[] }) => {
   const chartData = {
-    labels: RESERVATIONS_CHART_DATA.map((item) => item.name),
+    labels: data.map((item) => item.name),
     datasets: [
       {
         label: "Reservations",
-        data: RESERVATIONS_CHART_DATA.map((item) => item.reservations),
+        data: data.map((item) => item.reservations),
         borderColor: "#0055FE",
         borderWidth: 1.5,
         backgroundColor: (context: ScriptableContext<"line">) => {
@@ -148,7 +187,7 @@ const ReservationsAnalyticsChart = () => {
       },
       {
         label: "Walk-ins",
-        data: RESERVATIONS_CHART_DATA.map((item) => item.walkIns),
+        data: data.map((item) => item.walkIns),
         borderColor: "#0EA5E9",
         borderWidth: 1.5,
         backgroundColor: (context: ScriptableContext<"line">) => {
@@ -169,7 +208,7 @@ const ReservationsAnalyticsChart = () => {
     ],
   };
 
-  const options: any = {
+  const options: ChartOptions<"line"> = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
@@ -199,7 +238,7 @@ const ReservationsAnalyticsChart = () => {
       y: {
         beginAtZero: true,
         border: { display: false },
-        grid: { color: "#F1F5F9", borderDash: [3, 3] },
+        grid: { color: "#F1F5F9" },
         ticks: { color: "#94A3B8", font: { size: 11, family: "Inter" }, precision: 0 },
       },
     },
@@ -217,13 +256,11 @@ const ReservationsAnalyticsChart = () => {
 
 
 const ScreenRestaurantDashboard = () => {
-  const { fmt } = useRestaurantContext();
+  const { fmt, restaurantId } = useRestaurantContext();
   const {
     foodItems,
-    allDevices,
-    members,
-    fetchAllDevices,
-    fetchMembers,
+    deviceStats,
+    fetchDeviceStats,
     currentPage,
     setCurrentPage,
     searchQuery,
@@ -245,7 +282,6 @@ const ScreenRestaurantDashboard = () => {
     // Consumed from Context (Render-First)
     analytics,
     sellingItems: sellingItemData, // Alias to match existing usage
-    isAnalyticsLoading: analyticsLoading, // Alias
     fetchAnalytics,
     fetchMostSellingItems
   } = useOwner();
@@ -267,7 +303,10 @@ const ScreenRestaurantDashboard = () => {
   const [salesAnalytics, setSalesAnalytics] = useState<{ labels: string[]; revenue: number[]; orders: number[] } | null>(null);
   const [salesAnalyticsLoading, setSalesAnalyticsLoading] = useState(false);
   const [dashboardUpsellStats, setDashboardUpsellStats] = useState<any>(null);
-  const [reservationsToday, setReservationsToday] = useState(0);
+  const [reservationsToday, setReservationsToday] = useState<number | null>(null);
+  const [reservationAnalytics, setReservationAnalytics] = useState<ReservationChartPoint[]>(() => getSelectedWeek(formatInputDate(new Date())));
+  const [reservationAnalyticsLoading, setReservationAnalyticsLoading] = useState(false);
+  const [reservationAnalyticsError, setReservationAnalyticsError] = useState(false);
 
   const [isEdit, setIsEdit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -300,16 +339,24 @@ const ScreenRestaurantDashboard = () => {
 
   const fetchDailyStats = useCallback(async (force = false) => {
     if (userRole !== "owner" && userRole !== "manager") return;
+    if (!restaurantId) {
+      setDailyStats(null);
+      setDailyStatsLoading(false);
+      return;
+    }
     setDailyStatsLoading(true);
     try {
-      const response = await cachedGet("/api/daily-stats", {}, { ttlMs: 10_000, force });
+      const response = await cachedGet("/api/daily-stats", {
+        params: { restaurantId },
+      }, { ttlMs: 10_000, force });
       setDailyStats(response.data?.data || response.data);
     } catch (err) {
       console.warn("Failed to load daily stats", err);
+      setDailyStats(null);
     } finally {
       setDailyStatsLoading(false);
     }
-  }, [userRole]);
+  }, [restaurantId, userRole]);
 
   const fetchDashboardUpsellStats = useCallback(async (force = false) => {
     if (userRole !== "owner" && userRole !== "manager") return;
@@ -318,29 +365,78 @@ const ScreenRestaurantDashboard = () => {
       setDashboardUpsellStats(response.data?.data || response.data || null);
     } catch (err) {
       console.warn("Failed to load dashboard upsell summary", err);
+      setDashboardUpsellStats(null);
     }
   }, [userRole]);
 
 
-  const fetchReservationStats = useCallback(async () => {
+  const fetchReservationStats = useCallback(async (force = false) => {
     if (userRole !== "owner" && userRole !== "manager") return;
+    if (!restaurantId) {
+      setReservationsToday(null);
+      return;
+    }
     try {
-      const response = await cachedGet("/owners/reservations", {}, { ttlMs: 60_000, force: true });
-      const raw = response.data?.results || response.data?.data || response.data || [];
-      const rows = Array.isArray(raw) ? raw : [];
       const today = formatInputDate(new Date());
-      const todayRows = rows.filter((row: any) => {
-        const value = row.reservation_date || row.date || row.reservationDate || row.reservation_time || row.reservationTime || row.created_at;
-        return value && String(value).slice(0, 10) === today;
-      });
-      setReservationsToday(todayRows.length);
+      const response = await cachedGet("/owners/reservations/", {
+        params: { date: today, page_size: 1000 },
+      }, { ttlMs: 30_000, force });
+      const rows = getReservationRows(response.data).filter((row: any) => (
+        String(row.restaurant || "") === String(restaurantId)
+      ));
+      setReservationsToday(rows.filter((row: any) => (
+        isActiveReservation(row) && !isWalkInReservation(row)
+      )).length);
     } catch (err) {
       console.warn("Failed to load reservation dashboard stats", err);
+      setReservationsToday(null);
     }
-  }, [userRole]);
+  }, [restaurantId, userRole]);
+
+  const fetchReservationAnalytics = useCallback(async (force = false) => {
+    if ((userRole !== "owner" && userRole !== "manager") || !selectedDate) return;
+    const selectedWeek = getSelectedWeek(selectedDate);
+    if (!restaurantId) {
+      setReservationAnalytics(selectedWeek);
+      setReservationAnalyticsLoading(false);
+      setReservationAnalyticsError(true);
+      return;
+    }
+    setReservationAnalyticsLoading(true);
+    setReservationAnalyticsError(false);
+
+    try {
+      const dailyRows = await Promise.all(selectedWeek.map(async (point) => {
+        const response = await cachedGet("/owners/reservations/", {
+          params: { date: point.date, page_size: 1000 },
+        }, { ttlMs: 30_000, force });
+        const rows = getReservationRows(response.data).filter((row: any) => (
+          String(row.restaurant || "") === String(restaurantId) && isActiveReservation(row)
+        ));
+        const walkIns = rows.filter(isWalkInReservation).length;
+        return {
+          ...point,
+          reservations: rows.length - walkIns,
+          walkIns,
+        };
+      }));
+      setReservationAnalytics(dailyRows);
+    } catch (err) {
+      console.warn("Failed to load reservation analytics", err);
+      setReservationAnalytics(selectedWeek);
+      setReservationAnalyticsError(true);
+    } finally {
+      setReservationAnalyticsLoading(false);
+    }
+  }, [restaurantId, selectedDate, userRole]);
 
   const fetchSalesAnalytics = useCallback(async (force = false) => {
     if ((userRole !== "owner" && userRole !== "manager") || !selectedDate) return;
+    if (!restaurantId) {
+      setSalesAnalytics(null);
+      setSalesAnalyticsLoading(false);
+      return;
+    }
     setSalesAnalyticsLoading(true);
     try {
       const startDate = new Date(`${selectedDate}T00:00:00.000`);
@@ -349,6 +445,7 @@ const ScreenRestaurantDashboard = () => {
         params: {
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
+          restaurantId,
         },
       }, { ttlMs: 10_000, force });
       setSalesAnalytics(normalizeSalesAnalytics(response.data?.data || response.data));
@@ -357,7 +454,7 @@ const ScreenRestaurantDashboard = () => {
     } finally {
       setSalesAnalyticsLoading(false);
     }
-  }, [selectedDate, userRole]);
+  }, [restaurantId, selectedDate, userRole]);
 
   // Trigger Analytics Fetch when filters change (Context handles the fetch)
   useEffect(() => {
@@ -367,14 +464,17 @@ const ScreenRestaurantDashboard = () => {
       fetchDailyStats();
       fetchDashboardUpsellStats();
       fetchReservationStats();
-      fetchAllDevices();
-      fetchMembers();
+      fetchDeviceStats();
     }
-  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchReservationStats, fetchAllDevices, fetchMembers, userRole]);
+  }, [timeRange, compareEnabled, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchReservationStats, fetchDeviceStats, userRole]);
 
   useEffect(() => {
     fetchSalesAnalytics();
   }, [fetchSalesAnalytics]);
+
+  useEffect(() => {
+    fetchReservationAnalytics();
+  }, [fetchReservationAnalytics]);
 
   // Real-time Updates
   useEffect(() => {
@@ -397,9 +497,14 @@ const ScreenRestaurantDashboard = () => {
         fetchDailyStats(true);
         fetchDashboardUpsellStats(true);
         fetchSalesAnalytics(true);
+        fetchDeviceStats();
       }, 2000);
     }
-  }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchSalesAnalytics, timeRange, compareEnabled]);
+    if (String(response?.type || "").startsWith("reservation_")) {
+      fetchReservationStats(true);
+      fetchReservationAnalytics(true);
+    }
+  }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchSalesAnalytics, fetchDeviceStats, fetchReservationStats, fetchReservationAnalytics, timeRange, compareEnabled]);
 
   // GUARANTEED POLLING FALLBACK — 60s refresh for analytics (heavier queries)
   useEffect(() => {
@@ -410,9 +515,12 @@ const ScreenRestaurantDashboard = () => {
       fetchMostSellingItems();
       fetchDailyStats();
       fetchDashboardUpsellStats();
+      fetchReservationStats();
+      fetchReservationAnalytics();
+      fetchDeviceStats();
     }, 60000);
     return () => clearInterval(poll);
-  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, timeRange, compareEnabled, userRole]);
+  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchReservationStats, fetchReservationAnalytics, fetchDeviceStats, timeRange, compareEnabled, userRole]);
 
   // NOTE: Initial Fetch is now handled by OwnerContext (Background Fetch)
   // We DO NOT fetch here on mount to avoid waterfall.
@@ -462,29 +570,33 @@ const ScreenRestaurantDashboard = () => {
 
 
   // Chart Data Preparation
-  const statsLoading = dailyStatsLoading || analyticsLoading;
+  const statsLoading = dailyStatsLoading;
+  const hasDailyStats = dailyStats !== null;
   const totalRevenue = toNumber(
-    dailyStats?.totalRevenue ||
-    dailyStats?.total_revenue ||
-    dailyStats?.revenue ||
-    analytics?.status?.total_revenue
+    dailyStats?.totalRevenue ??
+    dailyStats?.total_revenue ??
+    dailyStats?.revenue
   );
   const totalOrders = toNumber(
-    dailyStats?.totalOrders ||
-    dailyStats?.total_orders ||
-    dailyStats?.orders ||
-    dailyStats?.ordersCount ||
-    analytics?.status?.total_orders
+    dailyStats?.totalOrders ??
+    dailyStats?.total_orders ??
+    dailyStats?.orders ??
+    dailyStats?.ordersCount
   );
-  const activeStaff = toNumber(dailyStats?.activeStaff || dailyStats?.active_staff || analytics?.status?.active_staff);
-  const averageOrderValue = toNumber(dailyStats?.averageOrderValue || dailyStats?.average_order_value || dailyStats?.aov || (totalOrders > 0 ? totalRevenue / totalOrders : 0));
-  const occupiedTables = (allDevices || []).filter((table: any) => ["occupied", "seated", "active", "in_use"].includes(String(table.status || table.table_status || "").toLowerCase())).length;
-  const activeTables = occupiedTables || toNumber(dailyStats?.activeTables || dailyStats?.active_tables || dailyStats?.occupiedTables || dailyStats?.occupied_tables) || (allDevices?.length || 0);
-  const teamMembersCount = toNumber(members?.length || dailyStats?.teamMembers || dailyStats?.team_members || activeStaff);
+  const activeStaff = toNumber(dailyStats?.activeStaff ?? dailyStats?.active_staff);
+  const averageOrderValue = toNumber(dailyStats?.averageOrderValue ?? dailyStats?.average_order_value ?? dailyStats?.aov ?? (totalOrders > 0 ? totalRevenue / totalOrders : 0));
+  const activeTables = toNumber(deviceStats?.active_devices);
+  const hasDeviceStats = Boolean(deviceStats && !(deviceStats as { error?: unknown }).error);
+  const teamMembersCount = activeStaff;
+  const weeklyRevenueGrowthValue = analytics?.status?.weekly_growth;
+  const weeklyRevenueGrowth = Number(weeklyRevenueGrowthValue);
+  const hasWeeklyRevenueGrowth = weeklyRevenueGrowthValue !== null && weeklyRevenueGrowthValue !== undefined && weeklyRevenueGrowthValue !== "" && Number.isFinite(weeklyRevenueGrowth);
+  const reservationAnalyticsHasActivity = reservationAnalytics.some((point) => point.reservations > 0 || point.walkIns > 0);
   const dashboardUpsellShown = toNumber(dashboardUpsellStats?.total_shown || dashboardUpsellStats?.shown || dashboardUpsellStats?.offers_shown);
   const dashboardUpsellAccepted = toNumber(dashboardUpsellStats?.total_accepted || dashboardUpsellStats?.accepted || dashboardUpsellStats?.add_to_cart);
   const dashboardUpsellAcceptance = toNumber(dashboardUpsellStats?.acceptance_rate || (dashboardUpsellShown > 0 ? (dashboardUpsellAccepted / dashboardUpsellShown) * 100 : 0));
   const dashboardUpsellRevenue = toNumber(dashboardUpsellStats?.upsell_revenue || dashboardUpsellStats?.revenue);
+  const hasDashboardUpsellStats = dashboardUpsellStats !== null;
   const chartSource = salesAnalytics && salesAnalytics.labels.length > 0
     ? salesAnalytics
     : {
@@ -589,14 +701,21 @@ const ScreenRestaurantDashboard = () => {
       {(userRole === 'owner' || userRole === 'manager') && (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <MetricCard title="Total Revenue" value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : fmt(totalRevenue)} trend={`${analytics?.status?.weekly_growth || 0}%`} isPositive={(analytics?.status?.weekly_growth || 0) >= 0} subtext="Today" icon={DollarSign} featured />
-            <MetricCard title="Total Orders" value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : totalOrders} subtext="Today" trend="8.2%" isPositive={true} icon={TrendingUp} />
-            <MetricCard title="Avg Order Value" value={statsLoading ? <div className="h-8 w-20 bg-slate-100 animate-pulse rounded" /> : fmt(averageOrderValue)} subtext="Today" trend="Per order" isPositive={true} icon={BarChart3} />
-            <MetricCard title="Active Tables" value={statsLoading ? <div className="h-8 w-12 bg-slate-100 animate-pulse rounded" /> : activeTables} subtext="Occupied" trend="Right now" isPositive={true} icon={LayoutGrid} />
+            <MetricCard
+              title="Total Revenue"
+              value={statsLoading ? <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" /> : (hasDailyStats ? fmt(totalRevenue) : "—")}
+              trend={hasWeeklyRevenueGrowth ? `${weeklyRevenueGrowth.toFixed(1)}%` : undefined}
+              isPositive={weeklyRevenueGrowth >= 0}
+              subtext="Today"
+              icon={DollarSign}
+            />
+            <MetricCard title="Total Orders" value={statsLoading ? <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" /> : (hasDailyStats ? totalOrders : "—")} subtext="Today" icon={TrendingUp} />
+            <MetricCard title="Avg Order Value" value={statsLoading ? <div className="h-8 w-20 bg-slate-100 animate-pulse rounded" /> : (hasDailyStats ? fmt(averageOrderValue) : "—")} subtext="Per order today" icon={BarChart3} />
+            <MetricCard title="Active Tables" value={hasDeviceStats ? activeTables : "—"} subtext="Active now" icon={LayoutGrid} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <MetricCard title="Team Members" value={teamMembersCount} subtext="Staff" trend="Active" isPositive={true} icon={Users} />
-            <MetricCard title="Reservations" value={reservationsToday} subtext="Today" trend="Booked" isPositive={true} icon={Calendar} />
+            <MetricCard title="Team Members" value={hasDailyStats ? teamMembersCount : "—"} subtext="Active staff" icon={Users} />
+            <MetricCard title="Reservations" value={reservationsToday ?? "—"} subtext="Booked today" icon={Calendar} />
           </div>
         </div>
       )}
@@ -706,7 +825,25 @@ const ScreenRestaurantDashboard = () => {
               className="p-5"
             >
               <div className="h-[280px] w-full">
-                <ReservationsAnalyticsChart />
+                {reservationAnalyticsLoading ? (
+                  <div className="flex h-full items-center justify-center rounded-lg bg-slate-50 text-sm text-slate-400">
+                    Loading reservation analytics...
+                  </div>
+                ) : reservationAnalyticsError ? (
+                  <div className="flex h-full flex-col items-center justify-center rounded-lg bg-slate-50 text-center">
+                    <Calendar className="mb-2 h-6 w-6 text-slate-300" strokeWidth={1.8} />
+                    <p className="text-sm font-medium text-slate-600">Reservation analytics unavailable</p>
+                    <p className="mt-1 text-xs text-slate-400">The dashboard could not load live reservation data.</p>
+                  </div>
+                ) : reservationAnalyticsHasActivity ? (
+                  <ReservationsAnalyticsChart data={reservationAnalytics} />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center rounded-lg bg-slate-50 text-center">
+                    <Calendar className="mb-2 h-6 w-6 text-slate-300" strokeWidth={1.8} />
+                    <p className="text-sm font-medium text-slate-600">No reservation activity this week</p>
+                    <p className="mt-1 text-xs text-slate-400">Reservations and walk-ins will appear here when recorded.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -736,19 +873,19 @@ const ScreenRestaurantDashboard = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
             <div className="px-5 py-5">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Suggestions Shown</p>
-              <p className="text-2xl font-semibold text-slate-900 leading-none">{dashboardUpsellShown}</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{hasDashboardUpsellStats ? dashboardUpsellShown : "—"}</p>
             </div>
             <div className="px-5 py-5">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Add To Cart</p>
-              <p className="text-2xl font-semibold text-slate-900 leading-none">{dashboardUpsellAccepted}</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{hasDashboardUpsellStats ? dashboardUpsellAccepted : "—"}</p>
             </div>
             <div className="px-5 py-5">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Acceptance Rate</p>
-              <p className="text-2xl font-semibold text-slate-900 leading-none">{Math.round(dashboardUpsellAcceptance)}%</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{hasDashboardUpsellStats ? `${Math.round(dashboardUpsellAcceptance)}%` : "—"}</p>
             </div>
             <div className="px-5 py-5">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Upsell Revenue</p>
-              <p className="text-2xl font-semibold text-slate-900 leading-none">{fmt(dashboardUpsellRevenue)}</p>
+              <p className="text-2xl font-semibold text-slate-900 leading-none">{hasDashboardUpsellStats ? fmt(dashboardUpsellRevenue) : "—"}</p>
             </div>
           </div>
         </div>
