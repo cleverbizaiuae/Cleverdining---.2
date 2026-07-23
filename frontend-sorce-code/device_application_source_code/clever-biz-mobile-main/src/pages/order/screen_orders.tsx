@@ -109,6 +109,7 @@ const preloadThankYouPage = () => {
 };
 
 const SECTION_LABEL_CLASS = "text-[11px] font-bold text-slate-400 uppercase tracking-widest";
+const OPTIMISTIC_ORDER_GRACE_MS = 15_000;
 
 const toNumber = (value: unknown): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -242,6 +243,23 @@ const getErrorMessage = (error: unknown): string => {
     return candidate.response?.data?.error || candidate.response?.data?.detail || candidate.message || "Something went wrong";
   }
   return "Something went wrong";
+};
+
+const isRecentOptimisticOrder = (order: Order, now: number): boolean => {
+  if (
+    !order.backendId ||
+    order.backendStatus ||
+    order.shouldRemove ||
+    order.paymentStatus === "Paid" ||
+    isPaymentPaid(order.payment_status)
+  ) {
+    return false;
+  }
+
+  const createdAt = Date.parse(String(order.created_time || order.timestamp || ""));
+  return Number.isFinite(createdAt) &&
+    now >= createdAt &&
+    now - createdAt <= OPTIMISTIC_ORDER_GRACE_MS;
 };
 
 const ScreenOrders = () => {
@@ -392,52 +410,19 @@ const ScreenOrders = () => {
   }, [tableInfo.restaurantId]);
 
   const syncOrdersFromBackend = useCallback((backendList: BackendOrder[]) => {
-    const mapped = backendList.map(mapBackendOrder);
-    const mappedById = new Map(mapped.map((order) => [order.backendId, order]));
+    const activeMapped = backendList
+      .map(mapBackendOrder)
+      .filter((order) => !order.isFullyPaid && !order.shouldRemove);
+    const activeIds = new Set(activeMapped.map((order) => order.backendId).filter(Boolean));
+    const now = Date.now();
 
     setOrders((previous) => {
-      const existingIds = new Set<string>();
-
-      const synced = previous.map((order) => {
-        if (!order.backendId) return order;
-        const backendOrder = mappedById.get(order.backendId);
-
-        if (!backendOrder) {
-          // The list endpoint may omit fulfilled orders before their payment state
-          // is refreshed. Absence alone is not proof that an order was paid.
-          return order;
-        }
-
-        existingIds.add(order.backendId);
-        return {
-          ...order,
-          items: backendOrder.items,
-          total: backendOrder.total,
-          total_price: backendOrder.total_price,
-          amountPaid: backendOrder.amountPaid,
-          amount_paid: backendOrder.amount_paid,
-          remainingAmount: backendOrder.remainingAmount,
-          remaining_amount: backendOrder.remaining_amount,
-          isFullyPaid: backendOrder.isFullyPaid,
-          is_fully_paid: backendOrder.is_fully_paid,
-          isPartiallyPaid: backendOrder.isPartiallyPaid,
-          is_partially_paid: backendOrder.is_partially_paid,
-          bill_payment_status: backendOrder.bill_payment_status,
-          payment_progress: backendOrder.payment_progress,
-          status: backendOrder.status,
-          backendStatus: backendOrder.backendStatus,
-          paymentStatus: backendOrder.paymentStatus,
-          payment_status: backendOrder.payment_status,
-          timestamp: backendOrder.timestamp,
-          created_time: backendOrder.created_time,
-          shouldRemove: backendOrder.shouldRemove,
-        };
-      });
-
-      const additions = mapped.filter(
-        (order) => order.backendId && !existingIds.has(order.backendId) && !order.shouldRemove,
+      const recentOptimisticOrders = previous.filter(
+        (order) =>
+          !activeIds.has(order.backendId) &&
+          isRecentOptimisticOrder(order, now),
       );
-      return [...additions, ...synced];
+      return [...activeMapped, ...recentOptimisticOrders];
     });
   }, []);
 
