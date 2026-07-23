@@ -7,6 +7,7 @@ from django.db.utils import OperationalError, ProgrammingError
 from rest_framework import serializers
 from django.db.models import Count, Q, Sum
 
+from category.models import Category
 from item.models import Item
 from .models import UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 
@@ -62,7 +63,48 @@ class UpsellSettingSerializer(serializers.ModelSerializer):
 
     def validate_prioritized_categories(self, value: str) -> str:
         parsed = parse_category_ids(value)
+        restaurant_id = getattr(self.instance, "restaurant_id", None)
+        if restaurant_id and parsed:
+            valid_ids = set(
+                Category.objects.filter(restaurant_id=restaurant_id, id__in=parsed).values_list("id", flat=True)
+            )
+            invalid_ids = sorted(set(parsed) - valid_ids)
+            if invalid_ids:
+                raise serializers.ValidationError("Categories must belong to this restaurant.")
         return ",".join(str(category_id) for category_id in parsed)
+
+    def validate_category_role_map(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Category role mapping must be an object.")
+
+        allowed_roles = {"main", "drinks", "desserts", "starters"}
+        unknown_roles = sorted(set(value) - allowed_roles)
+        if unknown_roles:
+            raise serializers.ValidationError("Unsupported category role.")
+
+        normalized = {}
+        assigned_ids = set()
+        for role in ("main", "drinks", "desserts", "starters"):
+            raw_ids = value.get(role, [])
+            if not isinstance(raw_ids, list):
+                raise serializers.ValidationError(f"{role} must be a list of category IDs.")
+            category_ids = parse_category_ids(raw_ids)
+            duplicate_ids = assigned_ids.intersection(category_ids)
+            if duplicate_ids:
+                raise serializers.ValidationError("A category can only have one explicit role.")
+            assigned_ids.update(category_ids)
+            normalized[role] = category_ids
+
+        restaurant_id = getattr(self.instance, "restaurant_id", None)
+        if restaurant_id and assigned_ids:
+            valid_ids = set(
+                Category.objects.filter(restaurant_id=restaurant_id, id__in=assigned_ids).values_list("id", flat=True)
+            )
+            if assigned_ids - valid_ids:
+                raise serializers.ValidationError("Categories must belong to this restaurant.")
+        return normalized
 
 
 class UpsellRuleSerializer(serializers.ModelSerializer):

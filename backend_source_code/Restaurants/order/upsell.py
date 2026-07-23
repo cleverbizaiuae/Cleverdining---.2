@@ -413,12 +413,15 @@ def _derive_role_categories(restaurant_id: int, setting: UpsellSetting) -> Dict[
     }
 
     override_map = setting.category_role_map or {}
+    explicitly_mapped_category_ids: Set[int] = set()
     for role in roles:
         raw_values = override_map.get(role) if isinstance(override_map, dict) else None
         if isinstance(raw_values, list):
             for value in raw_values:
                 try:
-                    roles[role].add(int(value))
+                    category_id = int(value)
+                    roles[role].add(category_id)
+                    explicitly_mapped_category_ids.add(category_id)
                 except (TypeError, ValueError):
                     continue
 
@@ -426,6 +429,8 @@ def _derive_role_categories(restaurant_id: int, setting: UpsellSetting) -> Dict[
     for category in categories:
         category_name = _normalize_text(category["Category_name"])
         category_id = int(category["id"])
+        if category_id in explicitly_mapped_category_ids:
+            continue
         role_from_type = category_type_to_role.get(_normalize_text(category.get("category_type")))
         if role_from_type:
             roles[role_from_type].add(category_id)

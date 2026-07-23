@@ -16,9 +16,14 @@ from device.models import Device, GuestSession
 from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
-from .models import Order, UpsellEvent, UpsellLLMDecision, UpsellRule, UpsellSetting
+from .models import Order, UpsellEvent, UpsellItemSetting, UpsellLLMDecision, UpsellRule, UpsellSetting
 from . import upsell as upsell_module
-from .upsell import build_item_context_upsell_suggestions, get_restaurant_menu_intelligence
+from .upsell import (
+    _derive_role_categories,
+    _item_roles,
+    build_item_context_upsell_suggestions,
+    get_restaurant_menu_intelligence,
+)
 from .upsell_cache import get_restaurant_upsell_cache_versions
 from .upsell_precompute import (
     build_precomputed_source_context,
@@ -452,6 +457,76 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         self.assertEqual([row["item"].id for row in rows], [self.ice_cream.id])
         self.assertTrue(rows[0]["manual_pair"])
+
+    def test_explicit_category_role_is_authoritative(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        setting.category_role_map = {
+            "main": [self.drink_category.id],
+            "drinks": [],
+            "desserts": [],
+            "starters": [],
+        }
+        setting.save(update_fields=["category_role_map", "updated_at"])
+
+        role_categories = _derive_role_categories(self.restaurant.id, setting)
+
+        self.assertEqual(_item_roles(self.cola, role_categories), {"main"})
+
+    def test_item_inventory_priority_can_be_configured_through_api(self):
+        client = APIClient()
+        client.force_authenticate(self.owner)
+
+        response = client.patch(
+            "/api/upsell/items",
+            {"item_id": self.lemonade.id, "inventory_priority": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["inventory_priority"])
+        self.assertTrue(
+            UpsellItemSetting.objects.get(
+                restaurant=self.restaurant,
+                item=self.lemonade,
+            ).inventory_priority
+        )
+
+    def test_category_guidance_rejects_foreign_categories(self):
+        other_owner = User.objects.create_user(
+            email="other-upsell-owner@example.com",
+            username="Other Upsell Owner",
+            password="test-password",
+            role="owner",
+        )
+        other_restaurant = Restaurant.objects.create(
+            resturent_name="Other Upsell Restaurant",
+            location="Dubai",
+            phone_number="+971500000003",
+            owner=other_owner,
+        )
+        foreign_category = Category.objects.create(
+            restaurant=other_restaurant,
+            Category_name="Foreign",
+            slug="foreign-upsell-category",
+        )
+        client = APIClient()
+        client.force_authenticate(self.owner)
+
+        response = client.patch(
+            "/api/upsell/settings",
+            {
+                "prioritized_categories": str(foreign_category.id),
+                "category_role_map": {
+                    "main": [foreign_category.id],
+                    "drinks": [],
+                    "desserts": [],
+                    "starters": [],
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,

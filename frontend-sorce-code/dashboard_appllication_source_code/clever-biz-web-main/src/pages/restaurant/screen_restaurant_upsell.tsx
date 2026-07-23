@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
-  Database,
   Eye,
   GitFork,
   Loader2,
@@ -118,6 +117,7 @@ type NewRuleDraft = {
 
 type TabKey = "performance" | "pairing" | "items" | "settings";
 type UpsellLoadScope = "base" | "items" | "settings" | "all";
+type CategoryRoleKey = "main" | "drinks" | "desserts" | "starters";
 
 const DEFAULT_SETTINGS: UpsellSettings = {
   enabled: true,
@@ -271,20 +271,6 @@ const SMART_SUGGESTION_ROWS = [
   ["Has a starter only", "Suggests a main dish"],
 ];
 
-const DEMO_PAIRING_ROWS: PairingRow[] = [
-  { source_item_id: 1, source_item_name: "Classic Cheeseburger", target_item_id: 2, target_item_name: "Cola", frequency: 24, association_strength: 0.92, shown_count: 58, accepted_count: 38, dismissed_count: 20, accept_rate: 66 },
-  { source_item_id: 3, source_item_name: "Double Apple Shisha", target_item_id: 4, target_item_name: "Classic Mojito", frequency: 22, association_strength: 0.89, shown_count: 51, accepted_count: 35, dismissed_count: 16, accept_rate: 69 },
-  { source_item_id: 5, source_item_name: "Truffle Burger", target_item_id: 4, target_item_name: "Classic Mojito", frequency: 18, association_strength: 0.87, shown_count: 42, accepted_count: 26, dismissed_count: 16, accept_rate: 62 },
-  { source_item_id: 6, source_item_name: "Sirloin Steak", target_item_id: 2, target_item_name: "Cola", frequency: 16, association_strength: 0.8, shown_count: 40, accepted_count: 24, dismissed_count: 16, accept_rate: 60 },
-  { source_item_id: 5, source_item_name: "Truffle Burger", target_item_id: 7, target_item_name: "Fries", frequency: 15, association_strength: 0.76, shown_count: 37, accepted_count: 22, dismissed_count: 15, accept_rate: 59 },
-  { source_item_id: 8, source_item_name: "Premium Sushi Platter", target_item_id: 4, target_item_name: "Classic Mojito", frequency: 14, association_strength: 0.74, shown_count: 33, accepted_count: 18, dismissed_count: 15, accept_rate: 55 },
-  { source_item_id: 9, source_item_name: "Carbonara", target_item_id: 4, target_item_name: "Classic Mojito", frequency: 12, association_strength: 0.68, shown_count: 29, accepted_count: 14, dismissed_count: 15, accept_rate: 48 },
-  { source_item_id: 10, source_item_name: "Salmon Sashimi", target_item_id: 11, target_item_name: "Dragon Roll", frequency: 11, association_strength: 0.72, shown_count: 24, accepted_count: 13, dismissed_count: 11, accept_rate: 54 },
-  { source_item_id: 11, source_item_name: "Dragon Roll", target_item_id: 8, target_item_name: "Premium Sushi Platter", frequency: 9, association_strength: 0.65, shown_count: 20, accepted_count: 9, dismissed_count: 11, accept_rate: 45 },
-  { source_item_id: 12, source_item_name: "Spicy Chicken Burger", target_item_id: 13, target_item_name: "Lemonade", frequency: 8, association_strength: 0.56, shown_count: 19, accepted_count: 7, dismissed_count: 12, accept_rate: 37 },
-  { source_item_id: 14, source_item_name: "Wagyu Slider", target_item_id: 15, target_item_name: "Chocolate Lava Cake", frequency: 7, association_strength: 0.48, shown_count: 15, accepted_count: 4, dismissed_count: 11, accept_rate: 27 },
-];
-
 const classNames = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
 const normalizeStrategyValue = (value: unknown): UpsellSettings["strategy"] => {
@@ -412,6 +398,16 @@ const ScreenRestaurantUpsell = () => {
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [items]);
+
+  const categoryRoleAssignments = useMemo(() => {
+    const assignments = new Map<number, CategoryRoleKey>();
+    (Object.entries(settings.category_role_map) as Array<[CategoryRoleKey, number[]]>).forEach(
+      ([role, categoryIds]) => {
+        categoryIds.forEach((categoryId) => assignments.set(Number(categoryId), role));
+      },
+    );
+    return assignments;
+  }, [settings.category_role_map]);
 
   const itemLookup = useMemo(() => {
     const map = new Map<number, UpsellItemRow>();
@@ -867,23 +863,37 @@ const ScreenRestaurantUpsell = () => {
     }
   };
 
-  const toggleItemEnabled = async (itemId: number, enabled: boolean) => {
+  const updateItemSetting = async (
+    itemId: number,
+    partial: Partial<Pick<UpsellItemRow, "enabled" | "inventory_priority">>,
+  ) => {
     try {
       setUpdatingItemId(itemId);
-      await axiosInstance.patch("/api/upsell/items", { item_id: itemId, enabled });
+      await axiosInstance.patch("/api/upsell/items", { item_id: itemId, ...partial });
       invalidateApiCache("upsell");
-      setItems((prev) => prev.map((item) => (item.id === itemId || item.item === itemId ? { ...item, enabled } : item)));
+      setItems((prev) =>
+        prev.map((item) => (item.id === itemId || item.item === itemId ? { ...item, ...partial } : item)),
+      );
     } catch {
-      toast.error("Failed to update item suggestion status.");
+      toast.error("Failed to update item upsell settings.");
     } finally {
       setUpdatingItemId(null);
     }
   };
 
-  const handleLoadDemoPairingData = () => {
-    setPairingRows(DEMO_PAIRING_ROWS);
-    setPairingLoaded(true);
-    toast.success("Demo pairing data loaded.");
+  const handleAssignCategoryRole = (categoryId: number, role: CategoryRoleKey | "") => {
+    const nextRoleMap: Record<CategoryRoleKey, number[]> = {
+      main: [...settings.category_role_map.main],
+      drinks: [...settings.category_role_map.drinks],
+      desserts: [...settings.category_role_map.desserts],
+      starters: [...settings.category_role_map.starters],
+    };
+
+    (Object.keys(nextRoleMap) as CategoryRoleKey[]).forEach((roleKey) => {
+      nextRoleMap[roleKey] = nextRoleMap[roleKey].filter((id) => Number(id) !== categoryId);
+    });
+    if (role) nextRoleMap[role].push(categoryId);
+    patchSettings({ category_role_map: nextRoleMap });
   };
 
   const refreshAll = async () => {
@@ -1187,13 +1197,6 @@ const ScreenRestaurantUpsell = () => {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={handleLoadDemoPairingData}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
-                >
-                  <Database className="h-4 w-4" strokeWidth={1.8} /> Load Demo Data
-                </button>
-                <button
-                  type="button"
                   onClick={() => fetchPairingIntelligence(true)}
                   disabled={runningIntelligence}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#0055FE] bg-white px-4 text-sm font-semibold text-[#0055FE] hover:bg-blue-50 disabled:opacity-60"
@@ -1213,9 +1216,8 @@ const ScreenRestaurantUpsell = () => {
             <section className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center">
               <GitFork className="mx-auto h-9 w-9 text-slate-300" strokeWidth={1.8} />
               <h3 className="mt-4 text-base font-bold text-slate-800">No pairing intelligence yet</h3>
-              <p className="mt-2 text-sm text-slate-500">Load demo data or run the intelligence scanner after completed orders exist.</p>
+              <p className="mt-2 text-sm text-slate-500">Pairings appear after at least two completed orders contain the same item combination.</p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">
-                <button onClick={handleLoadDemoPairingData} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600">Load Demo Data</button>
                 <button onClick={() => fetchPairingIntelligence(true)} className="rounded-xl bg-[#0055FE] px-4 py-2 text-sm font-semibold text-white">Run Intelligence Now</button>
               </div>
             </section>
@@ -1310,11 +1312,24 @@ const ScreenRestaurantUpsell = () => {
                             <span className="text-xs text-slate-300">No data yet</span>
                           )}
                         </div>
-                        {updatingItemId === toggleId ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-[#0055FE]" strokeWidth={1.8} />
-                        ) : (
-                          <ToggleSwitch checked={item.enabled} onChange={(next) => toggleItemEnabled(toggleId, next)} />
-                        )}
+                        <div className="flex shrink-0 flex-col gap-2.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:gap-5">
+                          <label className="flex items-center justify-between gap-2">
+                            <span>Move stock</span>
+                            <ToggleSwitch
+                              checked={item.inventory_priority}
+                              disabled={updatingItemId === toggleId}
+                              onChange={(next) => updateItemSetting(toggleId, { inventory_priority: next })}
+                            />
+                          </label>
+                          <label className="flex items-center justify-between gap-2">
+                            <span>Suggest</span>
+                            <ToggleSwitch
+                              checked={item.enabled}
+                              disabled={updatingItemId === toggleId}
+                              onChange={(next) => updateItemSetting(toggleId, { enabled: next })}
+                            />
+                          </label>
+                        </div>
                       </div>
                     );
                   })}
@@ -1437,6 +1452,54 @@ const ScreenRestaurantUpsell = () => {
                 );
               })}
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 className="text-base font-bold text-slate-900">Category Guidance</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Tell the engine what each menu category represents and which categories deserve extra shortlist priority.
+            </p>
+            {categoryOptions.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-slate-200 px-6 py-10 text-center text-sm text-slate-400">
+                Add menu categories before configuring category guidance.
+              </div>
+            ) : (
+              <div className="mt-6 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">
+                {categoryOptions.map((category) => {
+                  const prioritized = (settings.prioritized_categories_list || []).includes(category.id);
+                  const assignedRole = categoryRoleAssignments.get(category.id) || "";
+                  return (
+                    <div key={category.id} className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_190px_150px] sm:items-center">
+                      <span className="truncate text-sm font-bold text-slate-700">{category.name}</span>
+                      <label className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+                        Prioritize
+                        <ToggleSwitch
+                          checked={prioritized}
+                          disabled={savingSettings}
+                          onChange={() => handleTogglePrioritizedCategory(category.id)}
+                        />
+                      </label>
+                      <select
+                        value={assignedRole}
+                        disabled={savingSettings}
+                        onChange={(event) => handleAssignCategoryRole(category.id, event.target.value as CategoryRoleKey | "")}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:opacity-60"
+                        aria-label={`Role for ${category.name}`}
+                      >
+                        <option value="">Automatic role</option>
+                        <option value="main">Main</option>
+                        <option value="drinks">Drink</option>
+                        <option value="desserts">Dessert</option>
+                        <option value="starters">Starter / side</option>
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="mt-4 text-xs leading-5 text-slate-400">
+              Explicit roles override automatic name classification. Prioritized categories receive a ranking boost but still pass availability, cart, decline, and rule filters.
+            </p>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6">
