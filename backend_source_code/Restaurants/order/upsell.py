@@ -967,9 +967,16 @@ def _build_upsell_suggestions_for_items(
     prioritized_categories = _parse_prioritized_category_ids(setting)
     pair_rules, block_rules, global_block_targets = _active_manual_rules(restaurant.id)
 
-    trigger_source_item = next((item for item in cart_source_items if item.id == source_item_id), None)
-    if not trigger_source_item:
-        trigger_source_item = cart_source_items[-1] if cart_source_items else None
+    # Only the immediate after-add surface is anchored to one source item.
+    # Cart and pre-payment decisions evaluate every item in the order equally.
+    trigger_source_item = None
+    if trigger_point == "add_to_cart":
+        trigger_source_item = next(
+            (item for item in cart_source_items if item.id == source_item_id),
+            None,
+        )
+        if not trigger_source_item:
+            trigger_source_item = cart_source_items[-1] if cart_source_items else None
 
     available_ids = [
         int(item_id)

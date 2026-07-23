@@ -907,6 +907,38 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertIn("highest-priced", context["user_message"])
         self.assertIn("short, direct", context["user_message"])
 
+    def test_each_trigger_has_a_distinct_required_llm_objective(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="add_to_cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        trigger_rules = {}
+        for trigger_point in ("add_to_cart", "cart", "before_payment"):
+            context = build_upsell_agent_context(
+                restaurant=self.restaurant,
+                setting=self.restaurant.upsell_setting,
+                cart_items=[self.burger],
+                candidate_rows=rows,
+                trigger_point=trigger_point,
+                hour=13,
+                source_item_id=self.burger.id,
+            )
+            self.assertTrue(context["recommendation_required"])
+            self.assertEqual(context["trigger"]["point"], trigger_point)
+            self.assertIn(context["trigger"]["rule"], context["user_message"])
+            trigger_rules[trigger_point] = context["trigger"]["rule"]
+
+            if trigger_point == "add_to_cart":
+                self.assertEqual(context["trigger"]["source_item_id"], self.burger.id)
+            else:
+                self.assertIsNone(context["trigger"]["source_item_id"])
+
+        self.assertEqual(len(set(trigger_rules.values())), 3)
+
     def _agent_context(self, rows):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
         return build_upsell_agent_context(
@@ -1571,7 +1603,7 @@ class UpsellKnowledgeEngineTests(TestCase):
         VERTEX_UPSELL_PROJECT_ID="cleverdining-prod",
         VERTEX_UPSELL_SERVICE_ACCOUNT_JSON='{"type":"service_account"}',
     )
-    def test_vertex_can_suggest_nothing(self):
+    def test_before_payment_retries_llm_that_suggests_nothing(self):
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],
@@ -1579,8 +1611,9 @@ class UpsellKnowledgeEngineTests(TestCase):
             source_item_id=self.burger.id,
             limit=4,
         )
-        response = Mock(status_code=200)
-        response.json.return_value = {
+        chosen = rows[0]["item"]
+        no_suggestion = Mock(status_code=200)
+        no_suggestion.json.return_value = {
             "choices": [{
                 "message": {"content": (
                     '{"suggest_nothing":true,"suggested_item_id":null,'
@@ -1590,8 +1623,19 @@ class UpsellKnowledgeEngineTests(TestCase):
                 )}
             }]
         }
+        selected = Mock(status_code=200)
+        selected.json.return_value = {
+            "choices": [{
+                "message": {"content": (
+                    '{"suggest_nothing":false,"suggested_item_id":%d,'
+                    '"suggested_item_name":"%s","target_role":"%s",'
+                    '"reason":null,"reasoning":"Low-friction final addition.",'
+                    '"suggestion_copy":"One last addition before you confirm.","confidence":0.9}'
+                ) % (chosen.id, chosen.item_name, rows[0]["target_role"])}
+            }]
+        }
         session = Mock()
-        session.post.return_value = response
+        session.post.side_effect = [no_suggestion, selected]
         context = build_upsell_agent_context(
             restaurant=self.restaurant,
             setting=self.restaurant.upsell_setting,
@@ -1604,9 +1648,9 @@ class UpsellKnowledgeEngineTests(TestCase):
         with patch("order.upsell_knowledge._get_vertex_authorized_session", return_value=session):
             raw_decision, llm_status = call_upsell_llm(context)
 
-        decision = validated_upsell_agent_decision(raw_decision, rows, llm_status=llm_status)
-        self.assertTrue(decision["suggest_nothing"])
-        self.assertEqual(decision["decision_source"], "llm")
+        self.assertEqual(llm_status, "ok")
+        self.assertEqual(raw_decision["suggested_item_id"], chosen.id)
+        self.assertEqual(session.post.call_count, 2)
 
     @override_settings(
         UPSELL_LLM_ENABLED=True,
@@ -1785,26 +1829,34 @@ class UpsellKnowledgeEngineTests(TestCase):
             )
             llm.assert_not_called()
 
-    def test_disabled_trigger_is_enforced_before_llm_selection(self):
+    def test_each_disabled_trigger_is_enforced_before_llm_selection(self):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
-        setting.show_in_cart = False
-        setting.save(update_fields=["show_in_cart", "updated_at"])
-        request = APIRequestFactory().get(
-            "/api/upsell/smart-suggestions",
-            {
-                "restaurant_id": self.restaurant.id,
-                "cart_item_ids": str(self.burger.id),
-                "trigger_point": "cart",
-            },
-        )
+        trigger_fields = {
+            "add_to_cart": "show_after_add_to_cart",
+            "cart": "show_in_cart",
+            "before_payment": "show_before_payment",
+        }
+        for trigger_point, field_name in trigger_fields.items():
+            setattr(setting, field_name, False)
+            setting.save(update_fields=[field_name, "updated_at"])
+            request = APIRequestFactory().get(
+                "/api/upsell/smart-suggestions",
+                {
+                    "restaurant_id": self.restaurant.id,
+                    "cart_item_ids": str(self.burger.id),
+                    "trigger_point": trigger_point,
+                },
+            )
 
-        with patch("order.upsell_views.call_upsell_llm") as llm:
-            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+            with patch("order.upsell_views.call_upsell_llm") as llm:
+                response = UpsellSmartSuggestionsAPIView.as_view()(request)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 0)
-        self.assertEqual(
-            response.data["agent_decision"]["decision_source"],
-            "backend_settings",
-        )
-        llm.assert_not_called()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data["count"], 0)
+            self.assertEqual(
+                response.data["agent_decision"]["decision_source"],
+                "backend_settings",
+            )
+            llm.assert_not_called()
+            setattr(setting, field_name, True)
+            setting.save(update_fields=[field_name, "updated_at"])

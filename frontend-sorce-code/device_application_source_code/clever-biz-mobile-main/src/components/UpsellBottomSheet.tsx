@@ -44,7 +44,7 @@ const getContextualUpsellCopy = (
   }
 
   const triggerName = String(triggerItem?.item_name || triggerItem?.name || "your order").trim();
-  const suggestionName = String(suggestion.item_name || "this").trim();
+  const llmReason = String(suggestion.upsell_message || "").trim();
   const suggestedIsDessert = itemLooksLike(suggestion, ["dessert", "sweet", "cake", "ice", "crepe", "chocolate"]);
   const suggestedIsDrink = itemLooksLike(suggestion, ["drink", "juice", "mojito", "cola", "water", "coffee", "tea", "shake"]);
   const suggestedIsStarter = itemLooksLike(suggestion, ["starter", "side", "fries", "salad", "appetizer"]);
@@ -61,34 +61,34 @@ const getContextualUpsellCopy = (
   if (explicitLabel) {
     return {
       label: String(explicitLabel),
-      reason: suggestion.upsell_message || "Customers often add this to complete the order.",
+      reason: llmReason || "Customers often add this to complete the order.",
     };
   }
 
   if (suggestedIsDessert && triggerIsMain) {
     return {
       label: "Save room for this",
-      reason: "Most complete meals end with dessert. Don't miss out.",
+      reason: llmReason || "A natural dessert to complete this order.",
     };
   }
 
   if (suggestedIsDrink && triggerIsMain) {
     return {
       label: "Perfect with your order",
-      reason: `${suggestionName} is a natural match with ${triggerName}.`,
+      reason: llmReason || `A natural match with ${triggerName}.`,
     };
   }
 
   if (suggestedIsStarter) {
     return {
       label: "Also worth adding",
-      reason: "A small add-on to make the meal feel complete.",
+      reason: llmReason || "A small add-on to make the meal feel complete.",
     };
   }
 
   return {
     label: suggestion.upsell_rule || "Recommended",
-    reason: suggestion.upsell_message || "Customers often add this to complete the order.",
+    reason: llmReason || "Customers often add this to complete the order.",
   };
 };
 

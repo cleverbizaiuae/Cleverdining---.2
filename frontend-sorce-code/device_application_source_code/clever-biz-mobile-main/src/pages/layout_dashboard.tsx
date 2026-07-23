@@ -33,6 +33,7 @@ import {
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
+  isUpsellTriggerEnabled,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
@@ -361,8 +362,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       sourceItemIdsRef.current = cartItemIds;
 
       const shouldOpenImmediately =
-        (settings?.enabled ?? true) &&
-        (settings?.show_after_add_to_cart ?? true) &&
+        isUpsellTriggerEnabled(settings, "add_to_cart") &&
         canShowUpsellSession(settings?.aggressiveness || "moderate");
 
       activeRef.current = shouldOpenImmediately;
@@ -387,8 +387,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           if (
             settingsSnapshot &&
             (
-              !settingsSnapshot.enabled ||
-              !settingsSnapshot.show_after_add_to_cart ||
+              !isUpsellTriggerEnabled(settingsSnapshot, "add_to_cart") ||
               !canShowUpsellSession(settingsSnapshot.aggressiveness || "moderate")
             )
           ) {

@@ -10,6 +10,7 @@ import { getSessionCurrencyCode } from "../utils/regionSession";
 import {
   fetchUpsellSettings,
   fetchUpsellSuggestions,
+  isUpsellTriggerEnabled,
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
@@ -228,8 +229,7 @@ const ScreenCart = () => {
     const currentAggressiveness = currentSettings.aggressiveness || "moderate";
     const triggerLimit = getUpsellTriggerLimit("cart", currentAggressiveness);
     const shouldRenderCart =
-      currentSettings.enabled &&
-      currentSettings.show_in_cart &&
+      isUpsellTriggerEnabled(currentSettings, "cart") &&
       canShowUpsellSession(currentAggressiveness);
 
     const recordCartShown = (suggestions: UpsellSuggestion[]) => {
@@ -279,7 +279,6 @@ const ScreenCart = () => {
         const settingsPromise = fetchUpsellSettings({ force: true }).catch(() => null);
         const suggestionsPromise = fetchUpsellSuggestions({
           triggerPoint: "cart",
-          sourceItemId: validCartItems[validCartItems.length - 1]?.id,
           limit: triggerLimit,
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
@@ -300,8 +299,7 @@ const ScreenCart = () => {
         const effectiveAggressiveness = effectiveSettings.aggressiveness || "moderate";
         const effectiveTriggerLimit = getUpsellTriggerLimit("cart", effectiveAggressiveness);
         const shouldRenderCart =
-          effectiveSettings.enabled &&
-          effectiveSettings.show_in_cart &&
+          isUpsellTriggerEnabled(effectiveSettings, "cart") &&
           canShowUpsellSession(effectiveAggressiveness);
 
         if (!shouldRenderCart) {
@@ -353,8 +351,7 @@ const ScreenCart = () => {
     const triggerLimit = getUpsellTriggerLimit("before_payment", currentAggressiveness);
     const sessionLimit = getUpsellSessionCap(currentAggressiveness);
     const shouldRender =
-      currentSettings.enabled &&
-      currentSettings.show_before_payment &&
+      isUpsellTriggerEnabled(currentSettings, "before_payment") &&
       canShowUpsellSession(currentAggressiveness) &&
       canShowUpsellTouchpoint("before_payment", triggerLimit, sessionLimit);
 
@@ -421,8 +418,7 @@ const ScreenCart = () => {
         const effectiveTriggerLimit = getUpsellTriggerLimit("before_payment", effectiveAggressiveness);
         const effectiveSessionLimit = getUpsellSessionCap(effectiveAggressiveness);
         const shouldRenderRemote =
-          effectiveSettings.enabled &&
-          effectiveSettings.show_before_payment &&
+          isUpsellTriggerEnabled(effectiveSettings, "before_payment") &&
           canShowUpsellSession(effectiveAggressiveness) &&
           canShowUpsellTouchpoint("before_payment", effectiveTriggerLimit, effectiveSessionLimit);
 
@@ -1032,7 +1028,7 @@ const ScreenCart = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">
-                        While you wait
+                        Complete your order
                       </p>
                       <p className="text-[15px] font-bold text-foreground leading-tight truncate">
                         {suggestion.item_name}
@@ -1237,6 +1233,9 @@ const ScreenCart = () => {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-foreground truncate">{suggestion.item_name}</p>
+                          <p className="text-[10px] leading-tight text-muted-foreground line-clamp-2">
+                            {suggestion.upsell_message || "A final addition before you confirm."}
+                          </p>
                           <p className="text-xs text-primary font-bold">
                             {currencyCode} {getEffectiveItemPrice(suggestion).toFixed(2)}
                           </p>

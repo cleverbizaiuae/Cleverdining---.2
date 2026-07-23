@@ -53,6 +53,27 @@ export type UpsellSettingsSnapshot = {
   config_version?: number;
 };
 
+const UPSELL_TRIGGER_SETTING: Record<
+  UpsellTriggerPoint,
+  keyof Pick<
+    UpsellSettingsSnapshot,
+    "show_after_add_to_cart" | "show_in_cart" | "show_before_payment"
+  >
+> = {
+  add_to_cart: "show_after_add_to_cart",
+  cart: "show_in_cart",
+  before_payment: "show_before_payment",
+};
+
+export function isUpsellTriggerEnabled(
+  settings: UpsellSettingsSnapshot | null | undefined,
+  triggerPoint: UpsellTriggerPoint,
+  defaultWhenUnknown = true,
+): boolean {
+  if (!settings) return defaultWhenUnknown;
+  return settings.enabled && Boolean(settings[UPSELL_TRIGGER_SETTING[triggerPoint]]);
+}
+
 type CartLikeItem = {
   id: number;
   quantity?: number;

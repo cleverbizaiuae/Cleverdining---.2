@@ -271,6 +271,21 @@ TONE_INSTRUCTIONS = {
     "minimal": "Write short, direct copy with no filler.",
 }
 
+TRIGGER_INSTRUCTIONS = {
+    "add_to_cart": (
+        "Choose the best immediate complement to the newly added source item, "
+        "while respecting the roles already present in the full cart."
+    ),
+    "cart": (
+        "Choose the item that best completes the whole cart's most important "
+        "missing meal role."
+    ),
+    "before_payment": (
+        "Choose one low-friction final addition from the valid shortlist; prefer "
+        "a natural small drink, dessert, side, or add-on when available."
+    ),
+}
+
 UPSELL_SYSTEM_PROMPT = """
 You are CleverDining's final upsell recommender. The backend already enforced triggers, caps,
 availability, exclusions, business and venue rules, then supplied the only valid 3-5 candidates.
@@ -598,15 +613,16 @@ def build_upsell_agent_context(
         target_roles = get_gap_priority(set(cart_roles), venue_type=venue_type, hour=hour)
 
     candidate_payloads = [_candidate_payload(row) for row in list(candidate_rows)[:5]]
-    recommendation_required = bool(candidate_payloads) and trigger_point in {
-        "add_to_cart",
-        "cart",
-    }
+    recommendation_required = bool(candidate_payloads) and trigger_point in TRIGGER_INSTRUCTIONS
     signals = dict(session_signals or {})
     local_now = _local_restaurant_now(restaurant)
-    trigger_item = next(
-        (item for item in cart_items if source_item_id and getattr(item, "id", None) == source_item_id),
-        None,
+    trigger_item = (
+        next(
+            (item for item in cart_items if source_item_id and getattr(item, "id", None) == source_item_id),
+            None,
+        )
+        if trigger_point == "add_to_cart"
+        else None
     )
     session_context = {
         "suggestions_shown": int(signals.get("suggestions_shown") or 0),
@@ -661,8 +677,12 @@ def build_upsell_agent_context(
         "recommendation_required": recommendation_required,
         "trigger": {
             "point": trigger_point,
-            "source_item_id": getattr(trigger_item, "id", source_item_id),
+            "source_item_id": getattr(trigger_item, "id", None),
             "source_item_name": getattr(trigger_item, "item_name", "") if trigger_item else "",
+            "rule": TRIGGER_INSTRUCTIONS.get(
+                trigger_point,
+                TRIGGER_INSTRUCTIONS["cart"],
+            ),
         },
         "cart": [
             {
@@ -720,6 +740,14 @@ def build_upsell_agent_user_message(context: Mapping[str, Any]) -> str:
         "tone": context.get("settings", {}).get("tone"),
         "tone_rule": TONE_INSTRUCTIONS.get(tone, TONE_INSTRUCTIONS["friendly"]),
         "trigger": context.get("trigger", {"point": context.get("trigger_point")}),
+        "trigger_rule": (
+            context.get("trigger", {}).get("rule")
+            if isinstance(context.get("trigger"), Mapping)
+            else TRIGGER_INSTRUCTIONS.get(
+                str(context.get("trigger_point") or "cart"),
+                TRIGGER_INSTRUCTIONS["cart"],
+            )
+        ),
         "recommendation_required": bool(context.get("recommendation_required")),
         "cart_roles": context.get("cart_roles", []),
         "cart": [
