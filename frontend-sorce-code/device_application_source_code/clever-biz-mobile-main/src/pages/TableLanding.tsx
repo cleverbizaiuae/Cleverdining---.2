@@ -3,8 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
 import { getRegionConfig } from '../config/regionConfig';
-import { resetUpsellSession } from '../lib/upsellSession';
 import { cacheBrandConfigForRestaurant, getBrandSplashSessionKey } from '../lib/useBrandConfig';
+import { clearGuestSessionStorage } from '../lib/guestSessionStorage';
 
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
@@ -40,6 +40,7 @@ export default function TableLanding() {
             }
 
             try {
+                const previousSessionToken = localStorage.getItem('guest_session_token');
                 const candidateRestaurantId = payload.restaurant_id;
                 const brandRequest = candidateRestaurantId
                     ? axios.get(`/api/brand-config/?restaurant_id=${encodeURIComponent(candidateRestaurantId)}`).catch(() => null)
@@ -51,6 +52,7 @@ export default function TableLanding() {
 
                 const { guest_session_id, session_token, table_id, table_name } = res.data;
                 const resolvedRestaurantId = res.data.restaurant_id;
+                const isNewGuestSession = previousSessionToken !== session_token;
 
                 if (warmedBrand && String(candidateRestaurantId) === String(resolvedRestaurantId)) {
                     cacheBrandConfigForRestaurant(resolvedRestaurantId, warmedBrand.data);
@@ -63,6 +65,10 @@ export default function TableLanding() {
                     } catch {
                         // Branding remains on safe defaults until the background refresh succeeds.
                     }
+                }
+
+                if (isNewGuestSession) {
+                    clearGuestSessionStorage();
                 }
 
                 // Store session token
@@ -78,13 +84,6 @@ export default function TableLanding() {
 
                 // Backend treats it as Invalid Token (401) if sent as Bearer.
                 // Guest access relies on X-Guest-Session-Token header.
-
-                // Clear old cart backups to prevent leaks between guest sessions.
-                localStorage.removeItem('cart');
-                Object.keys(localStorage)
-                    .filter((key) => key.startsWith('cb:cart:'))
-                    .forEach((key) => localStorage.removeItem(key));
-                resetUpsellSession();
 
                 // Construct and store userInfo
                 const resolvedRegion =

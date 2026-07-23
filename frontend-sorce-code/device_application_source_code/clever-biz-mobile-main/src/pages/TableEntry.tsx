@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import axiosInstance from "../lib/axios";
 import { ImSpinner6 } from "react-icons/im";
 import { getRegionConfig } from "../config/regionConfig";
-import { resetUpsellSession } from "../lib/upsellSession";
+import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
 
 const TableEntry = () => {
     const { uuid } = useParams();
@@ -14,6 +14,7 @@ const TableEntry = () => {
             if (!uuid) return;
 
             try {
+                const previousSessionToken = localStorage.getItem("guest_session_token");
                 // 1. Fetch device details by UUID
                 const response = await axiosInstance.get(`/api/customer/devices/${uuid}/`);
                 const device = response.data;
@@ -65,25 +66,14 @@ const TableEntry = () => {
                     role: "guest",
                 };
 
-                // 4. Store session & info
-                // CRITICAL: Clear ALL previous session data first to ensure session isolation
-                localStorage.removeItem("guest_session_token");
-                localStorage.removeItem("pending_order_id");
-                localStorage.removeItem("bulk_checkout");
-                localStorage.removeItem("userInfo");
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem('cart');
-                Object.keys(localStorage)
-                    .filter((key) => key.startsWith('cb:cart:'))
-                    .forEach((key) => localStorage.removeItem(key));
-                resetUpsellSession();
-                // Clear chat/messages state for session isolation
-                localStorage.removeItem("chat_messages_cache");
-                localStorage.removeItem("newMessage");
-                // Old session cleanup complete - now store new session
+                // 4. Store session & info. A resumed scan keeps the current
+                // guest's state; a new session starts with no previous table data.
+                if (previousSessionToken !== session_token) {
+                    clearGuestSessionStorage();
+                }
 
                 localStorage.setItem("userInfo", JSON.stringify(mockUserInfo));
-                localStorage.setItem("accessToken", "guest_token"); // Marker for axios interceptor (optional but keeps flow)
+                localStorage.removeItem("accessToken");
                 localStorage.setItem("guest_session_token", session_token); // CRITICAL for backend auth
                 localStorage.setItem("guest_session_id", String(guest_session_id || ""));
                 localStorage.setItem("restaurant_id", String(device.restaurant_id || ""));

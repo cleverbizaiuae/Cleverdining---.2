@@ -398,6 +398,8 @@ class ConfirmCashPaymentAPIView(APIView):
                 session.is_active = False
                 session.save()
 
+                Cart.objects.filter(guest_session=session).delete()
+
                 # Clear chat messages for this device so next guest gets a clean slate
                 try:
                     ChatMessage.objects.filter(device=order.device).delete()

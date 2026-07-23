@@ -8,6 +8,7 @@ export type TableIdentity = {
   storageId: string;
   deviceId: string | null;
   restaurantId: string | null;
+  guestSessionId: string | null;
   ordersStorageKey: string;
   chatStorageKey: string;
   treatStorageKey: string;
@@ -60,10 +61,20 @@ export const getTableIdentity = (): TableIdentity => {
     parsed?.user?.restaurant_id,
     localStorage.getItem("restaurant_id"),
   );
+  const guestSessionId = firstString(
+    restaurant?.guest_session_id,
+    parsed?.guest_session_id,
+    localStorage.getItem("guest_session_id"),
+  );
+  const guestSessionToken = firstString(localStorage.getItem("guest_session_token"));
 
   const tableName = explicitTableName || (deviceId ? `Table ${extractNumber(deviceId)}` : TABLE_NAME);
   const tableNumber = extractNumber(tableName || deviceId, TABLE_NUMBER);
   const storageId = String(tableNumber);
+  const sessionIdentity = guestSessionId || guestSessionToken;
+  const storageScope = sessionIdentity
+    ? `session_${sessionIdentity.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+    : `unbound_${restaurantId || "restaurant"}_${deviceId || storageId}`;
 
   return {
     tableNumber,
@@ -72,9 +83,10 @@ export const getTableIdentity = (): TableIdentity => {
     storageId,
     deviceId: deviceId || null,
     restaurantId: restaurantId || null,
-    ordersStorageKey: `cleverbiz_orders_table_${storageId}`,
-    chatStorageKey: `cleverbiz_chat_table_${storageId}`,
-    treatStorageKey: `cb_treat_table_${storageId}`,
+    guestSessionId: guestSessionId || null,
+    ordersStorageKey: `cleverbiz_orders_${storageScope}`,
+    chatStorageKey: `cleverbiz_chat_${storageScope}`,
+    treatStorageKey: `cb_treat_${storageScope}`,
   };
 };
 

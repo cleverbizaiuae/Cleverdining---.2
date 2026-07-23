@@ -102,6 +102,7 @@ def _no_restaurant_response():
 class ResolveTableView(APIView):
     permission_classes = [AllowAny]
 
+    @transaction.atomic
     def post(self, request):
         # Accept all known client formats (legacy + current)
         restaurant_id = request.data.get('restaurant_id')
@@ -157,6 +158,9 @@ class ResolveTableView(APIView):
             if not device:
                 raise Device.DoesNotExist
 
+            # Serialize scans for the same table so a completed session cannot
+            # be resumed while another request is creating its replacement.
+            device = Device.objects.select_for_update().get(pk=device.pk)
             restaurant_id = device.restaurant.id
         except Device.DoesNotExist:
             # Construct debug info
@@ -168,7 +172,13 @@ class ResolveTableView(APIView):
 
         
         # Check for existing ACTIVE session
-        existing_session = GuestSession.objects.filter(device=device, is_active=True).first()
+        existing_session = (
+            GuestSession.objects
+            .select_for_update()
+            .filter(device=device, is_active=True)
+            .order_by('-created_at')
+            .first()
+        )
         
         if existing_session:
             # AUTO-EXPIRE check: If session is active but has NO unpaid/active orders, 
@@ -183,7 +193,7 @@ class ResolveTableView(APIView):
             if not has_pending_orders:
                 # Session is stale/finished. Close it.
                 existing_session.is_active = False
-                existing_session.save()
+                existing_session.save(update_fields=['is_active', 'last_seen_at'])
                 existing_session = None # Proceed to create NEW session
             else:
                 # Session is genuinely active with orders. Resume it.

@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { captureWebSocketFailure } from "../monitoring/sentry";
 import { getTableIdentity, removeLocalStorageSynced, setLocalStorageSynced } from "../lib/tableIdentity";
+import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
 
 type WebSocketContextType = {
   ws: WebSocket | null;
@@ -247,13 +248,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           }
 
           console.log("Session Ended via WebSocket");
-          localStorage.removeItem("userInfo");
-          localStorage.removeItem("guest_session_token");
-          localStorage.removeItem("guest_session_id");
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("pending_order_id");
-          removeLocalStorageSynced(chatStorageKey);
-          localStorage.removeItem("chat_messages_cache");
+          clearGuestSessionStorage();
           window.location.href = "/login";
           return;
         }

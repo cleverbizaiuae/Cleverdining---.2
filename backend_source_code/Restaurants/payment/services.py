@@ -193,7 +193,7 @@ class PaymentService:
         if not session:
             return
 
-        from order.models import Order
+        from order.models import Cart, Order
         from message.models import ChatMessage
 
         has_unpaid_orders = Order.objects.filter(
@@ -207,6 +207,7 @@ class PaymentService:
             session.is_active = False
             session.save(update_fields=['is_active'])
 
+        Cart.objects.filter(guest_session=session).delete()
         ChatMessage.objects.filter(device=order.device).delete()
 
         try:
@@ -591,8 +592,6 @@ class PaymentService:
             and payment.order.guest_session
             and payment.created_by != 'pre_order'
         ):
-            from order.models import Cart
-            Cart.objects.filter(guest_session=payment.order.guest_session).delete()
             PaymentService._close_session_and_clear_chat_if_settled(payment.order)
 
         return payload

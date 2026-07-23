@@ -78,22 +78,18 @@ const sanitizeCartItems = (raw: unknown): CartItem[] => {
 
 const getCartStorageKeys = (sessionToken?: string | null): string[] => {
   const keys: string[] = [];
-  if (sessionToken) keys.push(`cb:cart:${sessionToken}`);
+  if (sessionToken) return [`cb:cart:${sessionToken}`];
 
   try {
     const tableInfo = getTableIdentity();
-    if (tableInfo.restaurantId && tableInfo.deviceId) {
-      keys.push(`cb:cart:restaurant:${tableInfo.restaurantId}:device:${tableInfo.deviceId}`);
-    }
-    if (tableInfo.restaurantId && tableInfo.storageId) {
-      keys.push(`cb:cart:restaurant:${tableInfo.restaurantId}:table:${tableInfo.storageId}`);
+    if (tableInfo.guestSessionId) {
+      keys.push(`cb:cart:session:${tableInfo.guestSessionId}`);
     }
   } catch {
-    // Fall through to legacy keys.
+    // No guest session means there is no cart to persist.
   }
 
-  keys.push("cart");
-  return Array.from(new Set(keys));
+  return keys;
 };
 
 const readStoredCart = (sessionToken?: string | null): CartItem[] => {

@@ -10,13 +10,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient, APIRequestFactory
 
 from accounts.models import User
-from payment.models import PaymentGateway, PaymentProviderEvent
+from payment.models import Payment, PaymentGateway, PaymentProviderEvent
 from payment.models import StripeDetails
 from payment.provider_registry import PAYMENT_PROVIDER_CODES, PROVIDER_CLASSES
 from payment.services import PaymentService, _mark_order_payment_progress
 from restaurant.models import Restaurant
-from device.models import Device
-from order.models import Order
+from device.models import Device, GuestSession
+from order.models import Cart, Order
 
 
 class PreOrderPaymentSettlementTests(TestCase):
@@ -55,6 +55,97 @@ class PreOrderPaymentSettlementTests(TestCase):
         self.assertEqual(order.payment_status, "paid")
         self.assertEqual(order.status, "pending")
         self.assertEqual(str(order.amount_paid), "50.00")
+
+
+class CompletedGuestPaymentSessionTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="completed-guest-payment@example.com",
+            username="Completed Guest Payment",
+            password="password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Completed Guest Payment",
+            location="Dubai",
+            phone_number="+971500004322",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table Card",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        self.session = GuestSession.objects.create(
+            device=self.device,
+            session_token="completed-card-session",
+        )
+        self.order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            guest_session=self.session,
+            status="awaiting_payment",
+            payment_status="unpaid",
+            total_price="50.00",
+        )
+        Cart.objects.create(guest_session=self.session, device=self.device)
+        self.payment = Payment.objects.create(
+            device=self.device,
+            restaurant=self.restaurant,
+            order=self.order,
+            provider="stripe",
+            transaction_id="txn_completed_card_session",
+            amount="50.00",
+            status="pending",
+            created_by="guest",
+        )
+
+    def test_full_card_payment_retires_session_and_clears_cart(self):
+        with (
+            patch.object(PaymentService, "_emit_order_update"),
+            patch.object(PaymentService, "_emit_payment_update"),
+            patch("payment.services.async_to_sync") as async_to_sync,
+        ):
+            async_to_sync.return_value = lambda *_args, **_kwargs: None
+            result = PaymentService._finalize_completed_payment(
+                self.payment,
+                {"amount": "50.00", "status": "completed"},
+            )
+
+        self.session.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertTrue(result["fully_paid"])
+        self.assertEqual(self.order.payment_status, "paid")
+        self.assertFalse(self.session.is_active)
+        self.assertFalse(Cart.objects.filter(guest_session=self.session).exists())
+        self.assertTrue(Order.objects.filter(pk=self.order.pk).exists())
+
+    def test_payment_does_not_retire_session_while_another_order_is_unpaid(self):
+        Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            guest_session=self.session,
+            status="pending",
+            payment_status="unpaid",
+            total_price="25.00",
+        )
+
+        with (
+            patch.object(PaymentService, "_emit_order_update"),
+            patch.object(PaymentService, "_emit_payment_update"),
+            patch("payment.services.async_to_sync") as async_to_sync,
+        ):
+            async_to_sync.return_value = lambda *_args, **_kwargs: None
+            result = PaymentService._finalize_completed_payment(
+                self.payment,
+                {"amount": "50.00", "status": "completed"},
+            )
+
+        self.session.refresh_from_db()
+        self.assertTrue(result["fully_paid"])
+        self.assertTrue(self.session.is_active)
+        self.assertTrue(Cart.objects.filter(guest_session=self.session).exists())
 
 
 class PaymentProviderWebhookTests(TestCase):

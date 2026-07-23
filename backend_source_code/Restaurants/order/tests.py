@@ -16,7 +16,7 @@ from device.models import Device, GuestSession
 from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
-from .models import Order, UpsellEvent, UpsellItemSetting, UpsellLLMDecision, UpsellRule, UpsellSetting
+from .models import Cart, Order, UpsellEvent, UpsellItemSetting, UpsellLLMDecision, UpsellRule, UpsellSetting
 from . import upsell as upsell_module
 from .upsell import (
     _derive_role_categories,
@@ -159,6 +159,7 @@ class PaymentCompletionNavigationTests(TestCase):
             payment_status="pending_cash",
             total_price="42.00",
         )
+        Cart.objects.create(guest_session=self.session, device=self.device)
         self.client = APIClient()
 
     def test_cash_confirmation_notifies_guest_before_session_logout(self):
@@ -179,6 +180,7 @@ class PaymentCompletionNavigationTests(TestCase):
         self.session.refresh_from_db()
         self.assertEqual(self.order.payment_status, "paid")
         self.assertFalse(self.session.is_active)
+        self.assertFalse(Cart.objects.filter(guest_session=self.session).exists())
 
         guest_events = [
             payload

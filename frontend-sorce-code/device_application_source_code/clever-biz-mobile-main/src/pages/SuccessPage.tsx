@@ -14,6 +14,7 @@ import { cachedGet } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
 import logoImg from "@/assets/icon-32.png";
 import { useNavigate } from "react-router-dom";
+import { clearGuestSessionStorage } from "@/lib/guestSessionStorage";
 
 const firstNonEmpty = (...values: unknown[]) => {
   for (const value of values) {
@@ -70,18 +71,6 @@ const hexToRgba = (hex: string, alpha: number) => {
   const g = (value >> 8) & 255;
   const b = value & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-const cleanupSessionStorage = () => {
-  localStorage.removeItem("userInfo");
-  localStorage.removeItem("guest_session_token");
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("pending_order_id");
-  localStorage.removeItem("bulk_checkout");
-  localStorage.removeItem("last_paid_restaurant_id");
-  localStorage.removeItem("chat_messages_cache");
-  localStorage.removeItem("newMessage");
-  localStorage.removeItem("cart");
 };
 
 const useDecodedImage = (src: string | null) => {
@@ -259,7 +248,7 @@ const SuccessPage = () => {
   useEffect(() => {
     if (!paymentVerified || sessionCleanedRef.current) return;
     sessionCleanedRef.current = true;
-    cleanupSessionStorage();
+    clearGuestSessionStorage();
   }, [paymentVerified]);
 
   const resolvedRestaurantName = useMemo(() => {
@@ -296,7 +285,7 @@ const SuccessPage = () => {
     }
 
     // Cleanup session before leaving
-    cleanupSessionStorage();
+    clearGuestSessionStorage();
 
     // Open in new tab/window (external)
     window.open(resolvedGoogleReviewUrl, "_blank", "noopener,noreferrer");

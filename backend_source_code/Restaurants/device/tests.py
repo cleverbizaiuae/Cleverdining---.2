@@ -3,12 +3,14 @@ from unittest.mock import patch
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from accounts.models import ChefStaff, User
 from restaurant.models import Restaurant
 
-from .models import Device
+from order.models import Order
+
+from .models import Device, GuestSession
 from .views import SimpleDeviceListView, _resolve_user_restaurant_ids
 
 
@@ -115,3 +117,85 @@ class DeviceListErrorTests(TestCase):
         sql = "\n".join(query["sql"] for query in captured.captured_queries).lower()
         self.assertNotIn("whatsapp_provider", sql)
         self.assertNotIn("whatsapp_360dialog_channel_id", sql)
+
+
+class ResolveTableSessionIsolationTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="session-owner@example.com",
+            username="session-owner",
+            password="test-password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Session Test Restaurant",
+            location="Dubai",
+            phone_number="+971500000099",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table 9",
+                table_number="9",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        self.client = APIClient()
+
+    def test_paid_guest_is_replaced_and_new_guest_has_no_orders(self):
+        previous_session = GuestSession.objects.create(
+            device=self.device,
+            session_token="paid-guest-session",
+        )
+        Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            guest_session=previous_session,
+            status="delivered",
+            payment_status="paid",
+            total_price="42.00",
+            amount_paid="42.00",
+        )
+
+        response = self.client.post(
+            "/api/customer/resolve-table/",
+            {"device_id": self.device.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_resumed"])
+        self.assertNotEqual(response.json()["guest_session_id"], previous_session.id)
+        previous_session.refresh_from_db()
+        self.assertFalse(previous_session.is_active)
+
+        orders_response = self.client.get(
+            "/api/customer/uncomplete/orders/?include_settled=1",
+            HTTP_X_GUEST_SESSION_TOKEN=response.json()["session_token"],
+        )
+        self.assertEqual(orders_response.status_code, 200)
+        self.assertEqual(orders_response.json()["results"], [])
+
+    def test_unpaid_guest_session_is_resumed(self):
+        active_session = GuestSession.objects.create(
+            device=self.device,
+            session_token="active-guest-session",
+        )
+        Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            guest_session=active_session,
+            status="pending",
+            payment_status="unpaid",
+            total_price="25.00",
+        )
+
+        response = self.client.post(
+            "/api/customer/resolve-table/",
+            {"device_id": self.device.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_resumed"])
+        self.assertEqual(response.json()["guest_session_id"], active_session.id)
