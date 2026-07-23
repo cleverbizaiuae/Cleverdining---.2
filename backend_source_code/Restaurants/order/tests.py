@@ -300,6 +300,81 @@ class UpsellAnalyticsImageTests(TestCase):
             f"http://testserver{self.item.image1.url}",
         )
 
+    def test_summary_uses_real_events_and_current_engine_configuration(self):
+        UpsellSetting.objects.create(
+            restaurant=self.restaurant,
+            enabled=True,
+            strategy="max_revenue",
+            aggressiveness="aggressive",
+            tone="premium",
+            show_after_add_to_cart=True,
+            show_in_cart=True,
+            show_before_payment=False,
+        )
+        UpsellEvent.objects.create(
+            restaurant=self.restaurant,
+            session_id="image-test-session",
+            trigger_point="cart",
+            action="accepted",
+            upsell_item=self.item,
+            upsell_item_name=self.item.item_name,
+            upsell_category="Desserts",
+            upsell_price=self.item.price,
+        )
+        UpsellEvent.objects.create(
+            restaurant=self.restaurant,
+            session_id="image-test-session",
+            trigger_point="cart",
+            action="declined",
+            upsell_item=self.item,
+            upsell_item_name=self.item.item_name,
+            upsell_category="Desserts",
+            upsell_price=self.item.price,
+        )
+
+        request = APIRequestFactory().get(
+            f"/api/upsell/analytics?summary=1&restaurantId={self.restaurant.id}"
+        )
+        force_authenticate(request, user=self.owner)
+
+        response = UpsellAnalyticsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total_shown"], 1)
+        self.assertEqual(response.data["total_accepted"], 1)
+        self.assertEqual(response.data["total_rejected"], 1)
+        self.assertEqual(response.data["acceptance_rate"], 100.0)
+        self.assertEqual(response.data["upsell_revenue"], "12")
+        self.assertEqual(response.data["engine_context"]["strategy"], "max_revenue")
+        self.assertEqual(response.data["engine_context"]["aggressiveness"], "aggressive")
+        self.assertEqual(response.data["engine_context"]["tone"], "premium")
+        self.assertFalse(response.data["engine_context"]["trigger_points"]["before_payment"])
+        self.assertNotIn("top_items", response.data)
+        self.assertTrue(response.data["generated_at"])
+        self.assertTrue(response.data["last_event_at"])
+
+    def test_summary_rejects_a_restaurant_not_owned_by_the_user(self):
+        other_owner = User.objects.create_user(
+            email="other-summary-owner@example.com",
+            username="Other Summary Owner",
+            password="test-password",
+            role="owner",
+        )
+        other_restaurant = Restaurant.objects.create(
+            resturent_name="Other Summary Restaurant",
+            location="Test location",
+            phone_number="+971500000099",
+            owner=other_owner,
+        )
+        request = APIRequestFactory().get(
+            f"/api/upsell/analytics?summary=1&restaurantId={other_restaurant.id}"
+        )
+        force_authenticate(request, user=self.owner)
+
+        response = UpsellAnalyticsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 404)
+
 
 class UpsellKnowledgeEngineTests(TestCase):
     def setUp(self):

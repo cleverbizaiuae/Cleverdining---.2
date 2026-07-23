@@ -804,6 +804,12 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
             "reservation": event["reservation"]
         }))
 
+    async def upsell_event_updated(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "upsell_event_updated",
+            "restaurant_id": event["restaurant_id"],
+        }))
+
     # --- Review Events ---
     async def review_created(self, event):
         await self.send(text_data=json.dumps({

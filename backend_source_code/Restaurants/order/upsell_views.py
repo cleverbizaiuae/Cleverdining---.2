@@ -5,7 +5,9 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Optional
 
-from django.db.models import Count, F, Q, Sum
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.db.models import Count, F, Max, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from rest_framework import status
@@ -51,9 +53,14 @@ def _ensure_upsell_schema() -> None:
     ensure_category_schema()
 
 
-def get_restaurant_for_user(user) -> Optional[Restaurant]:
+def get_restaurant_for_user(user, restaurant_id: Optional[int] = None) -> Optional[Restaurant]:
     role = getattr(user, "role", None)
     if role == "owner":
+        if restaurant_id:
+            restaurant = user.restaurants.filter(pk=restaurant_id).first()
+            if restaurant:
+                return restaurant
+            return Restaurant.objects.filter(owner=user, pk=restaurant_id).first()
         restaurant = user.restaurants.first()
         if restaurant:
             return restaurant
@@ -96,6 +103,103 @@ def _date_range_queryset(base_qs, request):
         except ValueError:
             pass
     return base_qs
+
+
+def _upsell_analytics_summary(events, restaurant: Restaurant) -> dict:
+    totals = events.aggregate(
+        total_shown=Count("id", filter=Q(action="shown")),
+        total_accepted=Count("id", filter=Q(action="accepted")),
+        total_rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
+        upsell_revenue=Sum("upsell_price", filter=Q(action="accepted")),
+        last_event_at=Max("created_at"),
+    )
+    total_shown = int(totals.get("total_shown") or 0)
+    total_accepted = int(totals.get("total_accepted") or 0)
+    total_rejected = int(totals.get("total_rejected") or 0)
+    upsell_revenue = totals.get("upsell_revenue") or Decimal("0")
+    acceptance_rate = (
+        float(total_accepted) / float(total_shown) * 100.0
+        if total_shown
+        else 0.0
+    )
+    avg_upsell_value = (
+        upsell_revenue / total_accepted
+        if total_accepted
+        else Decimal("0")
+    )
+
+    setting = UpsellSetting.objects.filter(restaurant=restaurant).first()
+    available_item_count = Item.objects.filter(
+        restaurant=restaurant,
+        availability=True,
+    ).count()
+    disabled_available_item_count = UpsellItemSetting.objects.filter(
+        restaurant=restaurant,
+        enabled=False,
+        item__availability=True,
+    ).count()
+
+    return {
+        "total_shown": total_shown,
+        "total_accepted": total_accepted,
+        "total_rejected": total_rejected,
+        "acceptance_rate": round(acceptance_rate, 2),
+        "upsell_revenue": str(upsell_revenue),
+        "avg_upsell_value": str(avg_upsell_value),
+        "last_event_at": (
+            totals["last_event_at"].isoformat()
+            if totals.get("last_event_at")
+            else None
+        ),
+        "generated_at": timezone.now().isoformat(),
+        "engine_context": {
+            "enabled": setting.enabled if setting else True,
+            "strategy": setting.strategy if setting else "balanced",
+            "aggressiveness": setting.aggressiveness if setting else "moderate",
+            "tone": setting.tone if setting else "friendly",
+            "trigger_points": {
+                "add_to_cart": setting.show_after_add_to_cart if setting else True,
+                "cart": setting.show_in_cart if setting else True,
+                "before_payment": setting.show_before_payment if setting else True,
+            },
+            "enabled_item_count": max(
+                available_item_count - disabled_available_item_count,
+                0,
+            ),
+            "inventory_priority_count": UpsellItemSetting.objects.filter(
+                restaurant=restaurant,
+                enabled=True,
+                inventory_priority=True,
+                item__availability=True,
+            ).count(),
+            "active_rule_count": UpsellRule.objects.filter(
+                restaurant=restaurant,
+                is_active=True,
+            ).count(),
+            "tracked_pairing_count": ItemAssociation.objects.filter(
+                restaurant=restaurant,
+            ).count(),
+        },
+    }
+
+
+def _broadcast_upsell_event_updated(restaurant_id: int) -> None:
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_{restaurant_id}",
+            {
+                "type": "upsell_event_updated",
+                "restaurant_id": restaurant_id,
+            },
+        )
+    except Exception:
+        logger.exception(
+            "Could not broadcast upsell analytics update for restaurant %s",
+            restaurant_id,
+        )
 
 
 def _safe_int(value):
@@ -506,6 +610,7 @@ class UpsellEventCreateAPIView(APIView):
             metadata=payload.get("metadata", {}),
             created_at=event_time,
         )
+        _broadcast_upsell_event_updated(restaurant.id)
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
 
 
@@ -894,20 +999,28 @@ class UpsellAnalyticsAPIView(APIView):
 
     def get(self, request):
         _ensure_upsell_schema()
-        restaurant = get_restaurant_for_user(request.user)
+        requested_restaurant_id = _safe_int(
+            request.query_params.get("restaurantId")
+            or request.query_params.get("restaurant_id")
+        )
+        restaurant = get_restaurant_for_user(
+            request.user,
+            restaurant_id=requested_restaurant_id,
+        )
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
 
-        events = UpsellEvent.objects.filter(restaurant=restaurant)
-
-        shown_qs = events.filter(action="shown")
-        total_shown = shown_qs.count()
-        accepted_qs = events.filter(action="accepted")
-        total_accepted = accepted_qs.count()
-        total_rejected = events.filter(action__in=["declined", "dismissed"]).count()
-        acceptance_rate = (float(total_accepted) / float(total_shown) * 100.0) if total_shown else 0.0
-        upsell_revenue = accepted_qs.aggregate(total=Sum("upsell_price"))["total"] or Decimal("0")
-        avg_upsell_value = (upsell_revenue / total_accepted) if total_accepted else Decimal("0")
+        events = _date_range_queryset(
+            UpsellEvent.objects.filter(restaurant=restaurant),
+            request,
+        )
+        summary = _upsell_analytics_summary(events, restaurant)
+        if str(request.query_params.get("summary") or "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            return Response(summary)
 
         by_trigger_rows = (
             events.values("trigger_point")
@@ -1070,12 +1183,7 @@ class UpsellAnalyticsAPIView(APIView):
 
         return Response(
             {
-                "total_shown": total_shown,
-                "total_accepted": total_accepted,
-                "total_rejected": total_rejected,
-                "acceptance_rate": round(acceptance_rate, 2),
-                "upsell_revenue": str(upsell_revenue),
-                "avg_upsell_value": str(avg_upsell_value),
+                **summary,
                 "by_trigger": by_trigger,
                 "by_category": by_category,
                 "top_items": top_items,

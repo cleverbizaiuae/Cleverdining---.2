@@ -124,6 +124,32 @@ type ReservationChartPoint = {
   walkIns: number;
 };
 
+type DashboardUpsellSummary = {
+  total_shown: number;
+  total_accepted: number;
+  total_rejected: number;
+  acceptance_rate: number;
+  upsell_revenue: string;
+  avg_upsell_value: string;
+  generated_at: string;
+  last_event_at: string | null;
+  engine_context?: {
+    enabled: boolean;
+    strategy: string;
+    aggressiveness: string;
+    tone: string;
+    trigger_points: {
+      add_to_cart: boolean;
+      cart: boolean;
+      before_payment: boolean;
+    };
+    enabled_item_count: number;
+    inventory_priority_count: number;
+    active_rule_count: number;
+    tracked_pairing_count: number;
+  };
+};
+
 const getSelectedWeek = (dateValue: string): ReservationChartPoint[] => {
   const [year, month, day] = dateValue.split("-").map(Number);
   const selected = new Date(year, month - 1, day);
@@ -302,7 +328,7 @@ const ScreenRestaurantDashboard = () => {
   const [dailyStatsLoading, setDailyStatsLoading] = useState(false);
   const [salesAnalytics, setSalesAnalytics] = useState<{ labels: string[]; revenue: number[]; orders: number[] } | null>(null);
   const [salesAnalyticsLoading, setSalesAnalyticsLoading] = useState(false);
-  const [dashboardUpsellStats, setDashboardUpsellStats] = useState<any>(null);
+  const [dashboardUpsellStats, setDashboardUpsellStats] = useState<DashboardUpsellSummary | null>(null);
   const [reservationsToday, setReservationsToday] = useState<number | null>(null);
   const [reservationAnalytics, setReservationAnalytics] = useState<ReservationChartPoint[]>(() => getSelectedWeek(formatInputDate(new Date())));
   const [reservationAnalyticsLoading, setReservationAnalyticsLoading] = useState(false);
@@ -360,14 +386,27 @@ const ScreenRestaurantDashboard = () => {
 
   const fetchDashboardUpsellStats = useCallback(async (force = false) => {
     if (userRole !== "owner" && userRole !== "manager") return;
+    if (!restaurantId) {
+      setDashboardUpsellStats(null);
+      return;
+    }
     try {
-      const response = await cachedGet("/api/upsell/analytics", {}, { ttlMs: 20_000, force });
-      setDashboardUpsellStats(response.data?.data || response.data || null);
+      const response = await cachedGet<DashboardUpsellSummary>(
+        "/api/upsell/analytics",
+        {
+          params: {
+            restaurantId,
+            summary: 1,
+          },
+        },
+        { ttlMs: 0, force },
+      );
+      setDashboardUpsellStats(response.data || null);
     } catch (err) {
       console.warn("Failed to load dashboard upsell summary", err);
       setDashboardUpsellStats(null);
     }
-  }, [userRole]);
+  }, [restaurantId, userRole]);
 
 
   const fetchReservationStats = useCallback(async (force = false) => {
@@ -478,6 +517,9 @@ const ScreenRestaurantDashboard = () => {
 
   // Real-time Updates
   useEffect(() => {
+    if (response?.type === "upsell_event_updated") {
+      fetchDashboardUpsellStats(true);
+    }
     if (
       response?.type === "order_paid" ||
       response?.type === "cash_payment_confirmed" ||
@@ -506,7 +548,27 @@ const ScreenRestaurantDashboard = () => {
     }
   }, [response, fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchSalesAnalytics, fetchDeviceStats, fetchReservationStats, fetchReservationAnalytics, timeRange, compareEnabled]);
 
-  // GUARANTEED POLLING FALLBACK — 60s refresh for analytics (heavier queries)
+  // Near-real-time fallback for upsell events when websocket delivery is unavailable.
+  useEffect(() => {
+    if (userRole !== "owner" && userRole !== "manager") return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchDashboardUpsellStats(true);
+      }
+    };
+    const poll = window.setInterval(refreshWhenVisible, 15_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [fetchDashboardUpsellStats, userRole]);
+
+  // GUARANTEED POLLING FALLBACK — 60s refresh for heavier dashboard queries.
   useEffect(() => {
     if (userRole !== 'owner' && userRole !== 'manager') return;
     const poll = setInterval(() => {
@@ -514,13 +576,12 @@ const ScreenRestaurantDashboard = () => {
       fetchAnalytics(timeRange, compareEnabled);
       fetchMostSellingItems();
       fetchDailyStats();
-      fetchDashboardUpsellStats();
       fetchReservationStats();
       fetchReservationAnalytics();
       fetchDeviceStats();
     }, 60000);
     return () => clearInterval(poll);
-  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchDashboardUpsellStats, fetchReservationStats, fetchReservationAnalytics, fetchDeviceStats, timeRange, compareEnabled, userRole]);
+  }, [fetchAnalytics, fetchMostSellingItems, fetchDailyStats, fetchReservationStats, fetchReservationAnalytics, fetchDeviceStats, timeRange, compareEnabled, userRole]);
 
   // NOTE: Initial Fetch is now handled by OwnerContext (Background Fetch)
   // We DO NOT fetch here on mount to avoid waterfall.
@@ -592,11 +653,22 @@ const ScreenRestaurantDashboard = () => {
   const weeklyRevenueGrowth = Number(weeklyRevenueGrowthValue);
   const hasWeeklyRevenueGrowth = weeklyRevenueGrowthValue !== null && weeklyRevenueGrowthValue !== undefined && weeklyRevenueGrowthValue !== "" && Number.isFinite(weeklyRevenueGrowth);
   const reservationAnalyticsHasActivity = reservationAnalytics.some((point) => point.reservations > 0 || point.walkIns > 0);
-  const dashboardUpsellShown = toNumber(dashboardUpsellStats?.total_shown || dashboardUpsellStats?.shown || dashboardUpsellStats?.offers_shown);
-  const dashboardUpsellAccepted = toNumber(dashboardUpsellStats?.total_accepted || dashboardUpsellStats?.accepted || dashboardUpsellStats?.add_to_cart);
-  const dashboardUpsellAcceptance = toNumber(dashboardUpsellStats?.acceptance_rate || (dashboardUpsellShown > 0 ? (dashboardUpsellAccepted / dashboardUpsellShown) * 100 : 0));
-  const dashboardUpsellRevenue = toNumber(dashboardUpsellStats?.upsell_revenue || dashboardUpsellStats?.revenue);
+  const dashboardUpsellShown = toNumber(dashboardUpsellStats?.total_shown);
+  const dashboardUpsellAccepted = toNumber(dashboardUpsellStats?.total_accepted);
+  const dashboardUpsellAcceptance = toNumber(
+    dashboardUpsellStats?.acceptance_rate ??
+    (dashboardUpsellShown > 0 ? (dashboardUpsellAccepted / dashboardUpsellShown) * 100 : 0)
+  );
+  const dashboardUpsellRevenue = toNumber(dashboardUpsellStats?.upsell_revenue);
   const hasDashboardUpsellStats = dashboardUpsellStats !== null;
+  const dashboardUpsellGeneratedAt = dashboardUpsellStats?.generated_at
+    ? new Date(dashboardUpsellStats.generated_at)
+    : null;
+  const dashboardUpsellUpdatedLabel =
+    dashboardUpsellGeneratedAt && !Number.isNaN(dashboardUpsellGeneratedAt.getTime())
+      ? dashboardUpsellGeneratedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "";
+  const dashboardUpsellEngineEnabled = dashboardUpsellStats?.engine_context?.enabled ?? false;
   const chartSource = salesAnalytics && salesAnalytics.labels.length > 0
     ? salesAnalytics
     : {
@@ -854,11 +926,18 @@ const ScreenRestaurantDashboard = () => {
       {/* AI UPSELL PERFORMANCE STRIP */}
       {(userRole === 'owner' || userRole === 'manager') && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-              <TrendingUp size={16} strokeWidth={1.8} className="text-slate-400" />
-              AI Upsell Performance
-            </h3>
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                <TrendingUp size={16} strokeWidth={1.8} className="text-slate-400" />
+                AI Upsell Performance
+              </h3>
+              <p className="mt-1 text-xs text-slate-400">
+                {hasDashboardUpsellStats
+                  ? `${dashboardUpsellEngineEnabled ? "Live" : "Engine off"}${dashboardUpsellUpdatedLabel ? ` · Synced ${dashboardUpsellUpdatedLabel}` : ""}`
+                  : "Live analytics unavailable"}
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => {
