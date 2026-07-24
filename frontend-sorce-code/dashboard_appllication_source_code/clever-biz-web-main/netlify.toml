@@ -64,6 +64,12 @@
     Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
+
+[[headers]]
   for = "/login"
   [headers.values]
     Cache-Control = "no-store, max-age=0"
@@ -108,34 +114,36 @@
 [[headers]]
   for = "/superadmin/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/superadmin"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/multilocation/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/multilocation"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-    Netlify-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=3600, durable"
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 # Service Worker & Manifest - never cache aggressively
 [[headers]]
   for = "/sw.js"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
   for = "/manifest.webmanifest"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"

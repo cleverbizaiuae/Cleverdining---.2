@@ -15,29 +15,36 @@ const InstallPrompt = lazy(() =>
   import("./components/InstallPrompt.tsx").then((module) => ({ default: module.InstallPrompt })),
 );
 
-const updateSW = registerSW({
-  // iOS can keep a previously installed dashboard shell alive after deploys.
-  // Register immediately and explicitly check so mobile sessions receive the
-  // same auth bundle as desktop without waiting for Safari's update interval.
+const PWA_UPDATE_INTERVAL_MS = 15 * 60 * 1000;
+let serviceWorkerRegistration: ServiceWorkerRegistration | undefined;
+
+const checkForPwaUpdate = () => {
+  if (
+    !serviceWorkerRegistration ||
+    !navigator.onLine ||
+    document.visibilityState === "hidden"
+  ) {
+    return;
+  }
+
+  void serviceWorkerRegistration.update().catch(() => undefined);
+};
+
+registerSW({
+  // Installed iOS and Android dashboards can stay open for hours. Register
+  // immediately, then recheck whenever the app returns to the foreground.
   immediate: true,
-  onNeedRefresh() {
-    updateSW(true);
-  },
   onRegisteredSW(_swUrl, registration) {
-    registration?.update().catch(() => undefined);
+    serviceWorkerRegistration = registration;
+    checkForPwaUpdate();
   },
 });
 
-if ("caches" in window) {
-  window.addEventListener("load", () => {
-    caches.keys()
-      .then((keys) => Promise.all(
-        keys
-          .filter((key) => key.startsWith("dashboard-static-assets"))
-          .map((key) => caches.delete(key)),
-      ))
-      .catch(() => undefined);
-  });
+if ("serviceWorker" in navigator) {
+  window.addEventListener("online", checkForPwaUpdate);
+  window.addEventListener("pageshow", checkForPwaUpdate);
+  document.addEventListener("visibilitychange", checkForPwaUpdate);
+  window.setInterval(checkForPwaUpdate, PWA_UPDATE_INTERVAL_MS);
 }
 
 initSentry();
