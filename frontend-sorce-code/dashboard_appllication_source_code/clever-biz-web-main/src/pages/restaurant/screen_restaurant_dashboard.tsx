@@ -174,6 +174,124 @@ const getReservationRows = (payload: any): any[] => {
   return Array.isArray(raw) ? raw : [];
 };
 
+const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSelected }: any) => {
+  const [mode, setMode] = useState<'upload' | 'ai'>('upload');
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (generatedPreview) URL.revokeObjectURL(generatedPreview);
+    };
+  }, [generatedPreview]);
+
+  useEffect(() => {
+    if (!currentImage || typeof currentImage === 'string') {
+      setSelectedFilePreview(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(currentImage);
+    setSelectedFilePreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [currentImage]);
+
+  const handleGenerate = async () => {
+    const normalizedPrompt = prompt.trim();
+    if (!normalizedPrompt) return toast.error("Please enter a prompt");
+
+    setGenerating(true);
+    try {
+      let imageBlob: Blob | null = null;
+      try {
+        const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(normalizedPrompt + ' food professional photography')}?width=1024&height=1024&nologo=true`;
+        const res = await fetch(pollinationsUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob.type.startsWith('image/')) imageBlob = blob;
+        }
+      } catch {
+        // Pollinations is optional; use the fallback image service below.
+      }
+
+      if (!imageBlob) {
+        const foodishRes = await fetch('https://foodish-api.com/api/');
+        if (!foodishRes.ok) throw new Error('Image services unavailable');
+        const foodishData = await foodishRes.json();
+        const imgRes = await fetch(foodishData.image);
+        if (!imgRes.ok) throw new Error('Failed to download image');
+        imageBlob = await imgRes.blob();
+      }
+
+      const objectUrl = URL.createObjectURL(imageBlob);
+      setGeneratedPreview(objectUrl);
+      const file = new File([imageBlob], "generated-image.jpg", { type: imageBlob.type || "image/jpeg" });
+      onImageSelected(file);
+      toast.success("Image generated!");
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Generation failed: " + (error.message || "Unknown error"));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const previewUrl = typeof currentImage === 'string'
+    ? currentImage
+    : (selectedFilePreview || generatedPreview || existingImageUrl || null);
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1">
+        <label className="block text-xs font-medium text-slate-700">{label}</label>
+        <div className="flex gap-2 text-[10px]">
+          <button type="button" onClick={() => setMode('upload')} className={`px-2 py-1 rounded ${mode === 'upload' ? 'bg-slate-100 text-slate-800 font-bold' : 'text-slate-500'}`}>Upload</button>
+          <button type="button" onClick={() => setMode('ai')} className={`px-2 py-1 rounded ${mode === 'ai' ? 'bg-[#0055FE]/10 text-[#0055FE] font-bold' : 'text-slate-500'}`}>Generate with AI</button>
+        </div>
+      </div>
+      {mode === 'upload' ? (
+        <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
+          <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={event => onImageSelected(event.target.files?.[0] || null)} />
+          {previewUrl ? (
+            <div className="w-full">
+              <img src={previewUrl} alt="Preview" className="w-full h-24 object-cover rounded-md border border-slate-200 mb-2" />
+              <p className="text-xs text-green-600 font-medium">{currentImage?.name || "Current Image"}</p>
+              <p className="text-[10px] text-slate-400">Click to replace</p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 text-slate-400"><Upload size={24} /></div>
+              <p className="text-sm font-medium text-slate-700">Upload a File</p>
+              <p className="text-xs text-slate-500">Drag and drop or browse</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+          <textarea
+            className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-16 outline-none focus:border-[#0055FE]"
+            placeholder="Describe the image..."
+            value={prompt}
+            onChange={event => setPrompt(event.target.value)}
+          />
+          <button type="button" onClick={handleGenerate} disabled={generating} className="w-full py-1.5 bg-[#0055FE] text-white text-xs rounded hover:bg-[#0047D1] disabled:opacity-50 flex items-center justify-center gap-2">
+            {generating ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <TrendingUp size={12} />}
+            {generating ? "Generating..." : "Generate Image"}
+          </button>
+          {generatedPreview && (
+            <div className="mt-2">
+              <img src={generatedPreview} alt="AI Generated" className="w-full h-24 object-cover rounded-md border border-slate-200" />
+              <p className="text-[10px] text-green-600 mt-1 text-center font-medium">Image selected</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const isWalkInReservation = (row: any) => {
   const source = String(row?.source || row?.booking_source || row?.source_type || "")
     .trim()
@@ -676,95 +794,6 @@ const ScreenRestaurantDashboard = () => {
       revenue: analytics?.chart?.revenue || [],
       orders: analytics?.chart?.orders || [],
     };
-
-  const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSelected }: any) => {
-    const [mode, setMode] = useState<'upload' | 'ai'>('upload');
-    const [prompt, setPrompt] = useState('');
-    const [generating, setGenerating] = useState(false);
-    const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
-    const handleGenerate = async () => {
-      if (!prompt) return toast.error("Please enter a prompt");
-      setGenerating(true);
-      try {
-        // Strategy 1: Try Pollinations AI
-        let imageBlob: Blob | null = null;
-        try {
-          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ' food professional photography')}?width=1024&height=1024&nologo=true`;
-          const res = await fetch(pollinationsUrl);
-          if (res.ok) {
-            const blob = await res.blob();
-            if (blob.type.startsWith('image/')) imageBlob = blob;
-          }
-        } catch { /* Pollinations down, try fallback */ }
-
-        // Strategy 2: Foodish API (random food photos, always works)
-        if (!imageBlob) {
-          const foodishRes = await fetch('https://foodish-api.com/api/');
-          if (!foodishRes.ok) throw new Error('Image services unavailable');
-          const foodishData = await foodishRes.json();
-          const imgRes = await fetch(foodishData.image);
-          if (!imgRes.ok) throw new Error('Failed to download image');
-          imageBlob = await imgRes.blob();
-        }
-
-        const objectUrl = URL.createObjectURL(imageBlob);
-        setGeneratedPreview(objectUrl);
-        const file = new File([imageBlob], "generated-image.jpg", { type: imageBlob.type || "image/jpeg" });
-        onImageSelected(file);
-        toast.success("Image generated!");
-      } catch (e: any) {
-        console.error(e);
-        toast.error("Generation failed: " + (e.message || "Unknown error"));
-      } finally { setGenerating(false); }
-    };
-    const previewUrl = currentImage
-      ? (typeof currentImage === 'string' ? currentImage : URL.createObjectURL(currentImage))
-      : (generatedPreview || existingImageUrl || null);
-    return (
-      <div>
-        <div className="flex justify-between items-center mb-1">
-          <label className="block text-xs font-medium text-slate-700">{label}</label>
-          <div className="flex gap-2 text-[10px]">
-            <button onClick={() => setMode('upload')} className={`px-2 py-1 rounded ${mode === 'upload' ? 'bg-slate-100 text-slate-800 font-bold' : 'text-slate-500'}`}>Upload</button>
-            <button onClick={() => setMode('ai')} className={`px-2 py-1 rounded ${mode === 'ai' ? 'bg-[#0055FE]/10 text-[#0055FE] font-bold' : 'text-slate-500'}`}>Generate with AI</button>
-          </div>
-        </div>
-        {mode === 'upload' ? (
-          <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center hover:border-[#0055FE]/50 transition-colors cursor-pointer relative">
-            <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => { const file = e.target.files?.[0] || null; onImageSelected(file); }} />
-            {previewUrl ? (
-              <div className="w-full">
-                <img src={previewUrl} alt="Preview" className="w-full h-24 object-cover rounded-md border border-slate-200 mb-2" />
-                <p className="text-xs text-green-600 font-medium">{currentImage?.name || "Current Image"}</p>
-                <p className="text-[10px] text-slate-400">Click to replace</p>
-              </div>
-            ) : (
-              <>
-                <div className="mb-2 text-slate-400"><Upload size={24} /></div>
-                <p className="text-sm font-medium text-slate-700">Upload a File</p>
-                <p className="text-xs text-slate-500">Drag and drop or browse</p>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <textarea className="w-full text-xs p-2 border border-slate-200 rounded mb-2 h-16 outline-none focus:border-[#0055FE]" placeholder="Describe the image..." value={prompt} onChange={e => setPrompt(e.target.value)} />
-            <button onClick={handleGenerate} disabled={generating} className="w-full py-1.5 bg-[#0055FE] text-white text-xs rounded hover:bg-[#0047D1] disabled:opacity-50 flex items-center justify-center gap-2">
-              {generating ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <TrendingUp size={12} />}
-              Generate Image
-            </button>
-            {generatedPreview && (
-              <div className="mt-2">
-                <img src={generatedPreview} alt="AI Generated" className="w-full h-24 object-cover rounded-md border border-slate-200" />
-                <p className="text-[10px] text-green-600 mt-1 text-center font-medium">Image selected</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
 
   return (
     <div className="flex flex-col gap-6">
