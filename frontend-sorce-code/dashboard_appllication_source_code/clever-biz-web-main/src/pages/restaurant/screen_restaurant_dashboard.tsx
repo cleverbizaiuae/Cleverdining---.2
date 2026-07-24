@@ -256,7 +256,9 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
           <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={event => onImageSelected(event.target.files?.[0] || null)} />
           {previewUrl ? (
             <div className="w-full">
-              <img src={previewUrl} alt="Preview" className="w-full h-24 object-cover rounded-md border border-slate-200 mb-2" />
+              <div className="w-full h-48 sm:h-56 rounded-md border border-slate-200 bg-white overflow-hidden mb-2">
+                <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+              </div>
               <p className="text-xs text-green-600 font-medium">{currentImage?.name || "Current Image"}</p>
               <p className="text-[10px] text-slate-400">Click to replace</p>
             </div>
@@ -282,7 +284,9 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
           </button>
           {generatedPreview && (
             <div className="mt-2">
-              <img src={generatedPreview} alt="AI Generated" className="w-full h-24 object-cover rounded-md border border-slate-200" />
+              <div className="w-full h-48 sm:h-56 rounded-md border border-slate-200 bg-white overflow-hidden">
+                <img src={generatedPreview} alt="AI Generated" className="w-full h-full object-contain" />
+              </div>
               <p className="text-[10px] text-green-600 mt-1 text-center font-medium">Image selected</p>
             </div>
           )}
