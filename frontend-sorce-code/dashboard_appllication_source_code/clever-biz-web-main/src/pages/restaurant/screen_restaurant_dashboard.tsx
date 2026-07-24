@@ -475,7 +475,7 @@ const ScreenRestaurantDashboard = () => {
 
   // Generic Form Data
   const [catFormData, setCatFormData] = useState({ name: "", image: null as File | null });
-  const [subCatFormData, setSubCatFormData] = useState({ Category_name: "", parent_category: "", image: null as File | null });
+  const [subCatFormData, setSubCatFormData] = useState({ Category_name: "", parent_category: "" });
 
 
   // Add Item State
@@ -1374,7 +1374,7 @@ const ScreenRestaurantDashboard = () => {
       {/* ADD/EDIT SUB-CATEGORY MODAL */}
       <Modal
         isOpen={showAddSubCategory || showEditSubCategory}
-        onClose={() => { setShowAddSubCategory(false); setShowEditSubCategory(false); setSubCatFormData({ Category_name: "", parent_category: "", image: null }); }}
+        onClose={() => { setShowAddSubCategory(false); setShowEditSubCategory(false); setSubCatFormData({ Category_name: "", parent_category: "" }); }}
         title={showEditSubCategory ? "Edit Sub-Category" : "Add Sub-Category"}
       >
         <div className="space-y-4">
@@ -1402,15 +1402,6 @@ const ScreenRestaurantDashboard = () => {
             </select>
           </div>
 
-          {/* IMAGE UPLOADER WITH AI FOR SUBCATEGORY */}
-          <ImageUploaderWithAI
-            label="Sub-Category Image"
-            currentImage={subCatFormData.image}
-            existingImageUrl={showEditSubCategory ? editingSubCategory?.image : undefined}
-            onImageSelected={(file: File) => setSubCatFormData({ ...subCatFormData, image: file })}
-          />
-
-
           <button
             data-testid="submit-btn"
             disabled={isCategorySubmitting}
@@ -1422,17 +1413,15 @@ const ScreenRestaurantDashboard = () => {
                 if (showEditSubCategory) {
                   formData.append('Category_name', editingSubCategory.Category_name);
                   formData.append('parent_category', editingSubCategory.parent_category);
-                  if (subCatFormData.image) formData.append('image', subCatFormData.image);
                   await updateSubCategory(editingSubCategory.id, formData);
                   setShowEditSubCategory(false);
-                  setSubCatFormData({ Category_name: "", parent_category: "", image: null });
+                  setSubCatFormData({ Category_name: "", parent_category: "" });
                 } else {
                   formData.append('Category_name', subCatFormData.Category_name);
                   formData.append('parent_category', subCatFormData.parent_category);
-                  if (subCatFormData.image) formData.append('image', subCatFormData.image);
                   await createSubCategory(formData);
                   setShowAddSubCategory(false);
-                  setSubCatFormData({ Category_name: "", parent_category: "", image: null });
+                  setSubCatFormData({ Category_name: "", parent_category: "" });
                 }
               } finally {
                 setIsCategorySubmitting(false);
