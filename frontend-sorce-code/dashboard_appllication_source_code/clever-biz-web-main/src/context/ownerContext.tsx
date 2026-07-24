@@ -430,9 +430,14 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           category: item.category_name, // Display Name
           category_id: item.category,   // ID for editing
           category_name: item.category_name, // Explicit Name
+          sub_category: item.sub_category ?? null,
+          sub_category_id: item.sub_category ?? null,
+          sub_category_name: item.sub_category_name ?? "",
           available: !!item.availability,
           availability: item.availability,
-          description: item.description
+          description: item.description,
+          discount_percentage: item.discount_percentage,
+          video: item.video ?? null
         }));
 
         setFoodItems(formattedItems);

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useContext, useRef } from "react";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
-import { cachedGet } from "@/lib/requestCache";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import {
@@ -1113,7 +1113,7 @@ const ScreenRestaurantDashboard = () => {
                                     price: item.price,
                                     description: item.description || "",
                                     category: item.category_id || "",
-                                    sub_category: item.sub_category_id || "",
+                                    sub_category: item.sub_category_id ?? item.sub_category ?? "",
                                     discount_percentage: item.discount_percentage || 0,
                                     image1: null,
                                     video: null
@@ -1611,7 +1611,9 @@ const ScreenRestaurantDashboard = () => {
               formData.append('price', price);
               formData.append('description', description);
               formData.append('category', itemFormData.category);
-              if (itemFormData.sub_category) formData.append('sub_category', itemFormData.sub_category);
+              // Send an empty value when clearing the optional relation so PATCH
+              // does not silently retain the previously selected sub-category.
+              formData.append('sub_category', itemFormData.sub_category ? String(itemFormData.sub_category) : '');
               if ((itemFormData as any).discount_percentage) formData.append('discount_percentage', (itemFormData as any).discount_percentage);
               if (itemFormData.image1) formData.append('image1', itemFormData.image1);
               if (itemFormData.video) formData.append('video', itemFormData.video);
@@ -1621,21 +1623,32 @@ const ScreenRestaurantDashboard = () => {
 
               try {
                 if (editingItem) {
-                  await axiosInstance.patch(`/owners/items/${editingItem.id}/`, formData, {
+                  const response = await axiosInstance.patch(`/owners/items/${editingItem.id}/`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                   });
-                  toast.success("Item updated successfully");
+
+                  const requestedSubCategory = itemFormData.sub_category
+                    ? String(itemFormData.sub_category)
+                    : "";
+                  const persistedSubCategory = response.data?.sub_category == null
+                    ? ""
+                    : String(response.data.sub_category);
+
+                  if (persistedSubCategory !== requestedSubCategory) {
+                    throw new Error("The sub-category change was not saved. Please try again.");
+                  }
                 } else {
                   await axiosInstance.post('/owners/items/', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                   });
-                  toast.success("Item created successfully");
                 }
 
+                invalidateApiCache("items");
+                await fetchFoodItems(currentPage, debouncedSearchQuery);
                 setShowAddItem(false);
                 setEditingItem(null);
                 setItemFormData({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "", image1: null, video: null });
-                fetchFoodItems(currentPage, debouncedSearchQuery);
+                toast.success(editingItem ? "Item updated successfully" : "Item created successfully");
               } catch (e: any) {
                 console.error(e);
                 let errorMsg = "Failed to save item";
