@@ -129,7 +129,11 @@ interface OwnerContextType {
   members: Member[];
   membersSearchQuery: string;
   fetchCategories: () => Promise<void>;
-  fetchFoodItems: (page?: number, search?: string) => Promise<void>;
+  fetchFoodItems: (
+    page?: number,
+    search?: string,
+    pageSize?: number
+  ) => Promise<void>;
   fetchOrders: (page?: number, search?: string) => Promise<void>;
   fetchReservations: (
     page?: number,
@@ -400,7 +404,7 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
   }, [userRole]);
 
   const fetchFoodItems = useCallback(
-    async (page: number = currentPage, search?: string) => {
+    async (page: number = currentPage, search?: string, pageSize?: number) => {
       // Don't fetch if still loading or if userRole is null
       if (isLoading || !userRole) {
         return;
@@ -416,6 +420,10 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
           endpoint = `/api/chef/items/?page=${page}&search=${search || ""}`;
         } else {
           throw new Error("Invalid user role");
+        }
+
+        if (pageSize) {
+          endpoint += `&page_size=${pageSize}`;
         }
 
         const response = await cachedGet(endpoint, {}, { ttlMs: LIST_CACHE_TTL_MS });

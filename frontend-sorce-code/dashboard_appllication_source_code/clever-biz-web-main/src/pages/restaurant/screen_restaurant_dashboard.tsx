@@ -407,6 +407,7 @@ const ScreenRestaurantDashboard = () => {
   const { fmt, restaurantId } = useRestaurantContext();
   const {
     foodItems,
+    foodItemsCount,
     deviceStats,
     fetchDeviceStats,
     currentPage,
@@ -739,13 +740,30 @@ const ScreenRestaurantDashboard = () => {
   }, [searchQuery]);
 
   useEffect(() => {
+    if (isViewAll) return;
+
     const isInitialMenuFetch = currentPage === 1 && debouncedSearchQuery === "";
     const timer = window.setTimeout(
       () => fetchFoodItems(currentPage, debouncedSearchQuery),
       isInitialMenuFetch ? 900 : 0,
     );
     return () => window.clearTimeout(timer);
-  }, [currentPage, debouncedSearchQuery, fetchFoodItems]);
+  }, [currentPage, debouncedSearchQuery, fetchFoodItems, isViewAll]);
+
+  useEffect(() => {
+    if (!isViewAll) return;
+
+    void fetchFoodItems(
+      1,
+      debouncedSearchQuery,
+      Math.max(foodItemsCount, 10),
+    );
+  }, [
+    debouncedSearchQuery,
+    fetchFoodItems,
+    foodItemsCount,
+    isViewAll,
+  ]);
 
 
   // Removed fetchMostSellingItems local definition
@@ -1041,9 +1059,19 @@ const ScreenRestaurantDashboard = () => {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div
+            className={`overflow-x-auto ${
+              isViewAll
+                ? "max-h-[min(60vh,42rem)] overflow-y-auto [scrollbar-gutter:stable]"
+                : ""
+            }`}
+          >
             <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead
+                className={`bg-slate-50 border-b border-slate-200 ${
+                  isViewAll ? "sticky top-0 z-10" : ""
+                }`}
+              >
                 <tr>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Item Name</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Price</th>
