@@ -309,6 +309,7 @@ class CreateBulkCheckoutSessionView(APIView):
                                  "items": items_summary,
                                  "tip_amount": tip_total
                             }, 
+                            "order_ids": [order.id for order in all_orders],
                             "table_number": table_name,
                             "total_amount": str(total_amount),
                             "timestamp": str(now()),

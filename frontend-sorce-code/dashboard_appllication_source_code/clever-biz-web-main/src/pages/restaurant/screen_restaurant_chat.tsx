@@ -175,6 +175,10 @@ const ScreenRestaurantChat = () => {
   };
 
   useEffect(() => {
+    if (String(userInfo?.role || "").toLowerCase() !== "staff") {
+      setChatList((previous) => previous.filter((chat) => chat.source !== "table-message"));
+      return;
+    }
     let cancelled = false;
 
     const fetchTableMessages = async () => {
@@ -201,7 +205,7 @@ const ScreenRestaurantChat = () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [userInfo?.role]);
 
   // 1. Fetch Chat List (Tables)
   useEffect(() => {
@@ -457,7 +461,12 @@ const ScreenRestaurantChat = () => {
 
     if (selectedChat.source === "table-message") {
       const messageIds = (messageCache[selectedChat.id] || [])
-        .filter((message) => message.status === "pending" || message.status === "unread")
+        .filter((message) => {
+          const status = String(message.status || "").toLowerCase();
+          const type = String(message.type || "").toLowerCase();
+          return (status === "pending" || status === "unread")
+            && !["assistance", "call_waiter"].includes(type);
+        })
         .map((message) => message.id)
         .filter((id) => id !== undefined);
       if (messageIds.length > 0) {

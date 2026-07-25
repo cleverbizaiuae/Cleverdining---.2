@@ -838,6 +838,12 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
     async def cash_payment_confirmed(self, event):
         await self.send(text_data=json.dumps(event))
 
+    async def service_alert(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "service_alert",
+            "alert": event.get("alert", {}),
+        }))
+
     async def payment_status_update(self, event):
         await self.send(text_data=json.dumps(event))
 

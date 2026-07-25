@@ -539,6 +539,19 @@ const ScreenOrders = () => {
     return orders.filter((order) => order.paymentStatus !== "Paid" && order.backendId);
   }, [orders]);
 
+  const cashPendingOrderIds = useMemo(() => {
+    return new Set(
+      orders
+        .filter((order) => {
+          const status = String(order.backendStatus || order.status || "").toLowerCase();
+          const paymentStatus = String(order.payment_status || order.paymentStatus || "").toLowerCase();
+          return status === "awaiting_cash" || paymentStatus === "pending_cash";
+        })
+        .map((order) => String(order.backendId || order.id)),
+    );
+  }, [orders]);
+  const hasCashPending = cashPendingOrderIds.size > 0;
+
   const fullSubtotal = useMemo(() => {
     return unpaidOrders.reduce((sum, order) => sum + getOrderRemainingAmount(order), 0);
   }, [unpaidOrders]);
@@ -1025,14 +1038,18 @@ const ScreenOrders = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
               >
-                        <OrderCard order={order} isNew={highlightedOrderIds.has(String(order.backendId || order.id))} />
+                        <OrderCard
+                          order={order}
+                          isNew={highlightedOrderIds.has(String(order.backendId || order.id))}
+                          isCashPending={cashPendingOrderIds.has(String(order.backendId || order.id))}
+                        />
               </motion.div>
             ))}
           </div>
         )}
       </div>
 
-      {hasPayableOrders && (
+      {hasPayableOrders && !hasCashPending && (
         <div className="bg-card/95 border-t border-border px-4 pt-3 pb-3 shrink-0 backdrop-blur-lg shadow-[0_-14px_34px_rgba(0,0,0,0.34)]">
           <button
             onClick={openCheckoutDialog}
@@ -1046,6 +1063,15 @@ const ScreenOrders = () => {
               {fmt(totalAlreadyPaid)} already paid · {fmt(fullSubtotal)} left
             </p>
           )}
+        </div>
+      )}
+
+      {hasCashPending && (
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-blue-100 bg-blue-50 px-4 pt-3 pb-3">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#0055FE]" />
+          <p className="text-xs font-semibold text-[#0055FE]">
+            Staff is on their way to collect your cash — please stay seated
+          </p>
         </div>
       )}
 

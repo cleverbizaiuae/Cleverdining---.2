@@ -2,6 +2,9 @@ import React, { createContext, useState, useEffect, useContext, useRef, useCallb
 import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency } from "../lib/utils";
 import { cachedGet } from "../lib/requestCache";
+import axiosInstance from "../lib/axios";
+import { AnimatePresence, motion } from "motion/react";
+import { Banknote, BellRing, Check } from "lucide-react";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -27,6 +30,28 @@ type WsFailureContext = {
   feature?: string;
   endpoint?: string;
   status?: number | string;
+};
+
+type StaffServiceAlert = {
+  id: string | number;
+  tableNumber?: number;
+  table_number?: number;
+  tableName?: string;
+  table_name?: string;
+  type?: string;
+  message?: string;
+  status?: string;
+  createdAt?: string;
+  created_at?: string;
+};
+
+type CashServiceAlert = {
+  id: string;
+  tableName: string;
+  amount: number;
+  total?: number;
+  alreadyPaid?: number;
+  orderIds: number[];
 };
 
 function captureWebSocketFailure(message: string, context: WsFailureContext = {}) {
@@ -57,6 +82,8 @@ const WebSocketProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadTables, setUnreadTables] = useState<UnreadTable[]>([]);
   const [dashboardTables, setDashboardTables] = useState<DashboardTable[]>([]);
+  const [staffServiceAlerts, setStaffServiceAlerts] = useState<StaffServiceAlert[]>([]);
+  const [cashServiceAlerts, setCashServiceAlerts] = useState<CashServiceAlert[]>([]);
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -66,6 +93,7 @@ const WebSocketProvider = ({ children }) => {
   const accessToken = localStorage.getItem("accessToken");
   const dashboardRole = String(parseUser?.role || "").toLowerCase();
   const isChefDashboard = dashboardRole === "chef";
+  const isStaffDashboard = dashboardRole === "staff";
 
   // 2. Robust ID Extraction
   let restaurantId =
@@ -82,6 +110,115 @@ const WebSocketProvider = ({ children }) => {
 
   const id = restaurantId;
   const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/alldatalive/${id}/?token=${accessToken}`;
+
+  const refreshStaffServiceAlerts = useCallback(async () => {
+    if (!isStaffDashboard || !id) {
+      setStaffServiceAlerts([]);
+      return;
+    }
+    try {
+      const [messageResponse, orderResponse] = await Promise.all([
+        cachedGet(
+          "/api/table-messages",
+          { params: { restaurant_id: id } },
+          { ttlMs: 0, force: true },
+        ),
+        cachedGet(
+          "/api/staff/orders/",
+          { params: { page: 1, page_size: 250 } },
+          { ttlMs: 0, force: true },
+        ),
+      ]);
+      const rows = Array.isArray(messageResponse.data) ? messageResponse.data : [];
+      setStaffServiceAlerts(
+        rows.filter((row: StaffServiceAlert) => {
+          const type = String(row?.type || "").toLowerCase();
+          const status = String(row?.status || "").toLowerCase();
+          return ["assistance", "call_waiter"].includes(type) && ["pending", "queued"].includes(status);
+        }),
+      );
+
+      const orderPayload = orderResponse.data || {};
+      const rawResults = orderPayload.results;
+      const orders = Array.isArray(rawResults)
+        ? rawResults
+        : Array.isArray(rawResults?.orders)
+          ? rawResults.orders
+          : Array.isArray(orderPayload.orders)
+            ? orderPayload.orders
+            : [];
+      const groupedCashAlerts = new Map<string, CashServiceAlert>();
+      orders.forEach((order: any) => {
+        const status = String(order?.status || "").toLowerCase();
+        const paymentStatus = String(order?.payment_status || "").toLowerCase();
+        if (status !== "awaiting_cash" && paymentStatus !== "pending_cash") return;
+
+        const tableName = String(order?.device_name || order?.device_table_name || order?.tableNo || "Table");
+        const groupKey = String(order?.device_id || tableName);
+        const total = Number(order?.total_price || 0);
+        const paid = Number(order?.amount_paid || order?.amountPaid || 0);
+        const remaining = Number(order?.remaining_amount ?? order?.remainingAmount ?? Math.max(0, total - paid));
+        const existing = groupedCashAlerts.get(groupKey);
+        if (existing) {
+          existing.amount += Math.max(0, remaining);
+          existing.total = Number(existing.total || 0) + Math.max(0, total);
+          existing.alreadyPaid = Number(existing.alreadyPaid || 0) + Math.max(0, paid);
+          existing.orderIds.push(Number(order.id));
+        } else {
+          groupedCashAlerts.set(groupKey, {
+            id: `cash-table-${groupKey}`,
+            tableName,
+            amount: Math.max(0, remaining),
+            total: Math.max(0, total),
+            alreadyPaid: Math.max(0, paid),
+            orderIds: [Number(order.id)].filter((orderId) => Number.isInteger(orderId) && orderId > 0),
+          });
+        }
+      });
+      setCashServiceAlerts(Array.from(groupedCashAlerts.values()));
+    } catch (error) {
+      console.warn("Failed to refresh staff service alerts (non-blocking):", error);
+    }
+  }, [id, isStaffDashboard]);
+
+  useEffect(() => {
+    if (!isStaffDashboard) {
+      setStaffServiceAlerts([]);
+      setCashServiceAlerts([]);
+      return;
+    }
+    void refreshStaffServiceAlerts();
+    const interval = window.setInterval(() => {
+      void refreshStaffServiceAlerts();
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [isStaffDashboard, refreshStaffServiceAlerts]);
+
+  const handleServiceAttended = useCallback(async (alertId: string | number) => {
+    try {
+      await axiosInstance.patch(`/api/table-messages/${alertId}`, { status: "resolved" });
+      setStaffServiceAlerts((previous) => previous.filter((alert) => String(alert.id) !== String(alertId)));
+      await refreshStaffServiceAlerts();
+    } catch {
+      toast.error("Could not mark the request as attended.");
+    }
+  }, [refreshStaffServiceAlerts]);
+
+  const handleCashCollected = useCallback(async (alert: CashServiceAlert) => {
+    if (alert.orderIds.length === 0) {
+      window.location.href = "/dashboard/orders";
+      return;
+    }
+    try {
+      await Promise.all(
+        alert.orderIds.map((orderId) => axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`)),
+      );
+      setCashServiceAlerts((previous) => previous.filter((entry) => entry.id !== alert.id));
+      toast.success("Cash received and payment confirmed.");
+    } catch {
+      toast.error("Could not confirm the cash payment.");
+    }
+  }, []);
 
   // Cross-tab sync via BroadcastChannel
   useEffect(() => {
@@ -313,45 +450,56 @@ const WebSocketProvider = ({ children }) => {
             }
           }
 
-          if (parsedMessage.type === "cash_payment_alert" && !isChefDashboard) {
+          if (parsedMessage.type === "cash_payment_alert" && isStaffDashboard) {
             // Play Sound
             try {
               const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
               audio.play().catch(e => console.log("Audio play failed", e));
             } catch (e) { console.log(e); }
 
-            // Show Toast
-            toast((t) => (
-              <div onClick={() => {
-                toast.dismiss(t.id);
-                window.location.href = "/dashboard/orders";
-              }} className="cursor-pointer">
-                <p className="font-bold">🔔 Cash Payment Alert!</p>
-                <p>Table {parsedMessage.table_number}</p>
-                <p>Total: {parsedMessage.total_amount}</p>
-                {Number(parsedMessage.order?.tip_amount) > 0 && (
-                  <p className="text-sm text-yellow-800 font-semibold">
-                    Includes Tip: {getActiveRestaurantCurrency()} {parsedMessage.order.tip_amount}
-                  </p>
-                )}
-              </div>
-            ), {
-              duration: 10000,
-              position: 'top-right',
-              style: {
-                border: '2px solid #EAB308',
-                padding: '16px',
-                color: '#713200',
-                background: '#FEF9C3'
-              },
+            const rawOrderIds = Array.isArray(parsedMessage.order_ids)
+              ? parsedMessage.order_ids
+              : [parsedMessage.order?.id];
+            const orderIds = rawOrderIds
+              .map((value: unknown) => Number(value))
+              .filter((value: number) => Number.isInteger(value) && value > 0);
+            const alertId = String(
+              parsedMessage.session_id
+                ? `cash-session-${parsedMessage.session_id}`
+                : `cash-order-${orderIds[0] || Date.now()}`,
+            );
+            const amount = Number(parsedMessage.total_amount || 0);
+            const total = Number(parsedMessage.order?.total_price || amount || 0);
+            const alreadyPaid = Math.max(0, total - amount);
+            setCashServiceAlerts((previous) => {
+              const next: CashServiceAlert = {
+                id: alertId,
+                tableName: String(parsedMessage.table_number || parsedMessage.order?.device_name || "Table"),
+                amount,
+                total,
+                alreadyPaid,
+                orderIds,
+              };
+              return [...previous.filter((entry) => entry.id !== alertId), next];
             });
+          }
+
+          if (parsedMessage.type === "cash_payment_confirmed" && isStaffDashboard) {
+            const confirmedOrderId = Number(parsedMessage.order_id);
+            setCashServiceAlerts((previous) =>
+              previous.filter((alert) => !alert.orderIds.includes(confirmedOrderId)),
+            );
+          }
+
+          if (parsedMessage.type === "service_alert" && isStaffDashboard) {
+            void refreshStaffServiceAlerts();
           }
 
           // Handle Assistance Request Alerts from Tables
           if (
             parsedMessage.type === "chat_message"
             && parsedMessage.message_type === "alert"
-            && !isChefDashboard
+            && isStaffDashboard
           ) {
             // Play Alert Sound
             try {
@@ -457,6 +605,8 @@ const WebSocketProvider = ({ children }) => {
     clearUnreadForTable,
     incrementUnreadForTable,
     isChefDashboard,
+    isStaffDashboard,
+    refreshStaffServiceAlerts,
     setUnreadCountSafe,
   ]);
 
@@ -464,6 +614,16 @@ const WebSocketProvider = ({ children }) => {
     .slice(0, 2)
     .map((t) => t.tableName)
     .join(", ");
+  const pendingAssistanceAlerts = staffServiceAlerts.filter(
+    (alert) => String(alert.status || "").toLowerCase() === "pending",
+  );
+  const queuedAssistanceCount = staffServiceAlerts.filter(
+    (alert) => String(alert.status || "").toLowerCase() === "queued",
+  ).length;
+  const visibleServiceAlerts = [
+    ...pendingAssistanceAlerts.map((alert) => ({ kind: "assistance" as const, alert })),
+    ...cashServiceAlerts.map((alert) => ({ kind: "cash" as const, alert })),
+  ].slice(0, 4);
 
   return (
     <WebSocketContext.Provider
@@ -481,6 +641,92 @@ const WebSocketProvider = ({ children }) => {
       }}
     >
       {children}
+      {isStaffDashboard && (visibleServiceAlerts.length > 0 || queuedAssistanceCount > 0) && (
+        <div
+          className="pointer-events-none fixed right-6 bottom-6 z-[9999] flex flex-col-reverse gap-3"
+          style={{ maxWidth: 380, width: "calc(100vw - 48px)" }}
+        >
+          <AnimatePresence initial={false}>
+            {visibleServiceAlerts.map((entry) => {
+              const isCash = entry.kind === "cash";
+              const key = isCash ? entry.alert.id : `assistance-${entry.alert.id}`;
+              const tableName = isCash
+                ? entry.alert.tableName
+                : String(entry.alert.tableName || entry.alert.table_name || `Table ${entry.alert.tableNumber || entry.alert.table_number || ""}`);
+              return (
+                <motion.div
+                  key={key}
+                  initial={{ x: 60, opacity: 0, scale: 0.96 }}
+                  animate={{ x: 0, opacity: 1, scale: 1 }}
+                  exit={{ x: 80, opacity: 0, scale: 0.94 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  className="pointer-events-auto overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl shadow-slate-900/10"
+                >
+                  <div className="h-[3px] bg-[#0055FE]" />
+                  <div className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 pt-1">
+                        {isCash
+                          ? <Banknote className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />
+                          : <BellRing className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm leading-snug font-bold text-slate-900">
+                            {isCash ? "Cash Payment Requested" : "Assistance Requested"}
+                          </p>
+                          <span className="shrink-0 text-[10px] font-medium text-slate-400">Now</span>
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                          {isCash ? `${tableName} would like to pay by cash` : `${tableName} needs a team member`}
+                        </p>
+                        {isCash && (
+                          <div className="mt-1.5 space-y-0.5">
+                            <p className="text-xs font-bold text-[#0055FE]">
+                              Collect now: {getActiveRestaurantCurrency()} {entry.alert.amount.toFixed(2)}
+                            </p>
+                            {Number(entry.alert.alreadyPaid || 0) > 0 && (
+                              <p className="text-[10px] text-slate-400">
+                                Already paid: {getActiveRestaurantCurrency()} {Number(entry.alert.alreadyPaid).toFixed(2)}
+                                {entry.alert.total !== undefined && ` · Total: ${getActiveRestaurantCurrency()} ${Number(entry.alert.total).toFixed(2)}`}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => {
+                          if (isCash) {
+                            void handleCashCollected(entry.alert);
+                          } else {
+                            void handleServiceAttended(entry.alert.id);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#0055FE] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#0044dd] active:scale-95"
+                      >
+                        <Check size={12} strokeWidth={2.5} />
+                        {isCash ? "Cash Collected" : "Attended"}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+          {queuedAssistanceCount > 0 && (
+            <div className="flex justify-end">
+              <div className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <span className="text-[11px] font-semibold text-amber-700">
+                  {queuedAssistanceCount} more table{queuedAssistanceCount > 1 ? "s" : ""} in queue
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </WebSocketContext.Provider>
   );
 };

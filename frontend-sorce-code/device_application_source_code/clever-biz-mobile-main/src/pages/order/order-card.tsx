@@ -5,6 +5,7 @@ import { getSessionCurrencyCode } from "../../utils/regionSession";
 interface OrderCardProps {
   order: Order;
   isNew?: boolean;
+  isCashPending?: boolean;
 }
 
 const steps: Array<{ id: OrderStage; label: string }> = [
@@ -44,7 +45,7 @@ const normalizeItems = (order: Order): OrderItem[] => {
   return source;
 };
 
-export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
+export const OrderCard = ({ order, isNew = false, isCashPending = false }: OrderCardProps) => {
   const currencyCode = getSessionCurrencyCode();
   const normalizedStatus = normalizeStatus(String(order.status));
   const backendStatus = String(order.backendStatus || order.status || "").toLowerCase();
@@ -129,7 +130,7 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
 
         {items.length === 0 && <p className="text-sm text-muted-foreground">No items in this order.</p>}
 
-        {(isPartiallyPaid || resolvedPaidAmount > 0.001) && (
+        {(isPartiallyPaid || resolvedPaidAmount > 0.001) && !isCashPending && (
           <div className="rounded-xl border border-primary/10 bg-primary/5 px-3 py-2 space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-semibold">
               <span className="text-primary">{isFullyPaid ? "Paid" : "Partially paid"}</span>
@@ -143,6 +144,19 @@ export const OrderCard = ({ order, isNew = false }: OrderCardProps) => {
           </div>
         )}
       </div>
+
+      {isCashPending && (
+        <div className="flex items-center gap-2.5 border-t border-blue-100 bg-blue-50 px-4 py-2.5">
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[#0055FE]" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-[#0055FE]">Staff will collect your cash payment</p>
+            <p className="mt-0.5 text-[10px] text-blue-400">Please stay seated — staff will come to you</p>
+          </div>
+          <span className="ml-auto shrink-0 text-xs font-bold text-[#0055FE]">
+            {fmt(remainingAmount > 0.001 ? remainingAmount : total)}
+          </span>
+        </div>
+      )}
 
       <div className="px-4 pb-4 pt-2 flex items-center justify-between border-t border-border">
         <div className="flex items-center gap-2">

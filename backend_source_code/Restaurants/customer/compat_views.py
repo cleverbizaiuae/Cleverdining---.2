@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDay, TruncHour
 from django.utils import timezone
@@ -110,6 +111,48 @@ def _ids_from_payload(data):
     if not isinstance(raw_ids, list):
         raw_ids = [raw_ids]
     return [value for value in raw_ids if value not in (None, "")]
+
+
+def _same_restaurant_filter(restaurant_id):
+    if restaurant_id is None:
+        return Q(restaurant__isnull=True)
+    return Q(restaurant_id=restaurant_id)
+
+
+def _broadcast_service_alert(message):
+    if not message.restaurant_id:
+        return
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        async_to_sync(get_channel_layer().group_send)(
+            f"restaurant_{message.restaurant_id}",
+            {
+                "type": "service_alert",
+                "alert": _table_message_payload(message),
+            },
+        )
+    except Exception as exc:
+        print(f"Table message service alert broadcast failed (non-fatal): {exc}")
+
+
+def _promote_next_queued_assistance(restaurant_id):
+    queued = (
+        TableMessage.objects.select_for_update()
+        .filter(
+            _same_restaurant_filter(restaurant_id),
+            type__in=["assistance", "call_waiter"],
+            status="queued",
+        )
+        .order_by("created_at", "id")
+        .first()
+    )
+    if not queued:
+        return None
+    queued.status = "pending"
+    queued.save(update_fields=["status", "updated_at"])
+    return queued
 
 
 class DailyStatsAPIView(APIView):
@@ -266,9 +309,15 @@ class TableMessagesAPIView(APIView):
         if device_id:
             device = Device.objects.filter(pk=device_id).select_related("restaurant").first()
         if not device and table_number:
-            device = Device.objects.filter(table_number=str(table_number)).select_related("restaurant").first()
+            device_query = Device.objects.filter(table_number=str(table_number))
+            if restaurant_id:
+                device_query = device_query.filter(restaurant_id=restaurant_id)
+            device = device_query.select_related("restaurant").first()
         if not device and table_name:
-            device = Device.objects.filter(table_name=table_name).select_related("restaurant").first()
+            device_query = Device.objects.filter(table_name=table_name)
+            if restaurant_id:
+                device_query = device_query.filter(restaurant_id=restaurant_id)
+            device = device_query.select_related("restaurant").first()
 
         restaurant = device.restaurant if device else None
         if not restaurant and restaurant_id:
@@ -289,16 +338,63 @@ class TableMessagesAPIView(APIView):
         if status_value not in {choice[0] for choice in TableMessage.STATUS_CHOICES}:
             status_value = "pending"
 
-        message = TableMessage.objects.create(
-            restaurant=restaurant,
-            device=device,
-            table_number=parsed_table_number,
-            table_name=table_name or getattr(device, "table_name", "") or (f"Table {parsed_table_number}" if parsed_table_number else "Table"),
-            type=message_type,
-            message=str(request.data.get("message") or "").strip(),
-            status=status_value,
-        )
-        return Response(_table_message_payload(message), status=status.HTTP_201_CREATED)
+        is_assistance = message_type in {"assistance", "call_waiter"}
+        with transaction.atomic():
+            if is_assistance:
+                active_request = (
+                    TableMessage.objects.select_for_update()
+                    .filter(
+                        _same_restaurant_filter(getattr(restaurant, "id", None)),
+                        type__in=["assistance", "call_waiter"],
+                        status__in=["pending", "queued", "acknowledged"],
+                    )
+                    .filter(
+                        Q(device=device) if device else
+                        Q(table_number=parsed_table_number, table_name=table_name)
+                    )
+                    .order_by("created_at")
+                    .first()
+                )
+                if active_request:
+                    return Response(
+                        {
+                            "error": "already_requested",
+                            "status": active_request.status,
+                            "message": "This table already has an active assistance request",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                pending_count = TableMessage.objects.filter(
+                    _same_restaurant_filter(getattr(restaurant, "id", None)),
+                    type__in=["assistance", "call_waiter"],
+                    status__in=["pending", "acknowledged"],
+                ).count()
+                status_value = "queued" if pending_count >= 3 else "pending"
+
+            message = TableMessage.objects.create(
+                restaurant=restaurant,
+                device=device,
+                table_number=parsed_table_number,
+                table_name=table_name or getattr(device, "table_name", "") or (f"Table {parsed_table_number}" if parsed_table_number else "Table"),
+                type=message_type,
+                message=str(request.data.get("message") or "").strip(),
+                status=status_value,
+            )
+
+        payload = _table_message_payload(message)
+        if is_assistance:
+            payload["queued"] = message.status == "queued"
+            if message.status == "queued":
+                payload["queuePosition"] = TableMessage.objects.filter(
+                    _same_restaurant_filter(message.restaurant_id),
+                    type__in=["assistance", "call_waiter"],
+                    status="queued",
+                    created_at__lte=message.created_at,
+                ).count()
+            else:
+                _broadcast_service_alert(message)
+        return Response(payload, status=status.HTTP_201_CREATED)
 
     def patch(self, request, identifier=None):
         queryset = self._message_queryset(request, identifier)
@@ -319,7 +415,22 @@ class TableMessagesAPIView(APIView):
         if next_status not in {choice[0] for choice in TableMessage.STATUS_CHOICES}:
             return Response({"error": "Invalid table message status"}, status=status.HTTP_400_BAD_REQUEST)
 
-        updated = queryset.update(status=next_status, updated_at=timezone.now())
+        messages = list(queryset)
+        promoted = []
+        with transaction.atomic():
+            updated = queryset.update(status=next_status, updated_at=timezone.now())
+            if next_status == "resolved":
+                restaurant_ids = {
+                    message.restaurant_id
+                    for message in messages
+                    if message.type in {"assistance", "call_waiter"}
+                }
+                for restaurant_id in restaurant_ids:
+                    next_message = _promote_next_queued_assistance(restaurant_id)
+                    if next_message:
+                        promoted.append(next_message)
+        for message in promoted:
+            _broadcast_service_alert(message)
         return Response({"updated": updated, "status": next_status})
 
     def put(self, request, identifier=None):

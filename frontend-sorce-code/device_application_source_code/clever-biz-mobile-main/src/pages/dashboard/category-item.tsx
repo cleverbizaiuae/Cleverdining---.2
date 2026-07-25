@@ -7,6 +7,7 @@ export type CategoryItemType = {
   Category_name: string;
   image?: string;
   parent_category?: number | null;
+  display_order?: number;
 };
 
 interface CategoryItemProps {

@@ -8,7 +8,7 @@ import { cachedGet } from "../lib/requestCache";
 import { resolveMediaUrl } from "../lib/media";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import { OptimizedImage } from "./OptimizedImage";
-import { CheckCircle2, Minus, Plus, ShoppingBag, X } from "lucide-react";
+import { CheckCircle2, Minus, Plus, ShoppingBag, UserRound, X } from "lucide-react";
 import {
   fetchUpsellSuggestions,
   prefetchUpsellSuggestions,
@@ -442,8 +442,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
 };
 
 interface ModalAssistanceProps extends ModalProps {
-  confirm: () => void;
+  confirm: () => void | Promise<void>;
   tableName?: string;
+  isRequesting?: boolean;
 }
 
 export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
@@ -451,6 +452,7 @@ export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
   close,
   confirm,
   tableName,
+  isRequesting = false,
 }) => {
   return (
     <Dialog
@@ -459,57 +461,34 @@ export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
       className="relative z-50 transition duration-300 ease-out data-[closed]:opacity-0"
       transition={true}
     >
-      <DialogBackdrop className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+      <DialogBackdrop className="fixed inset-0 bg-black/45 backdrop-blur-sm" />
 
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-foreground shadow-2xl shadow-black/40 animate-in zoom-in-95 duration-200">
-          <div className="flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-primary"
-              >
-                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                <polyline points="14 2 14 8 20 8" />
-                <path d="M12 13v6" />
-                <path d="M12 17h.01" />
-              </svg>
-            </div>
-
-            <h3 className="text-xl font-bold text-foreground mb-2">
-              Need Assistance?
-            </h3>
-            <p className="text-muted-foreground text-sm mb-1">
-              Do you want a staff member to come to your table?
+        <DialogPanel className="w-[85%] max-w-[320px] overflow-hidden rounded-2xl border border-slate-100 bg-white p-0 text-slate-900 shadow-xl animate-in zoom-in-95 duration-200">
+          <div className="flex flex-col items-center px-5 pt-5 pb-4 text-center">
+            <UserRound className="mb-3 h-6 w-6 text-[#0055FE]" strokeWidth={1.8} />
+            <h3 className="text-base font-bold text-slate-900">Call a Waiter?</h3>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              A staff member will be with you at{" "}
+              <span className="font-semibold text-slate-600">{tableName || "your table"}</span> shortly.
             </p>
-            {tableName && (
-              <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider mb-6">
-                Table {tableName}
-              </p>
-            )}
+          </div>
 
-            <div className="flex w-full flex-col gap-3">
-              <button
-                onClick={confirm}
-                className="h-12 w-full rounded-xl bg-primary px-4 text-white font-bold transition-colors hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-[0.98]"
-              >
-                Call Waiter
-              </button>
-              <button
-                onClick={close}
-                className="h-12 w-full rounded-xl border border-border px-4 text-secondary-foreground font-medium transition-colors hover:bg-secondary"
-              >
-                Cancel
-              </button>
-            </div>
+          <div className="flex gap-2.5 px-5 pb-5">
+            <button
+              onClick={close}
+              disabled={isRequesting}
+              className="h-9 flex-1 rounded-xl text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void confirm()}
+              disabled={isRequesting}
+              className="h-9 flex-1 rounded-xl bg-[#0055FE] text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#0044dd] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isRequesting ? "Calling..." : "Call Waiter"}
+            </button>
           </div>
         </DialogPanel>
       </div>

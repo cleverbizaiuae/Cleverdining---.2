@@ -220,6 +220,7 @@ class OrderCreateAPIView(generics.CreateAPIView):
                     {
                         "type": "cash_payment_alert",
                         "order": data,
+                        "order_ids": [order.id],
                         "table_number": device.table_number or device.table_name,
                         "total_amount": str(order.total_price),
                         "timestamp": str(order.created_time)

@@ -43,6 +43,8 @@ import {
 } from "../lib/upsellApi";
 import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
+import axiosInstance from "@/lib/axios";
+import { getTableIdentity } from "@/lib/tableIdentity";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import { getEffectiveItemPrice } from "../utils/pricing";
 
@@ -124,6 +126,17 @@ const normalizeListPayload = <T,>(payload: any): T[] => {
   if (Array.isArray(payload?.results)) return payload.results;
   return [];
 };
+
+const sortMenuCategories = (rows: CategoryItemType[]): CategoryItemType[] =>
+  [...rows].sort((left, right) => {
+    const leftParent = left.parent_category ? Number(left.parent_category) : null;
+    const rightParent = right.parent_category ? Number(right.parent_category) : null;
+    const sameSiblingGroup = leftParent === rightParent;
+    if (!sameSiblingGroup) return 0;
+    const leftOrder = Number(left.display_order ?? left.id);
+    const rightOrder = Number(right.display_order ?? right.id);
+    return leftOrder - rightOrder || Number(left.id) - Number(right.id);
+  });
 
 const getMenuCacheKey = (restaurantId: number | null | undefined, kind: "categories" | "items") =>
   `cb:menu:v2:${restaurantId || "unknown"}:${kind}`;
@@ -653,6 +666,7 @@ const LayoutDashboard = () => {
   const [selectedItem, setSelectedItem] = useState<FoodItemTypes | null>(null);
   const [menuUpsellDetail, setMenuUpsellDetail] = useState<MenuItemAddedDetail | null>(null);
   const [isAssistanceOpen, setAssistanceOpen] = useState(false);
+  const [isRequestingAssistance, setIsRequestingAssistance] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
   useEffect(() => {
@@ -675,8 +689,7 @@ const LayoutDashboard = () => {
     return [];
   }, [selectedCategory, categories]);
 
-  // Access WebSocket context to use setNewMessageFlag and sendMessage
-  const { ws, setNewMessageFlag, sendMessage } = useWebSocket();
+  const { ws, setNewMessageFlag } = useWebSocket();
   const [lastUpdate, setLastUpdate] = useState<number>(0);
 
   // Listen for WebSocket messages to trigger refetch
@@ -835,14 +848,14 @@ const LayoutDashboard = () => {
     const targetId = getRestaurantIdFromStorage() || restaurantId;
     const cachedCategories = readMenuCache<CategoryItemType>(targetId, "categories");
     if (cachedCategories.length) {
-      setCategories(cachedCategories);
+      setCategories(sortMenuCategories(cachedCategories));
       setCategoriesLoaded(true);
     }
 
     try {
       const url = targetId ? `/api/customer/categories/?restaurant_id=${targetId}` : "/api/customer/categories/";
-      const response = await cachedGet(url, {}, { ttlMs: 30_000 });
-      const nextCategories = normalizeListPayload<CategoryItemType>(response.data);
+      const response = await cachedGet(url, {}, { ttlMs: 0, force: true });
+      const nextCategories = sortMenuCategories(normalizeListPayload<CategoryItemType>(response.data));
       if (nextCategories.length) {
         setCategories(nextCategories);
         writeMenuCache(targetId, "categories", nextCategories);
@@ -1036,24 +1049,61 @@ const LayoutDashboard = () => {
 
   const navigate = useNavigate();
 
-  const [lastAssistanceRequestTime, setLastAssistanceRequestTime] = useState<number>(0);
+  const handleRequestAssistance = async () => {
+    if (isRequestingAssistance) return;
+    setIsRequestingAssistance(true);
+    const identity = getTableIdentity();
+    const resolvedTableName = tableName || identity.tableName;
 
-  const handleRequestAssistance = () => {
-    const now = Date.now();
-    if (now - lastAssistanceRequestTime < 30000) {
-      toast.error("Please wait before requesting assistance again.");
-      return;
+    try {
+      const response = await axiosInstance.post("/api/table-messages", {
+        tableNumber: identity.tableNumber,
+        tableName: resolvedTableName,
+        deviceId: identity.deviceId,
+        restaurantId: identity.restaurantId,
+        type: "assistance",
+        message: `${resolvedTableName} is requesting assistance.`,
+        status: "pending",
+      });
+
+      if (response.data?.queued) {
+        toast.custom(
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
+            <p className="text-sm font-bold text-slate-900">Request Queued 🕒</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Waiter is busy — your request will be sent once they are done attending others.
+            </p>
+          </div>,
+          { duration: 5000 },
+        );
+      } else {
+        toast.custom(
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
+            <p className="text-sm font-bold text-slate-900">Staff Notified! 👋</p>
+            <p className="mt-0.5 text-xs text-slate-500">A team member will be with you shortly.</p>
+          </div>,
+          { duration: 4000 },
+        );
+      }
+      setAssistanceOpen(false);
+    } catch (error: any) {
+      if (error?.response?.status === 409) {
+        toast.custom(
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
+            <p className="text-sm font-bold text-slate-900">No worries, we've got you! 😊</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              We've already alerted the waiter — please relax, they'll be with you as soon as possible!
+            </p>
+          </div>,
+          { duration: 5000 },
+        );
+        setAssistanceOpen(false);
+      } else {
+        toast.error("Could not call a waiter. Please try again.");
+      }
+    } finally {
+      setIsRequestingAssistance(false);
     }
-
-    const tableNum = tableName || "Unknown";
-    const msg = `Table ${tableNum} is requesting assistance.`;
-
-    // Send message with type "alert"
-    sendMessage(msg, "alert");
-
-    setLastAssistanceRequestTime(now);
-    toast.success("Assistance request sent.");
-    setAssistanceOpen(false);
   };
 
   // Listen for custom event from BottomNav to trigger assistance
@@ -1348,6 +1398,7 @@ const LayoutDashboard = () => {
         close={() => setAssistanceOpen(false)}
         confirm={handleRequestAssistance}
         tableName={tableName}
+        isRequesting={isRequestingAssistance}
       />
     </CartProvider>
   );

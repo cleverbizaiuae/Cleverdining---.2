@@ -712,8 +712,9 @@ class CashAdapter(PaymentAdapter):
                 {
                     "type": "cash_payment_alert",
                     "order": order_data,
+                    "order_ids": [order.id],
                     "table_number": order.device.table_number or order.device.table_name,
-                    "total_amount": str(order.total_price),
+                    "total_amount": str(amount if amount is not None else order.total_price),
                     "timestamp": str(order.created_time)
                 }
             )

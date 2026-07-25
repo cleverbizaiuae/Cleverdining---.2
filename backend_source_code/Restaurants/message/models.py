@@ -74,11 +74,14 @@ class TableMessage(models.Model):
         ("chat", "Chat"),
         ("assistance", "Assistance"),
         ("call_waiter", "Call Waiter"),
+        ("cash_payment", "Cash Payment"),
     ]
     STATUS_CHOICES = [
         ("pending", "Pending"),
+        ("queued", "Queued"),
         ("acknowledged", "Acknowledged"),
         ("read", "Read"),
+        ("resolved", "Resolved"),
     ]
 
     restaurant = models.ForeignKey(Restaurant, on_delete=models.SET_NULL, null=True, blank=True, related_name="table_messages")
