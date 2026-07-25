@@ -1,10 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { CheckCircle2, RefreshCw, Star } from "lucide-react";
-import { motion } from "motion/react";
-import toast from "react-hot-toast";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ExternalLink,
+  Facebook,
+  CheckCircle2,
+  Instagram,
+  Music2,
+  RefreshCw,
+  Star,
+  Twitter,
+} from "lucide-react";
+import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
+import { cachedGet } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
+import logoImg from "@/assets/icon-32.png";
+import { useNavigate } from "react-router-dom";
 import { clearGuestSessionStorage } from "@/lib/guestSessionStorage";
+
+const firstNonEmpty = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return null;
+};
 
 const VERIFIED_PAYMENT_STATUSES = new Set([
   "completed",
@@ -22,6 +40,74 @@ const FAILED_PAYMENT_STATUSES = new Set([
   "cancelled",
   "canceled",
 ]);
+
+const resolveStoredRestaurantId = (): string | null => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    return firstNonEmpty(
+      parsed?.user?.restaurants?.[0]?.id,
+      parsed?.restaurants?.[0]?.id,
+      parsed?.restaurant?.id,
+      parsed?.restaurant_id,
+      parsed?.restaurantId,
+      localStorage.getItem("last_paid_restaurant_id"),
+      localStorage.getItem("restaurant_id"),
+      localStorage.getItem("restaurantId"),
+    );
+  } catch {
+    return firstNonEmpty(
+      localStorage.getItem("last_paid_restaurant_id"),
+      localStorage.getItem("restaurant_id"),
+      localStorage.getItem("restaurantId"),
+    );
+  }
+};
+
+const useDecodedImage = (src: string | null) => {
+  const [state, setState] = useState({
+    readySrc: null as string | null,
+    failedSrc: null as string | null,
+  });
+
+  useEffect(() => {
+    if (!src) {
+      setState({ readySrc: null, failedSrc: null });
+      return;
+    }
+
+    let cancelled = false;
+    setState({ readySrc: null, failedSrc: null });
+
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = async () => {
+      try {
+        await image.decode?.();
+      } catch {
+        // Some browsers throw if decode is called after load; onload is enough.
+      }
+      if (!cancelled) {
+        setState({ readySrc: src, failedSrc: null });
+      }
+    };
+    image.onerror = () => {
+      if (!cancelled) {
+        setState({ readySrc: null, failedSrc: src });
+      }
+    };
+    image.src = src;
+
+    if (image.complete && image.naturalWidth > 0) {
+      image.onload?.(new Event("load"));
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return state;
+};
 
 const SuccessPage = () => {
   const navigate = useNavigate();
@@ -41,12 +127,12 @@ const SuccessPage = () => {
   const [paymentVerified, setPaymentVerified] = useState(!paymentParams.hasGatewayReference);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verificationRetry, setVerificationRetry] = useState(0);
-  const [rating, setRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [name, setName] = useState("");
-  const [comment, setComment] = useState("");
+  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
+  const [restaurantName, setRestaurantName] = useState<string>("");
+  const [restaurantId, setRestaurantId] = useState<string | null>(() => resolveStoredRestaurantId());
+  const brand = useBrandConfig(restaurantId);
+  const logoImage = useDecodedImage(brand.logoUrl);
+  const sessionCleanedRef = useRef(false);
 
   useEffect(() => {
     if (!paymentParams.hasGatewayReference) return;
@@ -104,59 +190,79 @@ const SuccessPage = () => {
     };
     window.history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", handlePopState);
+
+    const fetchRestaurantInfo = async () => {
+      try {
+        const orderId = paymentParams.orderId || localStorage.getItem("pending_order_id");
+        const guestToken = localStorage.getItem("guest_session_token");
+
+        if (orderId && guestToken) {
+          const res = await cachedGet(`/api/customer/uncomplete/orders/${orderId}/`, {
+            headers: { "X-Guest-Session-Token": guestToken },
+          }, { ttlMs: 2_000 });
+
+          if (res.data) {
+            const nextRestaurantName = res.data.restaurant_name || "";
+            setRestaurantName((current) => current === nextRestaurantName ? current : nextRestaurantName);
+            const resolvedRestaurantId =
+              res.data.restaurant_id ??
+              res.data.restaurant ??
+              res.data?.restaurant_details?.id ??
+              null;
+            if (resolvedRestaurantId !== null && resolvedRestaurantId !== undefined) {
+              const nextRestaurantId = String(resolvedRestaurantId);
+              setRestaurantId((current) => current === nextRestaurantId ? current : nextRestaurantId);
+            }
+            const nextReviewUrl = res.data.restaurant_google_review_url || res.data.google_review_url || null;
+            setGoogleReviewUrl((current) => current === nextReviewUrl ? current : nextReviewUrl);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch restaurant info:", error);
+      }
+    };
+
+    void fetchRestaurantInfo();
+
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, []);
+  }, [paymentParams.orderId]);
 
-  const handleSubmitReview = async () => {
-    const orderId = paymentParams.orderId || localStorage.getItem("pending_order_id");
-    if (!orderId) {
-      toast.error("Order context missing. Cannot submit review.");
+  useEffect(() => {
+    if (!paymentVerified || sessionCleanedRef.current) return;
+    sessionCleanedRef.current = true;
+    clearGuestSessionStorage();
+  }, [paymentVerified]);
+
+  const resolvedRestaurantName = useMemo(() => {
+    const remoteName = (brand.restaurantName || "").trim();
+    if (remoteName && remoteName !== "My Restaurant") return remoteName;
+    return restaurantName || "Restaurant";
+  }, [brand.restaurantName, restaurantName]);
+
+  const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
+  const primaryColor = brand.primaryColor || "#0055FE";
+  const fontFamily = FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family;
+
+  const socialLinks = useMemo(
+    () =>
+      [
+        { key: "instagram", label: "Instagram", href: brand.instagramUrl, Icon: Instagram },
+        { key: "facebook", label: "Facebook", href: brand.facebookUrl, Icon: Facebook },
+        { key: "twitter", label: "Twitter", href: brand.twitterUrl, Icon: Twitter },
+        { key: "tiktok", label: "TikTok", href: brand.tiktokUrl, Icon: Music2 },
+      ].filter((social) => social.href),
+    [brand.facebookUrl, brand.instagramUrl, brand.tiktokUrl, brand.twitterUrl]
+  );
+
+  const handleGoogleReview = () => {
+    if (!resolvedGoogleReviewUrl) {
       return;
     }
 
-    if (rating === 0) {
-      toast.error("Please select a rating first.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const guestSessionToken = localStorage.getItem("guest_session_token");
-      await axiosInstance.post("/api/reviews/create/", {
-        order: Number.parseInt(orderId, 10),
-        rating,
-        guest_no: 1,
-        name: name || undefined,
-        comment: comment || undefined,
-      }, {
-        headers: guestSessionToken
-          ? { "X-Guest-Session-Token": guestSessionToken }
-          : {},
-      });
-      toast.success("Thanks for your feedback!");
-      setSubmitted(true);
-      clearGuestSessionStorage();
-    } catch (error: unknown) {
-      console.error("Review failed", error);
-      const responseStatus = (
-        error &&
-        typeof error === "object" &&
-        "response" in error
-      )
-        ? (error as { response?: { status?: number } }).response?.status
-        : undefined;
-      if (responseStatus === 401 || responseStatus === 403) {
-        toast.error("Session expired. Thanks for dining with us!");
-        setSubmitted(true);
-        clearGuestSessionStorage();
-      } else {
-        toast.error("Failed to submit review");
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    clearGuestSessionStorage();
+    window.open(resolvedGoogleReviewUrl, "_blank", "noopener,noreferrer");
   };
 
   if (!paymentVerified && verificationError) {
@@ -190,111 +296,94 @@ const SuccessPage = () => {
   if (!paymentVerified) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-slate-950 text-white">
-        <div
-          className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white"
-          aria-label="Verifying payment"
-        />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-label="Verifying payment" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 text-center sm:p-6">
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-gray-100 bg-white p-6 shadow-xl sm:p-8"
+    <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 p-4 text-center sm:p-6">
+      <main
+        className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-slate-100 bg-white p-6 shadow-xl sm:p-8"
+        style={{ fontFamily }}
       >
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 sm:mb-6 sm:h-20 sm:w-20">
-          <CheckCircle2 size={36} className="text-green-600 sm:h-10 sm:w-10" strokeWidth={3} />
-        </div>
-
-        <h1 className="mb-2 text-xl font-bold text-gray-900 sm:text-2xl">Payment Successful!</h1>
-        <p className="mb-4 text-sm leading-relaxed text-gray-500 sm:mb-6 sm:text-base">
-          Thanks for dining with us today. We hope everything was delicious. See you again soon!
-        </p>
-
-        <div className="mb-4 flex w-full flex-col items-center gap-2 sm:mb-6">
-          <p className="text-sm font-bold text-gray-700">Rate your experience</p>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-label={`Rate ${value} out of 5`}
-                onClick={() => !submitted && setRating(value)}
-                onMouseEnter={() => !submitted && setHoverRating(value)}
-                onMouseLeave={() => setHoverRating(0)}
-                disabled={submitted || submitting}
-                className="transition-transform hover:scale-110 focus:outline-none disabled:cursor-default"
-              >
-                <Star
-                  size={28}
-                  className={`transition-colors sm:h-8 sm:w-8 ${
-                    (hoverRating || rating) >= value
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "fill-gray-100 text-gray-300"
-                  }`}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-4 w-full space-y-3 sm:mb-6">
-          <input
-            type="text"
-            placeholder="Your name (optional)"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={submitted}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50 disabled:text-gray-400"
+        {logoImage.readySrc ? (
+          <img
+            src={logoImage.readySrc}
+            alt={`${resolvedRestaurantName} logo`}
+            decoding="async"
+            className="mb-5 h-16 w-16 rounded-2xl object-contain"
           />
-          <textarea
-            placeholder="Share your thoughts... (optional)"
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            disabled={submitted}
-            rows={3}
-            className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50 disabled:text-gray-400"
-          />
-        </div>
-
-        {!submitted ? (
-          <button
-            type="button"
-            onClick={handleSubmitReview}
-            disabled={submitting || rating === 0}
-            className={`mb-4 w-full rounded-xl px-6 py-2.5 font-bold text-white transition-all sm:py-3 ${
-              rating === 0
-                ? "cursor-not-allowed bg-gray-300"
-                : "bg-green-600 hover:bg-green-700 active:scale-[0.98]"
-            } disabled:opacity-70`}
-          >
-            {submitting ? "Submitting..." : "Submit Review"}
-          </button>
         ) : (
-          <p className="mb-4 animate-pulse text-sm font-bold text-green-600">
-            Thank you for your feedback!
+          <p className="mb-5 text-lg font-bold" style={{ color: primaryColor }}>
+            {resolvedRestaurantName}
           </p>
         )}
 
-        <div className="mb-4 h-px w-full bg-gray-100" />
+        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 className="h-11 w-11 text-green-600" strokeWidth={2.5} />
+        </div>
 
-        <p className="mb-2 text-xs text-gray-400">You will be logged out automatically.</p>
+        <h1 className="mb-2 text-2xl font-bold text-slate-900">Thank You!</h1>
+        <p className="mb-6 text-sm leading-relaxed text-slate-500 sm:text-base">
+          Thank you for dining with us today. We hope everything was delicious. See you again soon!
+        </p>
 
-        <button
-          type="button"
-          onClick={() => {
-            clearGuestSessionStorage();
-            window.location.href = "/login";
-          }}
-          className="w-full rounded-xl bg-gray-900 px-6 py-2.5 font-bold text-white transition-colors hover:bg-gray-800 sm:py-3"
+        <section
+          className="mb-5 w-full rounded-2xl border border-slate-200 p-4"
+          data-testid="google-review-card"
         >
-          Back to Home
-        </button>
-      </motion.div>
+          <div className="mb-3 flex items-center justify-center gap-1">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
+            ))}
+          </div>
+          <p className="mb-4 text-sm leading-relaxed text-slate-600">
+            Please leave a quick Google review and share your experience with others.
+          </p>
+          {resolvedGoogleReviewUrl ? (
+            <button
+              type="button"
+              onClick={handleGoogleReview}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold text-white shadow-sm transition-all hover:brightness-95 active:scale-[0.98]"
+              style={{ backgroundColor: primaryColor }}
+              data-testid="google-review-button"
+            >
+              Leave a Review on Google
+              <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          ) : (
+            <p className="text-sm font-medium text-slate-500">Thank you for your visit!</p>
+          )}
+        </section>
+
+        {socialLinks.length > 0 && (
+          <div className="mb-5 text-center">
+            <p className="mb-3 text-xs font-semibold uppercase text-slate-400">Follow Us</p>
+            <div className="flex items-center justify-center gap-3">
+              {socialLinks.map(({ key, label, href, Icon }) => (
+                <a
+                  key={key}
+                  href={href || undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 transition-transform active:scale-95"
+                  style={{ color: primaryColor }}
+                  data-testid={`social-link-${key}`}
+                >
+                  <Icon className="h-5 w-5" strokeWidth={1.8} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center gap-2 border-t border-slate-100 pt-5">
+          <img src={logoImg} alt="" className="h-4 w-4 opacity-50" />
+          <span className="text-xs text-slate-400">Powered by CleverBiz AI</span>
+        </div>
+      </main>
     </div>
   );
 };
