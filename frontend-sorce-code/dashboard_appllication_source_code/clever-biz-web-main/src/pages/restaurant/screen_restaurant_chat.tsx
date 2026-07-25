@@ -7,13 +7,17 @@ import toast from "react-hot-toast";
 import {
   Search,
   Send,
-  Bell,
   CheckCircle2,
-  Clock,
   MoreVertical,
   ArrowLeft
 } from "lucide-react";
 import { cn, getActiveRestaurantLocale, getActiveRestaurantTimezone } from "@/lib/utils";
+import {
+  getUnreadTableMessageIds,
+  isActiveAssistanceStatus,
+  isUnreadTableMessageStatus,
+  sortChatsByLatestMessage,
+} from "./chatListUtils";
 
 // Types
 interface ChatRoomItem {
@@ -94,17 +98,29 @@ const ScreenRestaurantChat = () => {
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const selectedChatRef = useRef<ChatRoomItem | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showClearChatModal, setShowClearChatModal] = useState(false);
+  const isStaff = String(userInfo?.role || "").toLowerCase() === "staff";
+
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
 
   useEffect(() => {
     if (!Array.isArray(dashboardTables)) return;
     const deviceChats = normalizeDeviceChats(dashboardTables as DeviceChatRow[]);
     setChatList((prev) => {
       const compatibilityChats = prev.filter((chat) => chat.source === "table-message");
-      return [...compatibilityChats, ...deviceChats];
+      const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
+      const nextChats = [...compatibilityChats, ...deviceChats].map((chat) =>
+        selectedId && String(chat.id) === String(selectedId)
+          ? { ...chat, unread_count: 0 }
+          : chat,
+      );
+      return isStaff ? sortChatsByLatestMessage(nextChats) : nextChats;
     });
-  }, [dashboardTables]);
+  }, [dashboardTables, isStaff]);
 
   const mergeTableMessages = (rows: TableMessage[]) => {
     const grouped = new Map<string, { chat: ChatRoomItem; messages: Message[] }>();
@@ -144,10 +160,13 @@ const ScreenRestaurantChat = () => {
         type,
       });
 
-      if (status === "pending" || status === "unread") {
+      if (isUnreadTableMessageStatus(status)) {
         entry.chat.unread_count = Number(entry.chat.unread_count || 0) + 1;
       }
-      if (type === "assistance" || type === "call_waiter") {
+      if (
+        (type === "assistance" || type === "call_waiter")
+        && isActiveAssistanceStatus(status)
+      ) {
         entry.chat.has_alert = true;
       }
       if (new Date(createdAt).getTime() > new Date(entry.chat.last_message_time || 0).getTime()) {
@@ -165,12 +184,13 @@ const ScreenRestaurantChat = () => {
 
     setChatList((prev) => {
       const nonTableChats = prev.filter((chat) => chat.source !== "table-message" && !String(chat.id).startsWith("table-"));
-      const tableChats = Array.from(grouped.values()).map((entry) => entry.chat);
-      return [...tableChats, ...nonTableChats].sort((a, b) => {
-        if (a.has_alert && !b.has_alert) return -1;
-        if (!a.has_alert && b.has_alert) return 1;
-        return Number(b.unread_count || 0) - Number(a.unread_count || 0);
-      });
+      const selectedId = selectedChatRef.current?.id;
+      const tableChats = Array.from(grouped.entries()).map(([key, entry]) =>
+        selectedId && String(key) === String(selectedId)
+          ? { ...entry.chat, unread_count: 0 }
+          : entry.chat,
+      );
+      return sortChatsByLatestMessage([...tableChats, ...nonTableChats]);
     });
   };
 
@@ -229,14 +249,20 @@ const ScreenRestaurantChat = () => {
         const deviceChats = normalizeDeviceChats(data);
         setChatList((prev) => {
           const compatibilityChats = prev.filter((chat) => chat.source === "table-message");
-          return [...compatibilityChats, ...deviceChats];
+          const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
+          const nextChats = [...compatibilityChats, ...deviceChats].map((chat) =>
+            selectedId && String(chat.id) === String(selectedId)
+              ? { ...chat, unread_count: 0 }
+              : chat,
+          );
+          return isStaff ? sortChatsByLatestMessage(nextChats) : nextChats;
         });
       } catch (error) {
         console.error("Failed to load chat list", error);
       }
     };
     fetchChats();
-  }, [userInfo?.role]);
+  }, [userInfo?.role, isStaff]);
 
   // 2. Unified WebSocket Connection (With Auto-Reconnect)
   const wsRef = useRef<WebSocket | null>(null);
@@ -331,13 +357,6 @@ const ScreenRestaurantChat = () => {
     };
   }, [selectedChat, userInfo]);
 
-  // Ref to track selected chat without triggering re-renders in useEffect
-  const selectedChatRef = useRef<ChatRoomItem | null>(null);
-
-  useEffect(() => {
-    selectedChatRef.current = selectedChat;
-  }, [selectedChat]);
-
   // Track processed messages to avoid double counting
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
@@ -393,7 +412,7 @@ const ScreenRestaurantChat = () => {
       // 1. Update Chat List (Badges + Time)
       if (lastMsg.device_id) {
         setChatList(prevList => {
-          return prevList.map(chat => {
+          const updatedChats = prevList.map(chat => {
             if (String(chat.id) === String(lastMsg.device_id)) {
               // Use REF to check current selection to avoid stale closure or dependency re-run issues
               const currentSelectedId = selectedChatRef.current?.id;
@@ -410,6 +429,7 @@ const ScreenRestaurantChat = () => {
             }
             return chat;
           });
+          return isStaff ? sortChatsByLatestMessage(updatedChats) : updatedChats;
         });
       }
 
@@ -436,10 +456,15 @@ const ScreenRestaurantChat = () => {
         });
       }
     }
-  }, [globalMessages]); // Dependency on selectedChat REMOVED to prevent re-runs on switch
+  }, [globalMessages, clearUnreadForTable, isStaff]); // selectedChat stays in a ref to avoid recounting on switch
 
   // Cache for chat messages: { [deviceId]: Message[] }
   const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
+  const messageCacheRef = useRef<Record<string, Message[]>>({});
+
+  useEffect(() => {
+    messageCacheRef.current = messageCache;
+  }, [messageCache]);
 
   // 4. Fetch History on Selection + Clear Badge
   useEffect(() => {
@@ -452,23 +477,17 @@ const ScreenRestaurantChat = () => {
     }
 
     // LOAD FROM CACHE FIRST (Instant Load)
-    if (messageCache[selectedChat.id]) {
+    if (messageCacheRef.current[selectedChat.id]) {
       console.log(`Loaded ${selectedChat.id} from cache`);
-      setMessages(messageCache[selectedChat.id]);
+      setMessages(messageCacheRef.current[selectedChat.id]);
     } else {
       setMessages([]); // Clear if no cache to prevent showing wrong chat
     }
 
     if (selectedChat.source === "table-message") {
-      const messageIds = (messageCache[selectedChat.id] || [])
-        .filter((message) => {
-          const status = String(message.status || "").toLowerCase();
-          const type = String(message.type || "").toLowerCase();
-          return (status === "pending" || status === "unread")
-            && !["assistance", "call_waiter"].includes(type);
-        })
-        .map((message) => message.id)
-        .filter((id) => id !== undefined);
+      const messageIds = getUnreadTableMessageIds(
+        messageCacheRef.current[selectedChat.id] || [],
+      );
       if (messageIds.length > 0) {
         axiosInstance.patch("/api/table-messages", {
           ids: messageIds,
@@ -556,7 +575,14 @@ const ScreenRestaurantChat = () => {
     }]);
 
     // Update List Timestamp
-    setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, last_message_time: new Date().toISOString() } : c));
+    setChatList(prev => {
+      const updatedChats = prev.map(c =>
+          c.id === selectedChat.id
+            ? { ...c, last_message_time: new Date().toISOString() }
+            : c,
+        );
+      return isStaff ? sortChatsByLatestMessage(updatedChats) : updatedChats;
+    });
     setInputText("");
   };
 
@@ -648,9 +674,12 @@ const ScreenRestaurantChat = () => {
     }
   };
 
-  const filteredChats = chatList.filter(c =>
+  const matchingChats = chatList.filter(c =>
     c.table_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const filteredChats = isStaff
+    ? sortChatsByLatestMessage(matchingChats)
+    : matchingChats;
 
   return (
     <>
