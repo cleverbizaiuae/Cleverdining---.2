@@ -5,6 +5,14 @@ import { cachedGet } from "../lib/requestCache";
 import axiosInstance from "../lib/axios";
 import { AnimatePresence, motion } from "motion/react";
 import { Banknote, BellRing, Check } from "lucide-react";
+import { useRole } from "./useRole";
+import {
+  isActionableAssistanceAlert,
+  isActiveAssistanceAlert,
+  isQueuedAssistanceAlert,
+  isStaffAlertRole,
+  upsertStaffServiceAlert,
+} from "./staffServiceAlerts";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -87,13 +95,15 @@ const WebSocketProvider = ({ children }) => {
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const { userInfo: syncedUserInfo } = useRole();
 
   // 1. Get User & Token
-  const parseUser = JSON.parse(localStorage.getItem("userInfo") || "{}");
+  const storedUser = JSON.parse(localStorage.getItem("userInfo") || "{}");
+  const parseUser = syncedUserInfo || storedUser;
   const accessToken = localStorage.getItem("accessToken");
   const dashboardRole = String(parseUser?.role || "").toLowerCase();
   const isChefDashboard = dashboardRole === "chef";
-  const isStaffDashboard = dashboardRole === "staff";
+  const isStaffDashboard = isStaffAlertRole(dashboardRole);
 
   // 2. Robust ID Extraction
   let restaurantId =
@@ -114,30 +124,28 @@ const WebSocketProvider = ({ children }) => {
   const refreshStaffServiceAlerts = useCallback(async () => {
     if (!isStaffDashboard || !id) {
       setStaffServiceAlerts([]);
+      setCashServiceAlerts([]);
       return;
     }
-    try {
-      const [messageResponse, orderResponse] = await Promise.all([
-        cachedGet(
-          "/api/table-messages",
-          { params: { restaurant_id: id } },
-          { ttlMs: 0, force: true },
-        ),
-        cachedGet(
-          "/api/staff/orders/",
-          { params: { page: 1, page_size: 250 } },
-          { ttlMs: 0, force: true },
-        ),
-      ]);
-      const rows = Array.isArray(messageResponse.data) ? messageResponse.data : [];
-      setStaffServiceAlerts(
-        rows.filter((row: StaffServiceAlert) => {
-          const type = String(row?.type || "").toLowerCase();
-          const status = String(row?.status || "").toLowerCase();
-          return ["assistance", "call_waiter"].includes(type) && ["pending", "queued"].includes(status);
-        }),
-      );
 
+    try {
+      const messageResponse = await cachedGet(
+        "/api/table-messages",
+        { params: { restaurant_id: id } },
+        { ttlMs: 0, force: true },
+      );
+      const rows = Array.isArray(messageResponse.data) ? messageResponse.data : [];
+      setStaffServiceAlerts(rows.filter(isActiveAssistanceAlert));
+    } catch (error) {
+      console.warn("Failed to refresh staff assistance alerts (non-blocking):", error);
+    }
+
+    try {
+      const orderResponse = await cachedGet(
+        "/api/staff/orders/",
+        { params: { page: 1, page_size: 250 } },
+        { ttlMs: 0, force: true },
+      );
       const orderPayload = orderResponse.data || {};
       const rawResults = orderPayload.results;
       const orders = Array.isArray(rawResults)
@@ -177,7 +185,7 @@ const WebSocketProvider = ({ children }) => {
       });
       setCashServiceAlerts(Array.from(groupedCashAlerts.values()));
     } catch (error) {
-      console.warn("Failed to refresh staff service alerts (non-blocking):", error);
+      console.warn("Failed to refresh staff cash alerts (non-blocking):", error);
     }
   }, [id, isStaffDashboard]);
 
@@ -494,6 +502,12 @@ const WebSocketProvider = ({ children }) => {
           }
 
           if (parsedMessage.type === "service_alert" && isStaffDashboard) {
+            const incomingAlert = parsedMessage.alert as StaffServiceAlert | undefined;
+            if (incomingAlert && isActiveAssistanceAlert(incomingAlert)) {
+              setStaffServiceAlerts((previous) =>
+                upsertStaffServiceAlert(previous, incomingAlert),
+              );
+            }
             void refreshStaffServiceAlerts();
           }
 
@@ -616,14 +630,10 @@ const WebSocketProvider = ({ children }) => {
     .slice(0, 2)
     .map((t) => t.tableName)
     .join(", ");
-  const pendingAssistanceAlerts = staffServiceAlerts.filter(
-    (alert) => String(alert.status || "").toLowerCase() === "pending",
-  );
-  const queuedAssistanceCount = staffServiceAlerts.filter(
-    (alert) => String(alert.status || "").toLowerCase() === "queued",
-  ).length;
+  const actionableAssistanceAlerts = staffServiceAlerts.filter(isActionableAssistanceAlert);
+  const queuedAssistanceCount = staffServiceAlerts.filter(isQueuedAssistanceAlert).length;
   const visibleServiceAlerts = [
-    ...pendingAssistanceAlerts.map((alert) => ({ kind: "assistance" as const, alert })),
+    ...actionableAssistanceAlerts.map((alert) => ({ kind: "assistance" as const, alert })),
     ...cashServiceAlerts.map((alert) => ({ kind: "cash" as const, alert })),
   ].slice(0, 4);
 
