@@ -1103,9 +1103,9 @@ const ScreenCart = () => {
       )}
 
       {reviewModalVisible && (
-        <div className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[1px] p-4 flex items-center justify-center">
-          <div className="w-[92%] max-w-sm bg-card text-foreground rounded-3xl border border-border shadow-2xl shadow-black/40 p-0 overflow-hidden gap-0 max-h-[88vh] flex flex-col">
-            <div className="relative p-5 pb-4 border-b border-border shrink-0">
+        <div className="fixed inset-0 z-[100] flex h-[100dvh] items-stretch justify-center bg-black/55 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[1px] sm:items-center sm:p-4">
+          <div className="flex h-full min-h-0 w-full max-w-sm flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 text-foreground shadow-2xl shadow-black/40 sm:h-auto sm:max-h-[min(720px,calc(100dvh-2rem))] sm:rounded-3xl">
+            <div className="relative shrink-0 border-b border-border p-4 pb-3 sm:p-5 sm:pb-4">
               <button
                 type="button"
                 onClick={() => setShowReviewModal(false)}
@@ -1134,41 +1134,45 @@ const ScreenCart = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Order</p>
-                {validCartItems.map((item) => (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <p className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Your Order
+                </p>
+                <div className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] [scrollbar-gutter:stable]">
+                  {validCartItems.map((item) => (
                       <div key={`review-${item.id}`} className="flex items-center gap-3 bg-secondary rounded-xl p-2.5 border border-border">
-                    <div className="w-11 h-11 rounded-lg overflow-hidden bg-background shrink-0">
-                      <OptimizedImage
-                        src={item.image1}
-                        alt={item.item_name}
-                        width={44}
-                        height={44}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{item.item_name}</p>
-                      {itemTimings[String(item.id)] && (
-                        <p className="text-[10px] text-primary font-medium mt-0.5">
-                          {TIMING_LABEL[itemTimings[String(item.id)]!]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-foreground">{currencyCode} {getLineTotal(item, item.quantity).toFixed(2)}</p>
-                      {hasItemDiscount(item) && (
-                        <p className="text-[10px] text-slate-400 line-through">
-                          {currencyCode} {(getOriginalItemPrice(item) * item.quantity).toFixed(2)}
-                        </p>
-                      )}
-                      <p className="text-[10px] text-slate-400">×{item.quantity}</p>
-                    </div>
-                  </div>
-                ))}
+                        <div className="w-11 h-11 rounded-lg overflow-hidden bg-background shrink-0">
+                          <OptimizedImage
+                            src={item.image1}
+                            alt={item.item_name}
+                            width={44}
+                            height={44}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{item.item_name}</p>
+                          {itemTimings[String(item.id)] && (
+                            <p className="text-[10px] text-primary font-medium mt-0.5">
+                              {TIMING_LABEL[itemTimings[String(item.id)]!]}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-foreground">{currencyCode} {getLineTotal(item, item.quantity).toFixed(2)}</p>
+                          {hasItemDiscount(item) && (
+                            <p className="text-[10px] text-slate-400 line-through">
+                              {currencyCode} {(getOriginalItemPrice(item) * item.quantity).toFixed(2)}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-slate-400">×{item.quantity}</p>
+                        </div>
+                      </div>
+                  ))}
+                </div>
 
-                <div className="flex justify-between items-center px-1 pt-1">
+                <div className="flex shrink-0 items-center justify-between border-t border-border px-1 pt-2 mt-2">
                   <span className="text-sm font-bold text-foreground">Total</span>
                   <span className="text-lg font-bold text-primary">
                     {currencyCode} {totalCost.toFixed(2)}
@@ -1177,7 +1181,7 @@ const ScreenCart = () => {
               </div>
 
               {payBeforeOrder && (
-                <div className="space-y-2">
+                <div className="shrink-0 space-y-2">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Method</p>
                   <div className="flex gap-2">
                     {(["card", "cash"] as const).map((method) => (
@@ -1207,7 +1211,7 @@ const ScreenCart = () => {
                 </div>
               )}
 
-              <div className="space-y-2">
+              <div className="shrink-0 space-y-2">
                 <div className="flex items-center gap-2 text-muted-foreground font-bold text-[10px] uppercase tracking-widest">
                   <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
                   Allergies & Special Requests
@@ -1216,12 +1220,12 @@ const ScreenCart = () => {
                   placeholder="e.g. Nut allergy, Gluten free, Extra spicy..."
                   value={specialRequest}
                   onChange={(e) => setSpecialRequest(e.target.value)}
-                  className="bg-secondary border border-border focus-visible:ring-primary/20 min-h-[56px] text-sm rounded-xl w-full p-3 resize-none text-foreground placeholder:text-muted-foreground"
+                  className="h-14 w-full resize-none rounded-xl border border-border bg-secondary p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
                 />
               </div>
             </div>
 
-            <div className="p-4 bg-card border-t border-border flex flex-col gap-2.5 shrink-0">
+            <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card p-3 sm:gap-2.5 sm:p-4">
               {upsellUiEnabled && beforePaymentSuggestions.length > 0 && (
                 <div className="rounded-xl border border-border bg-secondary p-2.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
@@ -1269,7 +1273,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={handleOrderNow}
                 disabled={isSubmittingOrder}
-                className="w-full h-14 rounded-xl text-base font-bold shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-white disabled:opacity-70 transition-colors"
+                className="h-12 w-full rounded-xl bg-primary text-base font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-70 sm:h-14"
               >
                 {isSubmittingOrder
                   ? payBeforeOrder && paymentMethod === "card"
@@ -1283,7 +1287,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={() => setShowReviewModal(false)}
                 disabled={isSubmittingOrder}
-                className="rounded-xl text-muted-foreground text-sm h-10 hover:bg-secondary transition-colors"
+                className="h-8 rounded-xl text-sm text-muted-foreground transition-colors hover:bg-secondary sm:h-10"
               >
                 Wait, I forgot something...
               </button>
