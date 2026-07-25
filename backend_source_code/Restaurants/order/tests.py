@@ -193,6 +193,22 @@ class PaymentCompletionNavigationTests(TestCase):
         self.assertEqual(guest_events[0]["session_id"], self.session.id)
         self.assertEqual(guest_events[0]["device_id"], self.device.id)
 
+    def test_chef_cannot_confirm_cash_payment(self):
+        chef = User.objects.create_user(
+            email="cash-confirmation-chef@example.com",
+            username="Cash Confirmation Chef",
+            password="test-password",
+            role="chef",
+        )
+        self.client.force_authenticate(chef)
+
+        response = self.client.patch(f"/owners/orders/confirm-cash/{self.order.id}/")
+
+        self.assertEqual(response.status_code, 403)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "awaiting_cash")
+        self.assertEqual(self.order.payment_status, "pending_cash")
+
     def test_paid_order_can_be_polled_for_completion_transition(self):
         self.order.payment_status = "paid"
         self.order.status = "delivered"

@@ -9,7 +9,7 @@ from device.models import GuestSession
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from .serializers import OrderCreateSerializerFixed, OrderDetailSerializer
-from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff,IsOwnerChefOrStaff
+from accounts.permissions import IsCustomerRole,IsOwnerRole,IsChefOrStaff,IsOwnerChefOrStaff,IsOwnerORStaff
 from accounts.models import ChefStaff
 from django.utils.timezone import now
 from django.db.models import Sum, Count, Q
@@ -256,7 +256,7 @@ class ConfirmCashPaymentAPIView(APIView):
     Endpoint for Staff/Owner to confirm cash receipt.
     Completes the order and Ends the Session.
     """
-    permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
+    permission_classes = [IsAuthenticated, IsOwnerORStaff]
 
     def patch(self, request, pk):
         from payment.models import Payment

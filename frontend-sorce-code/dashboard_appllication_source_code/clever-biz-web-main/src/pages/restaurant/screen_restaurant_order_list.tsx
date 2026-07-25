@@ -1,5 +1,6 @@
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
+import { isStaffAlertRole } from "@/hooks/staffServiceAlerts";
 import { useEffect, useState, useRef, useContext } from "react";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import PaymentGatewayModal, { type GatewayProvider } from "../model/PaymentGatewayModal";
@@ -109,6 +110,7 @@ const ScreenRestaurantOrderList = () => {
     return "Stripe";
   };
   const { userRole } = useRole();
+  const canCollectCash = isStaffAlertRole(userRole);
   const {
     orders = [],
     ordersStats,
@@ -267,9 +269,11 @@ const ScreenRestaurantOrderList = () => {
     order.status.toLowerCase() === 'ready' || order.status.toLowerCase() === 'served'
   );
 
-  const cashOrders = activeOrders.filter((order: any) =>
-    order.status === 'awaiting_cash' || order.payment_status === 'pending_cash'
-  );
+  const cashOrders = canCollectCash
+    ? activeOrders.filter((order: any) =>
+      order.status === 'awaiting_cash' || order.payment_status === 'pending_cash'
+    )
+    : [];
 
   // Group cash orders by table (device_id or tableNo)
   const cashOrdersByTable = cashOrders.reduce((acc: any, order: any) => {
@@ -343,6 +347,7 @@ const ScreenRestaurantOrderList = () => {
 
   // Confirm all cash orders for a table (takes array of order IDs)
   const handleConfirmCashForTable = async (orderIds: number[]) => {
+    if (!canCollectCash) return;
     try {
       // Confirm first order - backend will handle session-level logic
       // For bulk confirmation, we confirm each order
@@ -371,6 +376,7 @@ const ScreenRestaurantOrderList = () => {
 
   // Keep backward compatible single order confirm
   const handleConfirmCash = async (orderId: number) => {
+    if (!canCollectCash) return;
     if (markingPaidOrderId !== null) return;
     setMarkingPaidOrderId(orderId);
     try {
@@ -467,7 +473,7 @@ const ScreenRestaurantOrderList = () => {
     <div className="flex flex-col gap-6">
 
       {/* PENDING CASH BANNER - Grouped by Table */}
-      {groupedCashTables.length > 0 && (
+      {canCollectCash && groupedCashTables.length > 0 && (
         <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300 max-w-full">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-700 shrink-0 animate-pulse">
@@ -533,13 +539,15 @@ const ScreenRestaurantOrderList = () => {
                   <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
                   <p className="text-[10px] text-slate-500">{currencyCode} {order.total_price}</p>
                 </div>
-                <button
-                  onClick={() => handleConfirmCash(order.id)}
-                  disabled={markingPaidOrderId !== null}
-                  className="h-7 px-3 bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 text-white text-[10px] font-medium rounded transition-colors"
-                >
-                  {markingPaidOrderId === order.id ? "Saving..." : "Mark as Paid"}
-                </button>
+                {canCollectCash && (
+                  <button
+                    onClick={() => handleConfirmCash(order.id)}
+                    disabled={markingPaidOrderId !== null}
+                    className="h-7 px-3 bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 text-white text-[10px] font-medium rounded transition-colors"
+                  >
+                    {markingPaidOrderId === order.id ? "Saving..." : "Mark as Paid"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
