@@ -63,16 +63,6 @@ const resolveStoredRestaurantId = (): string | null => {
   }
 };
 
-const hexToRgba = (hex: string, alpha: number) => {
-  const normalized = hex.replace("#", "");
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return `rgba(0, 85, 254, ${alpha})`;
-  const value = Number.parseInt(normalized, 16);
-  const r = (value >> 16) & 255;
-  const g = (value >> 8) & 255;
-  const b = value & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
 const useDecodedImage = (src: string | null) => {
   const [state, setState] = useState({
     readySrc: null as string | null,
@@ -141,7 +131,6 @@ const SuccessPage = () => {
   const [restaurantName, setRestaurantName] = useState<string>("");
   const [restaurantId, setRestaurantId] = useState<string | null>(() => resolveStoredRestaurantId());
   const brand = useBrandConfig(restaurantId);
-  const coverImage = useDecodedImage(brand.coverImageUrl);
   const logoImage = useDecodedImage(brand.logoUrl);
   const sessionCleanedRef = useRef(false);
 
@@ -260,12 +249,6 @@ const SuccessPage = () => {
   const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
   const primaryColor = brand.primaryColor || "#0055FE";
   const fontFamily = FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family;
-  const backgroundGradient =
-    brand.themePreset === "luxury_dark"
-      ? "linear-gradient(160deg, #0f0f0f 0%, #1a1a2e 100%)"
-      : brand.themePreset === "warm_casual"
-        ? "linear-gradient(160deg, #7c2d12 0%, #c2410c 100%)"
-        : `linear-gradient(160deg, ${hexToRgba(primaryColor, 0.87)} 0%, ${primaryColor} 100%)`;
 
   const socialLinks = useMemo(
     () =>
@@ -328,126 +311,65 @@ const SuccessPage = () => {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
-      <div className="fixed inset-0" style={{ background: backgroundGradient }} />
-      {coverImage.readySrc ? (
-        <>
-          <div
-            className="fixed inset-0 scale-[1.08] bg-cover bg-center opacity-80 blur-[14px] transition-opacity duration-500 sm:blur-[18px]"
-            style={{ objectPosition: "center top" }}
-            aria-hidden="true"
-          >
-            <div
-              className="h-full w-full bg-cover bg-center"
-              style={{
-                backgroundImage: `url(${coverImage.readySrc})`,
-                backgroundPosition: "center top",
-              }}
-            />
-          </div>
+    <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 p-4 text-center sm:p-6">
+      <main
+        className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-slate-100 bg-white p-6 shadow-xl sm:p-8"
+        style={{ fontFamily }}
+      >
+        {logoImage.readySrc ? (
           <img
-            src={coverImage.readySrc}
-            alt={`${resolvedRestaurantName} cover`}
+            src={logoImage.readySrc}
+            alt={`${resolvedRestaurantName} logo`}
             decoding="async"
-            fetchPriority="high"
-            className="fixed inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500"
-            style={{ objectPosition: "center top", opacity: 0.55 }}
+            className="mb-5 h-16 w-16 rounded-2xl object-contain"
           />
-        </>
-      ) : null}
-      <div
-        className="fixed inset-0"
-        style={{
-          background:
-            brand.themePreset === "luxury_dark"
-              ? "linear-gradient(to bottom, rgba(0,0,0,0.74) 0%, rgba(0,0,0,0.86) 52%, rgba(0,0,0,0.94) 100%)"
-              : brand.themePreset === "warm_casual"
-                ? "linear-gradient(to bottom, rgba(67,24,8,0.50) 0%, rgba(31,15,8,0.78) 52%, rgba(14,9,6,0.92) 100%)"
-                : "linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.74) 54%, rgba(0,0,0,0.90) 100%)",
-        }}
-      />
-
-      <div className="relative z-10 flex min-h-screen w-full flex-col overflow-y-auto px-6 py-8 text-white">
-        <div className="flex flex-1 flex-col items-center justify-center min-h-[calc(100vh-112px)] py-8">
-          {/* Restaurant branding slot */}
-          <div className="mb-5">
-            {logoImage.readySrc ? (
-              <div
-                className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center p-1 shadow-2xl shadow-black/40"
-                style={{
-                  background: "rgba(255,255,255,0.12)",
-                  backdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255,255,255,0.22)",
-                }}
-              >
-                <img
-                  src={logoImage.readySrc}
-                  alt={`${resolvedRestaurantName} logo`}
-                  decoding="async"
-                  className="h-full w-full rounded-2xl object-contain bg-transparent"
-                />
-              </div>
-            ) : (
-              <div
-                className="h-20 w-20 mx-auto rounded-[1.25rem] flex items-center justify-center shadow-2xl shadow-black/40"
-                style={{
-                  background: "rgba(255,255,255,0.12)",
-                  backdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255,255,255,0.22)",
-                }}
-              >
-                <span className="text-white font-bold text-3xl" style={{ fontFamily }}>
-                  {(resolvedRestaurantName || "R")[0]}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <CheckCircle2 className="h-10 w-10 text-green-400" strokeWidth={1.8} />
-          </div>
-
-          {/* Main Title */}
-          <h1
-            className="text-4xl font-bold mb-3 text-center text-white"
-            style={{ fontFamily, letterSpacing: "-0.02em" }}
-          >
-            Order Placed!
-          </h1>
-
-          {/* Supporting Text */}
-          <p className="text-white/72 text-sm mb-6 text-center leading-relaxed max-w-sm italic">
-            {brand.tagline || "Your food is on its way. We hope you enjoy your meal."}
+        ) : (
+          <p className="mb-5 text-lg font-bold" style={{ color: primaryColor }}>
+            {resolvedRestaurantName}
           </p>
+        )}
 
-          {/* Google Review Section */}
-          <div className="w-full max-w-sm border border-white/15 bg-white/12 rounded-3xl p-4 mb-5 shadow-2xl shadow-black/20 backdrop-blur-md" data-testid="google-review-card">
-            <div className="flex items-center justify-center gap-1 mb-3">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Star key={index} className="w-4 h-4 fill-amber-400 text-amber-400" strokeWidth={1.8} />
-              ))}
-            </div>
-            <p className="text-white/72 text-sm mb-4 text-center leading-relaxed">
-              Please leave a quick Google review and share your experience with others.
-            </p>
-            {resolvedGoogleReviewUrl && (
-              <button
-                onClick={handleGoogleReview}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md hover:brightness-95 active:scale-[0.98]"
-                style={{ backgroundColor: primaryColor }}
-                data-testid="google-review-button"
-              >
-                <span>Leave a Review on Google</span>
-                <ExternalLink className="w-4 h-4" strokeWidth={1.8} />
-              </button>
-            )}
+        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 className="h-11 w-11 text-green-600" strokeWidth={2.5} />
+        </div>
+
+        <h1 className="mb-2 text-2xl font-bold text-slate-900">Thank You!</h1>
+        <p className="mb-6 text-sm leading-relaxed text-slate-500 sm:text-base">
+          Thank you for dining with us today. We hope everything was delicious. See you again soon!
+        </p>
+
+        <section
+          className="mb-5 w-full rounded-2xl border border-slate-200 p-4"
+          data-testid="google-review-card"
+        >
+          <div className="mb-3 flex items-center justify-center gap-1">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
+            ))}
           </div>
+          <p className="mb-4 text-sm leading-relaxed text-slate-600">
+            Please leave a quick Google review and share your experience with others.
+          </p>
+          {resolvedGoogleReviewUrl ? (
+            <button
+              type="button"
+              onClick={handleGoogleReview}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold text-white shadow-sm transition-all hover:brightness-95 active:scale-[0.98]"
+              style={{ backgroundColor: primaryColor }}
+              data-testid="google-review-button"
+            >
+              Leave a Review on Google
+              <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          ) : (
+            <p className="text-sm font-medium text-slate-500">Thank you for your visit!</p>
+          )}
+        </section>
 
-          {/* Social links */}
-          {socialLinks.length > 0 && (
-            <div className="mt-1 mb-4 text-center">
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Follow Us</p>
-              <div className="flex items-center justify-center gap-3">
+        {socialLinks.length > 0 && (
+          <div className="mb-5 text-center">
+            <p className="mb-3 text-xs font-semibold uppercase text-slate-400">Follow Us</p>
+            <div className="flex items-center justify-center gap-3">
               {socialLinks.map(({ key, label, href, Icon }) => (
                 <a
                   key={key}
@@ -455,27 +377,30 @@ const SuccessPage = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="w-11 h-11 rounded-xl border border-white/15 flex items-center justify-center transition-transform active:scale-95 backdrop-blur-md"
-                  style={{ background: "rgba(255,255,255,0.12)", color: "white" }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 transition-transform active:scale-95"
+                  style={{ color: primaryColor }}
                   data-testid={`social-link-${key}`}
                 >
-                  <Icon className="w-5 h-5" strokeWidth={1.8} />
+                  <Icon className="h-5 w-5" strokeWidth={1.8} />
                 </a>
               ))}
-              </div>
             </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-white/10 px-2 py-4 text-center">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <img src={logoImg} alt="CleverBiz AI" className="h-4 w-auto opacity-60" />
-            <span className="text-xs text-white/45">Powered by CleverBiz AI</span>
           </div>
-          <p className="text-xs text-white/40">Scan QR code to start a new session</p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => window.location.assign("/login")}
+          className="mb-5 min-h-12 w-full rounded-xl bg-slate-900 px-4 font-semibold text-white transition-colors hover:bg-slate-800"
+        >
+          Back to Home
+        </button>
+
+        <div className="flex items-center justify-center gap-2 border-t border-slate-100 pt-5">
+          <img src={logoImg} alt="" className="h-4 w-4 opacity-50" />
+          <span className="text-xs text-slate-400">Powered by CleverBiz AI</span>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

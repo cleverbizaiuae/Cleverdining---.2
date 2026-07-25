@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useContext, useRef } from "react";
+import { useEffect, useState, useCallback, useContext, useMemo, useRef } from "react";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
@@ -54,6 +54,67 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
       </div>
     </div>
   )
+};
+
+const MoveButtons = ({
+  canMoveUp,
+  canMoveDown,
+  isMoving,
+  onMove,
+  variant = "table",
+}: {
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  isMoving: boolean;
+  onMove: (direction: "up" | "down") => void;
+  variant?: "category-filter" | "subcategory-filter" | "table";
+}) => {
+  const isFilter = variant !== "table";
+  const enabledHoverClass = variant === "subcategory-filter"
+    ? "hover:bg-slate-100 hover:text-slate-700"
+    : "hover:bg-blue-50 hover:text-[#0055FE]";
+  const buttonClass = isFilter
+    ? `flex h-3.5 w-4 items-center justify-center rounded-sm text-slate-400 transition-colors disabled:cursor-not-allowed disabled:text-slate-200 ${enabledHoverClass}`
+    : `rounded p-1.5 text-slate-400 transition-colors disabled:cursor-not-allowed disabled:text-slate-200 ${enabledHoverClass}`;
+  const iconClass = isFilter ? "h-2.5 w-2.5" : "h-3 w-3";
+
+  return (
+    <div className={isFilter
+      ? "flex flex-col opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      : "inline-flex items-center gap-0.5"
+    }>
+      <button
+        type="button"
+        title="Move up"
+        aria-label="Move up"
+        disabled={!canMoveUp || isMoving}
+        onClick={(event) => {
+          event.stopPropagation();
+          onMove("up");
+        }}
+        className={buttonClass}
+      >
+        <svg viewBox="0 0 10 6" className={iconClass} fill="currentColor" aria-hidden="true">
+          <path d="M5 0L10 6H0z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        title="Move down"
+        aria-label="Move down"
+        disabled={!canMoveDown || isMoving}
+        onClick={(event) => {
+          event.stopPropagation();
+          onMove("down");
+        }}
+        className={buttonClass}
+      >
+        <svg viewBox="0 0 10 6" className={iconClass} fill="currentColor" aria-hidden="true">
+          <path d="M0 0H10L5 6z" />
+        </svg>
+      </button>
+    </div>
+  );
 };
 
 // --- COMPONENTS ---
@@ -407,11 +468,8 @@ const ScreenRestaurantDashboard = () => {
   const { fmt, restaurantId } = useRestaurantContext();
   const {
     foodItems,
-    foodItemsCount,
     deviceStats,
     fetchDeviceStats,
-    currentPage,
-    setCurrentPage,
     searchQuery,
     setSearchQuery,
     fetchFoodItems,
@@ -427,6 +485,8 @@ const ScreenRestaurantDashboard = () => {
     createSubCategory,
     updateSubCategory,
     deleteSubCategory,
+    moveCategory,
+    moveSubCategory,
 
     // Consumed from Context (Render-First)
     analytics,
@@ -482,7 +542,9 @@ const ScreenRestaurantDashboard = () => {
   // Add Item State
   const [showAddItem, setShowAddItem] = useState(false);
   const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
-  const [isViewAll, setIsViewAll] = useState(false);
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState("all");
+  const [menuSubCategoryFilter, setMenuSubCategoryFilter] = useState("all");
+  const [movingMenuGroup, setMovingMenuGroup] = useState<string | null>(null);
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -740,30 +802,117 @@ const ScreenRestaurantDashboard = () => {
   }, [searchQuery]);
 
   useEffect(() => {
-    if (isViewAll) return;
-
-    const isInitialMenuFetch = currentPage === 1 && debouncedSearchQuery === "";
+    const isInitialMenuFetch = debouncedSearchQuery === "";
     const timer = window.setTimeout(
-      () => fetchFoodItems(currentPage, debouncedSearchQuery),
-      isInitialMenuFetch ? 900 : 0,
+      () => fetchFoodItems(1, debouncedSearchQuery, 1000),
+      isInitialMenuFetch ? 500 : 0,
     );
     return () => window.clearTimeout(timer);
-  }, [currentPage, debouncedSearchQuery, fetchFoodItems, isViewAll]);
+  }, [debouncedSearchQuery, fetchFoodItems]);
+
+  const topLevelCategories = useMemo(
+    () => categories
+      .filter((category) => category.parent_category == null)
+      .sort((left, right) =>
+        (left.display_order ?? left.id) - (right.display_order ?? right.id)
+      ),
+    [categories],
+  );
+
+  const orderedSubCategories = useMemo(
+    () => [...subCategories].sort((left, right) => {
+      if (left.parent_category !== right.parent_category) {
+        return left.parent_category - right.parent_category;
+      }
+      return (left.display_order ?? left.id) - (right.display_order ?? right.id);
+    }),
+    [subCategories],
+  );
+
+  const selectedCategorySubCategories = useMemo(
+    () => menuCategoryFilter === "all"
+      ? []
+      : orderedSubCategories.filter(
+        (subCategory) => String(subCategory.parent_category) === menuCategoryFilter,
+      ),
+    [menuCategoryFilter, orderedSubCategories],
+  );
+
+  const filteredMenuItems = useMemo(
+    () => foodItems.filter((item: any) => {
+      if (
+        menuCategoryFilter !== "all" &&
+        String(item.category_id ?? item.category) !== menuCategoryFilter
+      ) {
+        return false;
+      }
+      if (
+        menuSubCategoryFilter !== "all" &&
+        String(item.sub_category_id ?? item.sub_category) !== menuSubCategoryFilter
+      ) {
+        return false;
+      }
+      return true;
+    }),
+    [foodItems, menuCategoryFilter, menuSubCategoryFilter],
+  );
 
   useEffect(() => {
-    if (!isViewAll) return;
+    if (
+      menuCategoryFilter !== "all" &&
+      !topLevelCategories.some((category) => String(category.id) === menuCategoryFilter)
+    ) {
+      setMenuCategoryFilter("all");
+      setMenuSubCategoryFilter("all");
+    }
+  }, [menuCategoryFilter, topLevelCategories]);
 
-    void fetchFoodItems(
-      1,
-      debouncedSearchQuery,
-      Math.max(foodItemsCount, 10),
-    );
-  }, [
-    debouncedSearchQuery,
-    fetchFoodItems,
-    foodItemsCount,
-    isViewAll,
-  ]);
+  useEffect(() => {
+    if (
+      menuSubCategoryFilter !== "all" &&
+      !selectedCategorySubCategories.some(
+        (subCategory) => String(subCategory.id) === menuSubCategoryFilter,
+      )
+    ) {
+      setMenuSubCategoryFilter("all");
+    }
+  }, [menuSubCategoryFilter, selectedCategorySubCategories]);
+
+  const categoryItemCount = (categoryId: number) =>
+    foodItems.filter((item: any) => String(item.category_id ?? item.category) === String(categoryId)).length;
+
+  const subCategoryItemCount = (subCategoryId: number) =>
+    foodItems.filter(
+      (item: any) => String(item.sub_category_id ?? item.sub_category) === String(subCategoryId),
+    ).length;
+
+  const handleMoveCategory = async (
+    categoryId: number,
+    direction: "up" | "down",
+  ) => {
+    const movementKey = `category-${categoryId}`;
+    if (movingMenuGroup) return;
+    setMovingMenuGroup(movementKey);
+    try {
+      await moveCategory(categoryId, direction);
+    } finally {
+      setMovingMenuGroup(null);
+    }
+  };
+
+  const handleMoveSubCategory = async (
+    subCategoryId: number,
+    direction: "up" | "down",
+  ) => {
+    const movementKey = `subcategory-${subCategoryId}`;
+    if (movingMenuGroup) return;
+    setMovingMenuGroup(movementKey);
+    try {
+      await moveSubCategory(subCategoryId, direction);
+    } finally {
+      setMovingMenuGroup(null);
+    }
+  };
 
 
   // Removed fetchMostSellingItems local definition
@@ -1058,32 +1207,114 @@ const ScreenRestaurantDashboard = () => {
             </div>
           </div>
 
-          {/* Table */}
-          <div
-            className={`overflow-x-auto ${
-              isViewAll
-                ? "max-h-[min(60vh,42rem)] overflow-y-auto [scrollbar-gutter:stable]"
-                : ""
-            }`}
-          >
-            <table className="w-full text-left">
-              <thead
-                className={`bg-slate-50 border-b border-slate-200 ${
-                  isViewAll ? "sticky top-0 z-10" : ""
+          <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-100 px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+                type="button"
+                onClick={() => {
+                  setMenuCategoryFilter("all");
+                  setMenuSubCategoryFilter("all");
+                }}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  menuCategoryFilter === "all"
+                    ? "bg-[#0055FE] text-white"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}
               >
+                All ({foodItems.length})
+            </button>
+            {topLevelCategories.map((category, index) => {
+                const isActive = menuCategoryFilter === String(category.id);
+                const movementKey = `category-${category.id}`;
+                return (
+                  <div key={category.id} className="group flex shrink-0 items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuCategoryFilter(String(category.id));
+                        setMenuSubCategoryFilter("all");
+                      }}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        isActive
+                          ? "bg-[#0055FE] text-white"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      }`}
+                    >
+                      {category.Category_name} ({categoryItemCount(category.id)})
+                    </button>
+                    {(userRole === "owner" || userRole === "manager") && (
+                      <MoveButtons
+                        canMoveUp={index > 0}
+                        canMoveDown={index < topLevelCategories.length - 1}
+                        isMoving={movingMenuGroup === movementKey}
+                        onMove={(direction) => handleMoveCategory(category.id, direction)}
+                        variant="category-filter"
+                      />
+                    )}
+                  </div>
+                );
+            })}
+          </div>
+
+          {menuCategoryFilter !== "all" && selectedCategorySubCategories.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-100 bg-slate-50/50 px-4 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                  type="button"
+                  onClick={() => setMenuSubCategoryFilter("all")}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    menuSubCategoryFilter === "all"
+                      ? "bg-slate-700 text-white"
+                      : "border border-slate-200 bg-white text-slate-500 hover:border-slate-400"
+                  }`}
+                >
+                  All subs
+              </button>
+              {selectedCategorySubCategories.map((subCategory, index) => {
+                  const isActive = menuSubCategoryFilter === String(subCategory.id);
+                  const movementKey = `subcategory-${subCategory.id}`;
+                  return (
+                    <div key={subCategory.id} className="group flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setMenuSubCategoryFilter(String(subCategory.id))}
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          isActive
+                            ? "bg-slate-700 text-white"
+                            : "border border-slate-200 bg-white text-slate-500 hover:border-slate-400"
+                        }`}
+                      >
+                        {subCategory.Category_name} ({subCategoryItemCount(subCategory.id)})
+                      </button>
+                      {(userRole === "owner" || userRole === "manager") && (
+                        <MoveButtons
+                          canMoveUp={index > 0}
+                          canMoveDown={index < selectedCategorySubCategories.length - 1}
+                          isMoving={movingMenuGroup === movementKey}
+                          onMove={(direction) => handleMoveSubCategory(subCategory.id, direction)}
+                          variant="subcategory-filter"
+                        />
+                      )}
+                    </div>
+                  );
+              })}
+            </div>
+          )}
+
+          {/* Table */}
+          <div className="max-h-[440px] overflow-auto [scrollbar-gutter:stable]">
+            <table className="w-full min-w-[680px] text-left">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Item Name</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Price</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 text-right">Actions</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Item</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Price</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {foodItems.length > 0 ? (
-                  foodItems.slice(0, isViewAll ? foodItems.length : 5).map((item: any) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3">
+                {filteredMenuItems.length > 0 ? (
+                  filteredMenuItems.map((item: any) => (
+                    <tr key={item.id} className="transition-colors hover:bg-slate-50/60">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden shrink-0">
                             {item.image ? (
@@ -1101,14 +1332,16 @@ const ScreenRestaurantDashboard = () => {
                               <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Img</div>
                             )}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{item.item_name}</p>
-                            {item.category && <p className="text-[10px] text-slate-500">{item.category}</p>}
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-medium text-slate-900">{item.item_name}</p>
+                            {menuCategoryFilter === "all" && item.category && (
+                              <p className="text-[10px] text-slate-400">{item.category}</p>
+                            )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-600 font-medium">{fmt(item.price)}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3 text-xs font-medium text-slate-600">{fmt(item.price)}</td>
+                      <td className="px-4 py-3">
                         <select
                           className={`h-7 pl-2 pr-6 text-[10px] font-medium rounded border appearance-none outline-none cursor-pointer bg-no-repeat bg-[right_0.4rem_center] transition-colors ${item.availability
                             ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
@@ -1129,7 +1362,7 @@ const ScreenRestaurantDashboard = () => {
                           <option value="false">Unavailable</option>
                         </select>
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-3 text-xs font-medium">
                           {(userRole === 'owner' || userRole === 'manager') && (
                             <>
@@ -1169,19 +1402,13 @@ const ScreenRestaurantDashboard = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-xs text-slate-400">No items found</td>
+                    <td colSpan={4} className="p-8 text-center text-sm text-slate-400">
+                      No items in this section
+                    </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </div>
-          <div className="p-3 border-t border-slate-200 text-center">
-            <button
-              onClick={() => setIsViewAll(!isViewAll)}
-              className="text-xs text-[#0055FE] font-medium hover:underline"
-            >
-              {isViewAll ? "View Less" : "View All Items"}
-            </button>
           </div>
         </div>
 
@@ -1245,8 +1472,8 @@ const ScreenRestaurantDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {categories.filter((c: any) => c.parent_category === null || c.parent_category === undefined).length > 0 ? (
-                  categories.filter((c: any) => c.parent_category === null || c.parent_category === undefined).map((cat: any) => (
+                {topLevelCategories.length > 0 ? (
+                  topLevelCategories.map((cat, index) => (
                     <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
@@ -1263,8 +1490,13 @@ const ScreenRestaurantDashboard = () => {
 
                       {(userRole === 'owner' || userRole === 'manager') && (
                         <td className="px-5 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            {/* Edit/Delete Actions - Wiring up to Modals later */}
+                          <div className="flex items-center justify-end gap-2">
+                            <MoveButtons
+                              canMoveUp={index > 0}
+                              canMoveDown={index < topLevelCategories.length - 1}
+                              isMoving={movingMenuGroup === `category-${cat.id}`}
+                              onMove={(direction) => handleMoveCategory(cat.id, direction)}
+                            />
                             <button onClick={() => { setEditingCategory(cat); setShowEditCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
                             <button onClick={() => { setCategoryToDelete(cat); setShowDeleteCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
                           </div>
@@ -1295,28 +1527,40 @@ const ScreenRestaurantDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {subCategories.length > 0 ? (
-                  subCategories.map((sub: any) => (
-                    <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-medium text-slate-900">{sub.Category_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-slate-500">
-                        {categories.find(c => c.id === sub.parent_category)?.Category_name || '-'}
-                      </td>
-
-                      {(userRole === 'owner' || userRole === 'manager') && (
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => { setEditingSubCategory(sub); setShowEditSubCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
-                            <button onClick={() => { setSubCategoryToDelete(sub); setShowDeleteSubCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
+                {orderedSubCategories.length > 0 ? (
+                  orderedSubCategories.map((sub) => {
+                    const siblings = orderedSubCategories.filter(
+                      (candidate) => candidate.parent_category === sub.parent_category,
+                    );
+                    const siblingIndex = siblings.findIndex((candidate) => candidate.id === sub.id);
+                    return (
+                      <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-medium text-slate-900">{sub.Category_name}</span>
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  ))
+                        <td className="px-5 py-3 text-xs text-slate-500">
+                          {categories.find(c => c.id === sub.parent_category)?.Category_name || '-'}
+                        </td>
+
+                        {(userRole === 'owner' || userRole === 'manager') && (
+                          <td className="px-5 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <MoveButtons
+                                canMoveUp={siblingIndex > 0}
+                                canMoveDown={siblingIndex < siblings.length - 1}
+                                isMoving={movingMenuGroup === `subcategory-${sub.id}`}
+                                onMove={(direction) => handleMoveSubCategory(sub.id, direction)}
+                              />
+                              <button onClick={() => { setEditingSubCategory(sub); setShowEditSubCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
+                              <button onClick={() => { setSubCategoryToDelete(sub); setShowDeleteSubCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr><td colSpan={3} className="py-6 text-center text-slate-500 text-xs">No sub-categories</td></tr>
                 )}
@@ -1490,7 +1734,7 @@ const ScreenRestaurantDashboard = () => {
                 await axiosInstance.delete(`/owners/items/${itemToDelete.id}/`);
                 toast.success("Item deleted");
                 setShowDeleteItem(false);
-                fetchFoodItems(currentPage, debouncedSearchQuery);
+                fetchFoodItems(1, debouncedSearchQuery, 1000);
               } catch (e: any) {
                 toast.error("Failed to delete item: " + (e.response?.data?.error || e.message));
               } finally {
@@ -1661,7 +1905,7 @@ const ScreenRestaurantDashboard = () => {
                 }
 
                 invalidateApiCache("items");
-                await fetchFoodItems(currentPage, debouncedSearchQuery);
+                await fetchFoodItems(1, debouncedSearchQuery, 1000);
                 setShowAddItem(false);
                 setEditingItem(null);
                 setItemFormData({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "", image1: null, video: null });

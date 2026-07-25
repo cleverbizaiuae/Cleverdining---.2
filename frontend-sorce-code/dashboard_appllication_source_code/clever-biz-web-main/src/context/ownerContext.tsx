@@ -22,13 +22,15 @@ export interface Category {
   Category_name: string;
   image?: string; // Mapped from imageUrl in spec if needed, or stick to backend naming
   parent_category?: number | null;
+  display_order?: number;
 }
 
 export interface SubCategory {
   id: number;
-  name: string;
-  category: number; // parent category id
+  Category_name: string;
+  parent_category: number;
   image?: string;
+  display_order?: number;
 }
 
 // Define device item type
@@ -173,6 +175,8 @@ interface OwnerContextType {
   createSubCategory: (formData: FormData) => Promise<void>;
   updateSubCategory: (id: number, formData: FormData) => Promise<void>;
   deleteSubCategory: (id: number) => Promise<void>;
+  moveCategory: (id: number, direction: "up" | "down") => Promise<void>;
+  moveSubCategory: (id: number, direction: "up" | "down") => Promise<void>;
 
   setOrders: React.Dispatch<React.SetStateAction<OrderItem[]>>;
   setReservations: React.Dispatch<React.SetStateAction<ReservationItem[]>>;
@@ -402,6 +406,44 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
       throw err;
     }
   }, [userRole]);
+
+  const moveCategory = useCallback(async (
+    id: number,
+    direction: "up" | "down",
+  ) => {
+    try {
+      const endpoint =
+        userRole === "owner" || userRole === "manager"
+          ? `/owners/categories/${id}/move/`
+          : `/api/staff/categories/${id}/move/`;
+      await axiosInstance.post(endpoint, { direction });
+      invalidateApiCache("categories");
+      await fetchCategories();
+    } catch (err) {
+      console.error("Failed to reorder category", err);
+      toast.error("Failed to reorder category");
+      throw err;
+    }
+  }, [userRole, fetchCategories]);
+
+  const moveSubCategory = useCallback(async (
+    id: number,
+    direction: "up" | "down",
+  ) => {
+    try {
+      const endpoint =
+        userRole === "owner" || userRole === "manager"
+          ? `/owners/sub-categories/${id}/move/`
+          : `/api/staff/sub-categories/${id}/move/`;
+      await axiosInstance.post(endpoint, { direction });
+      invalidateApiCache("categories");
+      await Promise.all([fetchSubCategories(), fetchCategories()]);
+    } catch (err) {
+      console.error("Failed to reorder sub-category", err);
+      toast.error("Failed to reorder sub-category");
+      throw err;
+    }
+  }, [userRole, fetchSubCategories, fetchCategories]);
 
   const fetchFoodItems = useCallback(
     async (page: number = currentPage, search?: string, pageSize?: number) => {
@@ -1184,6 +1226,8 @@ export const OwnerProvider: React.FC<{ children: ReactNode }> = ({
     createSubCategory,
     updateSubCategory,
     deleteSubCategory,
+    moveCategory,
+    moveSubCategory,
     ordersCount,
     ordersCurrentPage,
     ordersSearchQuery,

@@ -1,5 +1,8 @@
 # views.py
-from rest_framework import viewsets, permissions,generics
+from django.db import transaction
+from django.db.models import Max
+from rest_framework import viewsets, permissions,generics, status
+from rest_framework.decorators import action
 from .models import Category, Restaurant
 from .serializers import CategorySerializer,CustomerCategorySerializer, HierarchicalCategorySerializer, SubCategorySerializer
 from rest_framework.exceptions import ValidationError, PermissionDenied
@@ -44,8 +47,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 queryset = Category.objects.none()
 
             if self.request.query_params.get('hierarchy') == 'true':
-                return queryset.filter(level=0)
-            return queryset
+                return queryset.filter(level=0).order_by("display_order", "id")
+            return queryset.order_by("display_order", "id")
         except Exception as e:
             print(f"CategoryViewSet.get_queryset error: {e}")
             import traceback
@@ -77,7 +80,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
         if not restaurant:
             raise ValidationError("You don't have a restaurant yet.")
 
-        category = serializer.save(restaurant=restaurant)
+        next_order = (
+            Category.objects.filter(restaurant=restaurant, parent_category__isnull=True)
+            .aggregate(max_order=Max("display_order"))["max_order"]
+        )
+        category = serializer.save(
+            restaurant=restaurant,
+            display_order=0 if next_order is None else next_order + 1,
+        )
         self.send_ws_event("category_created", category)
 
     def perform_update(self, serializer):
@@ -113,6 +123,50 @@ class CategoryViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(f"CategoryViewSet.send_ws_event error (non-fatal): {e}")
 
+    @action(detail=True, methods=["post"], url_path="move")
+    def move(self, request, pk=None):
+        category = self.get_object()
+        if category.parent_category_id is not None:
+            raise ValidationError("Use the sub-category endpoint to reorder this category.")
+        self._move_within_siblings(category, request.data.get("direction"))
+        return Response(CategorySerializer(category).data, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _move_within_siblings(category, direction):
+        if direction not in {"up", "down"}:
+            raise ValidationError({"direction": "Direction must be 'up' or 'down'."})
+
+        with transaction.atomic():
+            siblings = list(
+                Category.objects.select_for_update()
+                .filter(
+                    restaurant_id=category.restaurant_id,
+                    parent_category_id=category.parent_category_id,
+                )
+                .order_by("display_order", "id")
+            )
+            for index, sibling in enumerate(siblings):
+                if sibling.display_order != index:
+                    Category.objects.filter(pk=sibling.pk).update(display_order=index)
+                    sibling.display_order = index
+
+            current_index = next(
+                (index for index, sibling in enumerate(siblings) if sibling.pk == category.pk),
+                None,
+            )
+            if current_index is None:
+                raise ValidationError("Category could not be reordered.")
+
+            target_index = current_index - 1 if direction == "up" else current_index + 1
+            if target_index < 0 or target_index >= len(siblings):
+                category.display_order = current_index
+                return
+
+            target = siblings[target_index]
+            Category.objects.filter(pk=category.pk).update(display_order=target_index)
+            Category.objects.filter(pk=target.pk).update(display_order=current_index)
+            category.display_order = target_index
+
 class SubCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = SubCategorySerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerChefOrStaff]
@@ -126,13 +180,13 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
             
             # Return only subcategories (level > 0)
             if role == 'owner':
-                return Category.objects.filter(restaurant__owner=user, level__gt=0)
+                return Category.objects.filter(restaurant__owner=user, level__gt=0).order_by("parent_category_id", "display_order", "id")
             elif role in ['chef', 'staff', 'manager']:
                 restaurant_ids = ChefStaff.objects.filter(
                     user=user,
                     action='accepted'
                 ).values_list('restaurant_id', flat=True)
-                return Category.objects.filter(restaurant_id__in=restaurant_ids, level__gt=0)
+                return Category.objects.filter(restaurant_id__in=restaurant_ids, level__gt=0).order_by("parent_category_id", "display_order", "id")
             
             return Category.objects.none()
         except Exception as e:
@@ -154,7 +208,18 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
         if not restaurant:
             raise ValidationError("You don't have a restaurant yet.")
 
-        category = serializer.save(restaurant=restaurant)
+        parent_category = serializer.validated_data.get("parent_category")
+        next_order = (
+            Category.objects.filter(
+                restaurant=restaurant,
+                parent_category=parent_category,
+            )
+            .aggregate(max_order=Max("display_order"))["max_order"]
+        )
+        category = serializer.save(
+            restaurant=restaurant,
+            display_order=0 if next_order is None else next_order + 1,
+        )
         try:
             async_to_sync(channel_layer.group_send)(
                 f"restaurant_{restaurant.id}",
@@ -162,6 +227,12 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             print(f"SubCategoryViewSet WS broadcast error (non-fatal): {e}")
+
+    @action(detail=True, methods=["post"], url_path="move")
+    def move(self, request, pk=None):
+        category = self.get_object()
+        CategoryViewSet._move_within_siblings(category, request.data.get("direction"))
+        return Response(SubCategorySerializer(category).data, status=status.HTTP_200_OK)
 
 
 

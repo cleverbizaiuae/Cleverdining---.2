@@ -29,6 +29,7 @@ def ensure_category_schema() -> bool:
             "icon",
             "icon_image",
             "category_type",
+            "display_order",
         ]
         missing_fields = []
         for field_name in required_field_names:
@@ -48,4 +49,3 @@ def ensure_category_schema() -> bool:
     except Exception as exc:
         print(f"[SCHEMA-HEAL] Failed ensuring category schema: {exc}")
         return False
-

@@ -17,8 +17,9 @@ class CategorySerializer(serializers.ModelSerializer):
             'icon',
             'icon_image',
             'category_type',
+            'display_order',
         ]
-        read_only_fields = ['slug', 'level']
+        read_only_fields = ['slug', 'level', 'display_order']
 
     def create(self, validated_data):
         validated_data['slug'] = slugify(validated_data['Category_name'])
@@ -39,6 +40,7 @@ class CustomerCategorySerializer(serializers.ModelSerializer):
             'icon',
             'icon_image',
             'category_type',
+            'display_order',
         ]
 
 class HierarchicalCategorySerializer(CategorySerializer):
@@ -56,5 +58,6 @@ class SubCategorySerializer(serializers.ModelSerializer):
     image = serializers.ImageField(required=False)
     class Meta:
         model = Category
-        fields = ['id', 'Category_name', 'parent_category', 'image', 'category_type']
+        fields = ['id', 'Category_name', 'parent_category', 'image', 'category_type', 'display_order']
+        read_only_fields = ['display_order']
         extra_kwargs = {'parent_category': {'required': True}}

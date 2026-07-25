@@ -26,6 +26,7 @@ class Category(models.Model):
         default="other",
         db_index=True,
     )
+    display_order = models.PositiveIntegerField(default=0, db_index=True)
     
     # Hierarchical fields
     parent_category = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='subcategories')
@@ -45,3 +46,6 @@ class Category(models.Model):
 
     def __str__(self) -> str:
         return self.Category_name
+
+    class Meta:
+        ordering = ["display_order", "id"]
