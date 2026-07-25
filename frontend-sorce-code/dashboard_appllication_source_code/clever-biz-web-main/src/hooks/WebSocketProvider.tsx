@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Banknote, BellRing, Check } from "lucide-react";
 import { useRole } from "./useRole";
 import {
+  getFirstDashboardRestaurantId,
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
@@ -29,6 +30,8 @@ type UnreadTable = {
 type DashboardTable = {
   id?: string | number;
   device_id?: string | number;
+  restaurant?: string | number;
+  restaurant_id?: string | number;
   table_name?: string;
   unread_count?: string | number;
   [key: string]: unknown;
@@ -117,6 +120,9 @@ const WebSocketProvider = ({ children }) => {
   if (!restaurantId && parseUser.restaurants && parseUser.restaurants.length > 0) {
     restaurantId = parseUser.restaurants[0]?.id;
   }
+  if (!restaurantId && dashboardTables.length > 0) {
+    restaurantId = getFirstDashboardRestaurantId(dashboardTables);
+  }
 
   const id = restaurantId;
   const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/alldatalive/${id}/?token=${accessToken}`;
@@ -201,6 +207,14 @@ const WebSocketProvider = ({ children }) => {
     }, 4000);
     return () => window.clearInterval(interval);
   }, [isStaffDashboard, refreshStaffServiceAlerts]);
+
+  useEffect(() => {
+    if (!isStaffDashboard || !id) return;
+    const currentRestaurantId = localStorage.getItem("restaurantId");
+    if (String(currentRestaurantId || "") !== String(id)) {
+      localStorage.setItem("restaurantId", String(id));
+    }
+  }, [id, isStaffDashboard]);
 
   const handleServiceAttended = useCallback(async (alertId: string | number) => {
     try {

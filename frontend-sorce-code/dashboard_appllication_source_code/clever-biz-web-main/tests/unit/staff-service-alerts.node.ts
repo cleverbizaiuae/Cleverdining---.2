@@ -1,11 +1,25 @@
 import assert from "node:assert/strict";
 import {
+  getFirstDashboardRestaurantId,
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
   isStaffAlertRole,
   upsertStaffServiceAlert,
 } from "../../src/hooks/staffServiceAlerts.ts";
+
+assert.equal(
+  getFirstDashboardRestaurantId([
+    { restaurant_id: 8 },
+    { restaurant_id: 18 },
+  ]),
+  8,
+);
+assert.equal(
+  getFirstDashboardRestaurantId([{ restaurant: "8" }]),
+  "8",
+);
+assert.equal(getFirstDashboardRestaurantId([]), null);
 
 assert.equal(isStaffAlertRole("staff"), true);
 assert.equal(isStaffAlertRole("Staff"), true);

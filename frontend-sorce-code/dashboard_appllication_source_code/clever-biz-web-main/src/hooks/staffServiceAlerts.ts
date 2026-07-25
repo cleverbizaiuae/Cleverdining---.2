@@ -4,6 +4,11 @@ export type StaffServiceAlertLike = {
   status?: string;
 };
 
+export type DashboardRestaurantRowLike = {
+  restaurant?: string | number;
+  restaurant_id?: string | number;
+};
+
 const ASSISTANCE_TYPES = new Set(["assistance", "call_waiter"]);
 const ACTIVE_ASSISTANCE_STATUSES = new Set(["pending", "queued", "acknowledged"]);
 const ACTIONABLE_ASSISTANCE_STATUSES = new Set(["pending", "acknowledged"]);
@@ -11,6 +16,16 @@ const ACTIONABLE_ASSISTANCE_STATUSES = new Set(["pending", "acknowledged"]);
 const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
 
 export const isStaffAlertRole = (role: unknown) => normalize(role) === "staff";
+
+export const getFirstDashboardRestaurantId = (
+  rows: DashboardRestaurantRowLike[],
+) => {
+  const row = rows.find((candidate) => (
+    candidate?.restaurant_id !== undefined
+    || candidate?.restaurant !== undefined
+  ));
+  return row?.restaurant_id ?? row?.restaurant ?? null;
+};
 
 export const isActiveAssistanceAlert = (alert: StaffServiceAlertLike) => (
   ASSISTANCE_TYPES.has(normalize(alert?.type))

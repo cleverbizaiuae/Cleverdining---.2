@@ -45,6 +45,8 @@ interface Message {
 
 interface TableMessage {
   id: string | number;
+  restaurantId?: string | number;
+  restaurant_id?: string | number;
   tableNumber?: number;
   table_number?: number;
   tableName?: string;
@@ -132,6 +134,13 @@ const ScreenRestaurantChat = () => {
       const createdAt = row.createdAt || row.created_at || new Date().toISOString();
       const status = String(row.status || "").toLowerCase();
       const type = String(row.type || "chat").toLowerCase();
+      const restaurantId = String(
+        row.restaurantId
+        ?? row.restaurant_id
+        ?? userInfo?.restaurants?.[0]?.id
+        ?? localStorage.getItem("restaurantId")
+        ?? "",
+      );
 
       if (!grouped.has(key)) {
         grouped.set(key, {
@@ -139,7 +148,7 @@ const ScreenRestaurantChat = () => {
             id: key,
             table_name: tableName,
             user_id: "",
-            restaurant_id: "",
+            restaurant_id: restaurantId,
             unread_count: 0,
             last_message_time: createdAt,
             has_alert: false,
@@ -274,7 +283,11 @@ const ScreenRestaurantChat = () => {
     const jwt = localStorage.getItem("accessToken");
     if (!jwt || jwt === "guest_token") return;
 
-    const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
+    const restaurantId = selectedChat.restaurant_id
+      || selectedChat.restaurant
+      || userInfo?.restaurants?.[0]?.id
+      || localStorage.getItem("restaurantId");
+    if (!restaurantId) return;
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const wsBaseUrl = import.meta.env.VITE_WS_URL || baseUrl.replace(/^http/, "ws");
     const wsUrl = `${wsBaseUrl}/ws/chat/restaurant/${restaurantId}/?token=${jwt}`;

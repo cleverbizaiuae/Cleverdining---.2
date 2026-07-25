@@ -86,6 +86,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        importScripts: ["/sw-staff-dashboard-refresh.js"],
         // Cache only the startup shell up front. Route chunks are cached on demand
         // below, avoiding a multi-MB service-worker install competing with page data.
         globPatterns: [
