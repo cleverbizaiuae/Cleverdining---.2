@@ -16,7 +16,7 @@ from device.models import Device, GuestSession
 from item.models import Item
 from restaurant.models import BrandConfig, Restaurant
 
-from .models import Cart, Order, UpsellEvent, UpsellItemSetting, UpsellLLMDecision, UpsellRule, UpsellSetting
+from .models import Cart, ItemAssociation, Order, UpsellEvent, UpsellItemSetting, UpsellLLMDecision, UpsellRule, UpsellSetting
 from . import upsell as upsell_module
 from .upsell import (
     _derive_role_categories,
@@ -1862,3 +1862,102 @@ class UpsellKnowledgeEngineTests(TestCase):
             llm.assert_not_called()
             setattr(setting, field_name, True)
             setting.save(update_fields=[field_name, "updated_at"])
+
+
+class UpsellApplyPairingsTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="pairing-owner@example.com",
+            username="Pairing Owner",
+            password="test-password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Pairing Restaurant",
+            location="Dubai",
+            phone_number="+971500008888",
+            owner=self.owner,
+        )
+        self.category = Category.objects.create(
+            restaurant=self.restaurant,
+            Category_name="Mains",
+            slug="mains",
+        )
+        self.burger = self.create_item("Burger", "burger", "25.00")
+        self.fries = self.create_item("Fries", "fries", "10.00")
+        self.cola = self.create_item("Cola", "cola", "8.00")
+        self.client = APIClient()
+        self.client.force_authenticate(self.owner)
+
+    def create_item(self, name, slug, price):
+        return Item.objects.create(
+            restaurant=self.restaurant,
+            category=self.category,
+            item_name=name,
+            description=f"{name} description",
+            slug=slug,
+            price=price,
+        )
+
+    def test_apply_pairings_creates_only_missing_rules_and_is_idempotent(self):
+        ItemAssociation.objects.create(
+            restaurant=self.restaurant,
+            source_item=self.burger,
+            target_item=self.fries,
+            co_order_frequency=6,
+            association_strength="0.900000",
+        )
+        ItemAssociation.objects.create(
+            restaurant=self.restaurant,
+            source_item=self.burger,
+            target_item=self.cola,
+            co_order_frequency=4,
+            association_strength="0.800000",
+        )
+        UpsellRule.objects.create(
+            restaurant=self.restaurant,
+            type="block",
+            source_item=self.burger,
+            target_item=self.cola,
+        )
+
+        response = self.client.post("/api/upsell/apply-pairings", {}, format="json")
+
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(response.json(), {"success": True, "applied": 1, "skipped": 1})
+        self.assertTrue(
+            UpsellRule.objects.filter(
+                restaurant=self.restaurant,
+                type="pair",
+                source_item=self.burger,
+                target_item=self.fries,
+            ).exists()
+        )
+        self.assertFalse(
+            UpsellRule.objects.filter(
+                restaurant=self.restaurant,
+                type="pair",
+                source_item=self.burger,
+                target_item=self.cola,
+            ).exists()
+        )
+
+        repeated = self.client.post("/api/upsell/apply-pairings", {}, format="json")
+
+        self.assertEqual(repeated.status_code, 200, repeated.json())
+        self.assertEqual(repeated.json(), {"success": True, "applied": 0, "skipped": 2})
+
+    def test_apply_pairings_ignores_unqualified_associations(self):
+        ItemAssociation.objects.create(
+            restaurant=self.restaurant,
+            source_item=self.burger,
+            target_item=self.fries,
+            co_order_frequency=1,
+            association_strength="1.000000",
+        )
+
+        response = self.client.post("/api/upsell/apply-pairings", {}, format="json")
+
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(response.json(), {"success": True, "applied": 0, "skipped": 0})
+        self.assertFalse(UpsellRule.objects.filter(restaurant=self.restaurant).exists())

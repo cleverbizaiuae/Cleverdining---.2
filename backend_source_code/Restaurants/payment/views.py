@@ -294,6 +294,8 @@ class CreateBulkCheckoutSessionView(APIView):
                         })
 
                 tip_total = sum(float(o.tip_amount or 0) for o in all_orders)
+                order_total = sum(Decimal(o.total_price or 0) for o in all_orders)
+                already_paid = sum(Decimal(o.amount_paid or 0) for o in all_orders)
 
                 print(f"[CASH-PAYMENT] Processing cash | session={session.id} | orders={[o.id for o in all_orders]} | total={total_amount} | tip={tip_total} | table={table_name}", file=sys.stderr)
 
@@ -312,6 +314,8 @@ class CreateBulkCheckoutSessionView(APIView):
                             "order_ids": [order.id for order in all_orders],
                             "table_number": table_name,
                             "total_amount": str(total_amount),
+                            "order_total": str(order_total),
+                            "already_paid": str(already_paid),
                             "timestamp": str(now()),
                             "is_bulk": True,
                             "session_id": session.id

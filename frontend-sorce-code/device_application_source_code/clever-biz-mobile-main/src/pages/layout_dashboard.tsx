@@ -782,12 +782,12 @@ const LayoutDashboard = () => {
 
   const splashGradient = useMemo(() => {
     if (brand.themePreset === "luxury_dark") {
-      return "linear-gradient(160deg, #0f0f0f 0%, #1a1a2e 100%)";
+      return "linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%)";
     }
     if (brand.themePreset === "warm_casual") {
-      return "linear-gradient(160deg, #7c2d12 0%, #c2410c 100%)";
+      return "linear-gradient(135deg, #7c2d12 0%, #c2410c 100%)";
     }
-    return `linear-gradient(160deg, ${hexToRgba(brand.primaryColor, 0.87)} 0%, ${brand.primaryColor} 100%)`;
+    return `linear-gradient(135deg, ${hexToRgba(brand.primaryColor, 0.8)} 0%, ${brand.primaryColor} 100%)`;
   }, [brand.primaryColor, brand.themePreset]);
 
   const [coverImgFailed, setCoverImgFailed] = useState(false);
@@ -900,7 +900,7 @@ const LayoutDashboard = () => {
         url += `?${params.join("&")}`;
       }
 
-      const response = await cachedGet(url, {}, { ttlMs: 8_000 });
+      const response = await cachedGet(url, {}, { ttlMs: 30_000 });
       const nextItems = normalizeListPayload<FoodItemTypes>(response.data);
       if (nextItems.length || !cachedItems.length) {
         setItems(nextItems);
@@ -1135,8 +1135,9 @@ const LayoutDashboard = () => {
         <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
+              <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-md">
               {hasBranding ? (
-                <section className="relative h-48 w-full overflow-hidden">
+                <section className="relative w-full overflow-hidden" style={{ height: "10rem" }}>
                   <div className="absolute inset-0" style={{ background: splashGradient }} />
                   {brandCoverUrl && !coverImgFailed ? (
                     <img
@@ -1153,12 +1154,7 @@ const LayoutDashboard = () => {
                   <div
                     className="absolute inset-0"
                     style={{
-                      background:
-                        brand.themePreset === "luxury_dark"
-                          ? "linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.78) 100%)"
-                          : brand.themePreset === "warm_casual"
-                            ? "linear-gradient(to bottom, rgba(100,30,5,0.28) 0%, rgba(100,30,5,0.62) 100%)"
-                            : "linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)",
+                      background: "linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)",
                     }}
                   />
 
@@ -1171,7 +1167,7 @@ const LayoutDashboard = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={label}
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white/90 backdrop-blur-sm transition-colors hover:text-white"
+                          className="text-white/90 transition-colors hover:text-white"
                         >
                           {key === "tiktok" ? (
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
@@ -1227,28 +1223,18 @@ const LayoutDashboard = () => {
                         ) : null}
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-white backdrop-blur-sm">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Table</span>
-                      <span className="text-xs font-bold leading-none">{tableName || "–"}</span>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-white/60">Table</p>
+                      <p className="text-base font-bold leading-none text-white">{tableName || "–"}</p>
                     </div>
                   </div>
                 </section>
               ) : null}
 
-              {/* Sticky Header */}
-              {/* Sticky Header Group - Single container for Logo, Search, Categories */}
-              <header
-                className={cn(
-                  "sticky top-0 z-40 border-b border-white/10 pb-2 backdrop-blur-xl transition-all duration-300",
-                  hasBranding
-                    ? "bg-background/78 pt-3"
-                    : "bg-background/82 pt-safe-top"
-                )}
-              >
                 {hasBranding ? (
                   null
                 ) : (
-                    <div className="px-4 py-3 flex items-center justify-between">
+                    <div className="px-4 pt-3 pb-2 flex items-center justify-between">
                     <div className="block shrink-0">
                       <Logo />
                     </div>
@@ -1262,7 +1248,7 @@ const LayoutDashboard = () => {
                 )}
 
                 {/* Search Bar */}
-                <div className="px-4 mt-0 mb-3">
+                <div className="px-4 pt-3 mb-3">
                   <div className="relative flex items-center gap-3">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />

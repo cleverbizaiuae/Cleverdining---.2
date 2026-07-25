@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useContext, useMemo, useRef } from "react";
+import { Fragment, useEffect, useState, useCallback, useContext, useMemo, useRef } from "react";
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
 import axiosInstance from "@/lib/axios";
@@ -74,13 +74,13 @@ const MoveButtons = ({
     ? "hover:bg-slate-100 hover:text-slate-700"
     : "hover:bg-blue-50 hover:text-[#0055FE]";
   const buttonClass = isFilter
-    ? `flex h-3.5 w-4 items-center justify-center rounded-sm text-slate-400 transition-colors disabled:cursor-not-allowed disabled:text-slate-200 ${enabledHoverClass}`
+    ? "rounded p-0.5 transition-colors hover:bg-black/10 disabled:cursor-not-allowed disabled:opacity-30"
     : `rounded p-1.5 text-slate-400 transition-colors disabled:cursor-not-allowed disabled:text-slate-200 ${enabledHoverClass}`;
-  const iconClass = isFilter ? "h-2.5 w-2.5" : "h-3 w-3";
+  const iconClass = "h-3 w-3";
 
   return (
     <div className={isFilter
-      ? "flex flex-col opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      ? "inline-flex items-center gap-0.5"
       : "inline-flex items-center gap-0.5"
     }>
       <button
@@ -544,6 +544,7 @@ const ScreenRestaurantDashboard = () => {
   const [itemFormData, setItemFormData] = useState({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "" as string | number, image1: null as File | null, video: null as File | null });
   const [menuCategoryFilter, setMenuCategoryFilter] = useState("all");
   const [menuSubCategoryFilter, setMenuSubCategoryFilter] = useState("all");
+  const [collapsedMenuCategories, setCollapsedMenuCategories] = useState<Set<string>>(() => new Set());
   const [movingMenuGroup, setMovingMenuGroup] = useState<string | null>(null);
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -857,6 +858,26 @@ const ScreenRestaurantDashboard = () => {
     [foodItems, menuCategoryFilter, menuSubCategoryFilter],
   );
 
+  const groupedFilteredMenuItems = useMemo(() => {
+    const groups = topLevelCategories
+      .map((category) => ({
+        key: String(category.id),
+        name: category.Category_name,
+        items: filteredMenuItems.filter(
+          (item: any) => String(item.category_id ?? item.category) === String(category.id),
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+    const categoryIds = new Set(topLevelCategories.map((category) => String(category.id)));
+    const uncategorized = filteredMenuItems.filter(
+      (item: any) => !categoryIds.has(String(item.category_id ?? item.category)),
+    );
+    if (uncategorized.length > 0) {
+      groups.push({ key: "uncategorized", name: "Uncategorized", items: uncategorized });
+    }
+    return groups;
+  }, [filteredMenuItems, topLevelCategories]);
+
   useEffect(() => {
     if (
       menuCategoryFilter !== "all" &&
@@ -913,6 +934,104 @@ const ScreenRestaurantDashboard = () => {
       setMovingMenuGroup(null);
     }
   };
+
+  const toggleMenuCategoryGroup = (categoryKey: string) => {
+    setCollapsedMenuCategories((previous) => {
+      const next = new Set(previous);
+      if (next.has(categoryKey)) next.delete(categoryKey);
+      else next.add(categoryKey);
+      return next;
+    });
+  };
+
+  const renderMenuItemRow = (item: any) => (
+    <tr key={item.id} className="transition-colors hover:bg-slate-50/60">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden shrink-0">
+            {item.image ? (
+              <OptimizedImage
+                src={item.image}
+                alt=""
+                width={32}
+                height={32}
+                className="w-full h-full object-cover"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Img</div>
+            )}
+          </div>
+          <p className="min-w-0 truncate text-xs font-medium text-slate-900">{item.item_name}</p>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-xs text-slate-500">
+        {topLevelCategories.find(
+          (category) => String(category.id) === String(item.category_id ?? item.category),
+        )?.Category_name || item.category_name || "Uncategorized"}
+      </td>
+      <td className="px-4 py-3 text-xs font-medium text-slate-600">{fmt(item.price)}</td>
+      <td className="px-4 py-3">
+        <select
+          className={`h-7 pl-2 pr-6 text-[10px] font-medium rounded border appearance-none outline-none cursor-pointer bg-no-repeat bg-[right_0.4rem_center] transition-colors ${item.availability
+            ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+            : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+          }`}
+          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+          value={item.availability ? "true" : "false"}
+          onChange={(event) => {
+            if (userRole === "owner" || (userRole as string) === "manager") {
+              updateAvailability(item.id, event.target.value === "true");
+            } else {
+              toast.error("You don't have permission to change status");
+            }
+          }}
+          disabled={userRole !== "owner" && (userRole as string) !== "manager"}
+        >
+          <option value="true">Available</option>
+          <option value="false">Unavailable</option>
+        </select>
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="flex justify-end gap-3 text-xs font-medium">
+          {(userRole === "owner" || userRole === "manager") && (
+            <>
+              <button
+                onClick={() => {
+                  setEditingItem(item);
+                  setItemFormData({
+                    item_name: item.item_name,
+                    price: item.price,
+                    description: item.description || "",
+                    category: item.category_id || "",
+                    sub_category: item.sub_category_id ?? item.sub_category ?? "",
+                    discount_percentage: item.discount_percentage || 0,
+                    image1: null,
+                    video: null,
+                  });
+                  setShowAddItem(true);
+                }}
+                className="text-[#0055FE] hover:underline"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => {
+                  setItemToDelete(item);
+                  setShowDeleteItem(true);
+                }}
+                className="text-red-500 hover:underline"
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
 
 
   // Removed fetchMostSellingItems local definition
@@ -1226,18 +1345,21 @@ const ScreenRestaurantDashboard = () => {
                 const isActive = menuCategoryFilter === String(category.id);
                 const movementKey = `category-${category.id}`;
                 return (
-                  <div key={category.id} className="group flex shrink-0 items-center gap-0.5">
+                  <div
+                    key={category.id}
+                    className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${
+                      isActive
+                        ? "border-[#0055FE] bg-[#0055FE] text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-[#0055FE]/40"
+                    }`}
+                  >
                     <button
                       type="button"
                       onClick={() => {
                         setMenuCategoryFilter(String(category.id));
                         setMenuSubCategoryFilter("all");
                       }}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        isActive
-                          ? "bg-[#0055FE] text-white"
-                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                      }`}
+                      className="px-1"
                     >
                       {category.Category_name} ({categoryItemCount(category.id)})
                     </button>
@@ -1272,15 +1394,18 @@ const ScreenRestaurantDashboard = () => {
                   const isActive = menuSubCategoryFilter === String(subCategory.id);
                   const movementKey = `subcategory-${subCategory.id}`;
                   return (
-                    <div key={subCategory.id} className="group flex shrink-0 items-center gap-0.5">
+                    <div
+                      key={subCategory.id}
+                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors ${
+                        isActive
+                          ? "border-[#0055FE] bg-[#0055FE] text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-[#0055FE]/40"
+                      }`}
+                    >
                       <button
                         type="button"
                         onClick={() => setMenuSubCategoryFilter(String(subCategory.id))}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          isActive
-                            ? "bg-slate-700 text-white"
-                            : "border border-slate-200 bg-white text-slate-500 hover:border-slate-400"
-                        }`}
+                        className="px-1"
                       >
                         {subCategory.Category_name} ({subCategoryItemCount(subCategory.id)})
                       </button>
@@ -1300,11 +1425,12 @@ const ScreenRestaurantDashboard = () => {
           )}
 
           {/* Table */}
-          <div className="max-h-[440px] overflow-auto [scrollbar-gutter:stable]">
+          <div className="max-h-[520px] overflow-auto [scrollbar-gutter:stable]">
             <table className="w-full min-w-[680px] text-left">
               <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
                 <tr>
                   <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Item</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Category</th>
                   <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Price</th>
                   <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
                   <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Actions</th>
@@ -1312,97 +1438,41 @@ const ScreenRestaurantDashboard = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredMenuItems.length > 0 ? (
-                  filteredMenuItems.map((item: any) => (
-                    <tr key={item.id} className="transition-colors hover:bg-slate-50/60">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden shrink-0">
-                            {item.image ? (
-                              <OptimizedImage
-                                src={item.image}
-                                alt=""
-                                width={32}
-                                height={32}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Img</div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-medium text-slate-900">{item.item_name}</p>
-                            {menuCategoryFilter === "all" && item.category && (
-                              <p className="text-[10px] text-slate-400">{item.category}</p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs font-medium text-slate-600">{fmt(item.price)}</td>
-                      <td className="px-4 py-3">
-                        <select
-                          className={`h-7 pl-2 pr-6 text-[10px] font-medium rounded border appearance-none outline-none cursor-pointer bg-no-repeat bg-[right_0.4rem_center] transition-colors ${item.availability
-                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                            : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                            }`}
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
-                          value={item.availability ? "true" : "false"}
-                          onChange={(e) => {
-                            if (userRole === 'owner' || (userRole as string) === 'manager') {
-                              updateAvailability(item.id, e.target.value === "true");
-                            } else {
-                              toast.error("You don't have permission to change status");
-                            }
-                          }}
-                          disabled={userRole !== 'owner' && (userRole as string) !== 'manager'}
-                        >
-                          <option value="true">Available</option>
-                          <option value="false">Unavailable</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-3 text-xs font-medium">
-                          {(userRole === 'owner' || userRole === 'manager') && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditingItem(item);
-                                  setItemFormData({
-                                    item_name: item.item_name,
-                                    price: item.price,
-                                    description: item.description || "",
-                                    category: item.category_id || "",
-                                    sub_category: item.sub_category_id ?? item.sub_category ?? "",
-                                    discount_percentage: item.discount_percentage || 0,
-                                    image1: null,
-                                    video: null
-                                  });
-                                  setShowAddItem(true);
-                                }}
-                                className="text-[#0055FE] hover:underline"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setItemToDelete(item);
-                                  setShowDeleteItem(true);
-                                }}
-                                className="text-red-500 hover:underline"
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  groupedFilteredMenuItems.map((group) => {
+                    const isCollapsed = collapsedMenuCategories.has(group.key);
+                    return (
+                      <Fragment key={group.key}>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                          <td colSpan={5} className="px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleMenuCategoryGroup(group.key)}
+                              className="flex w-full items-center justify-between text-left"
+                            >
+                              <span className="text-xs font-semibold text-slate-700">{group.name}</span>
+                              <span className="flex items-center gap-2 text-[10px] text-slate-400">
+                                {group.items.length} item{group.items.length !== 1 ? "s" : ""}
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  aria-hidden="true"
+                                >
+                                  <path d="m6 9 6 6 6-6" />
+                                </svg>
+                              </span>
+                            </button>
+                          </td>
+                        </tr>
+                        {!isCollapsed && group.items.map(renderMenuItemRow)}
+                      </Fragment>
+                    );
+                  })
                 ) : (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-sm text-slate-400">
+                    <td colSpan={5} className="p-8 text-center text-sm text-slate-400">
                       No items in this section
                     </td>
                   </tr>
@@ -1473,7 +1543,7 @@ const ScreenRestaurantDashboard = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {topLevelCategories.length > 0 ? (
-                  topLevelCategories.map((cat, index) => (
+                  topLevelCategories.map((cat) => (
                     <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
@@ -1491,12 +1561,6 @@ const ScreenRestaurantDashboard = () => {
                       {(userRole === 'owner' || userRole === 'manager') && (
                         <td className="px-5 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <MoveButtons
-                              canMoveUp={index > 0}
-                              canMoveDown={index < topLevelCategories.length - 1}
-                              isMoving={movingMenuGroup === `category-${cat.id}`}
-                              onMove={(direction) => handleMoveCategory(cat.id, direction)}
-                            />
                             <button onClick={() => { setEditingCategory(cat); setShowEditCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
                             <button onClick={() => { setCategoryToDelete(cat); setShowDeleteCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
                           </div>
@@ -1529,10 +1593,6 @@ const ScreenRestaurantDashboard = () => {
               <tbody className="divide-y divide-slate-100">
                 {orderedSubCategories.length > 0 ? (
                   orderedSubCategories.map((sub) => {
-                    const siblings = orderedSubCategories.filter(
-                      (candidate) => candidate.parent_category === sub.parent_category,
-                    );
-                    const siblingIndex = siblings.findIndex((candidate) => candidate.id === sub.id);
                     return (
                       <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-5 py-3">
@@ -1547,12 +1607,6 @@ const ScreenRestaurantDashboard = () => {
                         {(userRole === 'owner' || userRole === 'manager') && (
                           <td className="px-5 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <MoveButtons
-                                canMoveUp={siblingIndex > 0}
-                                canMoveDown={siblingIndex < siblings.length - 1}
-                                isMoving={movingMenuGroup === `subcategory-${sub.id}`}
-                                onMove={(direction) => handleMoveSubCategory(sub.id, direction)}
-                              />
                               <button onClick={() => { setEditingSubCategory(sub); setShowEditSubCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
                               <button onClick={() => { setSubCategoryToDelete(sub); setShowDeleteSubCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
                             </div>

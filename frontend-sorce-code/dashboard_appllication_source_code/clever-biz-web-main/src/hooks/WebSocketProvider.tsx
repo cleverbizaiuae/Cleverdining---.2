@@ -469,8 +469,10 @@ const WebSocketProvider = ({ children }) => {
                 : `cash-order-${orderIds[0] || Date.now()}`,
             );
             const amount = Number(parsedMessage.total_amount || 0);
-            const total = Number(parsedMessage.order?.total_price || amount || 0);
-            const alreadyPaid = Math.max(0, total - amount);
+            const total = Number(parsedMessage.order_total || parsedMessage.order?.total_price || amount || 0);
+            const alreadyPaid = Number(
+              parsedMessage.already_paid ?? Math.max(0, total - amount),
+            );
             setCashServiceAlerts((previous) => {
               const next: CashServiceAlert = {
                 id: alertId,

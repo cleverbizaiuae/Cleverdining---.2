@@ -7,6 +7,7 @@ from typing import Optional
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import transaction
 from django.db.models import Count, F, Max, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -522,6 +523,58 @@ class UpsellRulesAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(restaurant=restaurant)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UpsellApplyPairingsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        _ensure_upsell_schema()
+        restaurant = get_restaurant_for_user(request.user)
+        if not restaurant:
+            return Response(
+                {"detail": "Restaurant not found for user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        pairings = (
+            ItemAssociation.objects.filter(
+                restaurant=restaurant,
+                co_order_frequency__gte=2,
+            )
+            .exclude(source_item_id=F("target_item_id"))
+            .select_related("source_item", "target_item")
+            .order_by("-association_strength", "-co_order_frequency", "id")
+        )
+        existing_rule_keys = set(
+            UpsellRule.objects.filter(restaurant=restaurant).values_list(
+                "source_item_id",
+                "target_item_id",
+            )
+        )
+        applied = 0
+        skipped = 0
+
+        with transaction.atomic():
+            for pairing in pairings:
+                rule_key = (pairing.source_item_id, pairing.target_item_id)
+                if rule_key in existing_rule_keys:
+                    skipped += 1
+                    continue
+                UpsellRule.objects.create(
+                    restaurant=restaurant,
+                    type="pair",
+                    source_item=pairing.source_item,
+                    target_item=pairing.target_item,
+                    is_active=True,
+                )
+                existing_rule_keys.add(rule_key)
+                applied += 1
+
+        return Response(
+            {"success": True, "applied": applied, "skipped": skipped},
+            status=status.HTTP_200_OK,
+        )
 
 
 class UpsellRuleDeleteAPIView(APIView):

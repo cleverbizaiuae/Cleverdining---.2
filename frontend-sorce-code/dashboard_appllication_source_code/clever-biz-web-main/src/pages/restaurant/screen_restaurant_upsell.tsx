@@ -11,6 +11,8 @@ import {
   BarChart3,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   CreditCard,
   Eye,
@@ -374,6 +376,8 @@ const ScreenRestaurantUpsell = () => {
   const [analytics, setAnalytics] = useState<UpsellAnalytics>(DEFAULT_ANALYTICS);
   const [pairingRows, setPairingRows] = useState<PairingRow[]>([]);
   const [pairingLoaded, setPairingLoaded] = useState(false);
+  const [applyingPairings, setApplyingPairings] = useState(false);
+  const [applyResult, setApplyResult] = useState<{ applied: number; skipped: number } | null>(null);
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [rulesLoaded, setRulesLoaded] = useState(false);
   const [itemSearch, setItemSearch] = useState("");
@@ -381,6 +385,8 @@ const ScreenRestaurantUpsell = () => {
   const [newRule, setNewRule] = useState<NewRuleDraft>({ type: "pair" });
   const [addingRule, setAddingRule] = useState(false);
   const [hoverHour, setHoverHour] = useState<number | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
+  const knownCategoryKeysRef = useRef<Set<string>>(new Set());
   const settingsWriteQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const pendingSettingsWritesRef = useRef(0);
 
@@ -420,7 +426,7 @@ const ScreenRestaurantUpsell = () => {
 
   const groupedItems = useMemo(() => {
     const search = itemSearch.trim().toLowerCase();
-    const groups = new Map<string, { name: string; rows: UpsellItemRow[]; shownTotal: number }>();
+    const groups = new Map<string, { key: string; name: string; rows: UpsellItemRow[]; shownTotal: number }>();
 
     items
       .filter((item) => !search || item.item_name.toLowerCase().includes(search))
@@ -431,8 +437,14 @@ const ScreenRestaurantUpsell = () => {
         return a.item_name.localeCompare(b.item_name);
       })
       .forEach((item) => {
-        const groupKey = item.category_name || "Uncategorized";
-        const existing = groups.get(groupKey) || { name: groupKey, rows: [], shownTotal: 0 };
+        const groupName = item.category_name || "Uncategorized";
+        const groupKey = item.category_id === null ? "uncategorized" : String(item.category_id);
+        const existing = groups.get(groupKey) || {
+          key: groupKey,
+          name: groupName,
+          rows: [],
+          shownTotal: 0,
+        };
         existing.rows.push(item);
         existing.shownTotal += Number(item.shown_count || 0);
         groups.set(groupKey, existing);
@@ -443,6 +455,31 @@ const ScreenRestaurantUpsell = () => {
       return a.name.localeCompare(b.name);
     });
   }, [items, itemSearch]);
+
+  useEffect(() => {
+    if (!groupedItems.length) return;
+    setCollapsedCategories((previous) => {
+      const next = new Set(previous);
+      let changed = false;
+      groupedItems.forEach((group) => {
+        if (!knownCategoryKeysRef.current.has(group.key)) {
+          knownCategoryKeysRef.current.add(group.key);
+          next.add(group.key);
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [groupedItems]);
+
+  const toggleCategory = (categoryKey: string) => {
+    setCollapsedCategories((previous) => {
+      const next = new Set(previous);
+      if (next.has(categoryKey)) next.delete(categoryKey);
+      else next.add(categoryKey);
+      return next;
+    });
+  };
 
   const revenueSeries14Days = useMemo(() => {
     const map = new Map<string, number>();
@@ -715,6 +752,25 @@ const ScreenRestaurantUpsell = () => {
       setRunningIntelligence(false);
     }
   }, []);
+
+  const handleApplyPairings = async () => {
+    setApplyingPairings(true);
+    setApplyResult(null);
+    try {
+      const response = await axiosInstance.post("/api/upsell/apply-pairings", {});
+      const result = {
+        applied: Number(response.data?.applied || 0),
+        skipped: Number(response.data?.skipped || 0),
+      };
+      setApplyResult(result);
+      setRulesLoaded(false);
+      invalidateApiCache("upsell");
+    } catch {
+      toast.error("Failed to apply learned pairings.");
+    } finally {
+      setApplyingPairings(false);
+    }
+  };
 
   useEffect(() => {
     fetchUpsellData(true, "base");
@@ -1210,6 +1266,40 @@ const ScreenRestaurantUpsell = () => {
               <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={1.8} />
               <p><b className="text-slate-700">Scans the last 60 days of delivered orders.</b> The engine calculates which items customers actually order together, using a lift score to surface genuine patterns over coincidence. Pairs seen fewer than 2 times are ignored. Click <b>Run Intelligence</b> after new orders come in to refresh.</p>
             </div>
+            {pairingRows.length > 0 && (
+              <div className="mt-3 flex flex-col gap-3 rounded-xl border border-[#0055FE]/20 bg-[#0055FE]/5 px-4 py-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                  <Zap className="mt-0.5 h-4 w-4 shrink-0 text-[#0055FE]" strokeWidth={1.8} />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {pairingRows.length} pairing{pairingRows.length !== 1 ? "s" : ""} ready to apply
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Convert all learned pairings into Smart Rules automatically — existing rules are never overwritten.
+                    </p>
+                    {applyResult && (
+                      <p className="mt-1.5 text-xs font-semibold text-[#0055FE]">
+                        {applyResult.applied > 0
+                          ? `✓ ${applyResult.applied} rule${applyResult.applied !== 1 ? "s" : ""} applied${applyResult.skipped > 0 ? `, ${applyResult.skipped} already existed` : ""}`
+                          : `All ${applyResult.skipped} rules already existed — nothing new to apply`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyPairings}
+                  disabled={applyingPairings}
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-[#0055FE] px-3 text-sm font-semibold text-white hover:bg-[#0047D1] disabled:opacity-60 sm:self-center"
+                >
+                  {applyingPairings ? (
+                    <><RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Applying...</>
+                  ) : (
+                    <><CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Apply as Rules</>
+                  )}
+                </button>
+              </div>
+            )}
           </section>
 
           {pairingRows.length === 0 ? (
@@ -1281,10 +1371,26 @@ const ScreenRestaurantUpsell = () => {
           {groupedItems.length === 0 ? (
             <section className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">No menu items found.</section>
           ) : (
-            groupedItems.map((group) => (
-              <section key={group.name} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-600">{group.name}</div>
-                <div className="divide-y divide-slate-100">
+            groupedItems.map((group) => {
+              const isCollapsed = collapsedCategories.has(group.key);
+              return (
+              <section key={group.key} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(group.key)}
+                  className="flex w-full items-center justify-between bg-slate-50 px-5 py-3 text-left transition-colors hover:bg-slate-100"
+                >
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">{group.name}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400">
+                      {group.rows.length} item{group.rows.length !== 1 ? "s" : ""}
+                    </span>
+                    {isCollapsed
+                      ? <ChevronRight className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} />
+                      : <ChevronDown className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} />}
+                  </span>
+                </button>
+                {!isCollapsed && <div className="divide-y divide-slate-100">
                   {group.rows.map((item) => {
                     const toggleId = item.item || item.id;
                     const hasStats = Number(item.shown_count || 0) > 0;
@@ -1333,9 +1439,10 @@ const ScreenRestaurantUpsell = () => {
                       </div>
                     );
                   })}
-                </div>
+                </div>}
               </section>
-            ))
+              );
+            })
           )}
         </div>
       )}

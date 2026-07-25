@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowRight, Banknote, ChefHat, Clock3, Coffee, CreditCard, MapPin, Minus, Plus, ShoppingCart, Trash2, X, Zap } from "lucide-react";
+import { AlertCircle, ArrowRight, Banknote, Clock3, Coffee, CreditCard, MapPin, Minus, Plus, ShoppingCart, Trash2, UtensilsCrossed, X, Zap } from "lucide-react";
 import { useCart, type CartItem } from "../context/CartContext";
 import axiosInstance from "../lib/axios";
 import { API_BASE_URL } from "../lib/axios";
@@ -1106,9 +1106,7 @@ const ScreenCart = () => {
               </button>
 
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center">
-                  <ChefHat className="w-4 h-4 text-muted-foreground" strokeWidth={1.8} />
-                </div>
+                <UtensilsCrossed className="h-5 w-5 shrink-0 text-slate-400" strokeWidth={1.8} />
                 <div>
                   <h3 className="text-base font-bold text-foreground leading-tight">Review Your Order</h3>
                   <p className="text-xs text-slate-500">Check everything looks right</p>
