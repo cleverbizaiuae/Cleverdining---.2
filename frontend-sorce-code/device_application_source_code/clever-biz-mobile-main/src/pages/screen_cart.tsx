@@ -42,6 +42,7 @@ import {
   hasItemDiscount,
   toSafeNumber,
 } from "../utils/pricing";
+import { shouldShowReviewOrderModal } from "./cart-review";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -150,6 +151,10 @@ const ScreenCart = () => {
   const totalCost = validCartItems.reduce(
     (sum, item) => sum + getLineTotal(item, item.quantity),
     0
+  );
+  const reviewModalVisible = shouldShowReviewOrderModal(
+    showReviewModal,
+    validCartItems.length,
   );
   const activeCartUpsells = useMemo(() => upsellSuggestions.slice(0, 2), [upsellSuggestions]);
   const upsellUiEnabled = upsellSettings?.enabled ?? true;
@@ -682,11 +687,14 @@ const ScreenCart = () => {
         // Loyalty is non-blocking. Order placement must never fail because points failed.
       }
 
+      // Close the populated review before clearing its backing cart data.
+      // clearCart also waits for the server, so clearing first briefly rendered
+      // the same modal a second time with no items and a zero total.
+      setShowReviewModal(false);
       await clearCart();
       setItemTimings({});
       setSpecialRequest("");
       setPaymentMethod("card");
-      setShowReviewModal(false);
       // Double check cleanup
       if (guestSessionToken) {
         localStorage.removeItem(`cb:cart:${guestSessionToken}`);
@@ -801,7 +809,8 @@ const ScreenCart = () => {
       // Check for "writable nested fields" error (Backend issue workaround)
       if (errorMessage.includes("writable nested fields")) {
         toast.success("Order placed successfully!");
-        clearCart();
+        setShowReviewModal(false);
+        void clearCart();
         navigate("/dashboard/orders");
         return;
       }
@@ -1093,7 +1102,7 @@ const ScreenCart = () => {
         </div>
       )}
 
-      {showReviewModal && (
+      {reviewModalVisible && (
         <div className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[1px] p-4 flex items-center justify-center">
           <div className="w-[92%] max-w-sm bg-card text-foreground rounded-3xl border border-border shadow-2xl shadow-black/40 p-0 overflow-hidden gap-0 max-h-[88vh] flex flex-col">
             <div className="relative p-5 pb-4 border-b border-border shrink-0">
