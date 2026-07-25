@@ -6,6 +6,10 @@ import {
   getUpsellTableNumber,
 } from "./upsellSession";
 import { getEffectiveItemPrice } from "../utils/pricing";
+import {
+  buildUpsellRequestKey,
+  isRecentUpsellRequest,
+} from "./upsellRequestCache";
 
 export type UpsellSuggestion = {
   id: number;
@@ -100,12 +104,13 @@ const UPSELL_REQUEST_TIMEOUT_MS = 7_000;
 const UPSELL_RESOLUTION_TIMEOUT_MS = 12_000;
 const UPSELL_RETRY_DELAY_MS = 250;
 const UPSELL_RESULT_CACHE_MS = 2 * 60_000;
+const UPSELL_LIVE_PREFETCH_MAX_AGE_MS = 30_000;
 const UPSELL_PERSISTED_RESULT_CACHE_MS = 15 * 60_000;
 const UPSELL_PERSISTED_RESULT_PREFIX = "cb:upsell_result:v1:";
 const UPSELL_CONFIG_VERSION_KEY = "cb:upsell_config_version";
 const upsellResultRequests = new Map<
   string,
-  { expiresAt: number; request: Promise<UpsellSuggestion[]> }
+  { createdAt: number; expiresAt: number; request: Promise<UpsellSuggestion[]> }
 >();
 
 const clearPersistedUpsellResults = () => {
@@ -318,29 +323,23 @@ export type UpsellSuggestionRequest = {
   stage?: string;
 };
 
-const sortedPositiveIds = (values?: number[]) =>
-  Array.from(
-    new Set(
-      (values || [])
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0)
-    )
-  ).sort((left, right) => left - right);
-
 const getUpsellFetchLimit = (triggerPoint: UpsellTriggerPoint) =>
   triggerPoint === "add_to_cart" ? 6 : 2;
 
 const getUpsellRequestKey = (params: UpsellSuggestionRequest) => {
   const restaurantId = Number(params.restaurantId || getSessionRestaurantId() || 0);
-  return JSON.stringify({
+  return buildUpsellRequestKey({
     triggerPoint: params.triggerPoint,
     limit: getUpsellFetchLimit(params.triggerPoint),
     sourceItemId: Number(params.sourceItemId || 0),
     restaurantId,
-    cartItemIds: sortedPositiveIds(params.cartItemIds),
-    excludeItemIds: sortedPositiveIds(params.excludeItemIds),
+    cartItemIds: params.cartItemIds,
+    excludeItemIds: params.excludeItemIds,
     stage: params.stage || "",
     configVersion: getKnownUpsellConfigVersion(),
+    sessionId: getUpsellSessionId(),
+    tableNumber: getUpsellTableNumber(),
+    signals: getUpsellSignalsQueryParams(),
   });
 };
 
@@ -516,17 +515,34 @@ const fetchUpsellSuggestionsRemote = async (
 
 export function fetchUpsellSuggestions(
   params: UpsellSuggestionRequest,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; preferRecent?: boolean } = {},
 ): Promise<UpsellSuggestion[]> {
   const key = getUpsellRequestKey(params);
   const now = Date.now();
   const cached = upsellResultRequests.get(key);
-  if (!options.force && cached && cached.expiresAt > now) return cached.request;
+  const canReuseCached =
+    cached
+    && (
+      (!options.force && !options.preferRecent && cached.expiresAt > now)
+      || (
+        options.preferRecent
+        && isRecentUpsellRequest(
+          cached.createdAt,
+          cached.expiresAt,
+          now,
+          UPSELL_LIVE_PREFETCH_MAX_AGE_MS,
+        )
+      )
+    );
+  if (canReuseCached) return cached.request;
 
-  const persisted = options.force ? null : readPersistedUpsellResult(key);
+  const persisted = options.force || options.preferRecent
+    ? null
+    : readPersistedUpsellResult(key);
   if (persisted) {
     const request = Promise.resolve(persisted.slice(0, params.limit ?? 2));
     upsellResultRequests.set(key, {
+      createdAt: now,
       expiresAt: now + UPSELL_RESULT_CACHE_MS,
       request,
     });
@@ -543,6 +559,7 @@ export function fetchUpsellSuggestions(
       throw error;
     });
   upsellResultRequests.set(key, {
+    createdAt: now,
     expiresAt: now + UPSELL_RESULT_CACHE_MS,
     request,
   });

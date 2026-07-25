@@ -281,14 +281,14 @@ const ScreenCart = () => {
 
     const loadCartUpsells = async () => {
       try {
-        const settingsPromise = fetchUpsellSettings({ force: true }).catch(() => null);
+        const settingsPromise = fetchUpsellSettings().catch(() => null);
         const suggestionsPromise = fetchUpsellSuggestions({
           triggerPoint: "cart",
           limit: triggerLimit,
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
-        }, { force: true });
+        }, { preferRecent: true });
         const [settingsSnapshot, rawSuggestions] = await Promise.all([
           settingsPromise,
           suggestionsPromise,
@@ -410,7 +410,7 @@ const ScreenCart = () => {
 
     const loadBeforePaymentUpsell = async () => {
       try {
-        const settingsSnapshot = await fetchUpsellSettings({ force: true }).catch(() => null);
+        const settingsSnapshot = await fetchUpsellSettings().catch(() => null);
 
         if (cancelled) return;
         if (settingsSnapshot) {
@@ -440,7 +440,7 @@ const ScreenCart = () => {
           restaurantId: cartRestaurantId,
           cartItemIds: validCartItemIds,
           excludeItemIds: excludedItemIds,
-        }, { force: true });
+        }, { preferRecent: true });
         applyBeforePaymentSuggestions(rawSuggestions, effectiveTriggerLimit);
       } catch {
         if (!cancelled) {

@@ -383,7 +383,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       setSuggestions([]);
       setOpen(shouldOpenImmediately);
 
-      const settingsPromise = fetchUpsellSettings({ force: true }).catch(() => null);
+      const settingsPromise = fetchUpsellSettings().catch(() => null);
       const suggestionPromise = fetchUpsellSuggestions({
         triggerPoint: "add_to_cart",
         sourceItemId: Number(item.id),
@@ -391,7 +391,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         limit: 6,
         cartItemIds,
         excludeItemIds: excludedItemIds,
-      }, { force: true });
+      }, { preferRecent: true });
 
       void Promise.all([settingsPromise, suggestionPromise])
         .then(([settingsSnapshot, rawSuggestions]) => {
