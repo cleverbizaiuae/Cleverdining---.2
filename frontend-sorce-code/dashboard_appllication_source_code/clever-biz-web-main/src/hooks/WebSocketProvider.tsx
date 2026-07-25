@@ -64,6 +64,8 @@ const WebSocketProvider = ({ children }) => {
   // 1. Get User & Token
   const parseUser = JSON.parse(localStorage.getItem("userInfo") || "{}");
   const accessToken = localStorage.getItem("accessToken");
+  const dashboardRole = String(parseUser?.role || "").toLowerCase();
+  const isChefDashboard = dashboardRole === "chef";
 
   // 2. Robust ID Extraction
   let restaurantId =
@@ -89,6 +91,12 @@ const WebSocketProvider = ({ children }) => {
 
       channel.onmessage = (event) => {
         if (!event.data) return;
+        if (isChefDashboard) {
+          setUnreadCount(0);
+          setUnreadTables([]);
+          updateAppBadge(0);
+          return;
+        }
         if (typeof event.data.unreadCount === 'number') {
           setUnreadCount(event.data.unreadCount);
           updateAppBadge(event.data.unreadCount);
@@ -114,7 +122,7 @@ const WebSocketProvider = ({ children }) => {
     } catch (e) {
       // BroadcastChannel not supported in some browsers
     }
-  }, []);
+  }, [isChefDashboard]);
 
   const syncUnreadState = useCallback((count: number, tables?: UnreadTable[]) => {
     const safeCount = Math.max(0, Number(count) || 0);
@@ -194,7 +202,7 @@ const WebSocketProvider = ({ children }) => {
   useEffect(() => {
     if (!accessToken) return;
 
-    const role = parseUser?.role;
+    const role = dashboardRole;
     let endpoint = "/owners/devicesall/";
     if (role === "staff") endpoint = "/api/staff/devicesall/";
     if (role === "chef") endpoint = "/api/chef/devicesall/";
@@ -206,13 +214,15 @@ const WebSocketProvider = ({ children }) => {
         if (cancelled || !Array.isArray(data)) return;
 
         setDashboardTables(data);
-        const rows: UnreadTable[] = data
-          .map((row) => ({
-            deviceId: String(row?.id ?? row?.device_id ?? ""),
-            tableName: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
-            unreadCount: Number(row?.unread_count || 0),
-          }))
-          .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
+        const rows: UnreadTable[] = isChefDashboard
+          ? []
+          : data
+            .map((row) => ({
+              deviceId: String(row?.id ?? row?.device_id ?? ""),
+              tableName: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
+              unreadCount: Number(row?.unread_count || 0),
+            }))
+            .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
 
         const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
         syncUnreadState(total, rows);
@@ -239,7 +249,7 @@ const WebSocketProvider = ({ children }) => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [accessToken, parseUser?.role, syncUnreadState]);
+  }, [accessToken, dashboardRole, isChefDashboard, syncUnreadState]);
 
   useEffect(() => {
     if (!id || !accessToken) {
@@ -285,7 +295,7 @@ const WebSocketProvider = ({ children }) => {
             // Only increment for INCOMING device messages (customer -> staff)
             const isFromDevice = parsedMessage.is_from_device === true || parsedMessage.is_from_device === "true";
 
-            if (isFromDevice) {
+            if (isFromDevice && !isChefDashboard) {
               console.log("Incrementing Global Unread Count (Incoming Device Msg)");
               const deviceId = parsedMessage.device_id ?? parsedMessage.table_id;
               if (deviceId !== undefined && deviceId !== null) {
@@ -303,7 +313,7 @@ const WebSocketProvider = ({ children }) => {
             }
           }
 
-          if (parsedMessage.type === "cash_payment_alert") {
+          if (parsedMessage.type === "cash_payment_alert" && !isChefDashboard) {
             // Play Sound
             try {
               const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
@@ -338,7 +348,11 @@ const WebSocketProvider = ({ children }) => {
           }
 
           // Handle Assistance Request Alerts from Tables
-          if (parsedMessage.type === "chat_message" && parsedMessage.message_type === "alert") {
+          if (
+            parsedMessage.type === "chat_message"
+            && parsedMessage.message_type === "alert"
+            && !isChefDashboard
+          ) {
             // Play Alert Sound
             try {
               const audio = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
@@ -436,7 +450,15 @@ const WebSocketProvider = ({ children }) => {
         return null;
       });
     };
-  }, [wsUrl, id, accessToken, clearUnreadForTable, incrementUnreadForTable, setUnreadCountSafe]);
+  }, [
+    wsUrl,
+    id,
+    accessToken,
+    clearUnreadForTable,
+    incrementUnreadForTable,
+    isChefDashboard,
+    setUnreadCountSafe,
+  ]);
 
   const unreadTableSummary = unreadTables
     .slice(0, 2)
