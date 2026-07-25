@@ -281,17 +281,26 @@ export function preloadCachedBrandAssets(): void {
   preloadBrandImage(initial.logoUrl);
 }
 
-export function useBrandConfig(restaurantId?: string | number | null) {
+export function useBrandConfig(
+  restaurantId?: string | number | null,
+  orderId?: string | number | null,
+) {
   const normalizedRestaurantId = useMemo(() => {
     return normalizeRestaurantId(restaurantId) || resolveStoredRestaurantId();
   }, [restaurantId]);
+  const normalizedOrderId = useMemo(() => normalizeRestaurantId(orderId), [orderId]);
+  const lookupKey = normalizedRestaurantId
+    ? `restaurant:${normalizedRestaurantId}`
+    : normalizedOrderId
+      ? `order:${normalizedOrderId}`
+      : null;
   const [brand, setBrand] = useState<BrandConfig>(() => getInitialBrandConfig(normalizedRestaurantId));
-  const [brandRestaurantId, setBrandRestaurantId] = useState(normalizedRestaurantId);
+  const [brandLookupKey, setBrandLookupKey] = useState(lookupKey);
 
   const syncFromCache = useCallback(() => {
     setBrand(getInitialBrandConfig(normalizedRestaurantId));
-    setBrandRestaurantId(normalizedRestaurantId);
-  }, [normalizedRestaurantId]);
+    setBrandLookupKey(lookupKey);
+  }, [lookupKey, normalizedRestaurantId]);
 
   useEffect(() => {
     preloadBrandImage(brand.logoUrl);
@@ -301,7 +310,7 @@ export function useBrandConfig(restaurantId?: string | number | null) {
   useEffect(() => {
     syncFromCache();
 
-    if (!normalizedRestaurantId) {
+    if (!lookupKey) {
       return;
     }
 
@@ -310,15 +319,20 @@ export function useBrandConfig(restaurantId?: string | number | null) {
     const fetchRemote = async () => {
       try {
         const response = await cachedGet(
-          `/api/brand-config/?restaurant_id=${encodeURIComponent(normalizedRestaurantId)}`,
+          normalizedRestaurantId
+            ? `/api/brand-config/?restaurant_id=${encodeURIComponent(normalizedRestaurantId)}`
+            : `/api/brand-config/?order_id=${encodeURIComponent(normalizedOrderId || "")}`,
           { headers: { "Content-Type": "application/json" } },
           { ttlMs: 3_500 },
         );
         const mapped = mapBrandConfig(response.data);
         if (!isMounted) return;
         setBrand(mapped);
-        setBrandRestaurantId(normalizedRestaurantId);
-        writeCachedConfig(normalizedRestaurantId, mapped);
+        setBrandLookupKey(lookupKey);
+        const resolvedRestaurantId = normalizeRestaurantId(response.data?.restaurantId);
+        if (resolvedRestaurantId) {
+          writeCachedConfig(resolvedRestaurantId, mapped);
+        }
         preloadBrandImage(mapped.logoUrl);
         preloadBrandImage(mapped.coverImageUrl);
       } catch {
@@ -356,9 +370,9 @@ export function useBrandConfig(restaurantId?: string | number | null) {
       window.removeEventListener("focus", refreshFromLocalAndRemote);
       document.removeEventListener("visibilitychange", handleVisibilityRefresh);
     };
-  }, [normalizedRestaurantId, syncFromCache]);
+  }, [lookupKey, normalizedOrderId, normalizedRestaurantId, syncFromCache]);
 
-  return brandRestaurantId === normalizedRestaurantId
+  return brandLookupKey === lookupKey
     ? brand
     : getInitialBrandConfig(normalizedRestaurantId);
 }

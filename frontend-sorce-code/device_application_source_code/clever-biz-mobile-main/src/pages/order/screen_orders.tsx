@@ -406,6 +406,7 @@ const ScreenOrders = () => {
 
     const params = new URLSearchParams({ payment: paymentMethod });
     if (paidOrderId) params.set("order_id", paidOrderId);
+    if (tableInfo.restaurantId) params.set("restaurant_id", tableInfo.restaurantId);
     window.location.replace(`/thankyou?${params.toString()}`);
   }, [tableInfo.restaurantId]);
 

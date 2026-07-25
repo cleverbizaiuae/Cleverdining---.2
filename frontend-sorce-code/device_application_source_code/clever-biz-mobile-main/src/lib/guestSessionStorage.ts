@@ -8,7 +8,6 @@ const SESSION_KEYS = [
   "refreshToken",
   "pending_order_id",
   "bulk_checkout",
-  "last_paid_restaurant_id",
   "chat_messages_cache",
   "newMessage",
   "cart",

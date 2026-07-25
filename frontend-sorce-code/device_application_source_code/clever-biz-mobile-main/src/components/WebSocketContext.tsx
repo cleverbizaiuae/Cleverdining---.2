@@ -243,6 +243,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
             const params = new URLSearchParams({ payment: data.payment_method || "completed" });
             if (paidOrderId) params.set("order_id", paidOrderId);
+            if (paidRestaurantId) params.set("restaurant_id", paidRestaurantId);
             window.location.replace(`/thankyou?${params.toString()}`);
             return;
           }

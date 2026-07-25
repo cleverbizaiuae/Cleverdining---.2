@@ -1,14 +1,18 @@
 from django.test import TestCase
+from django.core.cache import cache
 from rest_framework.test import APIClient
 
 from accounts.models import User
 from category.models import Category
+from device.models import Device
 from item.models import Item
+from order.models import Order
 from restaurant.models import BrandConfig, Restaurant
 
 
 class BrandConfigPaymentTimingTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.owner = User.objects.create_user(
             email="payment-settings-owner@example.com",
             username="Payment Settings Owner",
@@ -56,6 +60,63 @@ class BrandConfigPaymentTimingTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["payBeforeOrder"])
+        self.assertEqual(response.json()["restaurantId"], self.restaurant.id)
+
+    def test_public_config_can_resolve_restaurant_from_paid_order(self):
+        device = Device.objects.create(
+            table_name="T1",
+            user=self.owner,
+            restaurant=self.restaurant,
+        )
+        order = Order.objects.create(
+            device=device,
+            restaurant=self.restaurant,
+            payment_status="paid",
+        )
+        self.config.instagram_url = "https://instagram.com/configured-restaurant"
+        self.config.save(update_fields=["instagram_url"])
+        self.restaurant.google_review_url = "https://g.page/r/configured-restaurant/review"
+        self.restaurant.save(update_fields=["google_review_url"])
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(
+            "/api/brand-config/",
+            {"order_id": order.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["restaurantId"], self.restaurant.id)
+        self.assertEqual(response.json()["restaurantName"], "Configured Restaurant")
+        self.assertEqual(
+            response.json()["googleReviewUrl"],
+            "https://g.page/r/configured-restaurant/review",
+        )
+        self.assertEqual(
+            response.json()["instagramUrl"],
+            "https://instagram.com/configured-restaurant",
+        )
+
+    def test_public_config_does_not_resolve_an_unpaid_order(self):
+        device = Device.objects.create(
+            table_name="T2",
+            user=self.owner,
+            restaurant=self.restaurant,
+        )
+        order = Order.objects.create(
+            device=device,
+            restaurant=self.restaurant,
+            payment_status="unpaid",
+        )
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(
+            "/api/brand-config/",
+            {"order_id": order.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["restaurantId"])
+        self.assertEqual(response.json()["restaurantName"], "My Restaurant")
 
 
 class NewRestaurantMenuIsolationTests(TestCase):

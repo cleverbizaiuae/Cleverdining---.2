@@ -323,7 +323,12 @@ export default function CheckoutPage() {
       navigate('/dashboard/orders?payment=partial', { replace: true });
       return;
     }
-    navigate(`/thankyou?session_id=${encodeURIComponent(result.transactionId || "")}`, {
+    const thankYouParams = new URLSearchParams({
+      session_id: result.transactionId || "",
+    });
+    if (orderId) thankYouParams.set("order_id", String(orderId));
+    if (restaurantId) thankYouParams.set("restaurant_id", String(restaurantId));
+    navigate(`/thankyou?${thankYouParams.toString()}`, {
       replace: true,
       state: {
         orderId,

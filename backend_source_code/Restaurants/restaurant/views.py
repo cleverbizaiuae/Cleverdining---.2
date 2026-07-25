@@ -28,6 +28,7 @@ def _brand_config_cache_key(restaurant_id):
 
 def _brand_default_payload():
     return {
+        "restaurantId": None,
         "brandingEnabled": False,
         "restaurantName": "My Restaurant",
         "logoUrl": None,
@@ -54,8 +55,25 @@ def _brand_default_payload():
 def _get_restaurant_for_brand_request(request, for_write=False):
     user = getattr(request, "user", None)
     restaurant_id = request.query_params.get("restaurant_id")
+    order_id = request.query_params.get("order_id")
     if not restaurant_id and hasattr(request, "data"):
         restaurant_id = request.data.get("restaurant_id")
+
+    # The thank-you page is reached after the guest session is closed, so its
+    # token may no longer exist. Brand data is already public by restaurant ID;
+    # resolving the same public data from the paid order keeps reloads and
+    # payment-provider redirects branded without exposing order details.
+    if not for_write and not restaurant_id and order_id:
+        from django.db.models import Q
+        from order.models import Order
+
+        order = (
+            Order.objects.select_related("restaurant")
+            .filter(pk=order_id)
+            .filter(Q(payment_status="paid") | Q(status__in=("paid", "completed")))
+            .first()
+        )
+        return order.restaurant if order else None
 
     if user and user.is_authenticated:
         role = getattr(user, "role", "")
@@ -128,11 +146,12 @@ class BrandConfigAPIView(APIView):
                 },
             )
             payload = dict(BrandConfigSerializer(config).data)
+            payload["restaurantId"] = restaurant.pk
             if not payload.get("googleReviewUrl"):
                 payload["googleReviewUrl"] = restaurant.google_review_url
-            if restaurant_id:
+            if restaurant.pk:
                 cache.set(
-                    _brand_config_cache_key(restaurant_id),
+                    _brand_config_cache_key(restaurant.pk),
                     payload,
                     BRAND_CONFIG_CACHE_SECONDS,
                 )
@@ -168,6 +187,7 @@ class BrandConfigAPIView(APIView):
                 restaurant.save(update_fields=["google_review_url"])
 
             payload = dict(BrandConfigSerializer(updated).data)
+            payload["restaurantId"] = restaurant.pk
             payload["googleReviewUrl"] = restaurant.google_review_url
             cache.delete(_brand_config_cache_key(restaurant.pk))
             return Response(payload, status=status.HTTP_200_OK)
