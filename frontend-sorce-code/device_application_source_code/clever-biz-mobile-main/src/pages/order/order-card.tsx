@@ -1,5 +1,6 @@
 import { cn } from "clsx-for-tailwind";
 import { Order, OrderItem, OrderStage } from "./order-types";
+import { mapOrderStatusToStage } from "./order-status";
 import { getSessionCurrencyCode } from "../../utils/regionSession";
 
 interface OrderCardProps {
@@ -13,22 +14,6 @@ const steps: Array<{ id: OrderStage; label: string }> = [
   { id: "Preparing", label: "Preparing" },
   { id: "Served", label: "Served" },
 ];
-
-const normalizeStatus = (status: string | undefined): OrderStage => {
-  const value = String(status || "").toLowerCase();
-  if (value === "preparing" || value === "cooking") return "Preparing";
-  if (
-    value === "ready" ||
-    value === "served" ||
-    value === "completed" ||
-    value === "delivered" ||
-    value === "cancelled" ||
-    value === "awaiting_cash"
-  ) {
-    return "Served";
-  }
-  return "Pending";
-};
 
 const parseMoney = (value: string | number | undefined): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -47,7 +32,7 @@ const normalizeItems = (order: Order): OrderItem[] => {
 
 export const OrderCard = ({ order, isNew = false, isCashPending = false }: OrderCardProps) => {
   const currencyCode = getSessionCurrencyCode();
-  const normalizedStatus = normalizeStatus(String(order.status));
+  const normalizedStatus = mapOrderStatusToStage(String(order.status));
   const backendStatus = String(order.backendStatus || order.status || "").toLowerCase();
   const currentStepIndex = steps.findIndex((step) => step.id === normalizedStatus);
   const items = normalizeItems(order);

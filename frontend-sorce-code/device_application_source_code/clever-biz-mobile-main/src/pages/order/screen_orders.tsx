@@ -1,8 +1,9 @@
 import axiosInstance from "@/lib/axios";
 import toast from "react-hot-toast";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Order, OrderItem, OrderStage } from "./order-types";
+import { Order, OrderItem } from "./order-types";
 import { OrderCard } from "./order-card";
+import { mapOrderStatusToStage } from "./order-status";
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import {
   ArrowRight,
@@ -120,22 +121,6 @@ const toNumber = (value: unknown): number => {
   return 0;
 };
 
-const mapBackendStatus = (status: string): OrderStage => {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized === "preparing" || normalized === "cooking") return "Preparing";
-  if (
-    normalized === "ready" ||
-    normalized === "served" ||
-    normalized === "delivered" ||
-    normalized === "cancelled" ||
-    normalized === "completed" ||
-    normalized === "awaiting_cash"
-  ) {
-    return "Served";
-  }
-  return "Pending";
-};
-
 const getOrderTotal = (order: Pick<Order, "total" | "total_price">): number =>
   toNumber(order.total ?? order.total_price);
 
@@ -202,7 +187,7 @@ const mapBackendOrder = (backendOrder: BackendOrder): Order => {
     is_partially_paid: isPartiallyPaid,
     bill_payment_status: backendOrder.bill_payment_status,
     payment_progress: backendOrder.payment_progress,
-    status: mapBackendStatus(backendStatus),
+    status: mapOrderStatusToStage(backendStatus),
     backendStatus,
     paymentStatus: isFullyPaid ? "Paid" : "Unpaid",
     payment_status: isFullyPaid ? "paid" : backendPaymentStatus,
