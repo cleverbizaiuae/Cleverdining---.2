@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency } from "../lib/utils";
+import { cachedGet } from "../lib/requestCache";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -8,22 +9,18 @@ export const WebSocketContext = createContext(null);
 // Cross-tab sync channel
 const BROADCAST_CHANNEL_NAME = 'cleverdining-unread-sync';
 
-const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, "");
-const resolveHttpBaseUrl = () => {
-  const envApiUrl = import.meta.env.VITE_API_URL as string | undefined;
-  const isLocalBrowser =
-    typeof window !== "undefined" &&
-    ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-
-  if (isLocalBrowser) return "http://127.0.0.1:8000";
-  if (envApiUrl && envApiUrl !== "/api") return normalizeBaseUrl(envApiUrl);
-  return "https://cleverdining-2.onrender.com";
-};
-
 type UnreadTable = {
   deviceId: string;
   tableName: string;
   unreadCount: number;
+};
+
+type DashboardTable = {
+  id?: string | number;
+  device_id?: string | number;
+  table_name?: string;
+  unread_count?: string | number;
+  [key: string]: unknown;
 };
 
 type WsFailureContext = {
@@ -59,6 +56,7 @@ const WebSocketProvider = ({ children }) => {
   const [response, setResponse] = useState({});
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadTables, setUnreadTables] = useState<UnreadTable[]>([]);
+  const [dashboardTables, setDashboardTables] = useState<DashboardTable[]>([]);
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -196,93 +194,51 @@ const WebSocketProvider = ({ children }) => {
   useEffect(() => {
     if (!accessToken) return;
 
-    const timeoutId = window.setTimeout(() => {
-      const fetchUnreadCount = async () => {
-        const failureKey = "cleverbiz:unread-count-disabled";
-        if (window.sessionStorage.getItem(failureKey) === "1") {
-          syncUnreadState(0);
-          return;
-        }
+    const role = parseUser?.role;
+    let endpoint = "/owners/devicesall/";
+    if (role === "staff") endpoint = "/api/staff/devicesall/";
+    if (role === "chef") endpoint = "/api/chef/devicesall/";
 
-        try {
-          const baseUrl = resolveHttpBaseUrl();
+    let cancelled = false;
+    const fetchTablesAndUnreadState = async (force = false) => {
+      try {
+        const { data } = await cachedGet<DashboardTable[]>(endpoint, {}, { ttlMs: 20_000, force });
+        if (cancelled || !Array.isArray(data)) return;
 
-          const res = await fetch(
-            `${baseUrl}/message/chat/unread-count/`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            syncUnreadState(data.unread_count || 0);
-          } else {
-            window.sessionStorage.setItem(failureKey, "1");
-            console.warn("Unread count returned non-OK status:", res.status);
-            syncUnreadState(0);
-          }
-        } catch (error) {
-          window.sessionStorage.setItem(failureKey, "1");
-          console.warn("Failed to fetch unread count (non-blocking):", error);
-          syncUnreadState(0);
-        }
-      };
+        setDashboardTables(data);
+        const rows: UnreadTable[] = data
+          .map((row) => ({
+            deviceId: String(row?.id ?? row?.device_id ?? ""),
+            tableName: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
+            unreadCount: Number(row?.unread_count || 0),
+          }))
+          .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
 
-      fetchUnreadCount();
-    }, 800);
-    return () => window.clearTimeout(timeoutId);
-  }, [accessToken, syncUnreadState]);
+        const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
+        syncUnreadState(total, rows);
+      } catch (error) {
+        console.warn("Failed to refresh tables and unread state (non-blocking):", error);
+      }
+    };
 
-  useEffect(() => {
-    if (!accessToken) return;
+    void fetchTablesAndUnreadState();
 
-    if (window.location.pathname.includes("/restaurant/devices")) return;
+    const handleFocus = () => {
+      void fetchTablesAndUnreadState(true);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchTablesAndUnreadState(true);
+      }
+    };
 
-    const timeoutId = window.setTimeout(() => {
-      const fetchUnreadTables = async () => {
-        const failureKey = "cleverbiz:unread-tables-disabled";
-        if (window.sessionStorage.getItem(failureKey) === "1") return;
-
-        try {
-          const role = parseUser?.role;
-          let endpoint = "/owners/devicesall/";
-          if (role === "staff") endpoint = "/api/staff/devicesall/";
-          if (role === "chef") endpoint = "/api/chef/devicesall/";
-
-          const baseUrl = resolveHttpBaseUrl();
-
-          const res = await fetch(`${baseUrl}${endpoint}`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-
-          if (!res.ok) {
-            window.sessionStorage.setItem(failureKey, "1");
-            return;
-          }
-          const data = await res.json();
-          if (!Array.isArray(data)) return;
-
-          const rows: UnreadTable[] = data
-            .map((row: any) => ({
-              deviceId: String(row?.id ?? row?.device_id ?? ""),
-              tableName: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
-              unreadCount: Number(row?.unread_count || 0),
-            }))
-            .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
-
-          const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
-          syncUnreadState(total, rows);
-        } catch (error) {
-          window.sessionStorage.setItem(failureKey, "1");
-          console.warn("Failed to fetch unread table list (non-blocking):", error);
-        }
-      };
-
-      fetchUnreadTables();
-    }, 1000);
-    return () => window.clearTimeout(timeoutId);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [accessToken, parseUser?.role, syncUnreadState]);
 
   useEffect(() => {
@@ -495,6 +451,7 @@ const WebSocketProvider = ({ children }) => {
         response,
         unreadCount,
         unreadTables,
+        dashboardTables,
         unreadTableSummary,
         setUnreadCount: setUnreadCountSafe,
         clearUnreadForTable,

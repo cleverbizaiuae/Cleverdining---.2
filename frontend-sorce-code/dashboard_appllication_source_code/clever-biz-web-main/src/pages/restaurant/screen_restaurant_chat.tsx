@@ -52,6 +52,25 @@ interface TableMessage {
   created_at?: string;
 }
 
+type DeviceChatRow = Partial<ChatRoomItem> & {
+  id?: string | number;
+  device_id?: string | number;
+  restaurant?: string | number;
+  active_session_id?: string | number;
+};
+
+const normalizeDeviceChats = (rows: DeviceChatRow[]): ChatRoomItem[] =>
+  rows.map((row) => ({
+    ...row,
+    id: String(row?.id ?? row?.device_id ?? ""),
+    table_name: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
+    user_id: String(row?.user_id ?? ""),
+    restaurant_id: String(row?.restaurant_id ?? row?.restaurant ?? ""),
+    active_guest_session_id: row?.active_guest_session_id ?? row?.active_session_id,
+    unread_count: Number(row?.unread_count || 0),
+    source: "device" as const,
+  }));
+
 // Utility for formatting time in Gulf Standard Time (GMT+4)
 const formatTime = (ts: string | number) => {
   const date = new Date(ts);
@@ -64,7 +83,11 @@ const formatTime = (ts: string | number) => {
 
 const ScreenRestaurantChat = () => {
   const { userInfo } = useRole();
-  const { clearUnreadForTable, messages: globalMessages } = useContext(WebSocketContext) || {};
+  const {
+    clearUnreadForTable,
+    messages: globalMessages,
+    dashboardTables,
+  } = useContext(WebSocketContext) || {};
   const [chatList, setChatList] = useState<ChatRoomItem[]>([]);
   const [selectedChat, setSelectedChat] = useState<ChatRoomItem | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,6 +96,15 @@ const ScreenRestaurantChat = () => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showClearChatModal, setShowClearChatModal] = useState(false);
+
+  useEffect(() => {
+    if (!Array.isArray(dashboardTables)) return;
+    const deviceChats = normalizeDeviceChats(dashboardTables as DeviceChatRow[]);
+    setChatList((prev) => {
+      const compatibilityChats = prev.filter((chat) => chat.source === "table-message");
+      return [...compatibilityChats, ...deviceChats];
+    });
+  }, [dashboardTables]);
 
   const mergeTableMessages = (rows: TableMessage[]) => {
     const grouped = new Map<string, { chat: ChatRoomItem; messages: Message[] }>();
@@ -189,13 +221,18 @@ const ScreenRestaurantChat = () => {
         }
 
         const { data } = await cachedGet(endpoint, {}, { ttlMs: 20_000 });
-        setChatList(Array.isArray(data) ? data : []);
+        if (!Array.isArray(data)) return;
+        const deviceChats = normalizeDeviceChats(data);
+        setChatList((prev) => {
+          const compatibilityChats = prev.filter((chat) => chat.source === "table-message");
+          return [...compatibilityChats, ...deviceChats];
+        });
       } catch (error) {
         console.error("Failed to load chat list", error);
       }
     };
     fetchChats();
-  }, []);
+  }, [userInfo?.role]);
 
   // 2. Unified WebSocket Connection (With Auto-Reconnect)
   const wsRef = useRef<WebSocket | null>(null);
@@ -437,7 +474,11 @@ const ScreenRestaurantChat = () => {
     const fetchHistory = async () => {
       try {
         const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
-        const { data } = await cachedGet(`/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`, {}, { ttlMs: 1_500 });
+        const { data } = await cachedGet(
+          `/message/chat/?device_id=${selectedChat.id}&restaurant_id=${restaurantId}`,
+          {},
+          { ttlMs: 1_500, force: true },
+        );
         const fetchedMessages = Array.isArray(data) ? data : [];
 
         setMessages(fetchedMessages);

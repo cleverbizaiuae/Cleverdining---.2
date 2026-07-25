@@ -297,7 +297,7 @@ class FastUnreadCountView(APIView):
                             restaurant_ids = list(Restaurant.objects.filter(owner=user).values_list('id', flat=True))
                 elif role in ['staff', 'chef', 'manager']:
                     from accounts.models import ChefStaff
-                    cs = ChefStaff.objects.filter(user=user, action='accepted').first()
+                    cs = ChefStaff.objects.filter(user=user).exclude(action='hold').first()
                     if cs:
                         restaurant_ids = [cs.restaurant_id]
                     else:
@@ -319,7 +319,8 @@ class FastUnreadCountView(APIView):
                 total_unread = ChatMessage.objects.filter(
                     restaurant_id__in=restaurant_ids,
                     is_read=False,
-                    is_from_device=True
+                    is_from_device=True,
+                    guest_session__is_active=True,
                 ).count()
             except Exception as e:
                 print(f"Error counting messages: {e}")

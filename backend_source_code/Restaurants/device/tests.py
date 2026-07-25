@@ -9,6 +9,7 @@ from accounts.models import ChefStaff, User
 from restaurant.models import Restaurant
 
 from order.models import Order
+from message.models import ChatMessage
 
 from .models import Device, GuestSession
 from .views import SimpleDeviceListView, _resolve_user_restaurant_ids
@@ -199,3 +200,73 @@ class ResolveTableSessionIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_resumed"])
         self.assertEqual(response.json()["guest_session_id"], active_session.id)
+
+
+class ActiveSessionMessageStateTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="message-owner@example.com",
+            username="message-owner",
+            password="test-password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Message Test Restaurant",
+            location="Dubai",
+            phone_number="+971500000088",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table 4",
+                table_number="4",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+
+        inactive_session = GuestSession.objects.create(
+            device=self.device,
+            session_token="inactive-message-session",
+            is_active=False,
+        )
+        self.active_session = GuestSession.objects.create(
+            device=self.device,
+            session_token="active-message-session",
+            is_active=True,
+        )
+        ChatMessage.objects.create(
+            sender=self.owner,
+            device=self.device,
+            restaurant=self.restaurant,
+            guest_session=inactive_session,
+            message="Old unread message",
+            is_from_device=True,
+            is_read=False,
+        )
+        self.active_message = ChatMessage.objects.create(
+            sender=self.owner,
+            device=self.device,
+            restaurant=self.restaurant,
+            guest_session=self.active_session,
+            message="Current unread message",
+            is_from_device=True,
+            is_read=False,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.owner)
+
+    def test_table_list_only_reports_current_session_unread_messages(self):
+        response = self.client.get("/owners/devicesall/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        table = response.json()[0]
+        self.assertEqual(table["active_session_id"], self.active_session.id)
+        self.assertEqual(table["unread_count"], 1)
+        self.assertIsNotNone(table["last_message_time"])
+
+    def test_global_badge_only_counts_current_session_messages(self):
+        response = self.client.get("/message/chat/unread-count/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["unread_count"], 1)

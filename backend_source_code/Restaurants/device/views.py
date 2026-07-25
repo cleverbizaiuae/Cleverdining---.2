@@ -473,8 +473,18 @@ class DeviceViewSet(viewsets.ModelViewSet):
                     to_attr='active_sessions_cache'
                 )
             ).annotate(
-                unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True)),
-                last_message_time=Max('messages__timestamp')
+                unread_count_cached=Count(
+                    'messages',
+                    filter=Q(
+                        messages__is_read=False,
+                        messages__is_from_device=True,
+                        messages__guest_session__is_active=True,
+                    ),
+                ),
+                last_message_time=Max(
+                    'messages__timestamp',
+                    filter=Q(messages__guest_session__is_active=True),
+                )
             )
         except Exception as e:
             print(f"DEBUG_DEVICES: Optimization failed, falling back. Error: {e}")
@@ -1092,8 +1102,18 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
                     to_attr='active_sessions_cache'
                 )
             ).annotate(
-                unread_count_cached=Count('messages', filter=Q(messages__is_read=False, messages__is_from_device=True)),
-                last_message_time=Max('messages__timestamp')
+                unread_count_cached=Count(
+                    'messages',
+                    filter=Q(
+                        messages__is_read=False,
+                        messages__is_from_device=True,
+                        messages__guest_session__is_active=True,
+                    ),
+                ),
+                last_message_time=Max(
+                    'messages__timestamp',
+                    filter=Q(messages__guest_session__is_active=True),
+                )
             )
         except Exception as e:
             print(f"DeviceViewSetall optimization failed, falling back. Error: {e}")
@@ -1404,7 +1424,9 @@ class SimpleDeviceListAllView(APIView):
             if not restaurant_ids:
                 return _no_restaurant_response()
             
-            # Get devices - simple query
+            from django.db.models import Count, Max, Prefetch
+            from .models import GuestSession
+
             restaurants = {
                 row['id']: row['resturent_name'] or ''
                 for row in Restaurant.objects.filter(id__in=restaurant_ids).values('id', 'resturent_name')
@@ -1419,6 +1441,27 @@ class SimpleDeviceListAllView(APIView):
                     'action', 'table_token', 'qr_code_image', 'restaurant_id',
                     'user_id', 'user__id', 'user__username',
                 )
+                .prefetch_related(
+                    Prefetch(
+                        'guest_sessions',
+                        queryset=GuestSession.objects.filter(is_active=True).order_by('-created_at'),
+                        to_attr='active_sessions_cache',
+                    )
+                )
+                .annotate(
+                    unread_count_cached=Count(
+                        'messages',
+                        filter=Q(
+                            messages__is_read=False,
+                            messages__is_from_device=True,
+                            messages__guest_session__is_active=True,
+                        ),
+                    ),
+                    last_message_time_cached=Max(
+                        'messages__timestamp',
+                        filter=Q(messages__guest_session__is_active=True),
+                    ),
+                )
                 .order_by('-id')
             )
             
@@ -1426,6 +1469,10 @@ class SimpleDeviceListAllView(APIView):
             results = []
             for device in devices:
                 try:
+                    active_sessions = getattr(device, 'active_sessions_cache', [])
+                    active_session = active_sessions[0] if active_sessions else None
+                    last_message_time = getattr(device, 'last_message_time_cached', None)
+
                     device_data = {
                         "id": device.id,
                         "table_name": device.table_name or "",
@@ -1444,9 +1491,9 @@ class SimpleDeviceListAllView(APIView):
                             if getattr(device, 'table_token', None)
                             else None
                         ),
-                        "active_session_id": None,
-                        "unread_count": 0,
-                        "last_message_time": None
+                        "active_session_id": active_session.id if active_session else None,
+                        "unread_count": int(getattr(device, 'unread_count_cached', 0) or 0),
+                        "last_message_time": last_message_time.isoformat() if last_message_time else None
                     }
                     
                     # Try to get QR code URL safely

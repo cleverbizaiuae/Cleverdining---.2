@@ -73,7 +73,11 @@ class DeviceSerializer(serializers.ModelSerializer):
                 return obj.unread_count_cached
             # Fallback to query
             if hasattr(obj, 'messages'):
-                return obj.messages.filter(is_read=False, is_from_device=True).count()
+                return obj.messages.filter(
+                    is_read=False,
+                    is_from_device=True,
+                    guest_session__is_active=True,
+                ).count()
         except Exception:
             pass
         return 0
