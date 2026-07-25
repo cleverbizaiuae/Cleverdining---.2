@@ -287,10 +287,10 @@ const SuccessPage = () => {
   }, [brand.themePreset, primaryColor]);
   const coverOverlay =
     brand.themePreset === "luxury_dark"
-      ? "linear-gradient(to bottom, rgba(0,0,0,0.24) 0%, rgba(0,0,0,0.56) 56%, rgba(0,0,0,0.88) 100%)"
+      ? "linear-gradient(to bottom, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.60) 56%, rgba(0,0,0,0.82) 100%)"
       : brand.themePreset === "warm_casual"
-        ? "linear-gradient(to bottom, rgba(67,20,7,0.16) 0%, rgba(67,20,7,0.52) 58%, rgba(15,23,42,0.86) 100%)"
-        : "linear-gradient(to bottom, rgba(15,23,42,0.10) 0%, rgba(15,23,42,0.48) 58%, rgba(15,23,42,0.86) 100%)";
+        ? "linear-gradient(to bottom, rgba(67,20,7,0.34) 0%, rgba(67,20,7,0.58) 58%, rgba(15,23,42,0.82) 100%)"
+        : "linear-gradient(to bottom, rgba(15,23,42,0.30) 0%, rgba(15,23,42,0.54) 58%, rgba(15,23,42,0.82) 100%)";
   const brandAssetsReady =
     (!brand.logoUrl || logoImage.readySrc === brand.logoUrl || logoImage.failedSrc === brand.logoUrl) &&
     (!brand.coverImageUrl || coverImage.readySrc === brand.coverImageUrl || coverImage.failedSrc === brand.coverImageUrl);
@@ -394,10 +394,16 @@ const SuccessPage = () => {
       ) : null}
       <div className="fixed inset-0 -z-10" style={{ background: coverOverlay }} />
 
-      <div className="flex min-h-[100dvh] w-full items-center justify-center sm:p-6 lg:p-10">
-        <main className="flex min-h-[100dvh] w-full flex-col overflow-hidden bg-transparent sm:min-h-0 sm:max-w-md sm:rounded-[2rem] sm:border sm:border-white/20 sm:shadow-2xl sm:shadow-black/35">
-          <header className="flex min-h-56 flex-col items-center justify-center px-5 pb-8 pt-[max(1.5rem,env(safe-area-inset-top))] text-white sm:min-h-48 sm:px-6 sm:py-7">
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-white/15 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-md sm:h-24 sm:w-24">
+      <div className="flex min-h-[100dvh] w-full items-center justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-6 lg:p-10">
+        <main
+          className="flex w-full max-w-md flex-col items-center overflow-hidden rounded-[1.75rem] border border-white/20 px-4 py-5 text-white shadow-2xl shadow-black/45 backdrop-blur-xl sm:rounded-[2rem] sm:px-7"
+          style={{
+            background:
+              "linear-gradient(155deg, rgba(15,23,42,0.76) 0%, rgba(15,23,42,0.58) 52%, rgba(2,6,23,0.72) 100%)",
+          }}
+        >
+          <header className="flex flex-col items-center">
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-black/20 p-1.5 shadow-xl shadow-black/30 backdrop-blur-md">
               {logoImage.readySrc ? (
                 <img
                   src={logoImage.readySrc}
@@ -412,109 +418,106 @@ const SuccessPage = () => {
                 </span>
               )}
             </div>
-            <p className="mt-3 text-lg font-bold leading-tight drop-shadow-md sm:mt-4 sm:text-xl">
+            <p className="mt-2.5 text-lg font-bold leading-tight drop-shadow-md">
               {resolvedRestaurantName}
             </p>
             {brand.tagline ? (
-              <p className="mt-1.5 max-w-xs text-sm text-white/75 drop-shadow">
+              <p className="mt-1 max-w-xs text-xs text-white/65 drop-shadow">
                 {brand.tagline}
               </p>
             ) : null}
           </header>
 
-          <div className="-mt-5 flex flex-1 flex-col items-center rounded-t-[1.75rem] bg-white/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-0 shadow-[0_-18px_45px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:mt-0 sm:rounded-none sm:px-7 sm:pb-6">
-            <div className="-mt-8 mb-2.5 flex h-16 w-16 items-center justify-center rounded-full border-[5px] border-white bg-emerald-100 shadow-lg shadow-emerald-900/10 sm:-mt-9 sm:h-20 sm:w-20 sm:border-[6px]">
-              <CheckCircle2 className="h-8 w-8 text-emerald-600 sm:h-10 sm:w-10" strokeWidth={2.6} />
+          <div className="mt-3 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-emerald-200/35 bg-emerald-300/15 shadow-lg shadow-black/20 backdrop-blur-md">
+            <CheckCircle2 className="h-7 w-7 text-emerald-300" strokeWidth={2.6} />
+          </div>
+
+          <h1 className="mt-2.5 text-[1.45rem] font-bold tracking-tight text-white drop-shadow">
+            Thank You!
+          </h1>
+          <p className="mt-1.5 max-w-sm text-[0.8rem] leading-relaxed text-white/72 drop-shadow-sm">
+            Thank you for dining with us today. We hope everything was delicious. See you again soon!
+          </p>
+
+          <section
+            className="mt-4 w-full rounded-2xl border border-white/18 bg-white/10 p-3.5 shadow-xl shadow-black/15 backdrop-blur-md"
+            style={{ boxShadow: `0 14px 34px ${hexToRgba(primaryColor, 0.12)}` }}
+            data-testid="google-review-card"
+          >
+            <div className="mb-2 flex items-center justify-center gap-1">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
+              ))}
             </div>
-
-            <h1 className="mb-1 text-[1.4rem] font-bold tracking-tight text-slate-900 sm:text-2xl">
-              Thank You!
-            </h1>
-            <p className="mb-4 max-w-sm text-[0.82rem] leading-relaxed text-slate-500 sm:text-sm">
-              Thank you for dining with us today. We hope everything was delicious. See you again soon!
+            <p className="mb-3 text-[0.8rem] leading-relaxed text-white/78">
+              Please leave a quick Google review and share your experience with others.
             </p>
-
-            <section
-              className="mb-3.5 w-full rounded-2xl border border-slate-200/80 bg-white/80 p-3.5 shadow-sm sm:p-4"
-              style={{ boxShadow: `0 12px 30px ${hexToRgba(primaryColor, 0.08)}` }}
-              data-testid="google-review-card"
-            >
-              <div className="mb-2 flex items-center justify-center gap-1">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
-                ))}
-              </div>
-              <p className="mb-3 text-[0.82rem] leading-relaxed text-slate-600 sm:text-sm">
-                Please leave a quick Google review and share your experience with others.
-              </p>
-              {resolvedGoogleReviewUrl ? (
-                <a
-                  href={resolvedGoogleReviewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-95 active:scale-[0.98] sm:min-h-12 sm:px-4 sm:text-base"
-                  style={{ backgroundColor: primaryColor }}
-                  data-testid="google-review-button"
-                >
-                  Leave a Review on Google
-                  <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
-                </a>
-              ) : (
-                <p className="text-sm font-medium text-slate-500">Thank you for your visit!</p>
-              )}
-            </section>
-
-            {socialLinks.length > 0 && (
-              <section className="mb-3.5 text-center" aria-label={`${resolvedRestaurantName} social links`}>
-                <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                  Follow Us
-                </p>
-                <div className="flex items-center justify-center gap-2.5">
-                  {socialLinks.map(({ key, label, href, Icon }) => (
-                    <a
-                      key={key}
-                      href={href || undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={label}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white transition-transform active:scale-95 sm:h-11 sm:w-11"
-                      style={{ color: primaryColor }}
-                      data-testid={`social-link-${key}`}
-                    >
-                      <Icon className="h-[1.1rem] w-[1.1rem] sm:h-5 sm:w-5" strokeWidth={1.8} />
-                    </a>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <footer className="mt-auto w-full border-t border-slate-100 pt-3.5">
+            {resolvedGoogleReviewUrl ? (
               <a
-                href="https://cleverbiz.ai"
+                href={resolvedGoogleReviewUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-xs text-slate-400 transition-colors hover:text-slate-600"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition-all hover:brightness-110 active:scale-[0.98]"
+                style={{ backgroundColor: primaryColor }}
+                data-testid="google-review-button"
               >
-                <img src={logoImg} alt="" className="h-4 w-4 opacity-60" />
-                <span>Powered by CleverBiz AI</span>
+                Leave a Review on Google
+                <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
               </a>
-              <div className="mt-2 flex items-center justify-center gap-3" aria-label="CleverBiz social links">
-                {CLEVERBIZ_SOCIAL_LINKS.map(({ key, label, href, Icon }) => (
+            ) : (
+              <p className="text-sm font-medium text-white/75">Thank you for your visit!</p>
+            )}
+          </section>
+
+          {socialLinks.length > 0 && (
+            <section className="mt-3.5 text-center" aria-label={`${resolvedRestaurantName} social links`}>
+              <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-white/55">
+                Follow Us
+              </p>
+              <div className="flex items-center justify-center gap-2.5">
+                {socialLinks.map(({ key, label, href, Icon }) => (
                   <a
                     key={key}
-                    href={href}
+                    href={href || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="text-slate-400 transition-colors hover:text-slate-600"
-                    data-testid={`cleverbiz-social-link-${key}`}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/90 shadow-sm backdrop-blur-md transition-all hover:bg-white/18 active:scale-95"
+                    data-testid={`social-link-${key}`}
                   >
-                    <Icon className="h-4 w-4" strokeWidth={1.8} />
+                    <Icon className="h-[1.1rem] w-[1.1rem]" strokeWidth={1.8} />
                   </a>
                 ))}
               </div>
-            </footer>
-          </div>
+            </section>
+          )}
+
+          <footer className="mt-4 w-full border-t border-white/12 pt-3.5">
+            <a
+              href="https://cleverbiz.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 text-xs text-white/55 transition-colors hover:text-white/80"
+            >
+              <img src={logoImg} alt="" className="h-4 w-4 opacity-80" />
+              <span>Powered by CleverBiz AI</span>
+            </a>
+            <div className="mt-2 flex items-center justify-center gap-3" aria-label="CleverBiz social links">
+              {CLEVERBIZ_SOCIAL_LINKS.map(({ key, label, href, Icon }) => (
+                <a
+                  key={key}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="text-white/45 transition-colors hover:text-white/75"
+                  data-testid={`cleverbiz-social-link-${key}`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.8} />
+                </a>
+              ))}
+            </div>
+          </footer>
         </main>
       </div>
     </div>
