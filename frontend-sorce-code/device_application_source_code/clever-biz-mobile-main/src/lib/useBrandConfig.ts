@@ -281,10 +281,15 @@ export function preloadCachedBrandAssets(): void {
   preloadBrandImage(initial.logoUrl);
 }
 
-export function useBrandConfig(
+export interface BrandConfigResult {
+  brand: BrandConfig;
+  isLoading: boolean;
+}
+
+export function useBrandConfigResult(
   restaurantId?: string | number | null,
   orderId?: string | number | null,
-) {
+): BrandConfigResult {
   const normalizedRestaurantId = useMemo(() => {
     return normalizeRestaurantId(restaurantId) || resolveStoredRestaurantId();
   }, [restaurantId]);
@@ -296,6 +301,7 @@ export function useBrandConfig(
       : null;
   const [brand, setBrand] = useState<BrandConfig>(() => getInitialBrandConfig(normalizedRestaurantId));
   const [brandLookupKey, setBrandLookupKey] = useState(lookupKey);
+  const [isLoading, setIsLoading] = useState(Boolean(lookupKey));
 
   const syncFromCache = useCallback(() => {
     setBrand(getInitialBrandConfig(normalizedRestaurantId));
@@ -311,12 +317,14 @@ export function useBrandConfig(
     syncFromCache();
 
     if (!lookupKey) {
+      setIsLoading(false);
       return;
     }
 
     let isMounted = true;
+    setIsLoading(true);
 
-    const fetchRemote = async () => {
+    const fetchRemote = async (settleInitialLoad = false) => {
       try {
         const response = await cachedGet(
           normalizedRestaurantId
@@ -337,19 +345,23 @@ export function useBrandConfig(
         preloadBrandImage(mapped.coverImageUrl);
       } catch {
         // Silent fallback.
+      } finally {
+        if (isMounted && settleInitialLoad) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchRemote();
+    void fetchRemote(true);
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetchRemote();
+        void fetchRemote();
       }
     }, BRAND_REMOTE_REFRESH_MS);
 
     const refreshFromLocalAndRemote = () => {
       syncFromCache();
-      fetchRemote();
+      void fetchRemote();
     };
 
     const handleVisibilityRefresh = () => {
@@ -372,7 +384,17 @@ export function useBrandConfig(
     };
   }, [lookupKey, normalizedOrderId, normalizedRestaurantId, syncFromCache]);
 
-  return brandLookupKey === lookupKey
-    ? brand
-    : getInitialBrandConfig(normalizedRestaurantId);
+  return {
+    brand: brandLookupKey === lookupKey
+      ? brand
+      : getInitialBrandConfig(normalizedRestaurantId),
+    isLoading: isLoading || brandLookupKey !== lookupKey,
+  };
+}
+
+export function useBrandConfig(
+  restaurantId?: string | number | null,
+  orderId?: string | number | null,
+): BrandConfig {
+  return useBrandConfigResult(restaurantId, orderId).brand;
 }

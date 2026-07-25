@@ -10,7 +10,11 @@ import {
   Star,
   Twitter,
 } from "lucide-react";
-import { FONT_PRESETS, useBrandConfig } from "@/lib/useBrandConfig";
+import {
+  FONT_PRESETS,
+  shouldRenderBrandExperience,
+  useBrandConfigResult,
+} from "@/lib/useBrandConfig";
 import { cachedGet } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
 import logoImg from "@/assets/icon-32.png";
@@ -23,6 +27,17 @@ const firstNonEmpty = (...values: unknown[]) => {
     if (text) return text;
   }
   return null;
+};
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const cleaned = (hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+    return `rgba(0, 85, 254, ${alpha})`;
+  }
+  const red = parseInt(cleaned.slice(0, 2), 16);
+  const green = parseInt(cleaned.slice(2, 4), 16);
+  const blue = parseInt(cleaned.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
 
 const VERIFIED_PAYMENT_STATUSES = new Set([
@@ -142,8 +157,12 @@ const SuccessPage = () => {
   const [restaurantId, setRestaurantId] = useState<string | null>(
     () => paymentParams.restaurantId || resolveStoredRestaurantId(),
   );
-  const brand = useBrandConfig(restaurantId, paymentParams.orderId);
+  const { brand, isLoading: isBrandLoading } = useBrandConfigResult(
+    restaurantId,
+    paymentParams.orderId,
+  );
   const logoImage = useDecodedImage(brand.logoUrl);
+  const coverImage = useDecodedImage(brand.coverImageUrl);
   const sessionCleanedRef = useRef(false);
 
   useEffect(() => {
@@ -256,6 +275,25 @@ const SuccessPage = () => {
   const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
   const primaryColor = brand.primaryColor || "#0055FE";
   const fontFamily = FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family;
+  const hasBranding = shouldRenderBrandExperience(brand);
+  const coverBackground = useMemo(() => {
+    if (brand.themePreset === "luxury_dark") {
+      return "linear-gradient(145deg, #09090b 0%, #18181b 48%, #27272a 100%)";
+    }
+    if (brand.themePreset === "warm_casual") {
+      return "linear-gradient(145deg, #7c2d12 0%, #c2410c 52%, #fb923c 100%)";
+    }
+    return `linear-gradient(145deg, ${hexToRgba(primaryColor, 0.72)} 0%, ${primaryColor} 58%, #0f172a 125%)`;
+  }, [brand.themePreset, primaryColor]);
+  const coverOverlay =
+    brand.themePreset === "luxury_dark"
+      ? "linear-gradient(to bottom, rgba(0,0,0,0.24) 0%, rgba(0,0,0,0.56) 56%, rgba(0,0,0,0.88) 100%)"
+      : brand.themePreset === "warm_casual"
+        ? "linear-gradient(to bottom, rgba(67,20,7,0.16) 0%, rgba(67,20,7,0.52) 58%, rgba(15,23,42,0.86) 100%)"
+        : "linear-gradient(to bottom, rgba(15,23,42,0.10) 0%, rgba(15,23,42,0.48) 58%, rgba(15,23,42,0.86) 100%)";
+  const brandAssetsReady =
+    (!brand.logoUrl || logoImage.readySrc === brand.logoUrl || logoImage.failedSrc === brand.logoUrl) &&
+    (!brand.coverImageUrl || coverImage.readySrc === brand.coverImageUrl || coverImage.failedSrc === brand.coverImageUrl);
 
   const socialLinks = useMemo(
     () =>
@@ -304,113 +342,181 @@ const SuccessPage = () => {
     );
   }
 
-  return (
-    <div className="flex min-h-[100dvh] w-full items-center justify-center bg-slate-50 p-4 text-center sm:p-6">
-      <main
-        className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-slate-100 bg-white p-6 shadow-xl sm:p-8"
-        style={{ fontFamily }}
+  if (isBrandLoading || !brandAssetsReady) {
+    return (
+      <div
+        className="fixed inset-0 isolate flex items-center justify-center overflow-hidden"
+        style={{ background: coverBackground, fontFamily }}
+        aria-label="Loading restaurant branding"
+        data-testid="brand-loading-screen"
       >
-        {logoImage.readySrc ? (
+        {coverImage.readySrc ? (
           <img
-            src={logoImage.readySrc}
-            alt={`${resolvedRestaurantName} logo`}
-            decoding="async"
-            className="mb-5 h-16 w-16 rounded-2xl object-contain"
-            data-testid="restaurant-logo"
+            src={coverImage.readySrc}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 -z-20 h-full w-full object-cover"
+            style={{ objectPosition: brand.coverPosition || "50% 50%" }}
           />
-        ) : (
-          <p className="mb-5 text-lg font-bold" style={{ color: primaryColor }}>
-            {resolvedRestaurantName}
-          </p>
-        )}
-
-        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle2 className="h-11 w-11 text-green-600" strokeWidth={2.5} />
+        ) : null}
+        <div className="absolute inset-0 -z-10 bg-slate-950/60" />
+        <div className="flex flex-col items-center gap-4">
+          {logoImage.readySrc ? (
+            <img
+              src={logoImage.readySrc}
+              alt={`${resolvedRestaurantName} logo`}
+              className="h-20 w-20 rounded-2xl border border-white/25 bg-white/15 object-contain p-1.5 shadow-xl backdrop-blur-md"
+            />
+          ) : null}
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/25 border-t-white" />
         </div>
+      </div>
+    );
+  }
 
-        <h1 className="mb-2 text-2xl font-bold text-slate-900">Thank You!</h1>
-        <p className="mb-6 text-sm leading-relaxed text-slate-500 sm:text-base">
-          Thank you for dining with us today. We hope everything was delicious. See you again soon!
-        </p>
+  return (
+    <div
+      className="relative isolate min-h-[100dvh] w-full overflow-x-hidden text-center"
+      style={{ background: coverBackground, fontFamily }}
+      data-testid="thank-you-page"
+    >
+      <div className="fixed inset-0 -z-20" style={{ background: coverBackground }} />
+      {hasBranding && coverImage.readySrc ? (
+        <img
+          src={coverImage.readySrc}
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+          className="fixed inset-0 -z-10 h-full w-full scale-[1.02] object-cover"
+          style={{ objectPosition: brand.coverPosition || "50% 50%" }}
+          data-testid="restaurant-cover"
+        />
+      ) : null}
+      <div className="fixed inset-0 -z-10" style={{ background: coverOverlay }} />
 
-        <section
-          className="mb-5 w-full rounded-2xl border border-slate-200 p-4"
-          data-testid="google-review-card"
-        >
-          <div className="mb-3 flex items-center justify-center gap-1">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
-            ))}
-          </div>
-          <p className="mb-4 text-sm leading-relaxed text-slate-600">
-            Please leave a quick Google review and share your experience with others.
-          </p>
-          {resolvedGoogleReviewUrl ? (
-            <a
-              href={resolvedGoogleReviewUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold text-white shadow-sm transition-all hover:brightness-95 active:scale-[0.98]"
-              style={{ backgroundColor: primaryColor }}
-              data-testid="google-review-button"
+      <div className="flex min-h-[100dvh] w-full items-center justify-center sm:p-6 lg:p-10">
+        <main className="flex min-h-[100dvh] w-full flex-col overflow-hidden bg-transparent sm:min-h-0 sm:max-w-md sm:rounded-[2rem] sm:border sm:border-white/20 sm:shadow-2xl sm:shadow-black/35">
+          <header className="flex min-h-56 flex-col items-center justify-center px-5 pb-8 pt-[max(1.5rem,env(safe-area-inset-top))] text-white sm:min-h-48 sm:px-6 sm:py-7">
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-white/15 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-md sm:h-24 sm:w-24">
+              {logoImage.readySrc ? (
+                <img
+                  src={logoImage.readySrc}
+                  alt={`${resolvedRestaurantName} logo`}
+                  decoding="async"
+                  className="h-full w-full rounded-full object-contain"
+                  data-testid="restaurant-logo"
+                />
+              ) : (
+                <span className="text-3xl font-bold sm:text-4xl">
+                  {resolvedRestaurantName.charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+            <p className="mt-3 text-lg font-bold leading-tight drop-shadow-md sm:mt-4 sm:text-xl">
+              {resolvedRestaurantName}
+            </p>
+            {brand.tagline ? (
+              <p className="mt-1.5 max-w-xs text-sm text-white/75 drop-shadow">
+                {brand.tagline}
+              </p>
+            ) : null}
+          </header>
+
+          <div className="-mt-5 flex flex-1 flex-col items-center rounded-t-[1.75rem] bg-white/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-0 shadow-[0_-18px_45px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:mt-0 sm:rounded-none sm:px-7 sm:pb-6">
+            <div className="-mt-8 mb-2.5 flex h-16 w-16 items-center justify-center rounded-full border-[5px] border-white bg-emerald-100 shadow-lg shadow-emerald-900/10 sm:-mt-9 sm:h-20 sm:w-20 sm:border-[6px]">
+              <CheckCircle2 className="h-8 w-8 text-emerald-600 sm:h-10 sm:w-10" strokeWidth={2.6} />
+            </div>
+
+            <h1 className="mb-1 text-[1.4rem] font-bold tracking-tight text-slate-900 sm:text-2xl">
+              Thank You!
+            </h1>
+            <p className="mb-4 max-w-sm text-[0.82rem] leading-relaxed text-slate-500 sm:text-sm">
+              Thank you for dining with us today. We hope everything was delicious. See you again soon!
+            </p>
+
+            <section
+              className="mb-3.5 w-full rounded-2xl border border-slate-200/80 bg-white/80 p-3.5 shadow-sm sm:p-4"
+              style={{ boxShadow: `0 12px 30px ${hexToRgba(primaryColor, 0.08)}` }}
+              data-testid="google-review-card"
             >
-              Leave a Review on Google
-              <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
-            </a>
-          ) : (
-            <p className="text-sm font-medium text-slate-500">Thank you for your visit!</p>
-          )}
-        </section>
-
-        {socialLinks.length > 0 && (
-          <section className="mb-5 text-center" aria-label={`${resolvedRestaurantName} social links`}>
-            <p className="mb-3 text-xs font-semibold uppercase text-slate-400">Follow Us</p>
-            <div className="flex items-center justify-center gap-3">
-              {socialLinks.map(({ key, label, href, Icon }) => (
+              <div className="mb-2 flex items-center justify-center gap-1">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
+                ))}
+              </div>
+              <p className="mb-3 text-[0.82rem] leading-relaxed text-slate-600 sm:text-sm">
+                Please leave a quick Google review and share your experience with others.
+              </p>
+              {resolvedGoogleReviewUrl ? (
                 <a
-                  key={key}
-                  href={href || undefined}
+                  href={resolvedGoogleReviewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={label}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 transition-transform active:scale-95"
-                  style={{ color: primaryColor }}
-                  data-testid={`social-link-${key}`}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-95 active:scale-[0.98] sm:min-h-12 sm:px-4 sm:text-base"
+                  style={{ backgroundColor: primaryColor }}
+                  data-testid="google-review-button"
                 >
-                  <Icon className="h-5 w-5" strokeWidth={1.8} />
+                  Leave a Review on Google
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
                 </a>
-              ))}
-            </div>
-          </section>
-        )}
+              ) : (
+                <p className="text-sm font-medium text-slate-500">Thank you for your visit!</p>
+              )}
+            </section>
 
-        <footer className="w-full border-t border-slate-100 pt-5">
-          <a
-            href="https://cleverbiz.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 text-xs text-slate-400 transition-colors hover:text-slate-600"
-          >
-            <img src={logoImg} alt="" className="h-4 w-4 opacity-60" />
-            <span>Powered by CleverBiz AI</span>
-          </a>
-          <div className="mt-3 flex items-center justify-center gap-3" aria-label="CleverBiz social links">
-            {CLEVERBIZ_SOCIAL_LINKS.map(({ key, label, href, Icon }) => (
+            {socialLinks.length > 0 && (
+              <section className="mb-3.5 text-center" aria-label={`${resolvedRestaurantName} social links`}>
+                <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  Follow Us
+                </p>
+                <div className="flex items-center justify-center gap-2.5">
+                  {socialLinks.map(({ key, label, href, Icon }) => (
+                    <a
+                      key={key}
+                      href={href || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={label}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white transition-transform active:scale-95 sm:h-11 sm:w-11"
+                      style={{ color: primaryColor }}
+                      data-testid={`social-link-${key}`}
+                    >
+                      <Icon className="h-[1.1rem] w-[1.1rem] sm:h-5 sm:w-5" strokeWidth={1.8} />
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <footer className="mt-auto w-full border-t border-slate-100 pt-3.5">
               <a
-                key={key}
-                href={href}
+                href="https://cleverbiz.ai"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={label}
-                className="text-slate-400 transition-colors hover:text-slate-600"
-                data-testid={`cleverbiz-social-link-${key}`}
+                className="flex items-center justify-center gap-2 text-xs text-slate-400 transition-colors hover:text-slate-600"
               >
-                <Icon className="h-4 w-4" strokeWidth={1.8} />
+                <img src={logoImg} alt="" className="h-4 w-4 opacity-60" />
+                <span>Powered by CleverBiz AI</span>
               </a>
-            ))}
+              <div className="mt-2 flex items-center justify-center gap-3" aria-label="CleverBiz social links">
+                {CLEVERBIZ_SOCIAL_LINKS.map(({ key, label, href, Icon }) => (
+                  <a
+                    key={key}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    className="text-slate-400 transition-colors hover:text-slate-600"
+                    data-testid={`cleverbiz-social-link-${key}`}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={1.8} />
+                  </a>
+                ))}
+              </div>
+            </footer>
           </div>
-        </footer>
-      </main>
+        </main>
+      </div>
     </div>
   );
 };
