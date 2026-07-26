@@ -26,6 +26,12 @@ type Props = {
 
 const normalizeText = (value: unknown) => String(value || "").toLowerCase();
 
+const firstSentence = (value: string) => {
+  const text = value.trim();
+  const sentenceEnd = text.search(/[.!?](?:\s|$)/);
+  return sentenceEnd >= 0 ? text.slice(0, sentenceEnd + 1).trim() : text;
+};
+
 const itemLooksLike = (item: Partial<UpsellSuggestion> | undefined, keywords: string[]) => {
   if (!item) return false;
   const haystack = `${normalizeText(item.category_name)} ${normalizeText(item.item_name)} ${normalizeText(item.description)}`;
@@ -260,9 +266,12 @@ export default function UpsellBottomSheet({
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-400">{contextualCopy.reason}</p>
-                    <p className="truncate text-base font-bold text-slate-900">{primaryItem.item_name}</p>
-                    <p className="line-clamp-1 text-xs text-slate-500">{primaryItem.description || "Popular with this meal."}</p>
+                    <p className="line-clamp-2 text-base font-bold leading-tight text-slate-900">
+                      {primaryItem.item_name}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-snug text-slate-500">
+                      {firstSentence(contextualCopy.reason)}
+                    </p>
                     <p className="mt-1.5 text-sm font-bold text-[#552500]">
                       {currencyCode} {getEffectiveItemPrice(primaryItem).toFixed(2)}
                     </p>
