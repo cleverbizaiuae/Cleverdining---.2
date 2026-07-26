@@ -17,7 +17,6 @@ import {
 } from "@/lib/useBrandConfig";
 import { cachedGet } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
-import logoImg from "@/assets/icon-32.png";
 import { useNavigate } from "react-router-dom";
 import { clearGuestSessionStorage } from "@/lib/guestSessionStorage";
 
@@ -422,23 +421,21 @@ const SuccessPage = () => {
             ) : null}
           </header>
 
-          <div className="mt-3 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-emerald-200/35 bg-emerald-300/15 shadow-lg shadow-black/25 backdrop-blur-md">
-            <CheckCircle2 className="h-7 w-7 text-emerald-300" strokeWidth={2.6} />
-          </div>
-
-          <h1 className="mt-2.5 text-[1.45rem] font-bold tracking-tight text-white drop-shadow-lg">
-            Thank You!
-          </h1>
-          <p className="mt-1.5 max-w-sm text-[0.8rem] leading-relaxed text-white/80 drop-shadow-md">
-            Thank you for dining with us today. We hope everything was delicious. See you again soon!
-          </p>
-
           <section
             className="mt-4 w-full rounded-2xl border border-white/20 bg-black/25 p-3.5 shadow-xl shadow-black/20 backdrop-blur-md"
             style={{ boxShadow: `0 14px 34px ${hexToRgba(primaryColor, 0.12)}` }}
             data-testid="google-review-card"
           >
-            <div className="mb-2 flex items-center justify-center gap-1">
+            <div className="mx-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-emerald-200/35 bg-emerald-300/15 shadow-lg shadow-black/25 backdrop-blur-md">
+              <CheckCircle2 className="h-7 w-7 text-emerald-300" strokeWidth={2.6} />
+            </div>
+            <h1 className="mt-2.5 text-[1.45rem] font-bold tracking-tight text-white drop-shadow-lg">
+              Thank You!
+            </h1>
+            <p className="mt-1.5 text-[0.8rem] leading-relaxed text-white/80 drop-shadow-md">
+              Thank you for dining with us today. We hope everything was delicious. See you again soon!
+            </p>
+            <div className="mb-2 mt-4 flex items-center justify-center gap-1">
               {Array.from({ length: 5 }).map((_, index) => (
                 <Star key={index} className="h-5 w-5 fill-amber-400 text-amber-400" strokeWidth={1.8} />
               ))}
@@ -492,9 +489,8 @@ const SuccessPage = () => {
             href="https://cleverbiz.ai"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 text-xs text-white/60 drop-shadow transition-colors hover:text-white/85"
+            className="flex items-center justify-center text-xs text-white/60 drop-shadow transition-colors hover:text-white/85"
           >
-            <img src={logoImg} alt="" className="h-4 w-4 opacity-90" />
             <span>Powered by CleverBiz AI</span>
           </a>
           <div className="mt-2 flex items-center justify-center gap-3" aria-label="CleverBiz social links">
