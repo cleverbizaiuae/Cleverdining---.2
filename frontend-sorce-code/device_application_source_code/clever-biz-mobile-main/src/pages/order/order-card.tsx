@@ -48,7 +48,6 @@ export const OrderCard = ({ order, isNew = false, isCashPending = false }: Order
     order.isPartiallyPaid === true ||
     (!isFullyPaid && resolvedPaidAmount > 0.001);
   const paymentProgress = total > 0 ? Math.min(100, Math.max(0, (resolvedPaidAmount / total) * 100)) : 0;
-  const orderTime = order.timestamp || order.created_time;
   const statusMeta =
     backendStatus === "cancelled" || backendStatus === "canceled"
       ? { icon: "✕", label: "Cancelled" }
@@ -60,20 +59,6 @@ export const OrderCard = ({ order, isNew = false, isCashPending = false }: Order
             icon: "✅",
             label: backendStatus === "delivered" || backendStatus === "completed" ? "Delivered" : "Served",
           };
-
-  const relativeTime = (value: string | undefined) => {
-    if (!value) return "--";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "--";
-    const diffMs = Date.now() - parsed.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return "Just now";
-    if (diffMin < 60) return `${diffMin} min ago`;
-    const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return `${diffHour} hr ago`;
-    const diffDay = Math.floor(diffHour / 24);
-    return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
-  };
 
   const fmt = (value: number) => {
     try {
@@ -91,7 +76,9 @@ export const OrderCard = ({ order, isNew = false, isCashPending = false }: Order
   return (
     <div className={cn("bg-card rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.18)] border overflow-hidden transition-colors duration-700", isNew ? "border-primary shadow-primary/20" : "border-border")}>
       <div className="px-4 pt-3.5 pb-3 border-b border-border">
-        <p className="text-xs text-muted-foreground font-medium">Ordered {relativeTime(orderTime)}</p>
+        <p className="text-xs font-semibold text-foreground">
+          Order #{order.backendId || order.id}
+        </p>
       </div>
 
       <div className="px-4 py-3 space-y-2">
