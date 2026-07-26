@@ -22,8 +22,11 @@ import { Logo } from "@/components/icons/brandLogo";
 import { Footer } from "../components/Footer";
 import {
   canShowUpsellSession,
+  canShowUpsellTouchpoint,
   incrementUpsellTouchpointCount,
   getUpsellExcludedItemIds,
+  getUpsellSessionCap,
+  getUpsellTriggerLimit,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
   markUpsellItemsShown,
@@ -374,14 +377,22 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       sourceItemIdRef.current = Number(item.id);
       sourceItemIdsRef.current = cartItemIds;
 
-      const shouldOpenImmediately =
+      const currentAggressiveness = settings?.aggressiveness || "moderate";
+      const currentTriggerLimit = getUpsellTriggerLimit("add_to_cart", currentAggressiveness);
+      const currentSessionLimit = getUpsellSessionCap(currentAggressiveness);
+      const shouldRequest =
         isUpsellTriggerEnabled(settings, "add_to_cart") &&
-        canShowUpsellSession(settings?.aggressiveness || "moderate");
+        canShowUpsellSession(currentAggressiveness) &&
+        canShowUpsellTouchpoint("add_to_cart", currentTriggerLimit, currentSessionLimit);
 
-      activeRef.current = shouldOpenImmediately;
-      setLoading(shouldOpenImmediately);
+      // Keep the sheet completely closed while the recommendation is being
+      // resolved. It opens only after a valid, allowed suggestion exists.
+      activeRef.current = false;
+      setLoading(false);
       setSuggestions([]);
-      setOpen(shouldOpenImmediately);
+      setOpen(false);
+
+      if (!shouldRequest) return;
 
       const settingsPromise = fetchUpsellSettings().catch(() => null);
       const suggestionPromise = fetchUpsellSuggestions({
@@ -397,12 +408,14 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
         .then(([settingsSnapshot, rawSuggestions]) => {
           if (requestSeqRef.current !== requestId) return [];
           if (settingsSnapshot) setSettings(settingsSnapshot);
+          const effectiveSettings = settingsSnapshot || settings;
+          const effectiveAggressiveness = effectiveSettings?.aggressiveness || "moderate";
+          const effectiveTriggerLimit = getUpsellTriggerLimit("add_to_cart", effectiveAggressiveness);
+          const effectiveSessionLimit = getUpsellSessionCap(effectiveAggressiveness);
           if (
-            settingsSnapshot &&
-            (
-              !isUpsellTriggerEnabled(settingsSnapshot, "add_to_cart") ||
-              !canShowUpsellSession(settingsSnapshot.aggressiveness || "moderate")
-            )
+            !isUpsellTriggerEnabled(effectiveSettings, "add_to_cart") ||
+            !canShowUpsellSession(effectiveAggressiveness) ||
+            !canShowUpsellTouchpoint("add_to_cart", effectiveTriggerLimit, effectiveSessionLimit)
           ) {
             setLoading(false);
             setOpen(false);
@@ -428,7 +441,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
             triggerPoint: "cart",
             sourceItemId: Number(item.id),
             restaurantId: Number(item.restaurant || 0) || undefined,
-            limit: 2,
+            limit: getUpsellTriggerLimit("cart", effectiveAggressiveness),
             cartItemIds,
             excludeItemIds: Array.from(
               new Set([
@@ -495,7 +508,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       triggerPoint: "cart",
       sourceItemId: suggestion.id,
       restaurantId: Number(suggestion.restaurant || triggerItem?.restaurant || 0) || undefined,
-      limit: 2,
+      limit: getUpsellTriggerLimit("cart", settings?.aggressiveness || "moderate"),
       cartItemIds: nextCartItemIds,
       excludeItemIds: Array.from(
         new Set([...nextCartItemIds, ...getUpsellExcludedItemIds()])

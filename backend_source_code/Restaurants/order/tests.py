@@ -2195,6 +2195,102 @@ class UpsellKnowledgeEngineTests(TestCase):
             )
             llm.assert_not_called()
 
+    def test_aggressiveness_cap_is_split_between_menu_and_cart_surfaces(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        expected_surface_caps = {
+            "subtle": 1,
+            "moderate": 2,
+            "aggressive": 3,
+        }
+
+        for aggressiveness, surface_cap in expected_surface_caps.items():
+            setting.aggressiveness = aggressiveness
+            setting.save(update_fields=["aggressiveness"])
+
+            for trigger_point, event_trigger_point in (
+                ("add_to_cart", "add_to_cart"),
+                ("cart", "cart"),
+                ("before_payment", "cart"),
+            ):
+                session_id = f"surface-cap-{aggressiveness}-{trigger_point}"
+                for index in range(surface_cap):
+                    UpsellEvent.objects.create(
+                        restaurant=self.restaurant,
+                        session_id=session_id,
+                        trigger_point=event_trigger_point,
+                        action="shown",
+                        upsell_item=self.cola,
+                        upsell_item_name=f"Cola {index}",
+                    )
+
+                request = APIRequestFactory().get(
+                    "/api/upsell/smart-suggestions",
+                    {
+                        "restaurant_id": self.restaurant.id,
+                        "cart_item_ids": str(self.burger.id),
+                        "source_item_id": self.burger.id,
+                        "trigger_point": trigger_point,
+                        "session_id": session_id,
+                    },
+                )
+                with patch("order.upsell_views.call_upsell_llm") as llm:
+                    response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["count"], 0)
+                self.assertEqual(
+                    response.data["agent_decision"]["decision_source"],
+                    "backend_surface_cap",
+                )
+                llm.assert_not_called()
+
+        setting.aggressiveness = "subtle"
+        setting.save(update_fields=["aggressiveness"])
+        split_session_id = "subtle-menu-complete-cart-available"
+        UpsellEvent.objects.create(
+            restaurant=self.restaurant,
+            session_id=split_session_id,
+            trigger_point="add_to_cart",
+            action="shown",
+            upsell_item=self.cola,
+            upsell_item_name=self.cola.item_name,
+        )
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        chosen = rows[0]["item"]
+        llm_response = {
+            "suggest_nothing": False,
+            "suggested_item_id": chosen.id,
+            "suggested_item_name": chosen.item_name,
+            "target_role": rows[0]["target_role"],
+            "reason": None,
+            "reasoning": "The cart allowance is still available.",
+            "suggestion_copy": "One useful addition for your order.",
+            "confidence": 0.9,
+        }
+        cart_request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "cart",
+                "session_id": split_session_id,
+            },
+        )
+        with patch("order.upsell_views.call_upsell_llm", return_value=(llm_response, "ok")):
+            cart_response = UpsellSmartSuggestionsAPIView.as_view()(cart_request)
+
+        self.assertEqual(cart_response.status_code, 200)
+        self.assertEqual(cart_response.data["count"], 1)
+        self.assertEqual(cart_response.data["results"][0]["id"], chosen.id)
+
     def test_each_disabled_trigger_is_enforced_before_llm_selection(self):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
         trigger_fields = {

@@ -30,6 +30,7 @@ from .upsell_knowledge import (
     build_upsell_agent_context,
     call_upsell_llm,
     classify_item_roles,
+    get_aggressiveness_policy,
     request_upsell_llm_decision,
     validated_upsell_agent_decision,
 )
@@ -784,10 +785,20 @@ class UpsellSmartSuggestionsAPIView(APIView):
         session_cap = UPSELL_SESSION_CAPS.get(setting.aggressiveness, 4)
         session_events = UpsellEvent.objects.none()
         suggestions_shown = 0
+        surface_suggestions_shown = 0
         declined_item_ids = set()
         if session_id:
             session_events = UpsellEvent.objects.filter(restaurant=restaurant, session_id=session_id)
             suggestions_shown = session_events.filter(action="shown").count()
+            surface_trigger_points = (
+                ("add_to_cart",)
+                if trigger_point == "add_to_cart"
+                else ("cart", "before_payment")
+            )
+            surface_suggestions_shown = session_events.filter(
+                action="shown",
+                trigger_point__in=surface_trigger_points,
+            ).count()
             declined_item_ids = set(
                 session_events.filter(action__in=["declined", "dismissed"])
                 .exclude(upsell_item_id__isnull=True)
@@ -832,6 +843,31 @@ class UpsellSmartSuggestionsAPIView(APIView):
                         "menu_version": menu_version,
                         "config_version": config_version,
                         "decision_source": "backend_session_cap",
+                    },
+                }
+            )
+
+        aggressiveness_policy = get_aggressiveness_policy(setting.aggressiveness)
+        surface_cap = (
+            aggressiveness_policy["menu_max_calls"]
+            if trigger_point == "add_to_cart"
+            else aggressiveness_policy["cart_max_calls"]
+        )
+        if session_id and surface_suggestions_shown >= surface_cap:
+            return Response(
+                {
+                    "results": [],
+                    "suggestions": [],
+                    "count": 0,
+                    "agent_decision": {
+                        "suggest_nothing": True,
+                        "reason": "Upsell allowance for this surface has been reached.",
+                        "decision_source": "backend_surface_cap",
+                    },
+                    "knowledge_base": {
+                        "menu_version": menu_version,
+                        "config_version": config_version,
+                        "decision_source": "backend_surface_cap",
                     },
                 }
             )

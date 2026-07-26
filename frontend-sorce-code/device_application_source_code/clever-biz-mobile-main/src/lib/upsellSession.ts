@@ -15,7 +15,8 @@ export type UpsellAggressiveness = "subtle" | "moderate" | "aggressive";
 const TOUCHPOINT_COUNTER_KEYS: Record<UpsellTouchpoint, string> = {
   add_to_cart: AFTER_ADD_COUNT_KEY,
   cart: CART_COUNT_KEY,
-  before_payment: PREPAY_COUNT_KEY,
+  // The cart and before-payment placements share the same cart allowance.
+  before_payment: CART_COUNT_KEY,
 };
 
 type SignalState = {
@@ -66,6 +67,9 @@ export function resetUpsellSession(): void {
     Object.values(TOUCHPOINT_COUNTER_KEYS).forEach((key) => {
       sessionStorage.removeItem(key);
     });
+    // Clean up counts written by older builds where before-payment had its
+    // own allowance.
+    sessionStorage.removeItem(PREPAY_COUNT_KEY);
     sessionStorage.removeItem(TOTAL_COUNT_KEY);
     sessionStorage.removeItem(TOTAL_DECLINE_SCORE_KEY);
   } catch {
@@ -220,8 +224,40 @@ export function getEffectiveUpsellAggressiveness(aggressiveness: UpsellAggressiv
 }
 
 export function getUpsellTriggerLimit(triggerPoint: UpsellTouchpoint, aggressiveness: UpsellAggressiveness = "moderate"): number {
-  if (triggerPoint === "add_to_cart" || triggerPoint === "before_payment") return 1;
-  return aggressiveness === "subtle" ? 1 : 2;
+  void triggerPoint;
+  if (aggressiveness === "subtle") return 1;
+  if (aggressiveness === "aggressive") return 3;
+  return 2;
+}
+
+function getUpsellTouchpointCount(triggerPoint: UpsellTouchpoint): number {
+  const storageKey = TOUCHPOINT_COUNTER_KEYS[triggerPoint];
+  const current = Number(sessionStorage.getItem(storageKey) || "0");
+  const legacyBeforePayment =
+    triggerPoint === "cart" || triggerPoint === "before_payment"
+      ? Number(sessionStorage.getItem(PREPAY_COUNT_KEY) || "0")
+      : 0;
+  return (Number.isFinite(current) ? current : 0)
+    + (Number.isFinite(legacyBeforePayment) ? legacyBeforePayment : 0);
+}
+
+export function getRemainingUpsellAllowance(
+  triggerPoint: UpsellTouchpoint,
+  aggressiveness: UpsellAggressiveness = "moderate",
+): number {
+  try {
+    const triggerLimit = getUpsellTriggerLimit(triggerPoint, aggressiveness);
+    const sessionLimit = getUpsellSessionCap(aggressiveness);
+    const current = getUpsellTouchpointCount(triggerPoint);
+    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
+    const normalizedTotal = Number.isFinite(total) ? total : 0;
+    return Math.max(
+      0,
+      Math.min(triggerLimit - current, sessionLimit - normalizedTotal),
+    );
+  } catch {
+    return getUpsellTriggerLimit(triggerPoint, aggressiveness);
+  }
 }
 
 export function canShowUpsellTouchpoint(
@@ -230,8 +266,7 @@ export function canShowUpsellTouchpoint(
   sessionLimit = Number.POSITIVE_INFINITY,
 ): boolean {
   try {
-    const storageKey = TOUCHPOINT_COUNTER_KEYS[triggerPoint];
-    const current = Number(sessionStorage.getItem(storageKey) || "0");
+    const current = getUpsellTouchpointCount(triggerPoint);
     const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
     return current < Math.max(1, limit) && total < Math.max(1, sessionLimit);
   } catch {
