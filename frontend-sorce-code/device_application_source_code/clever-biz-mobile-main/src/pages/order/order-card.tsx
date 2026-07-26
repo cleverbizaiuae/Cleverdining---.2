@@ -50,7 +50,9 @@ export const OrderCard = ({ order, isNew = false, isCashPending = false }: Order
   const paymentProgress = total > 0 ? Math.min(100, Math.max(0, (resolvedPaidAmount / total) * 100)) : 0;
   const orderTime = order.timestamp || order.created_time;
   const statusMeta =
-    normalizedStatus === "Pending"
+    backendStatus === "cancelled" || backendStatus === "canceled"
+      ? { icon: "✕", label: "Cancelled" }
+      : normalizedStatus === "Pending"
       ? { icon: "⏳", label: "Pending" }
       : normalizedStatus === "Preparing"
         ? { icon: "👨‍🍳", label: "Preparing" }

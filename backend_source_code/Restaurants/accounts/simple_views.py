@@ -123,7 +123,7 @@ class SimpleLoginView(APIView):
             try:
                 if getattr(user, 'role', None) == 'owner':
                     user_data['owner_id'] = user.id
-                elif getattr(user, 'role', None) in ['chef', 'staff']:
+                elif getattr(user, 'role', None) in ['chef', 'staff', 'manager']:
                     # Try to get owner from restaurant
                     staff_role = user.staff_roles.first()
                     if staff_role and staff_role.restaurant:
@@ -163,6 +163,43 @@ class SimpleLoginView(APIView):
                         }]
                 except Exception as rest_error:
                     logger.warning(f"Could not load restaurants: {str(rest_error)}")
+            elif getattr(user, 'role', None) in ['chef', 'staff', 'manager']:
+                try:
+                    staff_role = (
+                        user.staff_roles
+                        .select_related('restaurant')
+                        .filter(action='accepted')
+                        .first()
+                    )
+                    restaurant = staff_role.restaurant if staff_role else None
+                    if restaurant:
+                        region_defaults = resolve_region_defaults(
+                            region=restaurant.region,
+                            country=restaurant.country,
+                            currency=restaurant.currency,
+                        )
+                        user_data['restaurants'] = [{
+                            'id': restaurant.id,
+                            'resturent_name': restaurant.resturent_name or '',
+                            'location': restaurant.location or '',
+                            'region': restaurant.region or region_defaults['region'],
+                            'currency': restaurant.currency or region_defaults['currency'],
+                            'timezone': restaurant.timezone or region_defaults['timezone'],
+                            'country_code': restaurant.country_code or region_defaults['country_code'],
+                            'default_payment_provider': restaurant.default_payment_provider or region_defaults['default_payment_provider'],
+                            'phone_number': restaurant.phone_number or '',
+                            'package': restaurant.package or 'Basic',
+                            'source': 'staff',
+                            'device_id': None,
+                            'table_name': None,
+                            'subscription': {
+                                'package_name': 'Basic',
+                                'status': 'active',
+                                'current_period_end': None
+                            }
+                        }]
+                except Exception as rest_error:
+                    logger.warning(f"Could not load staff restaurant: {str(rest_error)}")
             
             # Step 7: Return success response
             logger.info(f"Login successful: {email} (role: {user.role})")

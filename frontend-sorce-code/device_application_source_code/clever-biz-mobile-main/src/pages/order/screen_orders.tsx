@@ -531,6 +531,7 @@ const ScreenOrders = () => {
         .filter((order) => {
           const status = String(order.backendStatus || order.status || "").toLowerCase();
           const paymentStatus = String(order.payment_status || order.paymentStatus || "").toLowerCase();
+          if (status === "cancelled" || status === "canceled") return false;
           return status === "awaiting_cash" || paymentStatus === "pending_cash";
         })
         .map((order) => String(order.backendId || order.id)),

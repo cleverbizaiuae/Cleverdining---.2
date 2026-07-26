@@ -71,6 +71,7 @@ const ScreenAdminLogin = () => {
             localStorage.setItem("refreshToken", refresh);
             localStorage.setItem("adminRole", dbRole === "owner" ? "manager" : dbRole); // Map backend owner to frontend manager
             localStorage.setItem("role", dbRole);
+            sessionStorage.removeItem("profile_synced");
 
             // Store User Object
             localStorage.setItem("userInfo", JSON.stringify(user));
@@ -78,10 +79,8 @@ const ScreenAdminLogin = () => {
             // Store Restaurant ID if available
             if (user.restaurants && user.restaurants.length > 0) {
                 localStorage.setItem("restaurantId", user.restaurants[0].id);
-            } else if (user.owner_id) {
-                // For staff/chef, might not have array but owner_id
-                // Logic depends on how frontend uses it. 
-                // We'll trust user object storage for now.
+            } else {
+                localStorage.removeItem("restaurantId");
             }
 
             toast.success(`Welcome back, ${user.username || "User"} !`);

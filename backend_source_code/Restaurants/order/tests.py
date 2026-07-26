@@ -14,6 +14,7 @@ from accounts.models import ChefStaff, User
 from category.models import Category
 from device.models import Device, GuestSession
 from item.models import Item
+from payment.models import Payment
 from restaurant.models import BrandConfig, Restaurant
 
 from .models import Cart, ItemAssociation, Order, UpsellEvent, UpsellItemSetting, UpsellLLMDecision, UpsellRule, UpsellSetting
@@ -125,6 +126,118 @@ class PayBeforeOrderFlowTests(TestCase):
         owner_response = self.client.get("/owners/orders/")
         owner_orders = owner_response.json()["results"]["orders"]
         self.assertEqual(len(owner_orders), 1)
+
+    def test_cash_prepayment_is_collectible_by_staff_but_hidden_from_chef(self):
+        response = self._place_order("cash")
+
+        self.assertEqual(response.status_code, 201)
+        order = Order.objects.get(pk=response.json()["id"])
+        self.assertEqual(order.status, "awaiting_payment")
+        self.assertEqual(order.payment_status, "pending_cash")
+        self.assertTrue(
+            Payment.objects.filter(
+                order=order,
+                provider="cash",
+                status="pending",
+            ).exists()
+        )
+
+        chef = User.objects.create_user(
+            email="cash-prepay-chef@example.com",
+            username="Cash Prepay Chef",
+            password="test-password",
+            role="chef",
+        )
+        staff = User.objects.create_user(
+            email="cash-prepay-staff@example.com",
+            username="Cash Prepay Staff",
+            password="test-password",
+            role="staff",
+        )
+        ChefStaff.objects.create(restaurant=self.restaurant, user=chef, action="accepted")
+        ChefStaff.objects.create(restaurant=self.restaurant, user=staff, action="accepted")
+
+        self.client.force_authenticate(chef)
+        chef_response = self.client.get("/api/chef/orders/")
+        self.assertEqual(chef_response.status_code, 200)
+        self.assertEqual(chef_response.json()["results"]["orders"], [])
+
+        self.client.force_authenticate(staff)
+        staff_response = self.client.get("/api/staff/orders/")
+        self.assertEqual(staff_response.status_code, 200)
+        self.assertEqual(
+            [entry["id"] for entry in staff_response.json()["results"]["orders"]],
+            [order.id],
+        )
+
+        confirm_response = self.client.patch(f"/owners/orders/confirm-cash/{order.id}/")
+        self.assertEqual(confirm_response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(order.payment_status, "paid")
+
+        self.client.force_authenticate(chef)
+        chef_response = self.client.get("/api/chef/orders/")
+        self.assertEqual(
+            [entry["id"] for entry in chef_response.json()["results"]["orders"]],
+            [order.id],
+        )
+
+    def test_switching_pending_stripe_attempt_to_cash_updates_payment_method_without_releasing_order(self):
+        response = self._place_order("card")
+        order = Order.objects.get(pk=response.json()["id"])
+        stripe_payment = Payment.objects.create(
+            device=self.device,
+            restaurant=self.restaurant,
+            order=order,
+            provider="stripe",
+            transaction_id="pi_pending_switch_to_cash",
+            amount=order.total_price,
+            status="pending",
+        )
+
+        cash_response = self.client.post(
+            "/api/customer/create-bulk-checkout-session/",
+            {
+                "provider": "cash",
+                "guest_session_token": self.session.session_token,
+            },
+            format="json",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+
+        self.assertEqual(cash_response.status_code, 200)
+        order.refresh_from_db()
+        stripe_payment.refresh_from_db()
+        self.assertEqual(stripe_payment.status, "cancelled")
+        self.assertEqual(order.status, "awaiting_payment")
+        self.assertEqual(order.payment_status, "pending_cash")
+        self.assertTrue(
+            Payment.objects.filter(order=order, provider="cash", status="pending").exists()
+        )
+
+    def test_cancelling_order_retires_pending_cash_payment(self):
+        self.brand_config.pay_before_order = False
+        self.brand_config.save(update_fields=["pay_before_order"])
+        response = self._place_order("cash")
+        order = Order.objects.get(pk=response.json()["id"])
+        payment = Payment.objects.get(order=order, provider="cash", status="pending")
+        order.status = "pending"
+        order.save(update_fields=["status", "updated_time"])
+
+        self.client.force_authenticate(self.owner)
+        cancel_response = self.client.patch(
+            f"/owners/orders/status/{order.id}/",
+            {"status": "cancelled"},
+            format="json",
+        )
+
+        self.assertEqual(cancel_response.status_code, 200)
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(order.status, "cancelled")
+        self.assertEqual(order.payment_status, "unpaid")
+        self.assertEqual(payment.status, "cancelled")
 
     def test_unpaid_prepayment_order_is_hidden_and_cannot_be_released_by_kitchen(self):
         response = self._place_order("card")

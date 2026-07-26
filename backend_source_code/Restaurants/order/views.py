@@ -94,6 +94,31 @@ def _block_unpaid_kitchen_release(order, new_status):
     return None
 
 
+def _cancel_pending_payments(order):
+    """Retire pending payment attempts when their order is cancelled."""
+    from payment.models import Payment
+    from payment.split_bill import mark_payment_failed
+
+    pending_payments = list(Payment.objects.filter(order=order, status="pending"))
+    cancelled_at = now()
+    for payment in pending_payments:
+        payment.status = "cancelled"
+        payment.cancelled_at = cancelled_at
+        payment.cancel_reason = "Order cancelled"
+        payment.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancel_reason",
+                "updated_at",
+            ]
+        )
+        mark_payment_failed(payment)
+
+    if order.payment_status == "pending_cash":
+        order.payment_status = "unpaid"
+
+
 
 class OrderCreateAPIView(generics.CreateAPIView):
     serializer_class = OrderCreateSerializerFixed
@@ -179,12 +204,25 @@ class OrderCreateAPIView(generics.CreateAPIView):
         except BrandConfig.DoesNotExist:
             pay_before_order = False
 
-        # Card orders requiring prepayment stay outside the kitchen queue until
-        # the configured gateway confirms payment.
-        requires_gateway_payment = pay_before_order and payment_method != 'cash'
-        if requires_gateway_payment:
+        # Every pay-before order stays outside the kitchen until the selected
+        # payment method is actually confirmed, including cash.
+        requires_payment_before_release = pay_before_order
+        if requires_payment_before_release:
             order.status = 'awaiting_payment'
             order.save(update_fields=['status', 'updated_time'])
+
+        if payment_method == 'cash':
+            from payment.services import PaymentService
+
+            PaymentService.create_payment(
+                order=order,
+                success_url='',
+                cancel_url='',
+                provider='cash',
+                amount=order.total_price,
+                created_by='pre_order',
+            )
+            order.refresh_from_db()
         
         # Serialize Response
         headers = self.get_success_headers(serializer.data)
@@ -192,7 +230,7 @@ class OrderCreateAPIView(generics.CreateAPIView):
         
         # Do not send unpaid pre-orders to the kitchen. Payment verification
         # emits the order update after moving the order to pending.
-        if not requires_gateway_payment:
+        if not requires_payment_before_release:
             try:
                 async_to_sync(channel_layer.group_send)(
                     f"restaurant_{order.restaurant.id}",
@@ -226,43 +264,6 @@ class OrderCreateAPIView(generics.CreateAPIView):
             except Exception as e:
                 print(f"Error clearing cart: {e}")
         
-        # Handle Cash Payment Logic
-        if payment_method == 'cash':
-            order.status = 'awaiting_cash'
-            order.payment_status = 'pending_cash'
-            order.save()
-            # Broadcast Cash Alert to Restaurant (best-effort, don't crash if Redis is down)
-            try:
-                async_to_sync(channel_layer.group_send)(
-                    f"restaurant_{order.restaurant.id}",
-                    {
-                        "type": "cash_payment_alert",
-                        "order": data,
-                        "order_ids": [order.id],
-                        "table_number": device.table_number or device.table_name,
-                        "total_amount": str(order.total_price),
-                        "order_total": str(order.total_price),
-                        "already_paid": str(order.amount_paid or 0),
-                        "timestamp": str(order.created_time)
-                    }
-                )
-            except Exception as e:
-                print(f"[WS-NOTIFY] Failed to send cash_payment_alert: {e}")
-            # Send updated status to guest
-            if order.guest_session:
-                try:
-                    async_to_sync(channel_layer.group_send)(
-                        f"session_{order.guest_session.id}",
-                        {
-                            "type": "order_status_update",
-                            "order_id": order.id,
-                            "status": 'awaiting_cash',
-                            "order": OrderDetailSerializer(order).data
-                        }
-                    )
-                except Exception as e:
-                    print(f"[WS-NOTIFY] Failed to send guest order_status_update: {e}")
-
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
@@ -296,6 +297,7 @@ class ConfirmCashPaymentAPIView(APIView):
         if order.payment_status == 'paid':
              return Response({"message": "Order is already paid"}, status=status.HTTP_200_OK)
 
+        was_awaiting_payment = order.status == 'awaiting_payment'
         pending_cash_payment = Payment.objects.filter(
             order=order,
             provider='cash',
@@ -325,9 +327,28 @@ class ConfirmCashPaymentAPIView(APIView):
                 if bill.payment_status == 'fully_paid':
                     PaymentService._close_session_and_clear_chat_if_settled(order)
                 order.refresh_from_db()
+                data = OrderDetailSerializer(order).data
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{order.restaurant.id}",
+                        {
+                            "type": "order_paid",
+                            "order": data,
+                        }
+                    )
+                    async_to_sync(channel_layer.group_send)(
+                        f"restaurant_{order.restaurant.id}",
+                        {
+                            "type": "cash_payment_confirmed",
+                            "order_id": order.id,
+                        }
+                    )
+                except Exception as e:
+                    print(f"[WS-NOTIFY] Failed to send confirmed cash update for order {order.id}: {e}")
                 return Response({
                     'message': 'Cash payment confirmed.',
                     'payment_status': order.payment_status,
+                    'status': order.status,
                     'paid_amount': str(bill.paid_amount),
                     'remaining_amount': str(bill.remaining_amount),
                     'fully_paid': bill.payment_status == 'fully_paid',
@@ -338,7 +359,7 @@ class ConfirmCashPaymentAPIView(APIView):
         orders_to_update = [order]
         
         for o in orders_to_update:
-            o.status = 'delivered'
+            o.status = 'pending' if was_awaiting_payment else 'delivered'
             o.amount_paid = o.total_price
             o.payment_status = 'paid'
             o.save(update_fields=['status', 'amount_paid', 'payment_status', 'updated_time'])
@@ -352,7 +373,11 @@ class ConfirmCashPaymentAPIView(APIView):
                 logger = logging.getLogger(__name__)
                 
                 # Check if payment already exists for this order
-                existing_payment = Payment.objects.filter(order=o).first()
+                existing_payment = (
+                    Payment.objects.filter(order=o, provider='cash')
+                    .order_by('-created_at')
+                    .first()
+                )
                 if existing_payment:
                     # Update existing payment status to completed
                     if existing_payment.status != 'completed':
@@ -528,7 +553,8 @@ class OrderCancelAPIView(APIView):
             return Response({"error": "Only pending orders can be cancelled"}, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = 'cancelled'
-        order.save()
+        _cancel_pending_payments(order)
+        order.save(update_fields=['status', 'payment_status', 'updated_time'])
         data = OrderDetailSerializer(order).data
         try:
             async_to_sync(channel_layer.group_send)(
@@ -773,7 +799,9 @@ class OwnerUpdateOrderStatusAPIView(APIView):
             return Response({"error": "Order is already completed/delivered."}, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = new_status
-        order.save(update_fields=['status', 'updated_time'])
+        if new_status == "cancelled":
+            _cancel_pending_payments(order)
+        order.save(update_fields=['status', 'payment_status', 'updated_time'])
 
         import sys
         cl_backend = type(channel_layer).__name__
@@ -905,14 +933,18 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
                      print(f"DEBUG_ORDERS: User is Owner. Found Restaurant ID: {restaurant_id}")
 
         if restaurant_id:
-             return (
+             queryset = (
                 Order.objects
                 .filter(restaurant_id=restaurant_id)
-                .exclude(status='awaiting_payment')
                 .select_related('device', 'restaurant', 'guest_session', 'business_day', 'bill')
                 .prefetch_related('order_items__item', 'payments')
                 .order_by('-created_time')
              )
+             if getattr(user, "role", None) in {"staff", "manager", "owner"}:
+                 return queryset.exclude(
+                     Q(status='awaiting_payment') & ~Q(payment_status='pending_cash')
+                 )
+             return queryset.exclude(status='awaiting_payment')
         
         print("DEBUG_ORDERS: Could not determine restaurant. Returning empty.")
         return Order.objects.none()
@@ -980,7 +1012,9 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
             return release_block
 
         order.status = new_status
-        order.save(update_fields=['status', 'updated_time'])
+        if new_status == "cancelled":
+            _cancel_pending_payments(order)
+        order.save(update_fields=['status', 'payment_status', 'updated_time'])
 
         if order.status == "completed":
             ChatMessage.objects.filter(

@@ -115,6 +115,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     device_table_name = serializers.CharField(source='device.table_name', read_only=True)
     payments = serializers.SerializerMethodField()
     restaurant_name = serializers.CharField(source='restaurant.resturent_name', read_only=True)
+    currency = serializers.CharField(source='restaurant.currency', read_only=True)
     google_review_url = serializers.CharField(source='restaurant.google_review_url', read_only=True, allow_null=True)
     special_request = serializers.SerializerMethodField()
     amount_paid = serializers.SerializerMethodField()
@@ -232,7 +233,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'amount_paid', 'amountPaid', 'remaining_amount', 'remainingAmount', 'is_fully_paid', 'isFullyPaid', 'is_partially_paid', 'isPartiallyPaid', 'bill_payment_status', 'payment_progress', 'tip_amount', 'tip_type', 'notes', 'special_request', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'google_review_url']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'amount_paid', 'amountPaid', 'remaining_amount', 'remainingAmount', 'is_fully_paid', 'isFullyPaid', 'is_partially_paid', 'isPartiallyPaid', 'bill_payment_status', 'payment_progress', 'tip_amount', 'tip_type', 'notes', 'special_request', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'currency', 'google_review_url']
 
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)

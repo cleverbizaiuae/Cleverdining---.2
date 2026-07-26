@@ -68,6 +68,7 @@ const parseMoney = (value: unknown): number => {
 const getPaymentInfo = (order: any) => {
   const total = parseMoney(order?.total_price ?? order?.total);
   const status = String(order?.payment_status || "").toLowerCase();
+  const fulfillmentStatus = String(order?.status || order?.backendStatus || "").toLowerCase();
   const explicitRemaining = order?.remaining_amount ?? order?.remainingAmount;
   const explicitPaid = order?.amount_paid ?? order?.amountPaid;
   const rawPaid = parseMoney(explicitPaid);
@@ -89,11 +90,11 @@ const getPaymentInfo = (order: any) => {
     isPartial,
     progress,
     status,
+    fulfillmentStatus,
   };
 };
 
 const ScreenRestaurantOrderList = () => {
-  const currencyCode = getActiveRestaurantCurrency();
   const regionCode = getActiveRestaurantRegion();
   const regionGatewayOptions = getRegionConfig(regionCode).payments.filter(
     (provider) => provider !== "cash"
@@ -122,6 +123,10 @@ const ScreenRestaurantOrderList = () => {
     setOrdersSearchQuery,
     updateOrderStatus,
   } = useOwner();
+  const currencyCode =
+    String((orders as any[]).find((order: any) => order?.currency)?.currency || getActiveRestaurantCurrency())
+      .trim()
+      .toUpperCase() || "AED";
 
   // Real-time WebSocket updates
   const { response } = useContext(WebSocketContext) || {};
@@ -271,7 +276,8 @@ const ScreenRestaurantOrderList = () => {
 
   const cashOrders = canCollectCash
     ? activeOrders.filter((order: any) =>
-      order.status === 'awaiting_cash' || order.payment_status === 'pending_cash'
+      String(order.status || "").toLowerCase() !== 'cancelled' &&
+      (order.status === 'awaiting_cash' || order.payment_status === 'pending_cash')
     )
     : [];
 
@@ -435,6 +441,7 @@ const ScreenRestaurantOrderList = () => {
 
   const formatMoney = (value: number) => `${currencyCode} ${value.toFixed(2)}`;
   const paymentBadgeClass = (info: ReturnType<typeof getPaymentInfo>) => {
+    if (info.fulfillmentStatus === "cancelled") return "bg-red-50 text-red-700";
     if (info.isFullyPaid) return "bg-green-50 text-green-700";
     if (info.isPartial) return "bg-amber-50 text-amber-700";
     if (info.status === "pending_cash") return "bg-yellow-50 text-yellow-700";
@@ -442,6 +449,7 @@ const ScreenRestaurantOrderList = () => {
   };
   const paymentBadgeLabel = (order: any) => {
     const info = getPaymentInfo(order);
+    if (info.fulfillmentStatus === "cancelled") return "Cancelled";
     if (info.isFullyPaid) return "Paid";
     if (info.isPartial) return `${formatMoney(info.remaining)} left`;
     return order.payment_status || "Unpaid";
@@ -986,7 +994,7 @@ const ScreenRestaurantOrderList = () => {
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-500">Status</span>
                     <span className={`font-bold uppercase ${selectedPaymentInfo?.isFullyPaid ? 'text-green-600' : selectedPaymentInfo?.isPartial ? 'text-amber-600' : 'text-red-500'}`}>
-                      {selectedPaymentInfo?.isFullyPaid ? "Paid" : selectedPaymentInfo?.isPartial ? "Partially Paid" : selectedOrder.payment_status || "Unpaid"}
+                      {selectedPaymentInfo?.fulfillmentStatus === "cancelled" ? "Cancelled" : selectedPaymentInfo?.isFullyPaid ? "Paid" : selectedPaymentInfo?.isPartial ? "Partially Paid" : selectedOrder.payment_status || "Unpaid"}
                     </span>
                   </div>
                   {selectedPaymentInfo && (

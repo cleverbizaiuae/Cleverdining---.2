@@ -333,6 +333,28 @@ class PaymentService:
     @staticmethod
     def create_payment(order, success_url, cancel_url, provider=None, amount=None, metadata=None, created_by=None, split_data=None):
         ensure_payment_schema()
+        resolved_provider = PaymentService._resolve_provider(order.restaurant, provider=provider)
+        if resolved_provider == "cash":
+            # A customer can abandon a gateway checkout and choose cash instead.
+            # Retire only still-pending attempts so Payments reflects the active
+            # method without altering completed transaction history.
+            superseded_payments = list(
+                Payment.objects.filter(order=order, status="pending").exclude(provider="cash")
+            )
+            for superseded in superseded_payments:
+                superseded.status = "cancelled"
+                superseded.cancelled_at = timezone.now()
+                superseded.cancel_reason = "Payment method changed to cash"
+                superseded.save(
+                    update_fields=[
+                        "status",
+                        "cancelled_at",
+                        "cancel_reason",
+                        "updated_at",
+                    ]
+                )
+                mark_payment_failed(superseded)
+
         adapter = PaymentService.get_adapter(order.restaurant, provider=provider)
         split_context = None
         bill = None

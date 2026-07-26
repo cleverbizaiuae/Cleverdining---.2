@@ -693,8 +693,10 @@ class PaymeAdapter(PaymentAdapter):
 
 class CashAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
-        # Update Order Status
-        order.status = 'awaiting_cash'
+        # Prepayment orders must remain outside the kitchen until staff confirms
+        # collection. Post-meal orders can remain in the normal cash-wait state.
+        is_prepayment = order.status == 'awaiting_payment'
+        order.status = 'awaiting_payment' if is_prepayment else 'awaiting_cash'
         order.payment_status = 'pending_cash'
         order.save()
 
@@ -706,22 +708,23 @@ class CashAdapter(PaymentAdapter):
         channel_layer = get_channel_layer()
         order_data = OrderDetailSerializer(order).data
         
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f"restaurant_{order.restaurant.id}",
-                {
-                    "type": "cash_payment_alert",
-                    "order": order_data,
-                    "order_ids": [order.id],
-                    "table_number": order.device.table_number or order.device.table_name,
-                    "total_amount": str(amount if amount is not None else order.total_price),
-                    "order_total": str(order.total_price),
-                    "already_paid": str(order.amount_paid or 0),
-                    "timestamp": str(order.created_time)
-                }
-            )
-        except Exception as e:
-            print(f"Failed to send cash payment alert: {e}")
+        if not (metadata or {}).get("suppress_cash_alert"):
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{order.restaurant.id}",
+                    {
+                        "type": "cash_payment_alert",
+                        "order": order_data,
+                        "order_ids": [order.id],
+                        "table_number": order.device.table_number or order.device.table_name,
+                        "total_amount": str(amount if amount is not None else order.total_price),
+                        "order_total": str(order.total_price),
+                        "already_paid": str(order.amount_paid or 0),
+                        "timestamp": str(order.created_time)
+                    }
+                )
+            except Exception as e:
+                print(f"Failed to send cash payment alert: {e}")
 
         # Cash payments are implicitly "initiated" but require manual confirmation
         import uuid

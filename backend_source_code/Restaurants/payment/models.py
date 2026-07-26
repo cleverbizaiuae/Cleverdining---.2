@@ -138,7 +138,14 @@ class Payment(models.Model):
     
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(
-        max_length=20, choices=[('completed', 'Completed'), ('failed', 'Failed'), ('pending', 'Pending')], default='pending'
+        max_length=20,
+        choices=[
+            ('completed', 'Completed'),
+            ('failed', 'Failed'),
+            ('pending', 'Pending'),
+            ('cancelled', 'Cancelled'),
+        ],
+        default='pending',
     )
     card_owner_name = models.CharField(max_length=255, null=True, blank=True)
     

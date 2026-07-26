@@ -188,7 +188,15 @@ class CreateBulkCheckoutSessionView(APIView):
         # 2. Get Unpaid Orders
         # Include all checkout-eligible unpaid states.
         # Exclude: only orders that are already PAID
-        eligible_statuses = ['pending', 'preparing', 'served', 'delivered', 'completed', 'awaiting_cash']
+        eligible_statuses = [
+            'pending',
+            'preparing',
+            'served',
+            'delivered',
+            'completed',
+            'awaiting_cash',
+            'awaiting_payment',
+        ]
         # Include all unpaid orders for the same current table/device to avoid missing orders
         # when session records rotate or split.
         session_scope = Q(guest_session=session)
@@ -268,11 +276,28 @@ class CreateBulkCheckoutSessionView(APIView):
                 # 1. Cache the list of orders BEFORE update
                 all_orders = list(unpaid_orders)
                 
-                # 2. Mark all as awaiting_cash
-                unpaid_orders.update(status='awaiting_cash', payment_status='pending_cash')
-                
                 if not all_orders:
                      return Response({'error': 'No orders to process'}, status=400)
+
+                # Record cash as the active payment method for every order.
+                # CashAdapter deliberately preserves awaiting_payment so
+                # pay-before orders cannot reach the kitchen before collection.
+                for cash_order in all_orders:
+                    outstanding = max(
+                        Decimal(cash_order.total_price or 0)
+                        - Decimal(getattr(cash_order, "amount_paid", 0) or 0),
+                        Decimal("0"),
+                    )
+                    PaymentService.create_payment(
+                        order=cash_order,
+                        success_url='',
+                        cancel_url='',
+                        provider='cash',
+                        amount=outstanding,
+                        metadata={'suppress_cash_alert': True},
+                        created_by=f'guest_bulk_cash:{session.id}',
+                    )
+                    cash_order.refresh_from_db()
 
                 first_order = all_orders[0]
                 
@@ -325,12 +350,17 @@ class CreateBulkCheckoutSessionView(APIView):
                     print(f"[CASH-PAYMENT] ⚠️ Redis/WS notification failed (restaurant alert): {ws_err}", file=sys.stderr)
                 
                 # Notify User Session
+                bulk_status = (
+                    'awaiting_payment'
+                    if any(order.status == 'awaiting_payment' for order in all_orders)
+                    else 'awaiting_cash'
+                )
                 try:
                     async_to_sync(channel_layer.group_send)(
                         f"session_{session.id}",
                         {
                             "type": "order_status_update", 
-                            "status": 'awaiting_cash', 
+                            "status": bulk_status,
                             "bulk": True
                         }
                     )

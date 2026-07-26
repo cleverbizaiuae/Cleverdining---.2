@@ -165,6 +165,7 @@ const WebSocketProvider = ({ children }) => {
       orders.forEach((order: any) => {
         const status = String(order?.status || "").toLowerCase();
         const paymentStatus = String(order?.payment_status || "").toLowerCase();
+        if (["cancelled", "canceled"].includes(status)) return;
         if (status !== "awaiting_cash" && paymentStatus !== "pending_cash") return;
 
         const tableName = String(order?.device_name || order?.device_table_name || order?.tableNo || "Table");
