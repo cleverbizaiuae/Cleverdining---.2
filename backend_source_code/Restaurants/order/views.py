@@ -76,6 +76,24 @@ def _block_unpaid_completion(order, new_status):
     return None
 
 
+def _block_unpaid_kitchen_release(order, new_status):
+    """Keep prepayment orders out of every kitchen status transition."""
+    if (
+        order.status == "awaiting_payment"
+        and str(order.payment_status or "").lower() not in {"paid", "completed", "succeeded", "success"}
+        and str(new_status or "").lower() not in {"awaiting_payment", "cancelled"}
+    ):
+        return Response(
+            {
+                "error": "This order must be paid before it can be released to the kitchen.",
+                "status": order.status,
+                "payment_status": order.payment_status,
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    return None
+
+
 
 class OrderCreateAPIView(generics.CreateAPIView):
     serializer_class = OrderCreateSerializerFixed
@@ -737,6 +755,9 @@ class OwnerUpdateOrderStatusAPIView(APIView):
         completion_block = _block_unpaid_completion(order, new_status)
         if completion_block is not None:
             return completion_block
+        release_block = _block_unpaid_kitchen_release(order, new_status)
+        if release_block is not None:
+            return release_block
 
 
         
@@ -887,6 +908,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
              return (
                 Order.objects
                 .filter(restaurant_id=restaurant_id)
+                .exclude(status='awaiting_payment')
                 .select_related('device', 'restaurant', 'guest_session', 'business_day', 'bill')
                 .prefetch_related('order_items__item', 'payments')
                 .order_by('-created_time')
@@ -953,6 +975,9 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         completion_block = _block_unpaid_completion(order, new_status)
         if completion_block is not None:
             return completion_block
+        release_block = _block_unpaid_kitchen_release(order, new_status)
+        if release_block is not None:
+            return release_block
 
         order.status = new_status
         order.save(update_fields=['status', 'updated_time'])

@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
-from accounts.models import User
+from accounts.models import ChefStaff, User
 from category.models import Category
 from device.models import Device, GuestSession
 from item.models import Item
@@ -125,6 +125,46 @@ class PayBeforeOrderFlowTests(TestCase):
         owner_response = self.client.get("/owners/orders/")
         owner_orders = owner_response.json()["results"]["orders"]
         self.assertEqual(len(owner_orders), 1)
+
+    def test_unpaid_prepayment_order_is_hidden_and_cannot_be_released_by_kitchen(self):
+        response = self._place_order("card")
+        order = Order.objects.get(pk=response.json()["id"])
+        chef = User.objects.create_user(
+            email="prepay-chef@example.com",
+            username="Prepay Chef",
+            password="test-password",
+            role="chef",
+        )
+        ChefStaff.objects.create(
+            restaurant=self.restaurant,
+            user=chef,
+            action="accepted",
+        )
+        self.client.force_authenticate(chef)
+
+        for endpoint in ("/api/chef/orders/", "/api/staff/orders/"):
+            queue_response = self.client.get(endpoint)
+            self.assertEqual(queue_response.status_code, 200)
+            self.assertEqual(queue_response.json()["results"]["orders"], [])
+
+        release_response = self.client.patch(
+            f"/api/chef/orders/status/{order.id}/",
+            {"status": "preparing"},
+            format="json",
+        )
+        self.assertEqual(release_response.status_code, 409)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "awaiting_payment")
+
+        order.status = "pending"
+        order.payment_status = "paid"
+        order.amount_paid = order.total_price
+        order.save(update_fields=["status", "payment_status", "amount_paid", "updated_time"])
+
+        paid_queue_response = self.client.get("/api/chef/orders/")
+        self.assertEqual(paid_queue_response.status_code, 200)
+        paid_orders = paid_queue_response.json()["results"]["orders"]
+        self.assertEqual([entry["id"] for entry in paid_orders], [order.id])
 
 
 class PaymentCompletionNavigationTests(TestCase):
