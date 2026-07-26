@@ -1103,13 +1103,13 @@ const ScreenCart = () => {
       )}
 
       {reviewModalVisible && (
-        <div className="fixed inset-0 z-[100] flex h-[100dvh] items-stretch justify-center bg-black/55 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[1px] sm:items-center sm:p-4">
-          <div className="flex h-full min-h-0 w-full max-w-sm flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 text-foreground shadow-2xl shadow-black/40 sm:h-auto sm:max-h-[min(720px,calc(100dvh-2rem))] sm:rounded-3xl">
-            <div className="relative shrink-0 border-b border-border p-4 pb-3 sm:p-5 sm:pb-4">
+        <div className="fixed inset-0 z-[100] flex h-[100dvh] items-center justify-center bg-black/55 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-[1px]">
+          <div className="flex max-h-[min(640px,calc(100dvh-4rem))] min-h-0 w-full max-w-[22rem] flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 text-foreground shadow-2xl shadow-black/40 sm:rounded-3xl">
+            <div className="relative shrink-0 border-b border-border p-3 pb-2.5 sm:p-4 sm:pb-3">
               <button
                 type="button"
                 onClick={() => setShowReviewModal(false)}
-                className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full border border-border text-muted-foreground hover:bg-secondary flex items-center justify-center"
+                className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-secondary"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1122,7 +1122,7 @@ const ScreenCart = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mt-3">
+              <div className="mt-2 flex items-center gap-2">
                 <span className="flex items-center gap-1 bg-secondary text-secondary-foreground text-xs font-semibold px-2.5 py-1 rounded-full">
                   <MapPin className="w-3 h-3" strokeWidth={1.8} />
                   Table {tableNumber}
@@ -1134,25 +1134,25 @@ const ScreenCart = () => {
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
-              <div className="flex min-h-0 flex-1 flex-col">
-                <p className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <div className="flex min-h-0 flex-col gap-2.5 overflow-hidden p-2.5 sm:p-3">
+              <div className="flex min-h-0 flex-col">
+                <p className="mb-1.5 shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                   Your Order
                 </p>
-                <div className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] [scrollbar-gutter:stable]">
+                <div className="max-h-[clamp(4.75rem,28dvh,13.5rem)] touch-pan-y space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] [scrollbar-gutter:stable]">
                   {validCartItems.map((item) => (
-                      <div key={`review-${item.id}`} className="flex items-center gap-3 bg-secondary rounded-xl p-2.5 border border-border">
-                        <div className="w-11 h-11 rounded-lg overflow-hidden bg-background shrink-0">
+                      <div key={`review-${item.id}`} className="flex items-center gap-2.5 rounded-xl border border-border bg-secondary p-2">
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-background">
                           <OptimizedImage
                             src={item.image1}
                             alt={item.item_name}
-                            width={44}
-                            height={44}
+                            width={40}
+                            height={40}
                             className="w-full h-full object-cover"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{item.item_name}</p>
+                          <p className="truncate text-[13px] font-semibold text-foreground">{item.item_name}</p>
                           {itemTimings[String(item.id)] && (
                             <p className="text-[10px] text-primary font-medium mt-0.5">
                               {TIMING_LABEL[itemTimings[String(item.id)]!]}
@@ -1160,7 +1160,7 @@ const ScreenCart = () => {
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-foreground">{currencyCode} {getLineTotal(item, item.quantity).toFixed(2)}</p>
+                          <p className="text-[13px] font-bold text-foreground">{currencyCode} {getLineTotal(item, item.quantity).toFixed(2)}</p>
                           {hasItemDiscount(item) && (
                             <p className="text-[10px] text-slate-400 line-through">
                               {currencyCode} {(getOriginalItemPrice(item) * item.quantity).toFixed(2)}
@@ -1172,23 +1172,23 @@ const ScreenCart = () => {
                   ))}
                 </div>
 
-                <div className="flex shrink-0 items-center justify-between border-t border-border px-1 pt-2 mt-2">
+                <div className="mt-1.5 flex shrink-0 items-center justify-between border-t border-border px-1 pt-1.5">
                   <span className="text-sm font-bold text-foreground">Total</span>
-                  <span className="text-lg font-bold text-primary">
+                  <span className="text-base font-bold text-primary">
                     {currencyCode} {totalCost.toFixed(2)}
                   </span>
                 </div>
               </div>
 
               {payBeforeOrder && (
-                <div className="shrink-0 space-y-2">
+                <div className="shrink-0 space-y-1.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Method</p>
                   <div className="flex gap-2">
                     {(["card", "cash"] as const).map((method) => (
                       <button
                         key={method}
                         onClick={() => setPaymentMethod(method)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-bold transition-all ${
                           paymentMethod === method
                             ? "bg-primary text-white border-primary shadow-sm"
                             : "bg-secondary text-secondary-foreground border-border hover:border-primary/40"
@@ -1211,7 +1211,7 @@ const ScreenCart = () => {
                 </div>
               )}
 
-              <div className="shrink-0 space-y-2">
+              <div className="shrink-0 space-y-1.5">
                 <div className="flex items-center gap-2 text-muted-foreground font-bold text-[10px] uppercase tracking-widest">
                   <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
                   Allergies & Special Requests
@@ -1220,12 +1220,12 @@ const ScreenCart = () => {
                   placeholder="e.g. Nut allergy, Gluten free, Extra spicy..."
                   value={specialRequest}
                   onChange={(e) => setSpecialRequest(e.target.value)}
-                  className="h-14 w-full resize-none rounded-xl border border-border bg-secondary p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
+                  className="h-12 w-full resize-none rounded-xl border border-border bg-secondary p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
                 />
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card p-3 sm:gap-2.5 sm:p-4">
+            <div className="flex shrink-0 flex-col gap-1.5 border-t border-border bg-card p-2.5 sm:p-3">
               {upsellUiEnabled && beforePaymentSuggestions.length > 0 && (
                 <div className="rounded-xl border border-border bg-secondary p-2.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
@@ -1273,7 +1273,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={handleOrderNow}
                 disabled={isSubmittingOrder}
-                className="h-12 w-full rounded-xl bg-primary text-base font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-70 sm:h-14"
+                className="h-11 w-full rounded-xl bg-primary text-sm font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-70 sm:h-12 sm:text-base"
               >
                 {isSubmittingOrder
                   ? payBeforeOrder && paymentMethod === "card"
@@ -1287,7 +1287,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={() => setShowReviewModal(false)}
                 disabled={isSubmittingOrder}
-                className="h-8 rounded-xl text-sm text-muted-foreground transition-colors hover:bg-secondary sm:h-10"
+                className="h-7 rounded-xl text-xs text-muted-foreground transition-colors hover:bg-secondary sm:h-8 sm:text-sm"
               >
                 Wait, I forgot something...
               </button>
