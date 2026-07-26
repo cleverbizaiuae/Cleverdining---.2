@@ -4,13 +4,14 @@ import { getActiveRestaurantCurrency } from "../lib/utils";
 import { cachedGet } from "../lib/requestCache";
 import axiosInstance from "../lib/axios";
 import { AnimatePresence, motion } from "motion/react";
-import { Banknote, BellRing, Check } from "lucide-react";
+import { ArrowRight, Banknote, BellRing, Check, PackageCheck } from "lucide-react";
 import { useRole } from "./useRole";
 import {
   getFirstDashboardRestaurantId,
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
+  isReadyToServeOrder,
   isStaffAlertRole,
   upsertStaffServiceAlert,
 } from "./staffServiceAlerts";
@@ -65,6 +66,12 @@ type CashServiceAlert = {
   orderIds: number[];
 };
 
+type ReadyOrderAlert = {
+  id: number;
+  tableName: string;
+  amount: number;
+};
+
 function captureWebSocketFailure(message: string, context: WsFailureContext = {}) {
   if (import.meta.env.DEV) {
     console.warn("[WebSocket warning]", message, context);
@@ -95,6 +102,7 @@ const WebSocketProvider = ({ children }) => {
   const [dashboardTables, setDashboardTables] = useState<DashboardTable[]>([]);
   const [staffServiceAlerts, setStaffServiceAlerts] = useState<StaffServiceAlert[]>([]);
   const [cashServiceAlerts, setCashServiceAlerts] = useState<CashServiceAlert[]>([]);
+  const [readyOrderAlerts, setReadyOrderAlerts] = useState<ReadyOrderAlert[]>([]);
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -131,6 +139,7 @@ const WebSocketProvider = ({ children }) => {
     if (!isStaffDashboard || !id) {
       setStaffServiceAlerts([]);
       setCashServiceAlerts([]);
+      setReadyOrderAlerts([]);
       return;
     }
 
@@ -162,10 +171,21 @@ const WebSocketProvider = ({ children }) => {
             ? orderPayload.orders
             : [];
       const groupedCashAlerts = new Map<string, CashServiceAlert>();
+      const nextReadyOrderAlerts: ReadyOrderAlert[] = [];
       orders.forEach((order: any) => {
         const status = String(order?.status || "").toLowerCase();
         const paymentStatus = String(order?.payment_status || "").toLowerCase();
         if (["cancelled", "canceled"].includes(status)) return;
+        if (isReadyToServeOrder(order)) {
+          const orderId = Number(order?.id);
+          if (Number.isInteger(orderId) && orderId > 0) {
+            nextReadyOrderAlerts.push({
+              id: orderId,
+              tableName: String(order?.device_name || order?.device_table_name || order?.tableNo || "Table"),
+              amount: Number(order?.total_price || 0),
+            });
+          }
+        }
         if (status !== "awaiting_cash" && paymentStatus !== "pending_cash") return;
 
         const tableName = String(order?.device_name || order?.device_table_name || order?.tableNo || "Table");
@@ -191,6 +211,7 @@ const WebSocketProvider = ({ children }) => {
         }
       });
       setCashServiceAlerts(Array.from(groupedCashAlerts.values()));
+      setReadyOrderAlerts(nextReadyOrderAlerts);
     } catch (error) {
       console.warn("Failed to refresh staff cash alerts (non-blocking):", error);
     }
@@ -200,6 +221,7 @@ const WebSocketProvider = ({ children }) => {
     if (!isStaffDashboard) {
       setStaffServiceAlerts([]);
       setCashServiceAlerts([]);
+      setReadyOrderAlerts([]);
       return;
     }
     void refreshStaffServiceAlerts();
@@ -526,6 +548,18 @@ const WebSocketProvider = ({ children }) => {
             void refreshStaffServiceAlerts();
           }
 
+          if (
+            isStaffDashboard
+            && (
+              parsedMessage.type === "new_order"
+              || parsedMessage.type === "order_created"
+              || parsedMessage.type === "order_updated"
+              || parsedMessage.type === "order_status_update"
+            )
+          ) {
+            void refreshStaffServiceAlerts();
+          }
+
           // Handle Assistance Request Alerts from Tables
           if (
             parsedMessage.type === "chat_message"
@@ -650,6 +684,7 @@ const WebSocketProvider = ({ children }) => {
   const visibleServiceAlerts = [
     ...actionableAssistanceAlerts.map((alert) => ({ kind: "assistance" as const, alert })),
     ...cashServiceAlerts.map((alert) => ({ kind: "cash" as const, alert })),
+    ...readyOrderAlerts.map((alert) => ({ kind: "ready" as const, alert })),
   ].slice(0, 4);
 
   return (
@@ -676,10 +711,17 @@ const WebSocketProvider = ({ children }) => {
           <AnimatePresence initial={false}>
             {visibleServiceAlerts.map((entry) => {
               const isCash = entry.kind === "cash";
-              const key = isCash ? entry.alert.id : `assistance-${entry.alert.id}`;
+              const isReady = entry.kind === "ready";
+              const key = isCash
+                ? entry.alert.id
+                : isReady
+                  ? `ready-${entry.alert.id}`
+                  : `assistance-${entry.alert.id}`;
               const tableName = isCash
                 ? entry.alert.tableName
-                : String(entry.alert.tableName || entry.alert.table_name || `Table ${entry.alert.tableNumber || entry.alert.table_number || ""}`);
+                : isReady
+                  ? entry.alert.tableName
+                  : String(entry.alert.tableName || entry.alert.table_name || `Table ${entry.alert.tableNumber || entry.alert.table_number || ""}`);
               return (
                 <motion.div
                   key={key}
@@ -693,19 +735,27 @@ const WebSocketProvider = ({ children }) => {
                   <div className="p-4">
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 pt-1">
-                        {isCash
-                          ? <Banknote className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />
-                          : <BellRing className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />}
+                        {isCash ? (
+                          <Banknote className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />
+                        ) : isReady ? (
+                          <PackageCheck className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />
+                        ) : (
+                          <BellRing className="h-5 w-5 text-[#0055FE]" strokeWidth={1.8} />
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm leading-snug font-bold text-slate-900">
-                            {isCash ? "Cash Payment Requested" : "Assistance Requested"}
+                            {isCash ? "Cash Payment Requested" : isReady ? "Order Ready" : "Assistance Requested"}
                           </p>
                           <span className="shrink-0 text-[10px] font-medium text-slate-400">Now</span>
                         </div>
                         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                          {isCash ? `${tableName} would like to pay by cash` : `${tableName} needs a team member`}
+                          {isCash
+                            ? `${tableName} would like to pay by cash`
+                            : isReady
+                              ? `${tableName} is ready to serve`
+                              : `${tableName} needs a team member`}
                         </p>
                         {isCash && (
                           <div className="mt-1.5 space-y-0.5">
@@ -720,6 +770,11 @@ const WebSocketProvider = ({ children }) => {
                             )}
                           </div>
                         )}
+                        {isReady && (
+                          <p className="mt-1.5 text-xs font-bold text-[#0055FE]">
+                            Order #{entry.alert.id} · {getActiveRestaurantCurrency()} {entry.alert.amount.toFixed(2)}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="mt-3 flex justify-end">
@@ -727,14 +782,21 @@ const WebSocketProvider = ({ children }) => {
                         onClick={() => {
                           if (isCash) {
                             void handleCashCollected(entry.alert);
+                          } else if (isReady) {
+                            const basePath = window.location.pathname.startsWith("/staffadmindashboard")
+                              ? "/staffadmindashboard"
+                              : "/staff";
+                            window.location.assign(`${basePath}/orders`);
                           } else {
                             void handleServiceAttended(entry.alert.id);
                           }
                         }}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#0055FE] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#0044dd] active:scale-95"
                       >
-                        <Check size={12} strokeWidth={2.5} />
-                        {isCash ? "Cash Collected" : "Attended"}
+                        {isReady
+                          ? <ArrowRight size={12} strokeWidth={2.5} />
+                          : <Check size={12} strokeWidth={2.5} />}
+                        {isCash ? "Cash Collected" : isReady ? "View Order" : "Attended"}
                       </button>
                     </div>
                   </div>

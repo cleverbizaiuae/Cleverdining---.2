@@ -4,6 +4,7 @@ import {
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
+  isReadyToServeOrder,
   isStaffAlertRole,
   upsertStaffServiceAlert,
 } from "../../src/hooks/staffServiceAlerts.ts";
@@ -25,6 +26,11 @@ assert.equal(isStaffAlertRole("staff"), true);
 assert.equal(isStaffAlertRole("Staff"), true);
 assert.equal(isStaffAlertRole("chef"), false);
 assert.equal(isStaffAlertRole("owner"), false);
+
+assert.equal(isReadyToServeOrder({ status: "ready" }), true);
+assert.equal(isReadyToServeOrder({ status: "SERVED" }), true);
+assert.equal(isReadyToServeOrder({ status: "preparing" }), false);
+assert.equal(isReadyToServeOrder({ status: "delivered" }), false);
 
 assert.equal(
   isActionableAssistanceAlert({ type: "assistance", status: "pending" }),

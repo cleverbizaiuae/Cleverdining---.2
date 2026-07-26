@@ -1,14 +1,12 @@
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
-import { isStaffAlertRole } from "@/hooks/staffServiceAlerts";
 import { useEffect, useState, useRef, useContext } from "react";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import PaymentGatewayModal, { type GatewayProvider } from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
-import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
+import { cachedGet } from "@/lib/requestCache";
 import {
   Search,
-  Bell,
   CheckCircle2,
   Package,
   Clock,
@@ -111,7 +109,6 @@ const ScreenRestaurantOrderList = () => {
     return "Stripe";
   };
   const { userRole } = useRole();
-  const canCollectCash = isStaffAlertRole(userRole);
   const {
     orders = [],
     ordersStats,
@@ -193,7 +190,6 @@ const ScreenRestaurantOrderList = () => {
   const [selectedProvider, setSelectedProvider] = useState<GatewayProvider>("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
-  const [markingPaidOrderId, setMarkingPaidOrderId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -269,39 +265,7 @@ const ScreenRestaurantOrderList = () => {
     return true;
   });
 
-  // 2. Ready & Cash Orders
-  const readyOrders = activeOrders.filter((order: any) =>
-    order.status.toLowerCase() === 'ready' || order.status.toLowerCase() === 'served'
-  );
-
-  const cashOrders = canCollectCash
-    ? activeOrders.filter((order: any) =>
-      String(order.status || "").toLowerCase() !== 'cancelled' &&
-      (order.status === 'awaiting_cash' || order.payment_status === 'pending_cash')
-    )
-    : [];
-
-  // Group cash orders by table (device_id or tableNo)
-  const cashOrdersByTable = cashOrders.reduce((acc: any, order: any) => {
-    const tableKey = order.device_id || order.tableNo || order.device_table_name || 'unknown';
-    const tableName = order.tableNo || order.device_table_name || 'Unknown';
-
-    if (!acc[tableKey]) {
-      acc[tableKey] = {
-        tableKey,
-        tableName,
-        orders: [],
-        totalAmount: 0
-      };
-    }
-    acc[tableKey].orders.push(order);
-    acc[tableKey].totalAmount += getPaymentInfo(order).remaining;
-    return acc;
-  }, {});
-
-  const groupedCashTables = Object.values(cashOrdersByTable) as any[];
-
-  // 3. Actions
+  // 2. Actions
   const [isClosingDay, setIsClosingDay] = useState(false);
 
   const handleCloseDay = async () => {
@@ -348,63 +312,6 @@ const ScreenRestaurantOrderList = () => {
       // setShowCloseDayConfirm(false); 
     } finally {
       setIsClosingDay(false);
-    }
-  };
-
-  // Confirm all cash orders for a table (takes array of order IDs)
-  const handleConfirmCashForTable = async (orderIds: number[]) => {
-    if (!canCollectCash) return;
-    try {
-      // Confirm first order - backend will handle session-level logic
-      // For bulk confirmation, we confirm each order
-      let fullyPaid = true;
-      let remainingAmount = 0;
-      for (const orderId of orderIds) {
-        const response = await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
-        if (response.data?.fully_paid === false) {
-          fullyPaid = false;
-          remainingAmount = Number(response.data?.remaining_amount || 0);
-        }
-      }
-      invalidateApiCache("orders");
-      toast.success(
-        fullyPaid
-          ? "Cash received. The table balance is fully paid."
-          : `Cash share confirmed. Remaining balance: ${currencyCode} ${remainingAmount.toFixed(2)}`,
-      );
-      // Refresh list
-      fetchOrders(ordersCurrentPage, debouncedSearchQuery);
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to confirm cash payment");
-    }
-  };
-
-  // Keep backward compatible single order confirm
-  const handleConfirmCash = async (orderId: number) => {
-    if (!canCollectCash) return;
-    if (markingPaidOrderId !== null) return;
-    setMarkingPaidOrderId(orderId);
-    try {
-      const response = await axiosInstance.patch(`/owners/orders/confirm-cash/${orderId}/`);
-      invalidateApiCache("orders");
-      const fullyPaid = response.data?.fully_paid !== false;
-      const remainingAmount = Number(response.data?.remaining_amount || 0);
-      toast.success(
-        fullyPaid
-          ? "Cash received. The order is fully paid."
-          : `Cash share confirmed. Remaining balance: ${currencyCode} ${remainingAmount.toFixed(2)}`,
-      );
-      await fetchOrders(ordersCurrentPage, debouncedSearchQuery);
-    } catch (error: any) {
-      console.error("Failed to mark order as paid", error);
-      const message =
-        error?.response?.data?.error ||
-        error?.response?.data?.detail ||
-        "Failed to mark order as paid";
-      toast.error(message);
-    } finally {
-      setMarkingPaidOrderId(null);
     }
   };
 
@@ -479,88 +386,6 @@ const ScreenRestaurantOrderList = () => {
 
   return (
     <div className="flex flex-col gap-6">
-
-      {/* PENDING CASH BANNER - Grouped by Table */}
-      {canCollectCash && groupedCashTables.length > 0 && (
-        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-3 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300 max-w-full">
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-700 shrink-0 animate-pulse">
-              <span className="text-lg">💵</span>
-            </div>
-            <div>
-              <h3 className="font-bold text-yellow-800 text-sm">Cash Payments Pending</h3>
-              <p className="text-xs text-yellow-700 font-medium whitespace-nowrap">
-                Collect cash to complete.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-0 md:flex-1 max-w-full">
-            {groupedCashTables.map((tableGroup: any) => (
-              <div key={tableGroup.tableKey} className="bg-white border border-yellow-200 rounded-lg p-2.5 shadow-sm min-w-[220px] flex items-center gap-3 shrink-0">
-                {/* Table Number Badge */}
-                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-800 font-bold text-xs shrink-0 border border-yellow-200">
-                  {tableGroup.tableName}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-900 truncate">
-                    {tableGroup.orders.length} Order{tableGroup.orders.length > 1 ? 's' : ''}
-                  </p>
-                  <p className="text-sm text-yellow-700 font-bold">{currencyCode} {tableGroup.totalAmount.toFixed(2)}</p>
-                </div>
-                <button
-                  onClick={() => handleConfirmCashForTable(tableGroup.orders.map((o: any) => o.id))}
-                  className="h-7 px-3 bg-yellow-500 hover:bg-yellow-600 text-white text-[10px] font-bold rounded shadow-sm transition-colors whitespace-nowrap"
-                >
-                  Confirm
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* READY FOR DELIVERY BANNER */}
-      {readyOrders.length > 0 && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 fade-in duration-300 max-w-full">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 shrink-0">
-              <Bell size={16} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-green-700 text-sm">Ready for Delivery</h3>
-              <p className="text-xs text-green-600 font-medium flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                Serve Now
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 w-full md:w-0 md:flex-1 max-w-full">
-            {readyOrders.map((order: any) => (
-              <div key={order.id} className="bg-white border border-green-100 rounded-lg p-2.5 shadow-sm min-w-[200px] flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
-                  {order.device_table_name || "Tab"}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-900">Order #{order.id}</p>
-                  <p className="text-[10px] text-slate-500">{currencyCode} {order.total_price}</p>
-                </div>
-                {canCollectCash && (
-                  <button
-                    onClick={() => handleConfirmCash(order.id)}
-                    disabled={markingPaidOrderId !== null}
-                    className="h-7 px-3 bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 text-white text-[10px] font-medium rounded transition-colors"
-                  >
-                    {markingPaidOrderId === order.id ? "Saving..." : "Mark as Paid"}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* METRIC CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

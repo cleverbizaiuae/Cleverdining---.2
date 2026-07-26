@@ -9,6 +9,10 @@ export type DashboardRestaurantRowLike = {
   restaurant_id?: string | number;
 };
 
+export type StaffReadyOrderLike = {
+  status?: string;
+};
+
 const ASSISTANCE_TYPES = new Set(["assistance", "call_waiter"]);
 const ACTIVE_ASSISTANCE_STATUSES = new Set(["pending", "queued", "acknowledged"]);
 const ACTIONABLE_ASSISTANCE_STATUSES = new Set(["pending", "acknowledged"]);
@@ -16,6 +20,11 @@ const ACTIONABLE_ASSISTANCE_STATUSES = new Set(["pending", "acknowledged"]);
 const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
 
 export const isStaffAlertRole = (role: unknown) => normalize(role) === "staff";
+
+export const isReadyToServeOrder = (order: StaffReadyOrderLike) => {
+  const status = normalize(order?.status);
+  return status === "ready" || status === "served";
+};
 
 export const getFirstDashboardRestaurantId = (
   rows: DashboardRestaurantRowLike[],
