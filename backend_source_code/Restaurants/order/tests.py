@@ -624,6 +624,100 @@ class UpsellKnowledgeEngineTests(TestCase):
             ).inventory_priority
         )
 
+    def test_balanced_revenue_and_move_stock_rankings_do_not_override_each_other(self):
+        clearance_water = self._item(
+            "Clearance Water",
+            self.drink_category,
+            "clearance-water",
+            "Cold bottled water drink",
+            "4.00",
+        )
+        ItemAssociation.objects.create(
+            restaurant=self.restaurant,
+            source_item=self.burger,
+            target_item=self.cola,
+            co_order_frequency=25,
+            association_strength="0.90",
+            times_shown=20,
+            times_accepted=14,
+        )
+        UpsellItemSetting.objects.create(
+            restaurant=self.restaurant,
+            item=clearance_water,
+            inventory_priority=True,
+        )
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+
+        def ranked_ids(strategy):
+            setting.strategy = strategy
+            setting.save(update_fields=["strategy", "updated_at"])
+            cache.clear()
+            rows = build_item_context_upsell_suggestions(
+                self.restaurant,
+                [self.burger.id],
+                trigger_point="cart",
+                source_item_id=self.burger.id,
+                limit=5,
+                apply_surface_limit=False,
+            )
+            return rows, [row["item"].id for row in rows]
+
+        balanced_rows, balanced_ids = ranked_ids("balanced")
+        self.assertEqual(balanced_ids[0], self.cola.id)
+        self.assertFalse(
+            next(row for row in balanced_rows if row["item"].id == clearance_water.id)[
+                "inventory_priority"
+            ]
+        )
+
+        revenue_rows, revenue_ids = ranked_ids("max_revenue")
+        self.assertEqual(revenue_ids[0], self.lemonade.id)
+        self.assertFalse(
+            next(row for row in revenue_rows if row["item"].id == clearance_water.id)[
+                "inventory_priority"
+            ]
+        )
+
+        stock_rows, stock_ids = ranked_ids("move_stock")
+        self.assertEqual(stock_ids[0], clearance_water.id)
+        self.assertTrue(stock_rows[0]["inventory_priority"])
+
+    def test_agent_context_hides_move_stock_flags_from_other_strategies(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.burger.id],
+            trigger_point="cart",
+            source_item_id=self.burger.id,
+            limit=5,
+            apply_surface_limit=False,
+        )
+        rows[0]["inventory_priority"] = True
+
+        setting.strategy = "balanced"
+        balanced_context = build_upsell_agent_context(
+            restaurant=self.restaurant,
+            setting=setting,
+            cart_items=[self.burger],
+            candidate_rows=rows,
+            trigger_point="cart",
+            hour=13,
+            source_item_id=self.burger.id,
+        )
+        self.assertFalse(balanced_context["candidates"][0]["inventory_priority"])
+
+        setting.strategy = "move_stock"
+        stock_context = build_upsell_agent_context(
+            restaurant=self.restaurant,
+            setting=setting,
+            cart_items=[self.burger],
+            candidate_rows=rows,
+            trigger_point="cart",
+            hour=13,
+            source_item_id=self.burger.id,
+        )
+        self.assertTrue(stock_context["candidates"][0]["inventory_priority"])
+
     def test_category_guidance_rejects_foreign_categories(self):
         other_owner = User.objects.create_user(
             email="other-upsell-owner@example.com",

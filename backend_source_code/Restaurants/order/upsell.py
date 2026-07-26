@@ -966,6 +966,7 @@ def _build_upsell_suggestions_for_items(
     pair_compatibility = menu_intelligence.get("pair_compatibility", {})
     prioritized_categories = _parse_prioritized_category_ids(setting)
     pair_rules, block_rules, global_block_targets = _active_manual_rules(restaurant.id)
+    strategy = _canonical_strategy(setting.strategy)
 
     # Only the immediate after-add surface is anchored to one source item.
     # Cart and pre-payment decisions evaluate every item in the order equally.
@@ -1000,6 +1001,9 @@ def _build_upsell_suggestions_for_items(
     disabled_item_ids, inventory_priority_ids = _upsell_item_flags(
         restaurant.id,
         available_item_ids,
+    )
+    active_inventory_priority_ids = (
+        inventory_priority_ids if strategy == "move_stock" else set()
     )
 
     cart_role_set: Set[str] = set()
@@ -1260,7 +1264,7 @@ def _build_upsell_suggestions_for_items(
             setting,
             candidate_price,
             cart_total,
-            is_inventory_priority=candidate.id in inventory_priority_ids,
+            is_inventory_priority=candidate.id in active_inventory_priority_ids,
             candidate_acceptance_rate=historical_acceptance_rate,
         )
         score += _tiebreaker_points(candidate.id)
@@ -1292,7 +1296,9 @@ def _build_upsell_suggestions_for_items(
                 "historical_max_frequency": int(historical.get("max_frequency", 0.0)) if historical else 0,
                 "historical_total_frequency": float(historical.get("total_frequency", 0.0)) if historical else 0.0,
                 "historical_acceptance_rate": historical_acceptance_rate,
-                "inventory_priority": candidate.id in inventory_priority_ids,
+                # Move-stock selections are deliberately dormant under every
+                # other strategy, including in the LLM candidate payload.
+                "inventory_priority": candidate.id in active_inventory_priority_ids,
                 "order_count_7d": int(candidate_order_counts.get("order_count_7d", 0)),
                 "order_count_30d": int(candidate_order_counts.get("order_count_30d", 0)),
             }
@@ -1311,8 +1317,10 @@ def _build_upsell_suggestions_for_items(
     best_gap_rank = min(int(row.get("gap_rank", 99)) for row in results)
     results = [row for row in results if int(row.get("gap_rank", 99)) == best_gap_rank]
 
-    strategy = _canonical_strategy(setting.strategy)
     if strategy == "max_revenue":
+        # Role/gap and safety filtering has already established that every row
+        # is a sensible complement. Revenue then ranks the highest-value valid
+        # candidate first.
         results.sort(
             key=lambda row: (
                 bool(row.get("manual_pair")),
@@ -1337,21 +1345,28 @@ def _build_upsell_suggestions_for_items(
     else:
         results.sort(key=lambda row: (bool(row.get("manual_pair")), row["score"]), reverse=True)
 
-    high_confidence = [
-        row
-        for row in results
-        if row.get("historical_max_strength", 0.0) >= 0.5 and row.get("historical_max_frequency", 0) >= 10
-    ]
-    if high_confidence:
-        top_override = max(
-            high_confidence,
-            key=lambda row: (
-                row.get("historical_max_strength", 0.0),
-                row.get("historical_max_frequency", 0),
-                row["score"],
-            ),
-        )
-        results = [top_override] + [row for row in results if row["item"].id != top_override["item"].id]
+    # Strong learned pairings are the defining override for Balanced only.
+    # They must not replace the revenue ranking or the explicit move-stock
+    # selection after those strategies have been chosen.
+    if strategy == "balanced":
+        high_confidence = [
+            row
+            for row in results
+            if row.get("historical_max_strength", 0.0) >= 0.5
+            and row.get("historical_max_frequency", 0) >= 10
+        ]
+        if high_confidence:
+            top_override = max(
+                high_confidence,
+                key=lambda row: (
+                    row.get("historical_max_strength", 0.0),
+                    row.get("historical_max_frequency", 0),
+                    row["score"],
+                ),
+            )
+            results = [top_override] + [
+                row for row in results if row["item"].id != top_override["item"].id
+            ]
 
     if not apply_surface_limit:
         return results[:limit]

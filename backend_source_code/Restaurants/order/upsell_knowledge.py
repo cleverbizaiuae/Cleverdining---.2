@@ -612,7 +612,11 @@ def build_upsell_agent_context(
     if not target_roles:
         target_roles = get_gap_priority(set(cart_roles), venue_type=venue_type, hour=hour)
 
+    strategy = _canonical_strategy_setting(getattr(setting, "strategy", "balanced"))
     candidate_payloads = [_candidate_payload(row) for row in list(candidate_rows)[:5]]
+    if strategy != "move_stock":
+        for candidate in candidate_payloads:
+            candidate["inventory_priority"] = False
     recommendation_required = bool(candidate_payloads) and trigger_point in TRIGGER_INSTRUCTIONS
     signals = dict(session_signals or {})
     local_now = _local_restaurant_now(restaurant)
