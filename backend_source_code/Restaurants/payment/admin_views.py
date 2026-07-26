@@ -16,6 +16,8 @@ channel_layer = get_channel_layer()
 
 class PaymentSerializer(serializers.ModelSerializer):
     order_id = serializers.IntegerField(source='order.id', read_only=True)
+    order_status = serializers.CharField(source='order.status', read_only=True)
+    currency = serializers.CharField(source='restaurant.currency', read_only=True)
     # Fixed: Order uses 'device' not 'table'
     table_name = serializers.SerializerMethodField()
     table_id = serializers.SerializerMethodField()
@@ -66,7 +68,8 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = [
-            'id', 'order_id', 'table_name', 'table_id', 'customer_name',
+            'id', 'order_id', 'order_status', 'table_name', 'table_id', 'customer_name',
+            'currency',
             'amount', 'provider', 'status', 'transaction_id',
             'split_type', 'payer_id_or_name', 'bill_id', 'bill_total_amount',
             'bill_paid_amount', 'bill_remaining_amount', 'bill_payment_status',
@@ -138,12 +141,14 @@ class PaymentAdminViewSet(ModelViewSet):
             rest_ids = self._get_user_restaurant_ids()
             if not rest_ids:
                 return Payment.objects.none()
-            # Optimized: Use select_related to avoid N+1 queries
-            # EXCLUDE cancelled orders to keep Payments tab clean
+            # Keep cancelled-order payments visible so the Payments tab reflects
+            # the final order decision. Superseded gateway attempts stay in the
+            # audit ledger but are hidden once the customer has switched to cash.
             return Payment.objects.filter(
                 restaurant_id__in=rest_ids
             ).exclude(
-                order__status='cancelled'
+                status='cancelled',
+                cancel_reason='Payment method changed to cash',
             ).select_related(
                 'order', 'order__device', 'restaurant'
             ).order_by('-created_at')
@@ -201,9 +206,11 @@ class PaymentAdminViewSet(ModelViewSet):
             return {
                 'id': f"derived_{order.id}",  # Synthetic ID to distinguish from real payments
                 'order_id': order.id,
+                'order_status': order.status,
                 'table_name': table_name,
                 'table_id': table_id,
                 'customer_name': "Guest",
+                'currency': order.restaurant.currency,
                 'amount': str(order.total_price),
                 'provider': 'cash',
                 'status': 'completed',
@@ -399,16 +406,37 @@ class PaymentAdminViewSet(ModelViewSet):
     def cancel(self, request, pk=None):
         payment = self.get_object()
         reason = request.data.get('reason', 'Cancelled by staff')
+
+        if payment.status == 'cancelled':
+            return Response({'status': 'cancelled'})
+        if payment.status != 'pending':
+            return Response(
+                {'error': 'Only pending payments can be cancelled'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
         payment.status = 'cancelled'
         payment.cancelled_at = timezone.now()
         payment.cancel_reason = reason
-        payment.save()
-        
-        # Optionally revert order status?
-        # order = payment.order
-        # order.status = 'payment_failed' 
-        # order.save()
+        payment.save(update_fields=['status', 'cancelled_at', 'cancel_reason', 'updated_at'])
+
+        # Keep the order payable after a payment attempt is cancelled. If the
+        # order itself was already cancelled, its fulfilment status remains the
+        # source of truth and the Payments tab now shows this cancelled record.
+        order = payment.order
+        if (
+            payment.provider == 'cash'
+            and order.payment_status == 'pending_cash'
+            and not Payment.objects.filter(
+                order=order,
+                provider='cash',
+                status='pending',
+            ).exists()
+        ):
+            order.payment_status = 'unpaid'
+            if order.status == 'awaiting_cash':
+                order.status = 'pending'
+            order.save(update_fields=['payment_status', 'status', 'updated_time'])
         
         self._emit_update(payment, 'payment:cancelled')
         

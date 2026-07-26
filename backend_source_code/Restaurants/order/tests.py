@@ -216,6 +216,18 @@ class PayBeforeOrderFlowTests(TestCase):
             Payment.objects.filter(order=order, provider="cash", status="pending").exists()
         )
 
+        self.client.force_authenticate(self.owner)
+        payments_response = self.client.get("/owners/payments/")
+        self.assertEqual(payments_response.status_code, 200)
+        visible_attempts = [
+            payment
+            for payment in payments_response.json()["results"]
+            if payment["order_id"] == order.id
+        ]
+        self.assertEqual(len(visible_attempts), 1)
+        self.assertEqual(visible_attempts[0]["provider"], "cash")
+        self.assertEqual(visible_attempts[0]["status"], "pending")
+
     def test_cancelling_order_retires_pending_cash_payment(self):
         self.brand_config.pay_before_order = False
         self.brand_config.save(update_fields=["pay_before_order"])
@@ -238,6 +250,95 @@ class PayBeforeOrderFlowTests(TestCase):
         self.assertEqual(order.status, "cancelled")
         self.assertEqual(order.payment_status, "unpaid")
         self.assertEqual(payment.status, "cancelled")
+
+        payments_response = self.client.get("/owners/payments/")
+        self.assertEqual(payments_response.status_code, 200)
+        visible_payment = next(
+            entry
+            for entry in payments_response.json()["results"]
+            if entry["id"] == payment.id
+        )
+        self.assertEqual(visible_payment["status"], "cancelled")
+        self.assertEqual(visible_payment["order_status"], "cancelled")
+
+    def test_cash_alert_uses_restaurant_currency(self):
+        self.restaurant.region = "UK"
+        self.restaurant.currency = "GBP"
+        self.restaurant.save(update_fields=["region", "currency"])
+        sent_events = []
+
+        def fake_async_to_sync(_callable):
+            def send(group, payload):
+                sent_events.append((group, payload))
+
+            return send
+
+        with patch("asgiref.sync.async_to_sync", side_effect=fake_async_to_sync):
+            response = self._place_order("cash")
+
+        self.assertEqual(response.status_code, 201)
+        cash_alerts = [
+            payload
+            for group, payload in sent_events
+            if group == f"restaurant_{self.restaurant.id}"
+            and payload.get("type") == "cash_payment_alert"
+        ]
+        self.assertEqual(len(cash_alerts), 1)
+        self.assertEqual(cash_alerts[0]["currency"], "GBP")
+
+    def test_bulk_cash_alert_uses_restaurant_currency(self):
+        self.restaurant.region = "UK"
+        self.restaurant.currency = "GBP"
+        self.restaurant.save(update_fields=["region", "currency"])
+        response = self._place_order("card")
+        self.assertEqual(response.status_code, 201)
+        sent_events = []
+
+        def fake_async_to_sync(_callable):
+            def send(group, payload):
+                sent_events.append((group, payload))
+
+            return send
+
+        with patch("payment.views.async_to_sync", side_effect=fake_async_to_sync):
+            cash_response = self.client.post(
+                "/api/customer/create-bulk-checkout-session/",
+                {"provider": "cash"},
+                format="json",
+                HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+            )
+
+        self.assertEqual(cash_response.status_code, 200)
+        cash_alerts = [
+            payload
+            for group, payload in sent_events
+            if group == f"restaurant_{self.restaurant.id}"
+            and payload.get("type") == "cash_payment_alert"
+        ]
+        self.assertEqual(len(cash_alerts), 1)
+        self.assertEqual(cash_alerts[0]["currency"], "GBP")
+        self.assertEqual(cash_alerts[0]["order"]["currency"], "GBP")
+
+    def test_pending_cash_payment_can_be_cancelled_from_payments(self):
+        self.brand_config.pay_before_order = False
+        self.brand_config.save(update_fields=["pay_before_order"])
+        response = self._place_order("cash")
+        order = Order.objects.get(pk=response.json()["id"])
+        payment = Payment.objects.get(order=order, provider="cash", status="pending")
+
+        self.client.force_authenticate(self.owner)
+        cancel_response = self.client.post(
+            f"/owners/payments/{payment.id}/cancel/",
+            {"reason": "Customer cancelled"},
+            format="json",
+        )
+
+        self.assertEqual(cancel_response.status_code, 200)
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(payment.status, "cancelled")
+        self.assertEqual(order.payment_status, "unpaid")
+        self.assertEqual(order.status, "pending")
 
     def test_unpaid_prepayment_order_is_hidden_and_cannot_be_released_by_kitchen(self):
         response = self._place_order("card")

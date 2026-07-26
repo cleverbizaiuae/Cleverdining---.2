@@ -16,6 +16,7 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import toast from 'react-hot-toast';
+import axiosInstance from '@/lib/axios';
 import { getActiveRestaurantCurrency } from '@/lib/utils';
 import { cachedGet } from '@/lib/requestCache';
 import { OptimizedImage } from '@/components/OptimizedImage';
@@ -55,9 +56,11 @@ const PaymentTimingSwitch = ({
 interface Payment {
     id: number;
     order_id: number;
+    order_status?: string;
     table_name: string;
     customer_name: string;
     amount: string;
+    currency?: string;
     provider: string;
     status: 'completed' | 'pending' | 'failed' | 'cancelled' | 'refunded' | 'initiated';
     created_at: string;
@@ -76,8 +79,13 @@ interface PaymentWithOrder extends Payment {
     };
 }
 
+const getEffectivePaymentStatus = (payment: Payment): Payment['status'] =>
+    String(payment.order_status || '').toLowerCase() === 'cancelled'
+        ? 'cancelled'
+        : payment.status;
+
 const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onClose: () => void; payment: PaymentWithOrder | null }) => {
-    const currencyCode = getActiveRestaurantCurrency();
+    const currencyCode = payment?.currency || getActiveRestaurantCurrency();
     const orderId = payment?.order_id;
     const { data: orderDetails, isLoading: loadingOrder } = useQuery({
         queryKey: ["owner-order-detail", orderId],
@@ -115,11 +123,11 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onC
                     <div>
                         <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Status</p>
                         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold capitalize
-                            ${payment.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                    payment.status === 'failed' ? 'bg-red-100 text-red-700' :
+                            ${getEffectivePaymentStatus(payment) === 'completed' ? 'bg-green-100 text-green-700' :
+                                getEffectivePaymentStatus(payment) === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                    ['failed', 'cancelled'].includes(getEffectivePaymentStatus(payment)) ? 'bg-red-100 text-red-700' :
                                         'bg-slate-100 text-slate-600'}`}>
-                            {payment.status}
+                            {getEffectivePaymentStatus(payment)}
                         </span>
                     </div>
                     <div>
@@ -187,6 +195,7 @@ export const Payments = () => {
     const [selectedPayments, setSelectedPayments] = useState<Set<number>>(new Set());
     const [viewPayment, setViewPayment] = useState<PaymentWithOrder | null>(null);
     const [isViewOpen, setIsViewOpen] = useState(false);
+    const [cancellingPaymentId, setCancellingPaymentId] = useState<number | null>(null);
     const { response } = useWebSocket();
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
     const brandConfig = useBrandConfig();
@@ -200,7 +209,7 @@ export const Payments = () => {
             if (startDate) params.append('created_at__gte', startDate.toISOString().split('T')[0]);
             if (endDate) params.append('created_at__lte', endDate.toISOString().split('T')[0]);
             if (params.toString()) url += `?${params.toString()}`;
-            const res = await cachedGet(url, {}, { ttlMs: 5_000 });
+            const res = await cachedGet(url, {}, { ttlMs: 0, force: true });
             const data = res.data;
             if (data && Array.isArray(data.results)) {
                 setPayments(data.results);
@@ -227,6 +236,7 @@ export const Payments = () => {
             response.type === 'payment_status_change' ||
             response.type === 'payment:created' ||
             response.type === 'payment:updated' ||
+            response.type === 'payment:cancelled' ||
             response.type === 'cash_payment_confirmed'
         )) {
             console.log('Payment event received, scheduling refresh:', response.type);
@@ -285,8 +295,32 @@ export const Payments = () => {
         });
     };
 
+    const handleCancelPayment = async (payment: Payment) => {
+        if (getEffectivePaymentStatus(payment) !== 'pending') return;
+        if (!window.confirm(`Cancel the pending payment for order #${payment.order_id}?`)) return;
+
+        setCancellingPaymentId(payment.id);
+        try {
+            await axiosInstance.post(`/owners/payments/${payment.id}/cancel/`, {
+                reason: 'Cancelled from Payments',
+            });
+            setPayments((current) =>
+                current.map((entry) =>
+                    entry.id === payment.id ? { ...entry, status: 'cancelled' } : entry
+                )
+            );
+            toast.success('Payment marked as cancelled');
+            await fetchPayments(false);
+        } catch (error: any) {
+            console.error('Failed to cancel payment', error);
+            toast.error(error?.response?.data?.error || 'Could not cancel payment');
+        } finally {
+            setCancellingPaymentId(null);
+        }
+    };
+
     const filteredPayments = payments.filter(p => {
-        const matchesFilter = filter === 'all' || p.status === filter;
+        const matchesFilter = filter === 'all' || getEffectivePaymentStatus(p) === filter;
         const matchesSearch = p.order_id?.toString().includes(search) || p.table_name?.toLowerCase().includes(search.toLowerCase());
         return matchesFilter && matchesSearch;
     });
@@ -311,6 +345,7 @@ export const Payments = () => {
             case 'completed': return 'bg-green-50 text-green-700 border-green-100';
             case 'pending': return 'bg-yellow-50 text-yellow-700 border-yellow-100';
             case 'failed': return 'bg-red-50 text-red-700 border-red-100';
+            case 'cancelled': return 'bg-red-50 text-red-700 border-red-100';
             default: return 'bg-slate-100 text-slate-600 border-slate-200';
         }
     };
@@ -378,6 +413,7 @@ export const Payments = () => {
                             <option value="completed">Completed</option>
                             <option value="pending">Pending</option>
                             <option value="failed">Failed</option>
+                            <option value="cancelled">Cancelled</option>
                             <option value="refunded">Refunded</option>
                         </select>
                         <div className="relative">
@@ -405,7 +441,7 @@ export const Payments = () => {
                                         <p className="text-xs text-slate-500">{p.table_name || "N/A"}</p>
                                     </div>
                                 </div>
-                                <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getStatusColor(p.status)}`}>{p.status}</span>
+                                <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getStatusColor(getEffectivePaymentStatus(p))}`}>{getEffectivePaymentStatus(p)}</span>
                             </div>
 
                             <div className="grid grid-cols-2 gap-3 text-xs">
@@ -423,10 +459,21 @@ export const Payments = () => {
                             </div>
 
                             <div className="flex items-center justify-between gap-3">
-                                <p className="text-base font-bold text-slate-900">{currencyCode} {p.amount}</p>
-                                <button onClick={() => { setViewPayment(p); setIsViewOpen(true); }} className="text-[#0055FE] hover:bg-[#0055FE]/10 p-2 rounded-lg transition-colors" aria-label={`View payment ${p.id}`}>
-                                    <Eye size={16} />
-                                </button>
+                                <p className="text-base font-bold text-slate-900">{p.currency || currencyCode} {p.amount}</p>
+                                <div className="flex items-center gap-1">
+                                    {getEffectivePaymentStatus(p) === 'pending' && (
+                                        <button
+                                            onClick={() => void handleCancelPayment(p)}
+                                            disabled={cancellingPaymentId === p.id}
+                                            className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                                        >
+                                            {cancellingPaymentId === p.id ? 'Cancelling…' : 'Cancel'}
+                                        </button>
+                                    )}
+                                    <button onClick={() => { setViewPayment(p); setIsViewOpen(true); }} className="text-[#0055FE] hover:bg-[#0055FE]/10 p-2 rounded-lg transition-colors" aria-label={`View payment ${p.id}`}>
+                                        <Eye size={16} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )) : (
@@ -461,7 +508,7 @@ export const Payments = () => {
                                     <td className="px-5 py-3 text-xs text-slate-500">#{String(p.id).slice(0, 8)}</td>
                                     <td className="px-5 py-3 text-sm font-medium text-slate-900">#{p.order_id}</td>
                                     <td className="px-5 py-3 text-xs text-slate-600">{p.table_name || "N/A"}</td>
-                                    <td className="px-5 py-3 text-sm font-semibold text-slate-900">{currencyCode} {p.amount}</td>
+                                    <td className="px-5 py-3 text-sm font-semibold text-slate-900">{p.currency || currencyCode} {p.amount}</td>
                                     <td className="px-5 py-3">
                                         <div className="flex items-center gap-2 text-xs font-medium text-slate-700 capitalize">
                                             {p.provider === 'card' ? <CreditCard size={14} className="text-[#0055FE]" /> : p.provider === 'cash' ? <Banknote size={14} className="text-emerald-500" /> : <Smartphone size={14} className="text-purple-500" />}
@@ -469,11 +516,22 @@ export const Payments = () => {
                                         </div>
                                     </td>
                                     <td className="px-5 py-3">
-                                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize ${getStatusColor(p.status)}`}>{p.status}</span>
+                                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize ${getStatusColor(getEffectivePaymentStatus(p))}`}>{getEffectivePaymentStatus(p)}</span>
                                     </td>
                                     <td className="px-5 py-3 text-xs text-slate-500">{new Date(p.created_at).toLocaleString()}</td>
                                     <td className="px-5 py-3 text-center">
-                                        <button onClick={() => { setViewPayment(p); setIsViewOpen(true); }} className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors"><Eye size={16} /></button>
+                                        <div className="flex items-center justify-center gap-1">
+                                            {getEffectivePaymentStatus(p) === 'pending' && (
+                                                <button
+                                                    onClick={() => void handleCancelPayment(p)}
+                                                    disabled={cancellingPaymentId === p.id}
+                                                    className="rounded px-2 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                                                >
+                                                    {cancellingPaymentId === p.id ? 'Cancelling…' : 'Cancel'}
+                                                </button>
+                                            )}
+                                            <button onClick={() => { setViewPayment(p); setIsViewOpen(true); }} className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors"><Eye size={16} /></button>
+                                        </div>
                                     </td>
                                 </tr>
                             )) : (

@@ -720,6 +720,7 @@ class CashAdapter(PaymentAdapter):
                         "total_amount": str(amount if amount is not None else order.total_price),
                         "order_total": str(order.total_price),
                         "already_paid": str(order.amount_paid or 0),
+                        "currency": str(order.restaurant.currency or "AED").upper(),
                         "timestamp": str(order.created_time)
                     }
                 )

@@ -929,9 +929,11 @@ export const TableFoodOrderList: React.FC<TableFoodOrderListProps> = ({
               </td>
               <td className="p-2 sm:p-4 text-inherit text-center">
                 <span className="font-medium">
-                  {item.status == "completed"
-                    ? "paid"
-                    : `${item?.payment_status}`}
+                  {item.status?.toLowerCase() === "cancelled"
+                    ? "cancelled"
+                    : item.status?.toLowerCase() === "completed"
+                      ? "paid"
+                      : `${item?.payment_status}`}
                 </span>
               </td>
               <td className="p-2 sm:p-4 text-inherit text-center">

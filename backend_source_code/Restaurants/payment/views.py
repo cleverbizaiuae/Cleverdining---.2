@@ -334,13 +334,15 @@ class CreateBulkCheckoutSessionView(APIView):
                                  "id": f"BULK-{session.id}", 
                                  "device_name": table_name,
                                  "items": items_summary,
-                                 "tip_amount": tip_total
+                                 "tip_amount": tip_total,
+                                 "currency": str(first_order.restaurant.currency or "AED").upper(),
                             }, 
                             "order_ids": [order.id for order in all_orders],
                             "table_number": table_name,
                             "total_amount": str(total_amount),
                             "order_total": str(order_total),
                             "already_paid": str(already_paid),
+                            "currency": str(first_order.restaurant.currency or "AED").upper(),
                             "timestamp": str(now()),
                             "is_bulk": True,
                             "session_id": session.id

@@ -61,6 +61,7 @@ type CashServiceAlert = {
   id: string;
   tableName: string;
   amount: number;
+  currency: string;
   total?: number;
   alreadyPaid?: number;
   orderIds: number[];
@@ -189,6 +190,7 @@ const WebSocketProvider = ({ children }) => {
         if (status !== "awaiting_cash" && paymentStatus !== "pending_cash") return;
 
         const tableName = String(order?.device_name || order?.device_table_name || order?.tableNo || "Table");
+        const currency = String(order?.currency || getActiveRestaurantCurrency()).trim().toUpperCase();
         const groupKey = String(order?.device_id || tableName);
         const total = Number(order?.total_price || 0);
         const paid = Number(order?.amount_paid || order?.amountPaid || 0);
@@ -204,6 +206,7 @@ const WebSocketProvider = ({ children }) => {
             id: `cash-table-${groupKey}`,
             tableName,
             amount: Math.max(0, remaining),
+            currency,
             total: Math.max(0, total),
             alreadyPaid: Math.max(0, paid),
             orderIds: [Number(order.id)].filter((orderId) => Number.isInteger(orderId) && orderId > 0),
@@ -523,6 +526,11 @@ const WebSocketProvider = ({ children }) => {
                 id: alertId,
                 tableName: String(parsedMessage.table_number || parsedMessage.order?.device_name || "Table"),
                 amount,
+                currency: String(
+                  parsedMessage.currency
+                  || parsedMessage.order?.currency
+                  || getActiveRestaurantCurrency()
+                ).trim().toUpperCase(),
                 total,
                 alreadyPaid,
                 orderIds,
@@ -722,6 +730,9 @@ const WebSocketProvider = ({ children }) => {
                 : isReady
                   ? entry.alert.tableName
                   : String(entry.alert.tableName || entry.alert.table_name || `Table ${entry.alert.tableNumber || entry.alert.table_number || ""}`);
+              const alertCurrency = isCash
+                ? entry.alert.currency || getActiveRestaurantCurrency()
+                : getActiveRestaurantCurrency();
               return (
                 <motion.div
                   key={key}
@@ -760,12 +771,12 @@ const WebSocketProvider = ({ children }) => {
                         {isCash && (
                           <div className="mt-1.5 space-y-0.5">
                             <p className="text-xs font-bold text-[#0055FE]">
-                              Collect now: {getActiveRestaurantCurrency()} {entry.alert.amount.toFixed(2)}
+                              Collect now: {alertCurrency} {entry.alert.amount.toFixed(2)}
                             </p>
                             {Number(entry.alert.alreadyPaid || 0) > 0 && (
                               <p className="text-[10px] text-slate-400">
-                                Already paid: {getActiveRestaurantCurrency()} {Number(entry.alert.alreadyPaid).toFixed(2)}
-                                {entry.alert.total !== undefined && ` · Total: ${getActiveRestaurantCurrency()} ${Number(entry.alert.total).toFixed(2)}`}
+                                Already paid: {alertCurrency} {Number(entry.alert.alreadyPaid).toFixed(2)}
+                                {entry.alert.total !== undefined && ` · Total: ${alertCurrency} ${Number(entry.alert.total).toFixed(2)}`}
                               </p>
                             )}
                           </div>

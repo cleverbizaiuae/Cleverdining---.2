@@ -204,11 +204,15 @@ const ScreenChefOrderList = () => {
                     <td className="px-5 py-3 text-sm font-medium text-slate-900">#{order.id}</td>
                     <td className="px-5 py-3 text-xs text-slate-600">{order.device_table_name || order.device_name || "N/A"}</td>
                     <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
-                        ? 'bg-green-50 text-green-700'
-                        : 'bg-red-50 text-red-700'
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${order.status?.toLowerCase() === 'cancelled'
+                        ? 'bg-red-50 text-red-700'
+                        : ['paid', 'completed'].includes((order.payment_status || '').toLowerCase())
+                          ? 'bg-green-50 text-green-700'
+                          : 'bg-red-50 text-red-700'
                         }`}>
-                        {order.payment_status || "Unpaid"}
+                        {order.status?.toLowerCase() === 'cancelled'
+                          ? 'Cancelled'
+                          : order.payment_status || "Unpaid"}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-xs text-slate-500">
