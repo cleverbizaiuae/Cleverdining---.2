@@ -783,13 +783,25 @@ class UpsellSmartSuggestionsAPIView(APIView):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=restaurant)
         menu_version, config_version = get_restaurant_upsell_cache_versions(restaurant.id)
         session_cap = UPSELL_SESSION_CAPS.get(setting.aggressiveness, 4)
+        aggressiveness_policy = get_aggressiveness_policy(setting.aggressiveness)
         session_events = UpsellEvent.objects.none()
         suggestions_shown = 0
         surface_suggestions_shown = 0
         declined_item_ids = set()
         if session_id:
             session_events = UpsellEvent.objects.filter(restaurant=restaurant, session_id=session_id)
-            suggestions_shown = session_events.filter(action="shown").count()
+            menu_suggestions_shown = session_events.filter(
+                action="shown",
+                trigger_point="add_to_cart",
+            ).count()
+            cart_suggestions_shown = session_events.filter(
+                action="shown",
+                trigger_point__in=("cart", "before_payment"),
+            ).count()
+            suggestions_shown = (
+                min(menu_suggestions_shown, aggressiveness_policy["menu_max_calls"])
+                + min(cart_suggestions_shown, aggressiveness_policy["cart_max_calls"])
+            )
             surface_trigger_points = (
                 ("add_to_cart",)
                 if trigger_point == "add_to_cart"
@@ -847,7 +859,6 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 }
             )
 
-        aggressiveness_policy = get_aggressiveness_policy(setting.aggressiveness)
         surface_cap = (
             aggressiveness_policy["menu_max_calls"]
             if trigger_point == "add_to_cart"

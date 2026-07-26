@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  canShowUpsellSession,
   getRemainingUpsellAllowance,
   getUpsellSessionCap,
   getUpsellTriggerLimit,
@@ -64,5 +65,11 @@ for (const aggressiveness of Object.keys(expectedLimits) as UpsellAggressiveness
   assert.equal(getRemainingUpsellAllowance("cart", aggressiveness), 0);
   assert.equal(getRemainingUpsellAllowance("before_payment", aggressiveness), 0);
 }
+
+resetUpsellSession();
+incrementUpsellTouchpointCount("add_to_cart", 2);
+assert.equal(getRemainingUpsellAllowance("add_to_cart", "subtle"), 0);
+assert.equal(getRemainingUpsellAllowance("cart", "subtle"), 1);
+assert.equal(canShowUpsellSession("subtle"), true);
 
 console.log("upsell session allowance checks passed");

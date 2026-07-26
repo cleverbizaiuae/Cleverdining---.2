@@ -2164,11 +2164,13 @@ class UpsellKnowledgeEngineTests(TestCase):
     def test_aggressiveness_cap_applies_across_every_upsell_surface(self):
         for trigger_point in ("add_to_cart", "cart", "before_payment"):
             session_id = f"global-cap-{trigger_point}"
-            for index in range(4):
+            for index, event_trigger_point in enumerate(
+                ("add_to_cart", "add_to_cart", "cart", "cart")
+            ):
                 UpsellEvent.objects.create(
                     restaurant=self.restaurant,
                     session_id=session_id,
-                    trigger_point="add_to_cart",
+                    trigger_point=event_trigger_point,
                     action="shown",
                     upsell_item=self.cola,
                     upsell_item_name=f"Cola {index}",
@@ -2247,14 +2249,15 @@ class UpsellKnowledgeEngineTests(TestCase):
         setting.aggressiveness = "subtle"
         setting.save(update_fields=["aggressiveness"])
         split_session_id = "subtle-menu-complete-cart-available"
-        UpsellEvent.objects.create(
-            restaurant=self.restaurant,
-            session_id=split_session_id,
-            trigger_point="add_to_cart",
-            action="shown",
-            upsell_item=self.cola,
-            upsell_item_name=self.cola.item_name,
-        )
+        for index in range(2):
+            UpsellEvent.objects.create(
+                restaurant=self.restaurant,
+                session_id=split_session_id,
+                trigger_point="add_to_cart",
+                action="shown",
+                upsell_item=self.cola,
+                upsell_item_name=f"{self.cola.item_name} {index}",
+            )
         rows = build_item_context_upsell_suggestions(
             self.restaurant,
             [self.burger.id],

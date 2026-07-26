@@ -204,8 +204,8 @@ export function canShowUpsellSession(
   aggressiveness: UpsellAggressiveness = "moderate",
 ): boolean {
   try {
-    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
-    return total < getUpsellSessionCap(aggressiveness);
+    const perSurfaceLimit = getUpsellTriggerLimit("add_to_cart", aggressiveness);
+    return getNormalizedUpsellSessionCount(perSurfaceLimit) < getUpsellSessionCap(aggressiveness);
   } catch {
     return true;
   }
@@ -241,6 +241,13 @@ function getUpsellTouchpointCount(triggerPoint: UpsellTouchpoint): number {
     + (Number.isFinite(legacyBeforePayment) ? legacyBeforePayment : 0);
 }
 
+function getNormalizedUpsellSessionCount(perSurfaceLimit: number): number {
+  const normalizedLimit = Math.max(1, Math.floor(Number(perSurfaceLimit) || 1));
+  const menuCount = getUpsellTouchpointCount("add_to_cart");
+  const cartCount = getUpsellTouchpointCount("cart");
+  return Math.min(menuCount, normalizedLimit) + Math.min(cartCount, normalizedLimit);
+}
+
 export function getRemainingUpsellAllowance(
   triggerPoint: UpsellTouchpoint,
   aggressiveness: UpsellAggressiveness = "moderate",
@@ -249,8 +256,7 @@ export function getRemainingUpsellAllowance(
     const triggerLimit = getUpsellTriggerLimit(triggerPoint, aggressiveness);
     const sessionLimit = getUpsellSessionCap(aggressiveness);
     const current = getUpsellTouchpointCount(triggerPoint);
-    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
-    const normalizedTotal = Number.isFinite(total) ? total : 0;
+    const normalizedTotal = getNormalizedUpsellSessionCount(triggerLimit);
     return Math.max(
       0,
       Math.min(triggerLimit - current, sessionLimit - normalizedTotal),
@@ -267,8 +273,12 @@ export function canShowUpsellTouchpoint(
 ): boolean {
   try {
     const current = getUpsellTouchpointCount(triggerPoint);
-    const total = Number(sessionStorage.getItem(TOTAL_COUNT_KEY) || "0");
-    return current < Math.max(1, limit) && total < Math.max(1, sessionLimit);
+    const normalizedSessionLimit = Math.max(1, sessionLimit);
+    const perSurfaceLimit = Number.isFinite(normalizedSessionLimit)
+      ? Math.max(1, Math.floor(normalizedSessionLimit / 2))
+      : Math.max(1, limit);
+    const normalizedTotal = getNormalizedUpsellSessionCount(perSurfaceLimit);
+    return current < Math.max(1, limit) && normalizedTotal < normalizedSessionLimit;
   } catch {
     return true;
   }
