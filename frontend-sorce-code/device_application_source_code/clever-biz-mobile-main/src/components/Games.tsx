@@ -14,6 +14,15 @@ import {
   X,
 } from "lucide-react";
 import axiosInstance from "@/lib/axios";
+import {
+  chooseConnect4CpuColumn,
+  createConnect4Board,
+  dropConnect4Piece,
+  getConnect4ValidColumns,
+  type Connect4Board,
+  type Connect4Piece,
+  type Connect4Player,
+} from "@/lib/connect4Engine";
 import { getPlayerSession, setPlayerSession, type PlayerSession } from "@/lib/playerSession";
 import { getTableIdentity } from "@/lib/tableIdentity";
 import { useActiveBrandConfig } from "@/lib/useBrandConfig";
@@ -402,10 +411,10 @@ export function SnakeGame({ onBack, restaurantId }: { onBack: () => void; restau
 
 const ROWS = 6;
 const COLS = 7;
-type Piece = "red" | "yellow" | null;
+type Piece = Connect4Piece;
 type ConnectMode = "1p" | "2p" | null;
 type Cell = { x: number; y: number };
-const createBoard = (): Piece[][] => Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => null));
+const createBoard = createConnect4Board;
 
 const checkConnectWin = (board: Piece[][], row: number, col: number, piece: Exclude<Piece, null>): Cell[] => {
   const directions = [
@@ -434,66 +443,66 @@ const checkConnectWin = (board: Piece[][], row: number, col: number, piece: Excl
 export function Connect4Game({ onBack, restaurantId }: { onBack: () => void; restaurantId?: string | number | null }) {
   const [mode, setMode] = useState<ConnectMode>(null);
   const [board, setBoard] = useState<Piece[][]>(() => createBoard());
-  const [currentPlayer, setCurrentPlayer] = useState<Exclude<Piece, null>>("red");
+  const [currentPlayer, setCurrentPlayer] = useState<Connect4Player>("red");
   const [winner, setWinner] = useState<Exclude<Piece, null> | "draw" | null>(null);
   const [winningCells, setWinningCells] = useState<Cell[]>([]);
+  const boardRef = useRef<Connect4Board>(board);
+  const currentPlayerRef = useRef<Connect4Player>("red");
+  const winnerRef = useRef<Exclude<Piece, null> | "draw" | null>(null);
   const moveCountRef = useRef(0);
   const scoreSubmittedRef = useRef(false);
 
   const reset = useCallback((nextMode: ConnectMode = mode) => {
+    const nextBoard = createBoard();
     setMode(nextMode);
-    setBoard(createBoard());
+    boardRef.current = nextBoard;
+    setBoard(nextBoard);
+    currentPlayerRef.current = "red";
     setCurrentPlayer("red");
+    winnerRef.current = null;
     setWinner(null);
     setWinningCells([]);
     moveCountRef.current = 0;
     scoreSubmittedRef.current = false;
   }, [mode]);
 
-  const dropPiece = useCallback((col: number, forcedPlayer?: Exclude<Piece, null>) => {
-    if (winner) return false;
-    const player = forcedPlayer || currentPlayer;
-    let placedRow = -1;
-    let nextBoard: Piece[][] = [];
+  const dropPiece = useCallback((col: number, forcedPlayer?: Connect4Player) => {
+    if (winnerRef.current) return false;
+    if (!forcedPlayer && mode === "1p" && currentPlayerRef.current !== "red") return false;
+    const player = forcedPlayer || currentPlayerRef.current;
+    if (player !== currentPlayerRef.current) return false;
+    const move = dropConnect4Piece(boardRef.current, col, player);
+    if (!move) return false;
 
-    setBoard((previous) => {
-      const copy = previous.map((row) => [...row]);
-      for (let row = ROWS - 1; row >= 0; row -= 1) {
-        if (!copy[row][col]) {
-          copy[row][col] = player;
-          placedRow = row;
-          break;
-        }
-      }
-      if (placedRow < 0) return previous;
-      nextBoard = copy;
-      return copy;
-    });
-
-    if (placedRow < 0) return false;
+    boardRef.current = move.board;
+    setBoard(move.board);
     moveCountRef.current += 1;
-    const winning = checkConnectWin(nextBoard, placedRow, col, player);
+    const winning = checkConnectWin(move.board, move.row, col, player);
     if (winning.length) {
+      winnerRef.current = player;
       setWinner(player);
       setWinningCells(winning);
-    } else if (nextBoard.every((row) => row.every(Boolean))) {
+    } else if (move.board.every((row) => row.every(Boolean))) {
+      winnerRef.current = "draw";
       setWinner("draw");
     } else {
-      setCurrentPlayer(player === "red" ? "yellow" : "red");
+      const nextPlayer = player === "red" ? "yellow" : "red";
+      currentPlayerRef.current = nextPlayer;
+      setCurrentPlayer(nextPlayer);
     }
     return true;
-  }, [currentPlayer, winner]);
+  }, [mode]);
 
-  const validColumns = useMemo(() => board[0].map((cell, index) => (cell ? null : index)).filter((value): value is number => value !== null), [board]);
+  const validColumns = useMemo(() => getConnect4ValidColumns(board), [board]);
 
   useEffect(() => {
     if (mode !== "1p" || currentPlayer !== "yellow" || winner || validColumns.length === 0) return undefined;
     const timer = window.setTimeout(() => {
-      const randomColumn = validColumns[Math.floor(Math.random() * validColumns.length)];
-      dropPiece(randomColumn, "yellow");
+      const cpuColumn = chooseConnect4CpuColumn(boardRef.current);
+      if (cpuColumn !== null) dropPiece(cpuColumn, "yellow");
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [currentPlayer, dropPiece, mode, validColumns, winner]);
+  }, [board, currentPlayer, dropPiece, mode, validColumns.length, winner]);
 
   useEffect(() => {
     if (winner !== "red" || scoreSubmittedRef.current) return;
