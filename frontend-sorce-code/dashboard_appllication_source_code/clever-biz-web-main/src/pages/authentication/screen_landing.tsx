@@ -64,12 +64,12 @@ const ScreenLanding = () => {
     <div className="bg-white h-full min-h-screen flex flex-col font-inter selection:bg-[#0055FE] selection:text-white">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
-        <div className="h-[80px] w-full container mx-auto px-6 flex justify-between items-center">
+        <div className="h-[80px] w-full container mx-auto px-3 sm:px-6 flex justify-between items-center">
           {/* Logo */}
-          <Logo className="w-[170px] z-49" />
+          <Logo className="max-w-[118px] sm:max-w-[170px] shrink-0 z-49" />
 
           {/* Navigation Buttons */}
-          <div className="flex flex-row justify-center items-center gap-x-4">
+          <div className="flex shrink-0 flex-row justify-center items-center gap-x-2 sm:gap-x-4">
             {isLoggedIn ? (
               <>
                 <button
@@ -96,13 +96,13 @@ const ScreenLanding = () => {
                     }
                     navigate(targetPath);
                   }}
-                  className="px-6 py-2.5 rounded-full border-2 border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE] hover:text-white font-medium transition-all duration-300"
+                  className="whitespace-nowrap px-3 py-2 text-[13px] sm:px-6 sm:py-2.5 sm:text-base rounded-full border-2 border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE] hover:text-white font-medium transition-all duration-300"
                 >
                   Dashboard
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-6 py-2.5 rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300"
+                  className="whitespace-nowrap px-3 py-2 text-[13px] sm:px-6 sm:py-2.5 sm:text-base rounded-full bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium shadow-lg shadow-blue-500/20 transition-all duration-300"
                 >
                   Logout
                 </button>
