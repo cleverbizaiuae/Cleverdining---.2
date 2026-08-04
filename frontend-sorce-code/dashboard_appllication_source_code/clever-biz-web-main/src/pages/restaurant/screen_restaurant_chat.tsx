@@ -16,6 +16,7 @@ import {
   getUnreadTableMessageIds,
   isActiveAssistanceStatus,
   isUnreadTableMessageStatus,
+  mergeStaffTableChats,
   sortChatsByLatestMessage,
 } from "./chatListUtils";
 
@@ -30,6 +31,10 @@ interface ChatRoomItem {
   active_guest_session_id?: string | number;
   last_message_time?: string;
   has_alert?: boolean;
+  device_has_alert?: boolean;
+  device_unread_count?: number;
+  table_message_unread_count?: number;
+  table_message_key?: string;
   source?: "device" | "table-message";
 }
 
@@ -66,16 +71,46 @@ type DeviceChatRow = Partial<ChatRoomItem> & {
 };
 
 const normalizeDeviceChats = (rows: DeviceChatRow[]): ChatRoomItem[] =>
-  rows.map((row) => ({
-    ...row,
-    id: String(row?.id ?? row?.device_id ?? ""),
-    table_name: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
-    user_id: String(row?.user_id ?? ""),
-    restaurant_id: String(row?.restaurant_id ?? row?.restaurant ?? ""),
-    active_guest_session_id: row?.active_guest_session_id ?? row?.active_session_id,
-    unread_count: Number(row?.unread_count || 0),
-    source: "device" as const,
-  }));
+  rows.map((row) => {
+    const unreadCount = Number(row?.unread_count || 0);
+    const hasAlert = Boolean(row?.has_alert);
+
+    return {
+      ...row,
+      id: String(row?.id ?? row?.device_id ?? ""),
+      table_name: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
+      user_id: String(row?.user_id ?? ""),
+      restaurant_id: String(row?.restaurant_id ?? row?.restaurant ?? ""),
+      active_guest_session_id: row?.active_guest_session_id ?? row?.active_session_id,
+      unread_count: unreadCount,
+      device_unread_count: unreadCount,
+      has_alert: hasAlert,
+      device_has_alert: hasAlert,
+      source: "device" as const,
+    };
+  });
+
+const combineMessages = (...messageGroups: Message[][]) => {
+  const seen = new Set<string>();
+
+  return messageGroups
+    .flat()
+    .filter((message) => {
+      const key = [
+        message.id ?? "",
+        message.timestamp,
+        message.message,
+        message.type ?? "",
+      ].join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort(
+      (first, second) =>
+        new Date(first.timestamp).getTime() - new Date(second.timestamp).getTime(),
+    );
+};
 
 // Utility for formatting time in Gulf Standard Time (GMT+4)
 const formatTime = (ts: string | number) => {
@@ -101,6 +136,7 @@ const ScreenRestaurantChat = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const selectedChatRef = useRef<ChatRoomItem | null>(null);
+  const tableMessageChatsRef = useRef<ChatRoomItem[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showClearChatModal, setShowClearChatModal] = useState(false);
   const isStaff = String(userInfo?.role || "").toLowerCase() === "staff";
@@ -112,16 +148,12 @@ const ScreenRestaurantChat = () => {
   useEffect(() => {
     if (!Array.isArray(dashboardTables)) return;
     const deviceChats = normalizeDeviceChats(dashboardTables as DeviceChatRow[]);
-    setChatList((prev) => {
-      const compatibilityChats = prev.filter((chat) => chat.source === "table-message");
-      const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
-      const nextChats = [...compatibilityChats, ...deviceChats].map((chat) =>
-        selectedId && String(chat.id) === String(selectedId)
-          ? { ...chat, unread_count: 0 }
-          : chat,
-      );
-      return isStaff ? sortChatsByLatestMessage(nextChats) : nextChats;
-    });
+    const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
+    setChatList(
+      isStaff
+        ? mergeStaffTableChats(deviceChats, tableMessageChatsRef.current, selectedId)
+        : deviceChats,
+    );
   }, [dashboardTables, isStaff]);
 
   const mergeTableMessages = (rows: TableMessage[]) => {
@@ -183,6 +215,9 @@ const ScreenRestaurantChat = () => {
       }
     });
 
+    const tableMessageChats = Array.from(grouped.values()).map((entry) => entry.chat);
+    tableMessageChatsRef.current = tableMessageChats;
+
     setMessageCache((prev) => {
       const next = { ...prev };
       grouped.forEach((entry, key) => {
@@ -192,14 +227,11 @@ const ScreenRestaurantChat = () => {
     });
 
     setChatList((prev) => {
-      const nonTableChats = prev.filter((chat) => chat.source !== "table-message" && !String(chat.id).startsWith("table-"));
-      const selectedId = selectedChatRef.current?.id;
-      const tableChats = Array.from(grouped.entries()).map(([key, entry]) =>
-        selectedId && String(key) === String(selectedId)
-          ? { ...entry.chat, unread_count: 0 }
-          : entry.chat,
+      const deviceChats = prev.filter(
+        (chat) => chat.source !== "table-message" && !String(chat.id).startsWith("table-"),
       );
-      return sortChatsByLatestMessage([...tableChats, ...nonTableChats]);
+      const selectedId = selectedChatRef.current?.id;
+      return mergeStaffTableChats(deviceChats, tableMessageChats, selectedId);
     });
   };
 
@@ -256,16 +288,12 @@ const ScreenRestaurantChat = () => {
         const { data } = await cachedGet(endpoint, {}, { ttlMs: 20_000 });
         if (!Array.isArray(data)) return;
         const deviceChats = normalizeDeviceChats(data);
-        setChatList((prev) => {
-          const compatibilityChats = prev.filter((chat) => chat.source === "table-message");
-          const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
-          const nextChats = [...compatibilityChats, ...deviceChats].map((chat) =>
-            selectedId && String(chat.id) === String(selectedId)
-              ? { ...chat, unread_count: 0 }
-              : chat,
-          );
-          return isStaff ? sortChatsByLatestMessage(nextChats) : nextChats;
-        });
+        const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
+        setChatList(
+          isStaff
+            ? mergeStaffTableChats(deviceChats, tableMessageChatsRef.current, selectedId)
+            : deviceChats,
+        );
       } catch (error) {
         console.error("Failed to load chat list", error);
       }
@@ -433,10 +461,17 @@ const ScreenRestaurantChat = () => {
 
               // Increment badge only if incoming and not currently open
               const shouldIncrement = isIncoming && !isCurrentlyOpen;
+              const tableUnread = Number(chat.table_message_unread_count || 0);
+              const deviceUnread = Number(
+                chat.device_unread_count
+                ?? Math.max(0, Number(chat.unread_count || 0) - tableUnread),
+              );
+              const nextDeviceUnread = shouldIncrement ? deviceUnread + 1 : deviceUnread;
 
               return {
                 ...chat,
-                unread_count: shouldIncrement ? (chat.unread_count || 0) + 1 : chat.unread_count,
+                unread_count: isCurrentlyOpen ? 0 : nextDeviceUnread + tableUnread,
+                device_unread_count: isCurrentlyOpen ? 0 : nextDeviceUnread,
                 last_message_time: lastMsg.timestamp
               };
             }
@@ -484,22 +519,36 @@ const ScreenRestaurantChat = () => {
     if (!selectedChat) return;
 
     // IMMEDIATELY clear local badge for this chat (optimistic UI)
-    setChatList(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
+    setChatList(prev => prev.map(c => c.id === selectedChat.id ? {
+      ...c,
+      unread_count: 0,
+      device_unread_count: 0,
+      table_message_unread_count: 0,
+    } : c));
     if (clearUnreadForTable) {
       clearUnreadForTable(selectedChat.id);
     }
 
+    const tableMessageKey = selectedChat.source === "table-message"
+      ? selectedChat.id
+      : selectedChat.table_message_key;
+    const tableMessages = tableMessageKey
+      ? messageCacheRef.current[tableMessageKey] || []
+      : [];
+
     // LOAD FROM CACHE FIRST (Instant Load)
     if (messageCacheRef.current[selectedChat.id]) {
       console.log(`Loaded ${selectedChat.id} from cache`);
-      setMessages(messageCacheRef.current[selectedChat.id]);
+      setMessages(combineMessages(messageCacheRef.current[selectedChat.id], tableMessages));
+    } else if (tableMessages.length > 0) {
+      setMessages(tableMessages);
     } else {
       setMessages([]); // Clear if no cache to prevent showing wrong chat
     }
 
-    if (selectedChat.source === "table-message") {
+    if (tableMessageKey) {
       const messageIds = getUnreadTableMessageIds(
-        messageCacheRef.current[selectedChat.id] || [],
+        tableMessages,
       );
       if (messageIds.length > 0) {
         axiosInstance.patch("/api/table-messages", {
@@ -509,6 +558,9 @@ const ScreenRestaurantChat = () => {
           console.warn("table-message acknowledge failed (non-blocking):", err);
         });
       }
+    }
+
+    if (selectedChat.source === "table-message") {
       return;
     }
 
@@ -522,12 +574,13 @@ const ScreenRestaurantChat = () => {
         );
         const fetchedMessages = Array.isArray(data) ? data : [];
 
-        setMessages(fetchedMessages);
+        const combinedMessages = combineMessages(fetchedMessages, tableMessages);
+        setMessages(combinedMessages);
 
         // Update Cache
         setMessageCache(prev => ({
           ...prev,
-          [selectedChat.id]: fetchedMessages
+          [selectedChat.id]: combinedMessages
         }));
 
         // Mark all as read on server (fire and forget, badge already cleared locally)
@@ -627,8 +680,11 @@ const ScreenRestaurantChat = () => {
     // API Calls
     for (const id of ids) {
       const chat = chatList.find((item) => item.id === id);
-      if (chat?.source === "table-message" || String(id).startsWith("table-")) {
-        const messageIds = (messageCache[id] || [])
+      const tableMessageKey = chat?.source === "table-message"
+        ? id
+        : chat?.table_message_key;
+      if (tableMessageKey) {
+        const messageIds = (messageCache[tableMessageKey] || [])
           .map((message) => message.id)
           .filter((messageId) => messageId !== undefined);
         if (messageIds.length > 0) {
@@ -637,9 +693,10 @@ const ScreenRestaurantChat = () => {
             status: "acknowledged",
           }).catch(console.error);
         }
-        continue;
       }
-      axiosInstance.post(`/message/chat/mark-all-read/?device_id=${id}`).catch(console.error);
+      if (chat?.source !== "table-message" && !String(id).startsWith("table-")) {
+        axiosInstance.post(`/message/chat/mark-all-read/?device_id=${id}`).catch(console.error);
+      }
     }
   };
 
@@ -672,8 +729,11 @@ const ScreenRestaurantChat = () => {
     // API Calls to clear chats on backend
     for (const id of ids) {
       const chat = chatList.find((item) => item.id === id);
-      if (chat?.source === "table-message" || String(id).startsWith("table-")) {
-        const messageIds = (messageCache[id] || [])
+      const tableMessageKey = chat?.source === "table-message"
+        ? id
+        : chat?.table_message_key;
+      if (tableMessageKey) {
+        const messageIds = (messageCache[tableMessageKey] || [])
           .map((message) => message.id)
           .filter((messageId) => messageId !== undefined);
         if (messageIds.length > 0) {
@@ -681,9 +741,10 @@ const ScreenRestaurantChat = () => {
             data: { ids: messageIds },
           }).catch(console.error);
         }
-        continue;
       }
-      await axiosInstance.post('/message/chat/clear-chat/', { device_id: id }).catch(console.error);
+      if (chat?.source !== "table-message" && !String(id).startsWith("table-")) {
+        await axiosInstance.post('/message/chat/clear-chat/', { device_id: id }).catch(console.error);
+      }
     }
   };
 
