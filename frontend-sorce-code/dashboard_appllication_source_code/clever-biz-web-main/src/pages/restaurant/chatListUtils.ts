@@ -27,6 +27,28 @@ export const sortChatsByLatestMessage = <T extends TimestampedChat>(chats: T[]) 
       getLastMessageTimestamp(second) - getLastMessageTimestamp(first),
   );
 
+export const resetClearedChatHistory = <T extends StaffTableChat>(
+  chats: T[],
+  chatIds: Array<string | number>,
+) => {
+  const clearedIds = new Set(chatIds.map((id) => String(id)));
+
+  return chats.map((chat) => {
+    if (!clearedIds.has(String(chat.id))) return chat;
+
+    return {
+      ...chat,
+      unread_count: 0,
+      device_unread_count: 0,
+      table_message_unread_count: 0,
+      table_message_key: undefined,
+      has_alert: false,
+      device_has_alert: false,
+      last_message_time: undefined,
+    } as T;
+  });
+};
+
 const getCanonicalTableIdentity = (tableName: string) => {
   return String(tableName || "")
     .trim()

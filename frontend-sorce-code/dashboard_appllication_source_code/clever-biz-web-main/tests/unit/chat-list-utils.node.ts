@@ -6,6 +6,7 @@ import {
   isActiveAssistanceStatus,
   isUnreadTableMessageStatus,
   mergeStaffTableChats,
+  resetClearedChatHistory,
   sortChatsByLatestMessage,
 } from "../../src/pages/restaurant/chatListUtils.ts";
 
@@ -140,4 +141,41 @@ test("staff device chats collapse only identical fetched table names", () => {
   assert.equal(chats.some((chat) => chat.id === "18"), true);
   assert.equal(chats.filter((chat) => /table\s+2/i.test(chat.table_name.trim())).length, 1);
   assert.equal(chats.find((chat) => /table\s+2/i.test(chat.table_name.trim()))?.id, "21");
+});
+
+test("clearing chat history retains the table conversation shell", () => {
+  const chats = resetClearedChatHistory(
+    [
+      {
+        id: "device-1",
+        table_name: "Table 1",
+        source: "device",
+        unread_count: 3,
+        device_unread_count: 2,
+        table_message_unread_count: 1,
+        table_message_key: "table-1",
+        has_alert: true,
+        device_has_alert: true,
+        last_message_time: "2026-08-04T12:00:00Z",
+      },
+      {
+        id: "device-2",
+        table_name: "Table 2",
+        source: "device",
+        unread_count: 1,
+      },
+    ],
+    ["device-1"],
+  );
+
+  assert.equal(chats.length, 2);
+  const tableOne = chats.find((chat) => chat.id === "device-1");
+  assert.equal(tableOne?.table_name, "Table 1");
+  assert.equal(tableOne?.unread_count, 0);
+  assert.equal(tableOne?.device_unread_count, 0);
+  assert.equal(tableOne?.table_message_unread_count, 0);
+  assert.equal(tableOne?.table_message_key, undefined);
+  assert.equal(tableOne?.has_alert, false);
+  assert.equal(tableOne?.last_message_time, undefined);
+  assert.equal(chats.find((chat) => chat.id === "device-2")?.unread_count, 1);
 });

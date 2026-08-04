@@ -17,6 +17,7 @@ import {
   isActiveAssistanceStatus,
   isUnreadTableMessageStatus,
   mergeStaffTableChats,
+  resetClearedChatHistory,
   sortChatsByLatestMessage,
 } from "./chatListUtils";
 
@@ -408,7 +409,7 @@ const ScreenRestaurantChat = () => {
 
     if (!lastMsg) return;
 
-    if (lastMsg.type === 'session_closed' || lastMsg.type === 'chat_cleared') {
+    if (lastMsg.type === 'session_closed') {
       const affectedDeviceId = lastMsg.device_id ?? lastMsg.table_id;
       if (!affectedDeviceId) return;
       const normalizedId = String(affectedDeviceId);
@@ -422,6 +423,33 @@ const ScreenRestaurantChat = () => {
 
       if (selectedChatRef.current && String(selectedChatRef.current.id) === normalizedId) {
         setSelectedChat(null);
+        setMessages([]);
+      }
+
+      if (clearUnreadForTable) {
+        clearUnreadForTable(normalizedId);
+      }
+      return;
+    }
+
+    if (lastMsg.type === 'chat_cleared') {
+      const affectedDeviceId = lastMsg.device_id ?? lastMsg.table_id;
+      if (!affectedDeviceId) return;
+      const normalizedId = String(affectedDeviceId);
+
+      setChatList((prev) => resetClearedChatHistory(prev, [normalizedId]));
+      setMessageCache((prev) => {
+        const next = { ...prev };
+        delete next[normalizedId];
+        return next;
+      });
+
+      if (selectedChatRef.current && String(selectedChatRef.current.id) === normalizedId) {
+        setSelectedChat((current) => (
+          current
+            ? resetClearedChatHistory([current], [normalizedId])[0]
+            : current
+        ));
         setMessages([]);
       }
 
@@ -706,8 +734,8 @@ const ScreenRestaurantChat = () => {
 
     setShowBulkClearModal(false);
 
-    // Optimistic UI: remove cleared chats from sidebar
-    setChatList(prev => prev.filter(c => !ids.includes(c.id)));
+    // Clear only the conversation state. The underlying table/device must remain.
+    setChatList(prev => resetClearedChatHistory(prev, ids));
 
     // Clear message cache for deleted chats
     setMessageCache(prev => {
@@ -1010,6 +1038,17 @@ const ScreenRestaurantChat = () => {
                     if (!selectedChat) return;
                     try {
                       await axiosInstance.post('/message/chat/clear-chat/', { device_id: selectedChat.id });
+                      setChatList((prev) => resetClearedChatHistory(prev, [selectedChat.id]));
+                      setSelectedChat((current) => (
+                        current
+                          ? resetClearedChatHistory([current], [selectedChat.id])[0]
+                          : current
+                      ));
+                      setMessageCache((prev) => {
+                        const next = { ...prev };
+                        delete next[selectedChat.id];
+                        return next;
+                      });
                       setMessages([]); // Clear locally
                       toast.success("Chat history cleared");
                     } catch (err) {
