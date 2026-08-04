@@ -53,6 +53,7 @@ const cleanNotes = (notes: string | null | undefined): string => {
   return notes
     .replace(/\[TIMING:[^\]]+\]/g, "")
     .replace(/\[Drinks:[^\]]+\]/g, "")
+    .replace(/\[PAYMENT(?:\.|:)[^\]]+\]/gi, "")
     .trim();
 };
 
