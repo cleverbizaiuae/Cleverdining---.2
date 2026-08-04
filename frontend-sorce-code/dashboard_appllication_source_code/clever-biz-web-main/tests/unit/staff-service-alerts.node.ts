@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {
+  createStaffOrderViewState,
   getFirstDashboardRestaurantId,
+  getStaffOrderFromViewState,
+  getStaffOrdersPath,
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
@@ -31,6 +34,27 @@ assert.equal(isReadyToServeOrder({ status: "ready" }), true);
 assert.equal(isReadyToServeOrder({ status: "SERVED" }), true);
 assert.equal(isReadyToServeOrder({ status: "preparing" }), false);
 assert.equal(isReadyToServeOrder({ status: "delivered" }), false);
+
+assert.equal(getStaffOrdersPath("/staffadmindashboard"), "/staffadmindashboard/orders");
+assert.equal(getStaffOrdersPath("/staffadmindashboard/messages"), "/staffadmindashboard/orders");
+assert.equal(getStaffOrdersPath("/staff/messages"), "/staff/orders");
+
+const orderViewState = createStaffOrderViewState({
+  id: 302,
+  device_name: "Table 1",
+  created_time: "2026-08-04T15:28:11Z",
+  order_items: [{ item_name: "Burger" }],
+});
+assert.deepEqual(getStaffOrderFromViewState(orderViewState), {
+  id: 302,
+  device_name: "Table 1",
+  created_time: "2026-08-04T15:28:11Z",
+  order_items: [{ item_name: "Burger" }],
+  tableNo: "Table 1",
+  timeOfOrder: "2026-08-04T15:28:11Z",
+});
+assert.equal(getStaffOrderFromViewState(null), null);
+assert.equal(getStaffOrderFromViewState({ viewOrder: {} }), null);
 
 assert.equal(
   isActionableAssistanceAlert({ type: "assistance", status: "pending" }),

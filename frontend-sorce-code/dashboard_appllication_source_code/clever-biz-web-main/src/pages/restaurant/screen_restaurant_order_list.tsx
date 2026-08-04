@@ -1,7 +1,8 @@
 import { useOwner } from "@/context/ownerContext";
 import { useRole } from "@/hooks/useRole";
-import { useEffect, useState, useRef, useContext } from "react";
+import { useCallback, useEffect, useState, useRef, useContext } from "react";
 import { WebSocketContext } from "@/hooks/WebSocketProvider";
+import { getStaffOrderFromViewState } from "@/hooks/staffServiceAlerts";
 import PaymentGatewayModal, { type GatewayProvider } from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
 import { cachedGet } from "@/lib/requestCache";
@@ -19,6 +20,7 @@ import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency, getActiveRestaurantRegion } from "@/lib/utils";
 import { getRegionConfig } from "@/config/regionConfig";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { useLocation, useNavigate } from "react-router";
 
 // --- COMPONENTS ---
 
@@ -93,6 +95,8 @@ const getPaymentInfo = (order: any) => {
 };
 
 const ScreenRestaurantOrderList = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const regionCode = getActiveRestaurantRegion();
   const regionGatewayOptions = getRegionConfig(regionCode).payments.filter(
     (provider) => provider !== "cash"
@@ -341,10 +345,21 @@ const ScreenRestaurantOrderList = () => {
   };
 
   // 4. View Logic
-  const handleViewOrder = (order: any) => {
+  const handleViewOrder = useCallback((order: any) => {
     setSelectedOrder(order);
     setViewModalOpen(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    const order = getStaffOrderFromViewState(location.state);
+    if (!order) return;
+
+    handleViewOrder(order);
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+  }, [handleViewOrder, location.hash, location.pathname, location.search, location.state, navigate]);
 
   const formatMoney = (value: number) => `${currencyCode} ${value.toFixed(2)}`;
   const paymentBadgeClass = (info: ReturnType<typeof getPaymentInfo>) => {

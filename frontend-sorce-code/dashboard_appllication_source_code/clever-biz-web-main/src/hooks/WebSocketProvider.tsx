@@ -5,14 +5,18 @@ import { cachedGet } from "../lib/requestCache";
 import axiosInstance from "../lib/axios";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowRight, Banknote, BellRing, Check, PackageCheck } from "lucide-react";
+import { useNavigate } from "react-router";
 import { useRole } from "./useRole";
 import {
+  createStaffOrderViewState,
   getFirstDashboardRestaurantId,
+  getStaffOrdersPath,
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
   isReadyToServeOrder,
   isStaffAlertRole,
+  type StaffOrderRecord,
   upsertStaffServiceAlert,
 } from "./staffServiceAlerts";
 
@@ -71,6 +75,7 @@ type ReadyOrderAlert = {
   id: number;
   tableName: string;
   amount: number;
+  order: StaffOrderRecord;
 };
 
 function captureWebSocketFailure(message: string, context: WsFailureContext = {}) {
@@ -95,6 +100,7 @@ function updateAppBadge(count: number) {
 }
 
 const WebSocketProvider = ({ children }) => {
+  const navigate = useNavigate();
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [response, setResponse] = useState({});
@@ -184,6 +190,7 @@ const WebSocketProvider = ({ children }) => {
               id: orderId,
               tableName: String(order?.device_name || order?.device_table_name || order?.tableNo || "Table"),
               amount: Number(order?.total_price || 0),
+              order,
             });
           }
         }
@@ -794,14 +801,15 @@ const WebSocketProvider = ({ children }) => {
                           if (isCash) {
                             void handleCashCollected(entry.alert);
                           } else if (isReady) {
-                            const basePath = window.location.pathname.startsWith("/staffadmindashboard")
-                              ? "/staffadmindashboard"
-                              : "/staff";
-                            window.location.assign(`${basePath}/orders`);
+                            navigate(
+                              getStaffOrdersPath(window.location.pathname),
+                              { state: createStaffOrderViewState(entry.alert.order) },
+                            );
                           } else {
                             void handleServiceAttended(entry.alert.id);
                           }
                         }}
+                        type="button"
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#0055FE] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#0044dd] active:scale-95"
                       >
                         {isReady

@@ -13,6 +13,14 @@ export type StaffReadyOrderLike = {
   status?: string;
 };
 
+export type StaffOrderRecord = Record<string, unknown> & {
+  id?: string | number;
+};
+
+export type StaffOrderViewState = {
+  viewOrder?: StaffOrderRecord;
+};
+
 const ASSISTANCE_TYPES = new Set(["assistance", "call_waiter"]);
 const ACTIVE_ASSISTANCE_STATUSES = new Set(["pending", "queued", "acknowledged"]);
 const ACTIONABLE_ASSISTANCE_STATUSES = new Set(["pending", "acknowledged"]);
@@ -24,6 +32,31 @@ export const isStaffAlertRole = (role: unknown) => normalize(role) === "staff";
 export const isReadyToServeOrder = (order: StaffReadyOrderLike) => {
   const status = normalize(order?.status);
   return status === "ready" || status === "served";
+};
+
+export const getStaffOrdersPath = (pathname: string) => (
+  pathname.startsWith("/staffadmindashboard")
+    ? "/staffadmindashboard/orders"
+    : "/staff/orders"
+);
+
+export const createStaffOrderViewState = (
+  order: StaffOrderRecord,
+): StaffOrderViewState => ({
+  viewOrder: {
+    ...order,
+    tableNo: order.tableNo || order.device_name || "N/A",
+    timeOfOrder: order.timeOfOrder || order.created_time,
+  },
+});
+
+export const getStaffOrderFromViewState = (
+  state: unknown,
+): StaffOrderRecord | null => {
+  if (!state || typeof state !== "object") return null;
+  const order = (state as StaffOrderViewState).viewOrder;
+  if (!order || typeof order !== "object" || order.id === undefined) return null;
+  return order;
 };
 
 export const getFirstDashboardRestaurantId = (
