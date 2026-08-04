@@ -127,8 +127,10 @@ const ScreenRestaurantChat = () => {
   const { userInfo } = useRole();
   const {
     clearUnreadForTable,
+    markChatReadForTable,
     messages: globalMessages,
     dashboardTables,
+    setActiveChatDeviceId,
   } = useContext(WebSocketContext) || {};
   const [chatList, setChatList] = useState<ChatRoomItem[]>([]);
   const [selectedChat, setSelectedChat] = useState<ChatRoomItem | null>(null);
@@ -145,6 +147,17 @@ const ScreenRestaurantChat = () => {
   useEffect(() => {
     selectedChatRef.current = selectedChat;
   }, [selectedChat]);
+
+  useEffect(() => {
+    const activeDeviceId = selectedChat?.source === "table-message"
+      ? null
+      : selectedChat?.id ?? null;
+    setActiveChatDeviceId?.(activeDeviceId);
+
+    return () => {
+      setActiveChatDeviceId?.(null);
+    };
+  }, [selectedChat?.id, selectedChat?.source, setActiveChatDeviceId]);
 
   useEffect(() => {
     if (!Array.isArray(dashboardTables)) return;
@@ -592,6 +605,8 @@ const ScreenRestaurantChat = () => {
       return;
     }
 
+    void markChatReadForTable?.(selectedChat.id);
+
     const fetchHistory = async () => {
       try {
         const restaurantId = selectedChat.restaurant_id || selectedChat.restaurant;
@@ -611,16 +626,12 @@ const ScreenRestaurantChat = () => {
           [selectedChat.id]: combinedMessages
         }));
 
-        // Mark all as read on server (fire and forget, badge already cleared locally)
-        axiosInstance.post(`/message/chat/mark-all-read/?device_id=${selectedChat.id}`).catch(err => {
-          console.warn("mark-all-read failed (non-blocking):", err);
-        });
       } catch (error) {
         console.error("Failed to fetch history", error);
       }
     };
     fetchHistory();
-  }, [selectedChat, userInfo, clearUnreadForTable]);
+  }, [selectedChat, userInfo, clearUnreadForTable, markChatReadForTable]);
 
   // 4. Auto-scroll to bottom
   useEffect(() => {

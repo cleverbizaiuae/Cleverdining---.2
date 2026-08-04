@@ -19,6 +19,10 @@ import {
   type StaffOrderRecord,
   upsertStaffServiceAlert,
 } from "./staffServiceAlerts";
+import {
+  isUnreadMessageForActiveChat,
+  normalizeUnreadDeviceId,
+} from "./unreadBadge";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
@@ -113,6 +117,8 @@ const WebSocketProvider = ({ children }) => {
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const activeChatDeviceIdRef = useRef<string | null>(null);
+  const markReadTimeoutsRef = useRef<Map<string, number>>(new Map());
   const { userInfo: syncedUserInfo } = useRole();
 
   // 1. Get User & Token
@@ -366,6 +372,51 @@ const WebSocketProvider = ({ children }) => {
     });
   }, []);
 
+  const setActiveChatDeviceId = useCallback((deviceId: unknown) => {
+    activeChatDeviceIdRef.current = normalizeUnreadDeviceId(deviceId);
+  }, []);
+
+  const markChatReadForTable = useCallback(async (deviceId: string | number) => {
+    const key = normalizeUnreadDeviceId(deviceId);
+    if (!key) return false;
+
+    try {
+      const { data } = await axiosInstance.post(
+        `/message/chat/mark-all-read/?device_id=${encodeURIComponent(key)}`,
+      );
+      if (data?.status !== "marked all read") {
+        console.warn("mark-all-read was not applied:", data);
+        return false;
+      }
+      clearUnreadForTable(key);
+      return true;
+    } catch (error) {
+      console.warn("mark-all-read failed (non-blocking):", error);
+      return false;
+    }
+  }, [clearUnreadForTable]);
+
+  const scheduleActiveChatReadSync = useCallback((deviceId: string | number) => {
+    const key = normalizeUnreadDeviceId(deviceId);
+    if (!key) return;
+
+    const existingTimeout = markReadTimeoutsRef.current.get(key);
+    if (existingTimeout !== undefined) {
+      window.clearTimeout(existingTimeout);
+    }
+
+    const timeout = window.setTimeout(() => {
+      markReadTimeoutsRef.current.delete(key);
+      void markChatReadForTable(key);
+    }, 250);
+    markReadTimeoutsRef.current.set(key, timeout);
+  }, [markChatReadForTable]);
+
+  useEffect(() => () => {
+    markReadTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
+    markReadTimeoutsRef.current.clear();
+  }, []);
+
   const incrementUnreadForTable = useCallback((deviceId: string | number, tableName?: string) => {
     const key = String(deviceId);
     setUnreadTables((prev) => {
@@ -488,9 +539,12 @@ const WebSocketProvider = ({ children }) => {
             const isFromDevice = parsedMessage.is_from_device === true || parsedMessage.is_from_device === "true";
 
             if (isFromDevice && !isChefDashboard) {
-              console.log("Incrementing Global Unread Count (Incoming Device Msg)");
               const deviceId = parsedMessage.device_id ?? parsedMessage.table_id;
-              if (deviceId !== undefined && deviceId !== null) {
+              if (isUnreadMessageForActiveChat(deviceId, activeChatDeviceIdRef.current)) {
+                clearUnreadForTable(deviceId);
+                scheduleActiveChatReadSync(deviceId);
+              } else if (deviceId !== undefined && deviceId !== null) {
+                console.log("Incrementing Global Unread Count (Incoming Device Msg)");
                 incrementUnreadForTable(deviceId, parsedMessage.table_name);
               } else {
                 setUnreadCountSafe((prev) => prev + 1);
@@ -687,6 +741,7 @@ const WebSocketProvider = ({ children }) => {
     isChefDashboard,
     isStaffDashboard,
     refreshStaffServiceAlerts,
+    scheduleActiveChatReadSync,
     setUnreadCountSafe,
   ]);
 
@@ -715,6 +770,8 @@ const WebSocketProvider = ({ children }) => {
         setUnreadCount: setUnreadCountSafe,
         clearUnreadForTable,
         incrementUnreadForTable,
+        setActiveChatDeviceId,
+        markChatReadForTable,
       }}
     >
       {children}
