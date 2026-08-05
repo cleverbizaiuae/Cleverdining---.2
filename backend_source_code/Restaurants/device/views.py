@@ -1110,10 +1110,11 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
                         messages__guest_session__is_active=True,
                     ),
                 ),
-                last_message_time=Max(
-                    'messages__timestamp',
-                    filter=Q(messages__guest_session__is_active=True),
-                )
+                # Conversation recency must survive session expiry. Unread state
+                # remains scoped to the active guest session above, while the
+                # latest persisted message keeps the staff chat list ordered
+                # like a normal inbox after a reload.
+                last_message_time=Max('messages__timestamp')
             )
         except Exception as e:
             print(f"DeviceViewSetall optimization failed, falling back. Error: {e}")
