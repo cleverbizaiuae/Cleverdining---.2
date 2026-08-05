@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildStaffOrderAlerts,
   createStaffOrderViewState,
   getActiveAssistanceAlertIdsForTable,
   getFirstDashboardRestaurantId,
@@ -35,6 +36,61 @@ assert.equal(isReadyToServeOrder({ status: "ready" }), true);
 assert.equal(isReadyToServeOrder({ status: "SERVED" }), true);
 assert.equal(isReadyToServeOrder({ status: "preparing" }), false);
 assert.equal(isReadyToServeOrder({ status: "delivered" }), false);
+
+const staffOrderAlerts = buildStaffOrderAlerts(
+  {
+    count: 3,
+    results: {
+      stats: { ongoing_orders: 3 },
+      orders: [
+        {
+          id: 307,
+          device: 18,
+          device_name: "T1",
+          status: "pending",
+          payment_status: "pending_cash",
+          total_price: "50.00",
+          amount_paid: "0.00",
+          remaining_amount: "50.00",
+          currency: "AED",
+        },
+        {
+          id: 306,
+          device: 18,
+          device_name: "T1",
+          status: "pending",
+          payment_status: "pending_cash",
+          total_price: "58.00",
+          amount_paid: "8.00",
+          remaining_amount: "50.00",
+          currency: "AED",
+        },
+        {
+          id: 305,
+          device: 18,
+          device_name: "T1",
+          status: "served",
+          payment_status: "paid",
+          total_price: "70.00",
+        },
+      ],
+    },
+  },
+  "GBP",
+);
+assert.deepEqual(staffOrderAlerts.cashAlerts, [
+  {
+    id: "cash-table-18",
+    tableName: "T1",
+    amount: 100,
+    currency: "AED",
+    total: 108,
+    alreadyPaid: 8,
+    orderIds: [307, 306],
+  },
+]);
+assert.equal(staffOrderAlerts.readyOrderAlerts.length, 1);
+assert.equal(staffOrderAlerts.readyOrderAlerts[0]?.id, 305);
 
 assert.equal(getStaffOrdersPath("/staffadmindashboard"), "/staffadmindashboard/orders");
 assert.equal(getStaffOrdersPath("/staffadmindashboard/messages"), "/staffadmindashboard/orders");

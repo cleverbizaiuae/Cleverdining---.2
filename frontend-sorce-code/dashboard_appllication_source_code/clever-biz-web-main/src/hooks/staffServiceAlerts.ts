@@ -21,6 +21,24 @@ export type StaffReadyOrderLike = {
 
 export type StaffOrderRecord = Record<string, unknown> & {
   id?: string | number;
+  status?: string;
+};
+
+export type StaffCashOrderAlert = {
+  id: string;
+  tableName: string;
+  amount: number;
+  currency: string;
+  total?: number;
+  alreadyPaid?: number;
+  orderIds: number[];
+};
+
+export type StaffReadyOrderAlert = {
+  id: number;
+  tableName: string;
+  amount: number;
+  order: StaffOrderRecord;
 };
 
 export type StaffOrderViewState = {
@@ -38,6 +56,86 @@ export const isStaffAlertRole = (role: unknown) => normalize(role) === "staff";
 export const isReadyToServeOrder = (order: StaffReadyOrderLike) => {
   const status = normalize(order?.status);
   return status === "ready" || status === "served";
+};
+
+const getStaffOrdersFromPayload = (payload: unknown): StaffOrderRecord[] => {
+  if (!payload || typeof payload !== "object") return [];
+
+  const record = payload as Record<string, unknown>;
+  const results = record.results;
+  if (Array.isArray(results)) return results as StaffOrderRecord[];
+  if (results && typeof results === "object") {
+    const nestedOrders = (results as Record<string, unknown>).orders;
+    if (Array.isArray(nestedOrders)) return nestedOrders as StaffOrderRecord[];
+  }
+  return Array.isArray(record.orders) ? record.orders as StaffOrderRecord[] : [];
+};
+
+const asFiniteMoney = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export const buildStaffOrderAlerts = (
+  payload: unknown,
+  fallbackCurrency: string,
+) => {
+  const groupedCashAlerts = new Map<string, StaffCashOrderAlert>();
+  const readyOrderAlerts: StaffReadyOrderAlert[] = [];
+
+  getStaffOrdersFromPayload(payload).forEach((order) => {
+    const status = normalize(order.status);
+    const paymentStatus = normalize(order.payment_status);
+    if (status === "cancelled" || status === "canceled") return;
+
+    if (isReadyToServeOrder(order)) {
+      const orderId = Number(order.id);
+      if (Number.isInteger(orderId) && orderId > 0) {
+        readyOrderAlerts.push({
+          id: orderId,
+          tableName: String(order.device_name || order.device_table_name || order.tableNo || "Table"),
+          amount: asFiniteMoney(order.total_price),
+          order,
+        });
+      }
+    }
+
+    if (status !== "awaiting_cash" && paymentStatus !== "pending_cash") return;
+
+    const tableName = String(order.device_name || order.device_table_name || order.tableNo || "Table");
+    const currency = String(order.currency || fallbackCurrency || "AED").trim().toUpperCase();
+    const groupKey = String(order.device_id || order.device || tableName);
+    const total = asFiniteMoney(order.total_price);
+    const paid = asFiniteMoney(order.amount_paid || order.amountPaid);
+    const remaining = asFiniteMoney(
+      order.remaining_amount ?? order.remainingAmount ?? Math.max(0, total - paid),
+    );
+    const orderId = Number(order.id);
+    const existing = groupedCashAlerts.get(groupKey);
+
+    if (existing) {
+      existing.amount += Math.max(0, remaining);
+      existing.total = Number(existing.total || 0) + Math.max(0, total);
+      existing.alreadyPaid = Number(existing.alreadyPaid || 0) + Math.max(0, paid);
+      if (Number.isInteger(orderId) && orderId > 0) existing.orderIds.push(orderId);
+      return;
+    }
+
+    groupedCashAlerts.set(groupKey, {
+      id: `cash-table-${groupKey}`,
+      tableName,
+      amount: Math.max(0, remaining),
+      currency,
+      total: Math.max(0, total),
+      alreadyPaid: Math.max(0, paid),
+      orderIds: Number.isInteger(orderId) && orderId > 0 ? [orderId] : [],
+    });
+  });
+
+  return {
+    cashAlerts: Array.from(groupedCashAlerts.values()),
+    readyOrderAlerts,
+  };
 };
 
 export const getStaffOrdersPath = (pathname: string) => (

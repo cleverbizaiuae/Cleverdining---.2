@@ -8,6 +8,7 @@ import { ArrowRight, Banknote, BellRing, Check, PackageCheck } from "lucide-reac
 import { useNavigate } from "react-router";
 import { useRole } from "./useRole";
 import {
+  buildStaffOrderAlerts,
   createStaffOrderViewState,
   getActiveAssistanceAlertIdsForTable,
   getFirstDashboardRestaurantId,
@@ -15,9 +16,9 @@ import {
   isActionableAssistanceAlert,
   isActiveAssistanceAlert,
   isQueuedAssistanceAlert,
-  isReadyToServeOrder,
   isStaffAlertRole,
-  type StaffOrderRecord,
+  type StaffCashOrderAlert,
+  type StaffReadyOrderAlert,
   upsertStaffServiceAlert,
 } from "./staffServiceAlerts";
 import {
@@ -67,23 +68,6 @@ type StaffServiceAlert = {
   created_at?: string;
 };
 
-type CashServiceAlert = {
-  id: string;
-  tableName: string;
-  amount: number;
-  currency: string;
-  total?: number;
-  alreadyPaid?: number;
-  orderIds: number[];
-};
-
-type ReadyOrderAlert = {
-  id: number;
-  tableName: string;
-  amount: number;
-  order: StaffOrderRecord;
-};
-
 function captureWebSocketFailure(message: string, context: WsFailureContext = {}) {
   if (import.meta.env.DEV) {
     console.warn("[WebSocket warning]", message, context);
@@ -114,10 +98,13 @@ const WebSocketProvider = ({ children }) => {
   const [unreadTables, setUnreadTables] = useState<UnreadTable[]>([]);
   const [dashboardTables, setDashboardTables] = useState<DashboardTable[]>([]);
   const [staffServiceAlerts, setStaffServiceAlerts] = useState<StaffServiceAlert[]>([]);
-  const [cashServiceAlerts, setCashServiceAlerts] = useState<CashServiceAlert[]>([]);
-  const [readyOrderAlerts, setReadyOrderAlerts] = useState<ReadyOrderAlert[]>([]);
+  const [cashServiceAlerts, setCashServiceAlerts] = useState<StaffCashOrderAlert[]>([]);
+  const [readyOrderAlerts, setReadyOrderAlerts] = useState<StaffReadyOrderAlert[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptRef = useRef(0);
+  const staffAlertRefreshRef = useRef<Promise<void> | null>(null);
+  const staffAlertScopeRef = useRef<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const activeChatDeviceIdRef = useRef<string | null>(null);
   const markReadTimeoutsRef = useRef<Map<string, number>>(new Map());
@@ -149,6 +136,7 @@ const WebSocketProvider = ({ children }) => {
 
   const id = restaurantId;
   const wsUrl = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/ws/alldatalive/${id}/?token=${accessToken}`;
+  staffAlertScopeRef.current = isStaffDashboard && id ? String(id) : null;
 
   const refreshStaffServiceAlerts = useCallback(async () => {
     if (!isStaffDashboard || !id) {
@@ -158,80 +146,46 @@ const WebSocketProvider = ({ children }) => {
       return;
     }
 
-    try {
-      const messageResponse = await cachedGet(
-        "/api/table-messages",
-        { params: { restaurant_id: id } },
-        { ttlMs: 0, force: true },
-      );
-      const rows = Array.isArray(messageResponse.data) ? messageResponse.data : [];
-      setStaffServiceAlerts(rows.filter(isActiveAssistanceAlert));
-    } catch (error) {
-      console.warn("Failed to refresh staff assistance alerts (non-blocking):", error);
+    if (staffAlertRefreshRef.current) {
+      await staffAlertRefreshRef.current;
+      return;
     }
 
-    try {
-      const orderResponse = await cachedGet(
-        "/api/staff/orders/",
-        { params: { page: 1, page_size: 250 } },
-        { ttlMs: 0, force: true },
-      );
-      const orderPayload = orderResponse.data || {};
-      const rawResults = orderPayload.results;
-      const orders = Array.isArray(rawResults)
-        ? rawResults
-        : Array.isArray(rawResults?.orders)
-          ? rawResults.orders
-          : Array.isArray(orderPayload.orders)
-            ? orderPayload.orders
-            : [];
-      const groupedCashAlerts = new Map<string, CashServiceAlert>();
-      const nextReadyOrderAlerts: ReadyOrderAlert[] = [];
-      orders.forEach((order: any) => {
-        const status = String(order?.status || "").toLowerCase();
-        const paymentStatus = String(order?.payment_status || "").toLowerCase();
-        if (["cancelled", "canceled"].includes(status)) return;
-        if (isReadyToServeOrder(order)) {
-          const orderId = Number(order?.id);
-          if (Number.isInteger(orderId) && orderId > 0) {
-            nextReadyOrderAlerts.push({
-              id: orderId,
-              tableName: String(order?.device_name || order?.device_table_name || order?.tableNo || "Table"),
-              amount: Number(order?.total_price || 0),
-              order,
-            });
-          }
-        }
-        if (status !== "awaiting_cash" && paymentStatus !== "pending_cash") return;
+    const requestScope = String(id);
+    const refreshRequest = (async () => {
+      const [messageResult, orderResult] = await Promise.allSettled([
+        axiosInstance.get("/api/table-messages", { params: { restaurant_id: id } }),
+        axiosInstance.get("/api/staff/orders/", { params: { page: 1, page_size: 250 } }),
+      ]);
 
-        const tableName = String(order?.device_name || order?.device_table_name || order?.tableNo || "Table");
-        const currency = String(order?.currency || getActiveRestaurantCurrency()).trim().toUpperCase();
-        const groupKey = String(order?.device_id || tableName);
-        const total = Number(order?.total_price || 0);
-        const paid = Number(order?.amount_paid || order?.amountPaid || 0);
-        const remaining = Number(order?.remaining_amount ?? order?.remainingAmount ?? Math.max(0, total - paid));
-        const existing = groupedCashAlerts.get(groupKey);
-        if (existing) {
-          existing.amount += Math.max(0, remaining);
-          existing.total = Number(existing.total || 0) + Math.max(0, total);
-          existing.alreadyPaid = Number(existing.alreadyPaid || 0) + Math.max(0, paid);
-          existing.orderIds.push(Number(order.id));
-        } else {
-          groupedCashAlerts.set(groupKey, {
-            id: `cash-table-${groupKey}`,
-            tableName,
-            amount: Math.max(0, remaining),
-            currency,
-            total: Math.max(0, total),
-            alreadyPaid: Math.max(0, paid),
-            orderIds: [Number(order.id)].filter((orderId) => Number.isInteger(orderId) && orderId > 0),
-          });
-        }
-      });
-      setCashServiceAlerts(Array.from(groupedCashAlerts.values()));
-      setReadyOrderAlerts(nextReadyOrderAlerts);
-    } catch (error) {
-      console.warn("Failed to refresh staff cash alerts (non-blocking):", error);
+      if (staffAlertScopeRef.current !== requestScope) return;
+
+      if (messageResult.status === "fulfilled") {
+        const rows = Array.isArray(messageResult.value.data) ? messageResult.value.data : [];
+        setStaffServiceAlerts(rows.filter(isActiveAssistanceAlert));
+      } else {
+        console.warn("Failed to refresh staff assistance alerts (non-blocking):", messageResult.reason);
+      }
+
+      if (orderResult.status === "fulfilled") {
+        const { cashAlerts, readyOrderAlerts: nextReadyOrderAlerts } = buildStaffOrderAlerts(
+          orderResult.value.data,
+          getActiveRestaurantCurrency(),
+        );
+        setCashServiceAlerts(cashAlerts);
+        setReadyOrderAlerts(nextReadyOrderAlerts);
+      } else {
+        console.warn("Failed to refresh staff order alerts (non-blocking):", orderResult.reason);
+      }
+    })();
+
+    staffAlertRefreshRef.current = refreshRequest;
+    try {
+      await refreshRequest;
+    } finally {
+      if (staffAlertRefreshRef.current === refreshRequest) {
+        staffAlertRefreshRef.current = null;
+      }
     }
   }, [id, isStaffDashboard]);
 
@@ -276,7 +230,7 @@ const WebSocketProvider = ({ children }) => {
     }
   }, [refreshStaffServiceAlerts, staffServiceAlerts]);
 
-  const handleCashCollected = useCallback(async (alert: CashServiceAlert) => {
+  const handleCashCollected = useCallback(async (alert: StaffCashOrderAlert) => {
     if (alert.orderIds.length === 0) {
       window.location.href = "/dashboard/orders";
       return;
@@ -521,27 +475,48 @@ const WebSocketProvider = ({ children }) => {
       return;
     }
 
-    // We will handle closing via setWs internally to avoid stale closures
+    let disposed = false;
 
     const connectWebSocket = () => {
-      setWs((prevWs) => {
-        if (prevWs) {
-          prevWs.onclose = null; // Prevent reconnect loop on cleanup
-          prevWs.close();
-        }
-        return null;
-      });
+      if (disposed) return;
+
+      const existingSocket = wsRef.current;
+      if (
+        existingSocket
+        && (
+          existingSocket.readyState === WebSocket.OPEN
+          || existingSocket.readyState === WebSocket.CONNECTING
+        )
+      ) {
+        return;
+      }
+
+      if (existingSocket) {
+        existingSocket.onclose = null;
+        existingSocket.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
 
       console.log(`Connecting to Global WS: ${wsUrl}`);
       const socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
       setWs(socket);
 
       socket.onopen = () => {
+        if (disposed || wsRef.current !== socket) {
+          socket.onclose = null;
+          socket.close();
+          return;
+        }
         console.log("Global WebSocket connected");
         reconnectAttemptRef.current = 0; // Reset on successful connect
       };
 
       socket.onmessage = (event) => {
+        if (disposed || wsRef.current !== socket) return;
         try {
           const parsedMessage = JSON.parse(event.data);
 
@@ -597,7 +572,7 @@ const WebSocketProvider = ({ children }) => {
               parsedMessage.already_paid ?? Math.max(0, total - amount),
             );
             setCashServiceAlerts((previous) => {
-              const next: CashServiceAlert = {
+              const next: StaffCashOrderAlert = {
                 id: alertId,
                 tableName: String(parsedMessage.table_number || parsedMessage.order?.device_name || "Table"),
                 amount,
@@ -700,18 +675,23 @@ const WebSocketProvider = ({ children }) => {
       };
 
       socket.onclose = () => {
+        if (wsRef.current === socket) {
+          wsRef.current = null;
+          setWs(null);
+        }
+        if (disposed) return;
+
         console.log("WebSocket connection closed");
         // Auto-reconnect with exponential backoff
         const attempt = reconnectAttemptRef.current;
         const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // Max 30s
         console.log(`Reconnecting in ${delay}ms (attempt ${attempt + 1})`);
         reconnectTimeoutRef.current = setTimeout(() => {
+          if (disposed) return;
           reconnectAttemptRef.current = attempt + 1;
           connectWebSocket();
         }, delay);
       };
-
-      // Do not return socket, setWs controls it
     };
 
     const initialConnectTimer = window.setTimeout(connectWebSocket, 400);
@@ -720,31 +700,37 @@ const WebSocketProvider = ({ children }) => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log("Dashboard visible, checking WebSocket connection...");
-        setWs((prevWs) => {
-          if (!prevWs || prevWs.readyState === WebSocket.CLOSED || prevWs.readyState === WebSocket.CLOSING) {
-            connectWebSocket();
-          }
-          return prevWs;
-        });
+        const currentSocket = wsRef.current;
+        if (
+          !currentSocket
+          || currentSocket.readyState === WebSocket.CLOSED
+          || currentSocket.readyState === WebSocket.CLOSING
+        ) {
+          connectWebSocket();
+        }
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      disposed = true;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       window.clearTimeout(initialConnectTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
 
-      setWs((prevWs) => {
-        if (prevWs) {
-          prevWs.onclose = null;
-          prevWs.close();
+      const currentSocket = wsRef.current;
+      if (currentSocket) {
+        currentSocket.onclose = null;
+        currentSocket.close();
+        if (wsRef.current === currentSocket) {
+          wsRef.current = null;
         }
-        return null;
-      });
+      }
+      setWs(null);
     };
   }, [
     wsUrl,
