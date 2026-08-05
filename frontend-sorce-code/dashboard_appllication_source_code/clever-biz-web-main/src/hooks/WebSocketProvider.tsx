@@ -9,6 +9,7 @@ import { useNavigate } from "react-router";
 import { useRole } from "./useRole";
 import {
   createStaffOrderViewState,
+  getActiveAssistanceAlertIdsForTable,
   getFirstDashboardRestaurantId,
   getStaffOrdersPath,
   isActionableAssistanceAlert,
@@ -53,6 +54,8 @@ type WsFailureContext = {
 
 type StaffServiceAlert = {
   id: string | number;
+  deviceId?: string | number;
+  device_id?: string | number;
   tableNumber?: number;
   table_number?: number;
   tableName?: string;
@@ -254,15 +257,24 @@ const WebSocketProvider = ({ children }) => {
     }
   }, [id, isStaffDashboard]);
 
-  const handleServiceAttended = useCallback(async (alertId: string | number) => {
+  const handleServiceAttended = useCallback(async (alert: StaffServiceAlert) => {
+    const alertIds = getActiveAssistanceAlertIdsForTable(staffServiceAlerts, alert);
+    if (alertIds.length === 0) return;
+
     try {
-      await axiosInstance.patch(`/api/table-messages/${alertId}`, { status: "resolved" });
-      setStaffServiceAlerts((previous) => previous.filter((alert) => String(alert.id) !== String(alertId)));
+      await axiosInstance.patch("/api/table-messages", {
+        ids: alertIds,
+        status: "resolved",
+      });
+      const resolvedIds = new Set(alertIds.map((alertId) => String(alertId)));
+      setStaffServiceAlerts((previous) => previous.filter(
+        (candidate) => !resolvedIds.has(String(candidate.id)),
+      ));
       await refreshStaffServiceAlerts();
     } catch {
       toast.error("Could not mark the request as attended.");
     }
-  }, [refreshStaffServiceAlerts]);
+  }, [refreshStaffServiceAlerts, staffServiceAlerts]);
 
   const handleCashCollected = useCallback(async (alert: CashServiceAlert) => {
     if (alert.orderIds.length === 0) {
@@ -862,7 +874,7 @@ const WebSocketProvider = ({ children }) => {
                               { state: createStaffOrderViewState(entry.alert.order) },
                             );
                           } else {
-                            void handleServiceAttended(entry.alert.id);
+                            void handleServiceAttended(entry.alert);
                           }
                         }}
                         type="button"

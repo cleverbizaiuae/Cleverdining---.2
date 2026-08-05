@@ -2,6 +2,15 @@ export type TimestampedChat = {
   last_message_time?: string;
 };
 
+export type ChatMessageLike = {
+  id?: string | number;
+  device_id?: string | number;
+  guest_session_id?: string | number;
+  message?: string;
+  timestamp?: string | number;
+  is_from_device?: boolean | string;
+};
+
 export type StaffTableChat = TimestampedChat & {
   id: string;
   table_name: string;
@@ -26,6 +35,40 @@ export const sortChatsByLatestMessage = <T extends TimestampedChat>(chats: T[]) 
     (first, second) =>
       getLastMessageTimestamp(second) - getLastMessageTimestamp(first),
   );
+
+export const touchChatLatestActivity = <T extends StaffTableChat>(
+  chats: T[],
+  deviceId: string | number,
+  timestamp: string | number,
+) => {
+  const targetId = String(deviceId);
+  const incomingTime = new Date(timestamp).getTime();
+
+  const updated = chats.map((chat) => {
+    if (String(chat.id) !== targetId) return chat;
+
+    const currentTime = getLastMessageTimestamp(chat);
+    if (Number.isFinite(incomingTime) && currentTime > incomingTime) {
+      return chat;
+    }
+
+    return {
+      ...chat,
+      last_message_time: String(timestamp),
+    } as T;
+  });
+
+  return sortChatsByLatestMessage(updated);
+};
+
+export const getChatMessageFingerprint = (message: ChatMessageLike) => [
+  message.id ?? "",
+  message.device_id ?? "",
+  message.guest_session_id ?? "",
+  message.timestamp ?? "",
+  message.message ?? "",
+  String(message.is_from_device ?? ""),
+].join("|");
 
 export const resetClearedChatHistory = <T extends StaffTableChat>(
   chats: T[],

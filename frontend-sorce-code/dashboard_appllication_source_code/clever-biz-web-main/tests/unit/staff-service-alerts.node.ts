@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   createStaffOrderViewState,
+  getActiveAssistanceAlertIdsForTable,
   getFirstDashboardRestaurantId,
   getStaffOrderFromViewState,
   getStaffOrdersPath,
@@ -79,6 +80,31 @@ assert.equal(
 assert.equal(
   isQueuedAssistanceAlert({ type: "call_waiter", status: "queued" }),
   true,
+);
+
+assert.deepEqual(
+  getActiveAssistanceAlertIdsForTable(
+    [
+      { id: 10, deviceId: 7, tableName: "T1", type: "assistance", status: "acknowledged" },
+      { id: 11, table_number: "1", tableName: "T1", type: "call_waiter", status: "pending" },
+      { id: 12, deviceId: 7, tableName: "T1", type: "assistance", status: "resolved" },
+      { id: 13, deviceId: 8, tableName: "T2", type: "assistance", status: "pending" },
+    ],
+    { id: 10, deviceId: 7, tableName: "T1", type: "assistance", status: "acknowledged" },
+  ),
+  [10, 11],
+);
+
+assert.deepEqual(
+  getActiveAssistanceAlertIdsForTable(
+    [
+      { id: 21, table_number: 1, type: "assistance", status: "pending" },
+      { id: 22, tableNumber: "1", type: "call_waiter", status: "queued" },
+      { id: 23, tableNumber: 2, type: "assistance", status: "pending" },
+    ],
+    { id: 21, tableNumber: 1, type: "assistance", status: "pending" },
+  ),
+  [21, 22],
 );
 
 const merged = upsertStaffServiceAlert(

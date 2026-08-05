@@ -1,5 +1,11 @@
 export type StaffServiceAlertLike = {
   id?: string | number;
+  deviceId?: string | number;
+  device_id?: string | number;
+  tableNumber?: string | number;
+  table_number?: string | number;
+  tableName?: string;
+  table_name?: string;
   type?: string;
   status?: string;
 };
@@ -83,6 +89,53 @@ export const isQueuedAssistanceAlert = (alert: StaffServiceAlertLike) => (
   ASSISTANCE_TYPES.has(normalize(alert?.type))
   && normalize(alert?.status) === "queued"
 );
+
+const getServiceAlertIdentityParts = (alert: StaffServiceAlertLike) => ({
+  deviceId: normalize(alert?.deviceId ?? alert?.device_id),
+  tableNumber: normalize(alert?.tableNumber ?? alert?.table_number),
+  tableName: normalize(alert?.tableName ?? alert?.table_name).replace(/\s+/g, " "),
+});
+
+const isSameServiceTable = (
+  first: StaffServiceAlertLike,
+  second: StaffServiceAlertLike,
+) => {
+  const firstIdentity = getServiceAlertIdentityParts(first);
+  const secondIdentity = getServiceAlertIdentityParts(second);
+
+  if (firstIdentity.deviceId && secondIdentity.deviceId) {
+    return firstIdentity.deviceId === secondIdentity.deviceId;
+  }
+  if (firstIdentity.tableNumber && secondIdentity.tableNumber) {
+    return firstIdentity.tableNumber === secondIdentity.tableNumber;
+  }
+  return Boolean(
+    firstIdentity.tableName
+    && secondIdentity.tableName
+    && firstIdentity.tableName === secondIdentity.tableName,
+  );
+};
+
+export const getActiveAssistanceAlertIdsForTable = (
+  alerts: StaffServiceAlertLike[],
+  target: StaffServiceAlertLike,
+) => {
+  const targetIdentity = getServiceAlertIdentityParts(target);
+  if (!targetIdentity.deviceId && !targetIdentity.tableNumber && !targetIdentity.tableName) {
+    return target?.id === undefined || target?.id === null ? [] : [target.id];
+  }
+
+  const ids = alerts
+    .filter((alert) => (
+      isActiveAssistanceAlert(alert)
+      && isSameServiceTable(alert, target)
+    ))
+    .map((alert) => alert.id)
+    .filter((id): id is string | number => id !== undefined && id !== null);
+
+  if (ids.length > 0) return ids;
+  return target?.id === undefined || target?.id === null ? [] : [target.id];
+};
 
 export const upsertStaffServiceAlert = <T extends StaffServiceAlertLike>(
   alerts: T[],

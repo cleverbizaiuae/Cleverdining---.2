@@ -13,12 +13,14 @@ import {
 } from "lucide-react";
 import { cn, getActiveRestaurantLocale, getActiveRestaurantTimezone } from "@/lib/utils";
 import {
+  getChatMessageFingerprint,
   getUnreadTableMessageIds,
   isActiveAssistanceStatus,
   isUnreadTableMessageStatus,
   mergeStaffTableChats,
   resetClearedChatHistory,
   sortChatsByLatestMessage,
+  touchChatLatestActivity,
 } from "./chatListUtils";
 
 // Types
@@ -113,6 +115,21 @@ const combineMessages = (...messageGroups: Message[][]) => {
     );
 };
 
+const rememberProcessedMessage = (
+  processed: Set<string>,
+  message: Parameters<typeof getChatMessageFingerprint>[0],
+) => {
+  const fingerprint = getChatMessageFingerprint(message);
+  if (processed.has(fingerprint)) return false;
+
+  processed.add(fingerprint);
+  if (processed.size > 100) {
+    const oldest = processed.values().next().value;
+    if (oldest !== undefined) processed.delete(oldest);
+  }
+  return true;
+};
+
 // Utility for formatting time in Gulf Standard Time (GMT+4)
 const formatTime = (ts: string | number) => {
   const date = new Date(ts);
@@ -140,6 +157,7 @@ const ScreenRestaurantChat = () => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const selectedChatRef = useRef<ChatRoomItem | null>(null);
   const tableMessageChatsRef = useRef<ChatRoomItem[]>([]);
+  const processedMessageIdsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showClearChatModal, setShowClearChatModal] = useState(false);
   const isStaff = String(userInfo?.role || "").toLowerCase() === "staff";
@@ -363,17 +381,23 @@ const ScreenRestaurantChat = () => {
           if (data.type === 'chat_message') {
             console.log("Dashboard Received WS Data:", data);
 
+            if (isStaff && data.device_id && data.timestamp) {
+              setChatList((previous) => touchChatLatestActivity(
+                previous,
+                data.device_id,
+                data.timestamp,
+              ));
+            }
+
             const isRelevant =
               (data.guest_session_id && String(data.guest_session_id) === String(selectedChat.active_guest_session_id)) ||
               (data.device_id && String(data.device_id) === String(selectedChat.id));
 
             if (isRelevant || data.sender === "You") {
+              if (!rememberProcessedMessage(processedMessageIdsRef.current, data)) {
+                return;
+              }
               setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.message === data.message && (Date.now() - new Date(lastMsg.timestamp).getTime() < 2000)) {
-                  return prev;
-                }
-
                 // Bulletproof boolean conversion
                 const isFromDevice = data.is_from_device === true || data.is_from_device === "true" || data.is_from_device === "True";
 
@@ -414,10 +438,7 @@ const ScreenRestaurantChat = () => {
       if (wsRef.current) wsRef.current.close();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [selectedChat, userInfo]);
-
-  // Track processed messages to avoid double counting
-  const processedMessageIdsRef = useRef<Set<string>>(new Set());
+  }, [selectedChat, userInfo, isStaff]);
 
   useEffect(() => {
     if (!globalMessages || globalMessages.length === 0) return;
@@ -477,19 +498,11 @@ const ScreenRestaurantChat = () => {
     }
 
     if (lastMsg.type === 'chat_message') {
-      // Generate a unique ID for the message if not present
-      const msgId = lastMsg.id || `${lastMsg.device_id}-${lastMsg.timestamp}-${lastMsg.message}`;
-
-      // If we already processed this message, skip
-      if (processedMessageIdsRef.current.has(msgId)) {
+      // The chat-room and restaurant-room sockets receive the same server event.
+      // Process its exact fingerprint only once while still allowing a later,
+      // intentional repeat of the same text (which has a different timestamp).
+      if (!rememberProcessedMessage(processedMessageIdsRef.current, lastMsg)) {
         return;
-      }
-      processedMessageIdsRef.current.add(msgId);
-
-      // Clean up old IDs to prevent memory leak (keep last 100)
-      if (processedMessageIdsRef.current.size > 100) {
-        const it = processedMessageIdsRef.current.values();
-        processedMessageIdsRef.current.delete(it.next().value);
       }
 
       // Only process INCOMING messages (from device/customer)
@@ -522,7 +535,9 @@ const ScreenRestaurantChat = () => {
             }
             return chat;
           });
-          return isStaff ? sortChatsByLatestMessage(updatedChats) : updatedChats;
+          return isStaff
+            ? touchChatLatestActivity(updatedChats, lastMsg.device_id, lastMsg.timestamp)
+            : updatedChats;
         });
       }
 
@@ -530,13 +545,6 @@ const ScreenRestaurantChat = () => {
       // Check against REF
       if (selectedChatRef.current && String(selectedChatRef.current.id) === String(lastMsg.device_id)) {
         setMessages(prev => {
-          // Dedup check
-          const alreadyExists = prev.some(m =>
-            m.message === lastMsg.message &&
-            Math.abs(new Date(m.timestamp).getTime() - new Date(lastMsg.timestamp).getTime()) < 2000
-          );
-          if (alreadyExists) return prev;
-
           // Bulletproof boolean conversion
           const isFromDevice = lastMsg.is_from_device === true || lastMsg.is_from_device === "true" || lastMsg.is_from_device === "True";
 
@@ -675,14 +683,6 @@ const ScreenRestaurantChat = () => {
     };
     console.log("Dashboard Sending WS Payload:", payload);
     socket.send(JSON.stringify(payload));
-
-    // Optimistic UI update
-    setMessages(prev => [...prev, {
-      message: inputText,
-      sender: "me",
-      timestamp: Date.now(),
-      is_from_device: false
-    }]);
 
     // Update List Timestamp
     setChatList(prev => {

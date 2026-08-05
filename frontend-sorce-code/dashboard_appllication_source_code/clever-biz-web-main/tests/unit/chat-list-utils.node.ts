@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getChatMessageFingerprint,
   getUnreadTableMessageIds,
   isActiveAssistanceStatus,
   isUnreadTableMessageStatus,
   mergeStaffTableChats,
   resetClearedChatHistory,
   sortChatsByLatestMessage,
+  touchChatLatestActivity,
 } from "../../src/pages/restaurant/chatListUtils.ts";
 
 test("staff conversations sort by the complete latest-message date and time", () => {
@@ -21,6 +23,58 @@ test("staff conversations sort by the complete latest-message date and time", ()
   assert.deepEqual(
     sorted.map((chat) => chat.id),
     ["newest", "newer-early-clock", "older-late-clock", "no-message"],
+  );
+});
+
+test("a newly received staff chat moves its table to the top", () => {
+  const touched = touchChatLatestActivity(
+    [
+      { id: "device-1", last_message_time: "2026-08-05T10:00:00Z" },
+      { id: "device-2", last_message_time: "2026-08-05T11:00:00Z" },
+    ],
+    "device-1",
+    "2026-08-05T12:00:00Z",
+  );
+
+  assert.deepEqual(touched.map((chat) => chat.id), ["device-1", "device-2"]);
+  assert.equal(touched[0]?.last_message_time, "2026-08-05T12:00:00Z");
+});
+
+test("an older delayed event cannot demote a table with newer activity", () => {
+  const touched = touchChatLatestActivity(
+    [
+      { id: "device-1", last_message_time: "2026-08-05T12:00:00Z" },
+      { id: "device-2", last_message_time: "2026-08-05T11:00:00Z" },
+    ],
+    "device-1",
+    "2026-08-05T09:00:00Z",
+  );
+
+  assert.deepEqual(touched.map((chat) => chat.id), ["device-1", "device-2"]);
+  assert.equal(touched[0]?.last_message_time, "2026-08-05T12:00:00Z");
+});
+
+test("the chat-room and restaurant-room copies share one exact fingerprint", () => {
+  const roomCopy = {
+    device_id: "device-1",
+    guest_session_id: "session-9",
+    message: "Yes",
+    timestamp: "2026-08-05T11:38:42.123Z",
+    is_from_device: false,
+  };
+  const restaurantCopy = { ...roomCopy };
+  const separateSend = {
+    ...roomCopy,
+    timestamp: "2026-08-05T11:38:43.001Z",
+  };
+
+  assert.equal(
+    getChatMessageFingerprint(roomCopy),
+    getChatMessageFingerprint(restaurantCopy),
+  );
+  assert.notEqual(
+    getChatMessageFingerprint(roomCopy),
+    getChatMessageFingerprint(separateSend),
   );
 });
 
