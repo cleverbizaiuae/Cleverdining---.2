@@ -78,10 +78,10 @@ test("staff assistance is merged into the existing device conversation for the s
   assert.equal(tableOne?.table_message_key, "table-1");
   assert.equal(tableOne?.unread_count, 2);
   assert.equal(tableOne?.has_alert, true);
-  assert.equal(tableOne?.last_message_time, "2026-08-04T11:26:00Z");
+  assert.equal(tableOne?.last_message_time, "2026-08-04T10:00:00Z");
 });
 
-test("staff table messages remain available when no matching device conversation exists", () => {
+test("compatibility alerts cannot create a second staff conversation list entry", () => {
   const chats = mergeStaffTableChats(
     [],
     [
@@ -94,7 +94,39 @@ test("staff table messages remain available when no matching device conversation
     ],
   );
 
-  assert.deepEqual(chats.map((chat) => chat.id), ["table-4"]);
+  assert.deepEqual(chats, []);
+});
+
+test("compatibility alerts do not reorder the authoritative device conversation list", () => {
+  const chats = mergeStaffTableChats(
+    [
+      {
+        id: "device-1",
+        table_name: "Table 1",
+        source: "device",
+        last_message_time: "2026-08-04T12:00:00Z",
+      },
+      {
+        id: "device-2",
+        table_name: "Table 2",
+        source: "device",
+        last_message_time: "2026-08-04T11:00:00Z",
+      },
+    ],
+    [
+      {
+        id: "table-2",
+        table_name: "Table 2",
+        source: "table-message",
+        has_alert: true,
+        last_message_time: "2026-08-04T13:00:00Z",
+      },
+    ],
+  );
+
+  assert.deepEqual(chats.map((chat) => chat.id), ["device-1", "device-2"]);
+  assert.equal(chats[1]?.has_alert, true);
+  assert.equal(chats[1]?.last_message_time, "2026-08-04T11:00:00Z");
 });
 
 test("staff device chats collapse only identical fetched table names", () => {

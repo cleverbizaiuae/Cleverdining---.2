@@ -284,6 +284,10 @@ const ScreenRestaurantChat = () => {
 
   // 1. Fetch Chat List (Tables)
   useEffect(() => {
+    // Staff tables are already supplied by WebSocketProvider. Issuing the same
+    // request again here caused an initial list to be replaced moments later.
+    if (isStaff) return;
+
     const fetchChats = async () => {
       try {
         let endpoint;

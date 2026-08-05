@@ -56,12 +56,6 @@ const getCanonicalTableIdentity = (tableName: string) => {
     .replace(/\s+/g, " ");
 };
 
-const latestTimestamp = (first?: string, second?: string) => {
-  const firstTime = first ? new Date(first).getTime() : 0;
-  const secondTime = second ? new Date(second).getTime() : 0;
-  return secondTime > firstTime ? second : first;
-};
-
 const preferDeviceChat = <T extends StaffTableChat>(first: T, second: T) => {
   const firstHasActiveSession = first.active_guest_session_id !== undefined
     && first.active_guest_session_id !== null;
@@ -131,7 +125,6 @@ export const mergeStaffTableChats = <T extends StaffTableChat>(
     );
 
     if (deviceIndex < 0) {
-      merged.push({ ...tableChat });
       return;
     }
 
@@ -149,10 +142,6 @@ export const mergeStaffTableChats = <T extends StaffTableChat>(
       table_message_unread_count: isSelected ? 0 : tableUnread,
       table_message_key: tableChat.id,
       has_alert: Boolean(deviceChat.device_has_alert || tableChat.has_alert),
-      last_message_time: latestTimestamp(
-        deviceChat.last_message_time,
-        tableChat.last_message_time,
-      ),
     } as T;
   });
 
