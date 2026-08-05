@@ -74,7 +74,7 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
                   <span>{item.title}</span>
                   {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
                     <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
-                      {unreadTableSummary}
+                      ({unreadTableSummary})
                     </span>
                   )}
                   {item.title === "Messages" && unreadCount > 0 && (

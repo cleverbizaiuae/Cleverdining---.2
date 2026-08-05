@@ -580,9 +580,7 @@ const ScreenRestaurantChat = () => {
     // LOAD FROM CACHE FIRST (Instant Load)
     if (messageCacheRef.current[selectedChat.id]) {
       console.log(`Loaded ${selectedChat.id} from cache`);
-      setMessages(combineMessages(messageCacheRef.current[selectedChat.id], tableMessages));
-    } else if (tableMessages.length > 0) {
-      setMessages(tableMessages);
+      setMessages(combineMessages(messageCacheRef.current[selectedChat.id]));
     } else {
       setMessages([]); // Clear if no cache to prevent showing wrong chat
     }
@@ -617,7 +615,10 @@ const ScreenRestaurantChat = () => {
         );
         const fetchedMessages = Array.isArray(data) ? data : [];
 
-        const combinedMessages = combineMessages(fetchedMessages, tableMessages);
+        // The authenticated active-session chat is the authoritative conversation
+        // history. Table-message rows are retained only for staff alert/read state;
+        // merging them here reintroduced messages from earlier table sessions.
+        const combinedMessages = combineMessages(fetchedMessages);
         setMessages(combinedMessages);
 
         // Update Cache

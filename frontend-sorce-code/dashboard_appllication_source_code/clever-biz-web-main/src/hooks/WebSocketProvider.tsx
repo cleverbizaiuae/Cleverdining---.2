@@ -20,15 +20,14 @@ import {
   upsertStaffServiceAlert,
 } from "./staffServiceAlerts";
 import {
+  formatUnreadTableSummary,
+  getUnreadSyncChannelName,
   isUnreadMessageForActiveChat,
   normalizeUnreadDeviceId,
 } from "./unreadBadge";
 
 // Create a WebSocket context
 export const WebSocketContext = createContext(null);
-
-// Cross-tab sync channel
-const BROADCAST_CHANNEL_NAME = 'cleverdining-unread-sync';
 
 type UnreadTable = {
   deviceId: string;
@@ -283,8 +282,11 @@ const WebSocketProvider = ({ children }) => {
 
   // Cross-tab sync via BroadcastChannel
   useEffect(() => {
+    const channelName = getUnreadSyncChannelName(id, dashboardRole);
+    if (!channelName) return;
+
     try {
-      const channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      const channel = new BroadcastChannel(channelName);
       broadcastChannelRef.current = channel;
 
       channel.onmessage = (event) => {
@@ -320,7 +322,7 @@ const WebSocketProvider = ({ children }) => {
     } catch (e) {
       // BroadcastChannel not supported in some browsers
     }
-  }, [isChefDashboard]);
+  }, [dashboardRole, id, isChefDashboard]);
 
   const syncUnreadState = useCallback((count: number, tables?: UnreadTable[]) => {
     const safeCount = Math.max(0, Number(count) || 0);
@@ -745,10 +747,7 @@ const WebSocketProvider = ({ children }) => {
     setUnreadCountSafe,
   ]);
 
-  const unreadTableSummary = unreadTables
-    .slice(0, 2)
-    .map((t) => t.tableName)
-    .join(", ");
+  const unreadTableSummary = formatUnreadTableSummary(unreadTables);
   const actionableAssistanceAlerts = staffServiceAlerts.filter(isActionableAssistanceAlert);
   const queuedAssistanceCount = staffServiceAlerts.filter(isQueuedAssistanceAlert).length;
   const visibleServiceAlerts = [
