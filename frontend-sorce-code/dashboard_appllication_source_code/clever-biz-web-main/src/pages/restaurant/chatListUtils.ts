@@ -36,6 +36,9 @@ export const sortChatsByLatestMessage = <T extends TimestampedChat>(chats: T[]) 
       getLastMessageTimestamp(second) - getLastMessageTimestamp(first),
   );
 
+export const shouldSortChatsByLatestForRole = (role: unknown) =>
+  ["owner", "manager", "staff"].includes(String(role || "").trim().toLowerCase());
+
 export const touchChatLatestActivity = <T extends StaffTableChat>(
   chats: T[],
   deviceId: string | number,

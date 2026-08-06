@@ -19,6 +19,7 @@ import {
   isUnreadTableMessageStatus,
   mergeStaffTableChats,
   resetClearedChatHistory,
+  shouldSortChatsByLatestForRole,
   sortChatsByLatestMessage,
   touchChatLatestActivity,
 } from "./chatListUtils";
@@ -795,7 +796,7 @@ const ScreenRestaurantChat = () => {
   const matchingChats = chatList.filter(c =>
     c.table_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredChats = isStaff
+  const filteredChats = shouldSortChatsByLatestForRole(userInfo?.role)
     ? sortChatsByLatestMessage(matchingChats)
     : matchingChats;
 

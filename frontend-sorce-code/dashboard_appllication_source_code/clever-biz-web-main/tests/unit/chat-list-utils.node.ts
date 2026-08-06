@@ -8,6 +8,7 @@ import {
   isUnreadTableMessageStatus,
   mergeStaffTableChats,
   resetClearedChatHistory,
+  shouldSortChatsByLatestForRole,
   sortChatsByLatestMessage,
   touchChatLatestActivity,
 } from "../../src/pages/restaurant/chatListUtils.ts";
@@ -24,6 +25,13 @@ test("staff conversations sort by the complete latest-message date and time", ()
     sorted.map((chat) => chat.id),
     ["newest", "newer-early-clock", "older-late-clock", "no-message"],
   );
+});
+
+test("manager and staff message lists use latest-message ordering", () => {
+  assert.equal(shouldSortChatsByLatestForRole("manager"), true);
+  assert.equal(shouldSortChatsByLatestForRole("owner"), true);
+  assert.equal(shouldSortChatsByLatestForRole("staff"), true);
+  assert.equal(shouldSortChatsByLatestForRole("chef"), false);
 });
 
 test("a newly received staff chat moves its table to the top", () => {
