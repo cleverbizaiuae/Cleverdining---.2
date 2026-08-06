@@ -1458,10 +1458,9 @@ class SimpleDeviceListAllView(APIView):
                             messages__guest_session__is_active=True,
                         ),
                     ),
-                    last_message_time_cached=Max(
-                        'messages__timestamp',
-                        filter=Q(messages__guest_session__is_active=True),
-                    ),
+                    # Conversation recency must survive guest-session expiry so
+                    # the latest table stays at the top of the chat list.
+                    last_message_time_cached=Max('messages__timestamp'),
                 )
                 .order_by('-id')
             )
