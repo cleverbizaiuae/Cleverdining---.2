@@ -23,8 +23,8 @@ import {
 import {
   formatUnreadTableSummary,
   getUnreadSyncChannelName,
-  isUnreadSnapshotCurrent,
   isUnreadMessageForActiveChat,
+  mergeUnreadTableSnapshots,
   normalizeUnreadDeviceId,
   resolveUnreadTableName,
 } from "./unreadBadge";
@@ -109,6 +109,7 @@ const WebSocketProvider = ({ children }) => {
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const activeChatDeviceIdRef = useRef<string | null>(null);
   const dashboardTablesRef = useRef<DashboardTable[]>([]);
+  const unreadTablesRef = useRef<UnreadTable[]>([]);
   const unreadRevisionRef = useRef(0);
   const markReadTimeoutsRef = useRef<Map<string, number>>(new Map());
   const { userInfo: syncedUserInfo } = useRole();
@@ -263,6 +264,7 @@ const WebSocketProvider = ({ children }) => {
         if (isChefDashboard) {
           setUnreadCount(0);
           setUnreadTables([]);
+          unreadTablesRef.current = [];
           updateAppBadge(0);
           return;
         }
@@ -272,16 +274,20 @@ const WebSocketProvider = ({ children }) => {
           updateAppBadge(event.data.unreadCount);
         }
         if (Array.isArray(event.data.unreadTables)) {
-          setUnreadTables(
-            event.data.unreadTables
+          const nextTables = event.data.unreadTables
               .filter((t: any) => t && t.deviceId)
               .map((t: any) => ({
                 deviceId: String(t.deviceId),
-                tableName: String(t.tableName || `Table ${t.deviceId}`),
+                tableName: resolveUnreadTableName(
+                  t.deviceId,
+                  t.tableName,
+                  dashboardTablesRef.current,
+                ),
                 unreadCount: Number(t.unreadCount || 0),
               }))
-              .filter((t: UnreadTable) => t.unreadCount > 0)
-          );
+              .filter((t: UnreadTable) => t.unreadCount > 0);
+          unreadTablesRef.current = nextTables;
+          setUnreadTables(nextTables);
         }
       };
 
@@ -298,7 +304,9 @@ const WebSocketProvider = ({ children }) => {
     const safeCount = Math.max(0, Number(count) || 0);
     setUnreadCount(safeCount);
     if (tables) {
-      setUnreadTables(tables.filter((t) => t.unreadCount > 0));
+      const nextTables = tables.filter((t) => t.unreadCount > 0);
+      unreadTablesRef.current = nextTables;
+      setUnreadTables(nextTables);
     }
     updateAppBadge(safeCount);
     try {
@@ -315,6 +323,7 @@ const WebSocketProvider = ({ children }) => {
       const resolved = typeof next === "function" ? (next as (p: number) => number)(prev) : next;
       const safeCount = Math.max(0, Number(resolved) || 0);
       if (safeCount === 0) {
+        unreadTablesRef.current = [];
         setUnreadTables([]);
       }
       updateAppBadge(safeCount);
@@ -333,6 +342,7 @@ const WebSocketProvider = ({ children }) => {
     unreadRevisionRef.current += 1;
     setUnreadTables((prev) => {
       const next = prev.filter((t) => String(t.deviceId) !== key);
+      unreadTablesRef.current = next;
       const safeCount = next.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0);
       setUnreadCount(safeCount);
       updateAppBadge(safeCount);
@@ -409,6 +419,7 @@ const WebSocketProvider = ({ children }) => {
         )
         : [...prev, { deviceId: key, tableName: resolvedTableName, unreadCount: 1 }];
 
+      unreadTablesRef.current = next;
       const safeCount = next.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0);
       setUnreadCount(safeCount);
       updateAppBadge(safeCount);
@@ -432,14 +443,12 @@ const WebSocketProvider = ({ children }) => {
 
     let cancelled = false;
     const fetchTablesAndUnreadState = async (force = false) => {
-      const requestRevision = unreadRevisionRef.current;
       try {
         const { data } = await cachedGet<DashboardTable[]>(endpoint, {}, { ttlMs: 20_000, force });
         if (cancelled || !Array.isArray(data)) return;
 
-        setDashboardTables(data);
         dashboardTablesRef.current = data;
-        const rows: UnreadTable[] = isChefDashboard
+        const serverRows: UnreadTable[] = isChefDashboard
           ? []
           : data
             .map((row) => ({
@@ -447,12 +456,30 @@ const WebSocketProvider = ({ children }) => {
               tableName: String(row?.table_name || `Table ${row?.id ?? row?.device_id ?? ""}`),
               unreadCount: Number(row?.unread_count || 0),
             }))
-            .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
+            .filter((row: UnreadTable) => (
+              !!row.deviceId
+              && row.unreadCount > 0
+              && row.deviceId !== activeChatDeviceIdRef.current
+            ));
 
-        if (isUnreadSnapshotCurrent(requestRevision, unreadRevisionRef.current)) {
-          const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
-          syncUnreadState(total, rows);
-        }
+        const liveRows = unreadTablesRef.current
+          .filter((row) => row.deviceId !== activeChatDeviceIdRef.current)
+          .map((row) => ({
+            ...row,
+            tableName: resolveUnreadTableName(row.deviceId, row.tableName, data),
+          }));
+        const rows = mergeUnreadTableSnapshots(serverRows, liveRows);
+        const unreadByDevice = new Map(
+          rows.map((row) => [row.deviceId, row.unreadCount]),
+        );
+        const tablesWithUnread = data.map((row) => ({
+          ...row,
+          unread_count: unreadByDevice.get(String(row?.id ?? row?.device_id ?? "")) || 0,
+        }));
+        setDashboardTables(tablesWithUnread);
+        dashboardTablesRef.current = tablesWithUnread;
+        const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
+        syncUnreadState(total, rows);
       } catch (error) {
         console.warn("Failed to refresh tables and unread state (non-blocking):", error);
       }

@@ -37,7 +37,13 @@ export function resolveUnreadTableName(
 ): string {
   const normalizedDeviceId = normalizeUnreadDeviceId(deviceId);
   const explicitName = String(eventTableName || "").trim();
-  if (explicitName) return explicitName;
+  const generatedName = normalizedDeviceId ? `Table ${normalizedDeviceId}` : "";
+  if (
+    explicitName
+    && explicitName.toLowerCase() !== generatedName.toLowerCase()
+  ) {
+    return explicitName;
+  }
 
   const matchingTable = normalizedDeviceId
     ? tables.find((table) => (
@@ -46,7 +52,49 @@ export function resolveUnreadTableName(
     : undefined;
   const storedName = String(matchingTable?.table_name || "").trim();
 
-  return storedName || `Table ${normalizedDeviceId || ""}`.trim();
+  return storedName || explicitName || generatedName || "Table";
+}
+
+export type UnreadTableSnapshot = {
+  deviceId: string;
+  tableName: string;
+  unreadCount: number;
+};
+
+export function mergeUnreadTableSnapshots(
+  serverRows: UnreadTableSnapshot[],
+  liveRows: UnreadTableSnapshot[],
+): UnreadTableSnapshot[] {
+  const merged = new Map<string, UnreadTableSnapshot>();
+
+  serverRows.forEach((row) => {
+    const deviceId = normalizeUnreadDeviceId(row.deviceId);
+    const unreadCount = Math.max(0, Number(row.unreadCount || 0));
+    if (!deviceId || unreadCount === 0) return;
+    merged.set(deviceId, {
+      deviceId,
+      tableName: String(row.tableName || `Table ${deviceId}`),
+      unreadCount,
+    });
+  });
+
+  liveRows.forEach((row) => {
+    const deviceId = normalizeUnreadDeviceId(row.deviceId);
+    const unreadCount = Math.max(0, Number(row.unreadCount || 0));
+    if (!deviceId || unreadCount === 0) return;
+
+    const existing = merged.get(deviceId);
+    const liveName = String(row.tableName || "").trim();
+    const fallbackName = `Table ${deviceId}`;
+    merged.set(deviceId, {
+      deviceId,
+      tableName: existing?.tableName
+        || (liveName && liveName.toLowerCase() !== fallbackName.toLowerCase() ? liveName : fallbackName),
+      unreadCount: Math.max(existing?.unreadCount || 0, unreadCount),
+    });
+  });
+
+  return Array.from(merged.values());
 }
 
 export function isUnreadSnapshotCurrent(

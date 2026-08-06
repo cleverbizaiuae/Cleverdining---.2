@@ -74,6 +74,11 @@ type DeviceChatRow = Partial<ChatRoomItem> & {
   active_session_id?: string | number;
 };
 
+type UnreadTableRow = {
+  deviceId: string | number;
+  unreadCount: number;
+};
+
 const normalizeDeviceChats = (rows: DeviceChatRow[]): ChatRoomItem[] =>
   rows.map((row) => {
     const unreadCount = Number(row?.unread_count || 0);
@@ -148,6 +153,7 @@ const ScreenRestaurantChat = () => {
     markChatReadForTable,
     messages: globalMessages,
     dashboardTables,
+    unreadTables,
     setActiveChatDeviceId,
   } = useContext(WebSocketContext) || {};
   const [chatList, setChatList] = useState<ChatRoomItem[]>([]);
@@ -180,14 +186,28 @@ const ScreenRestaurantChat = () => {
 
   useEffect(() => {
     if (!Array.isArray(dashboardTables)) return;
-    const deviceChats = normalizeDeviceChats(dashboardTables as DeviceChatRow[]);
+    const unreadByDevice = new Map(
+      (Array.isArray(unreadTables) ? unreadTables as UnreadTableRow[] : []).map((row) => [
+        String(row.deviceId),
+        Number(row.unreadCount || 0),
+      ]),
+    );
+    const deviceChats = normalizeDeviceChats(dashboardTables as DeviceChatRow[]).map((chat) => {
+      const liveUnreadCount = unreadByDevice.get(String(chat.id));
+      if (liveUnreadCount === undefined) return chat;
+      return {
+        ...chat,
+        unread_count: liveUnreadCount,
+        device_unread_count: liveUnreadCount,
+      };
+    });
     const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
     setChatList(
       isStaff
         ? mergeStaffTableChats(deviceChats, tableMessageChatsRef.current, selectedId)
         : deviceChats,
     );
-  }, [dashboardTables, isStaff]);
+  }, [dashboardTables, unreadTables, isStaff]);
 
   const mergeTableMessages = (rows: TableMessage[]) => {
     const grouped = new Map<string, { chat: ChatRoomItem; messages: Message[] }>();

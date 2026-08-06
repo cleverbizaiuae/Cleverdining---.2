@@ -4,6 +4,7 @@ import {
   getUnreadSyncChannelName,
   isUnreadSnapshotCurrent,
   isUnreadMessageForActiveChat,
+  mergeUnreadTableSnapshots,
   normalizeUnreadDeviceId,
   resolveUnreadTableName,
 } from "../../src/hooks/unreadBadge.ts";
@@ -42,6 +43,25 @@ assert.equal(
   "T1",
 );
 assert.equal(resolveUnreadTableName(37, undefined, []), "Table 37");
+assert.equal(
+  resolveUnreadTableName(37, "Table 37", [{ id: 37, table_name: "Lol" }]),
+  "Lol",
+);
+
+assert.deepEqual(
+  mergeUnreadTableSnapshots(
+    [],
+    [{ deviceId: "37", tableName: "Lol", unreadCount: 2 }],
+  ),
+  [{ deviceId: "37", tableName: "Lol", unreadCount: 2 }],
+);
+assert.deepEqual(
+  mergeUnreadTableSnapshots(
+    [{ deviceId: "37", tableName: "Lol", unreadCount: 1 }],
+    [{ deviceId: "37", tableName: "Table 37", unreadCount: 3 }],
+  ),
+  [{ deviceId: "37", tableName: "Lol", unreadCount: 3 }],
+);
 
 assert.equal(isUnreadSnapshotCurrent(4, 4), true);
 assert.equal(isUnreadSnapshotCurrent(4, 5), false);
