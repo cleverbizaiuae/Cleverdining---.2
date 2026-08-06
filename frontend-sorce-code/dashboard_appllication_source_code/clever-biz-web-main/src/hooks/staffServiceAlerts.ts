@@ -8,6 +8,8 @@ export type StaffServiceAlertLike = {
   table_name?: string;
   type?: string;
   status?: string;
+  createdAt?: string;
+  created_at?: string;
 };
 
 export type DashboardRestaurantRowLike = {
@@ -187,6 +189,44 @@ export const isQueuedAssistanceAlert = (alert: StaffServiceAlertLike) => (
   ASSISTANCE_TYPES.has(normalize(alert?.type))
   && normalize(alert?.status) === "queued"
 );
+
+const compareAssistanceQueueOrder = (
+  first: StaffServiceAlertLike,
+  second: StaffServiceAlertLike,
+) => {
+  const firstTimestamp = Date.parse(String(first.createdAt ?? first.created_at ?? ""));
+  const secondTimestamp = Date.parse(String(second.createdAt ?? second.created_at ?? ""));
+  const firstHasTimestamp = Number.isFinite(firstTimestamp);
+  const secondHasTimestamp = Number.isFinite(secondTimestamp);
+
+  if (firstHasTimestamp && secondHasTimestamp && firstTimestamp !== secondTimestamp) {
+    return firstTimestamp - secondTimestamp;
+  }
+  if (firstHasTimestamp !== secondHasTimestamp) return firstHasTimestamp ? -1 : 1;
+
+  return String(first.id ?? "").localeCompare(String(second.id ?? ""), undefined, {
+    numeric: true,
+  });
+};
+
+export const getStaffAssistanceQueue = <T extends StaffServiceAlertLike>(
+  alerts: T[],
+  visibleLimit = 3,
+) => {
+  const safeVisibleLimit = Math.max(0, Math.floor(visibleLimit));
+  const actionableAlerts = alerts
+    .filter(isActionableAssistanceAlert)
+    .sort(compareAssistanceQueueOrder);
+  const serverQueuedAlerts = alerts
+    .filter(isQueuedAssistanceAlert)
+    .sort(compareAssistanceQueueOrder);
+  const overflowAlerts = actionableAlerts.slice(safeVisibleLimit);
+
+  return {
+    visibleAlerts: actionableAlerts.slice(0, safeVisibleLimit),
+    queuedAlerts: [...overflowAlerts, ...serverQueuedAlerts].sort(compareAssistanceQueueOrder),
+  };
+};
 
 const getServiceAlertIdentityParts = (alert: StaffServiceAlertLike) => ({
   deviceId: normalize(alert?.deviceId ?? alert?.device_id),

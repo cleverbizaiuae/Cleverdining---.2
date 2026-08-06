@@ -12,10 +12,9 @@ import {
   createStaffOrderViewState,
   getActiveAssistanceAlertIdsForTable,
   getFirstDashboardRestaurantId,
+  getStaffAssistanceQueue,
   getStaffOrdersPath,
-  isActionableAssistanceAlert,
   isActiveAssistanceAlert,
-  isQueuedAssistanceAlert,
   isStaffAlertRole,
   type StaffCashOrderAlert,
   type StaffReadyOrderAlert,
@@ -746,10 +745,10 @@ const WebSocketProvider = ({ children }) => {
   ]);
 
   const unreadTableSummary = formatUnreadTableSummary(unreadTables);
-  const actionableAssistanceAlerts = staffServiceAlerts.filter(isActionableAssistanceAlert);
-  const queuedAssistanceCount = staffServiceAlerts.filter(isQueuedAssistanceAlert).length;
+  const assistanceQueue = getStaffAssistanceQueue(staffServiceAlerts, 3);
+  const queuedAssistanceCount = assistanceQueue.queuedAlerts.length;
   const visibleServiceAlerts = [
-    ...actionableAssistanceAlerts.map((alert) => ({ kind: "assistance" as const, alert })),
+    ...assistanceQueue.visibleAlerts.map((alert) => ({ kind: "assistance" as const, alert })),
     ...cashServiceAlerts.map((alert) => ({ kind: "cash" as const, alert })),
     ...readyOrderAlerts.map((alert) => ({ kind: "ready" as const, alert })),
   ].slice(0, 4);

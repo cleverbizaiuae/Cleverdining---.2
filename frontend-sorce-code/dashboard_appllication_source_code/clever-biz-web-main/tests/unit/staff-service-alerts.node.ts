@@ -4,6 +4,7 @@ import {
   createStaffOrderViewState,
   getActiveAssistanceAlertIdsForTable,
   getFirstDashboardRestaurantId,
+  getStaffAssistanceQueue,
   getStaffOrderFromViewState,
   getStaffOrdersPath,
   isActionableAssistanceAlert,
@@ -137,6 +138,36 @@ assert.equal(
   isQueuedAssistanceAlert({ type: "call_waiter", status: "queued" }),
   true,
 );
+
+const assistanceQueue = getStaffAssistanceQueue([
+  { id: 6, type: "assistance", status: "queued", createdAt: "2026-08-06T10:05:00Z" },
+  { id: 3, type: "assistance", status: "pending", createdAt: "2026-08-06T10:02:00Z" },
+  { id: 5, type: "call_waiter", status: "queued", createdAt: "2026-08-06T10:04:00Z" },
+  { id: 1, type: "assistance", status: "pending", createdAt: "2026-08-06T10:00:00Z" },
+  { id: 4, type: "assistance", status: "queued", createdAt: "2026-08-06T10:03:00Z" },
+  { id: 2, type: "call_waiter", status: "acknowledged", createdAt: "2026-08-06T10:01:00Z" },
+]);
+assert.deepEqual(assistanceQueue.visibleAlerts.map((alert) => alert.id), [1, 2, 3]);
+assert.deepEqual(assistanceQueue.queuedAlerts.map((alert) => alert.id), [4, 5, 6]);
+
+const promotedAssistanceQueue = getStaffAssistanceQueue([
+  { id: 2, type: "call_waiter", status: "acknowledged", createdAt: "2026-08-06T10:01:00Z" },
+  { id: 3, type: "assistance", status: "pending", createdAt: "2026-08-06T10:02:00Z" },
+  { id: 4, type: "assistance", status: "pending", createdAt: "2026-08-06T10:03:00Z" },
+  { id: 5, type: "call_waiter", status: "queued", createdAt: "2026-08-06T10:04:00Z" },
+  { id: 6, type: "assistance", status: "queued", createdAt: "2026-08-06T10:05:00Z" },
+]);
+assert.deepEqual(promotedAssistanceQueue.visibleAlerts.map((alert) => alert.id), [2, 3, 4]);
+assert.deepEqual(promotedAssistanceQueue.queuedAlerts.map((alert) => alert.id), [5, 6]);
+
+const defensiveAssistanceQueue = getStaffAssistanceQueue([
+  { id: 14, type: "assistance", status: "pending", created_at: "2026-08-06T10:03:00Z" },
+  { id: 11, type: "assistance", status: "pending", created_at: "2026-08-06T10:00:00Z" },
+  { id: 13, type: "assistance", status: "pending", created_at: "2026-08-06T10:02:00Z" },
+  { id: 12, type: "assistance", status: "pending", created_at: "2026-08-06T10:01:00Z" },
+]);
+assert.deepEqual(defensiveAssistanceQueue.visibleAlerts.map((alert) => alert.id), [11, 12, 13]);
+assert.deepEqual(defensiveAssistanceQueue.queuedAlerts.map((alert) => alert.id), [14]);
 
 assert.deepEqual(
   getActiveAssistanceAlertIdsForTable(
