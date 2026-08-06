@@ -24,6 +24,38 @@ export function getUnreadSyncChannelName(
   return `cleverdining-unread-sync:${normalizedRestaurantId}:${normalizedRole}`;
 }
 
+type UnreadTableIdentityRow = {
+  id?: string | number;
+  device_id?: string | number;
+  table_name?: string;
+};
+
+export function resolveUnreadTableName(
+  deviceId: unknown,
+  eventTableName: unknown,
+  tables: UnreadTableIdentityRow[],
+): string {
+  const normalizedDeviceId = normalizeUnreadDeviceId(deviceId);
+  const explicitName = String(eventTableName || "").trim();
+  if (explicitName) return explicitName;
+
+  const matchingTable = normalizedDeviceId
+    ? tables.find((table) => (
+      normalizeUnreadDeviceId(table.id ?? table.device_id) === normalizedDeviceId
+    ))
+    : undefined;
+  const storedName = String(matchingTable?.table_name || "").trim();
+
+  return storedName || `Table ${normalizedDeviceId || ""}`.trim();
+}
+
+export function isUnreadSnapshotCurrent(
+  requestRevision: number,
+  currentRevision: number,
+): boolean {
+  return requestRevision === currentRevision;
+}
+
 type UnreadTableSummaryRow = {
   tableName?: string;
   unreadCount?: number;

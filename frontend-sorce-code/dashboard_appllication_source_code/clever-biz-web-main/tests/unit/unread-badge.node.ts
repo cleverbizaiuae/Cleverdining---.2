@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import {
   formatUnreadTableSummary,
   getUnreadSyncChannelName,
+  isUnreadSnapshotCurrent,
   isUnreadMessageForActiveChat,
   normalizeUnreadDeviceId,
+  resolveUnreadTableName,
 } from "../../src/hooks/unreadBadge.ts";
 
 assert.equal(normalizeUnreadDeviceId(12), "12");
@@ -30,6 +32,19 @@ assert.notEqual(
   getUnreadSyncChannelName(9, "staff"),
 );
 assert.equal(getUnreadSyncChannelName(undefined, "staff"), null);
+
+assert.equal(
+  resolveUnreadTableName(37, undefined, [{ id: 37, table_name: "Lol" }]),
+  "Lol",
+);
+assert.equal(
+  resolveUnreadTableName("37", "T1", [{ id: 37, table_name: "Lol" }]),
+  "T1",
+);
+assert.equal(resolveUnreadTableName(37, undefined, []), "Table 37");
+
+assert.equal(isUnreadSnapshotCurrent(4, 4), true);
+assert.equal(isUnreadSnapshotCurrent(4, 5), false);
 
 assert.equal(
   formatUnreadTableSummary([

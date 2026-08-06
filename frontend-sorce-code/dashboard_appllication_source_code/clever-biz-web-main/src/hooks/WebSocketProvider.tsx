@@ -23,8 +23,10 @@ import {
 import {
   formatUnreadTableSummary,
   getUnreadSyncChannelName,
+  isUnreadSnapshotCurrent,
   isUnreadMessageForActiveChat,
   normalizeUnreadDeviceId,
+  resolveUnreadTableName,
 } from "./unreadBadge";
 
 // Create a WebSocket context
@@ -106,6 +108,8 @@ const WebSocketProvider = ({ children }) => {
   const staffAlertScopeRef = useRef<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const activeChatDeviceIdRef = useRef<string | null>(null);
+  const dashboardTablesRef = useRef<DashboardTable[]>([]);
+  const unreadRevisionRef = useRef(0);
   const markReadTimeoutsRef = useRef<Map<string, number>>(new Map());
   const { userInfo: syncedUserInfo } = useRole();
 
@@ -262,6 +266,7 @@ const WebSocketProvider = ({ children }) => {
           updateAppBadge(0);
           return;
         }
+        unreadRevisionRef.current += 1;
         if (typeof event.data.unreadCount === 'number') {
           setUnreadCount(event.data.unreadCount);
           updateAppBadge(event.data.unreadCount);
@@ -305,6 +310,7 @@ const WebSocketProvider = ({ children }) => {
   }, []);
 
   const setUnreadCountSafe = useCallback((next: number | ((prev: number) => number)) => {
+    unreadRevisionRef.current += 1;
     setUnreadCount((prev) => {
       const resolved = typeof next === "function" ? (next as (p: number) => number)(prev) : next;
       const safeCount = Math.max(0, Number(resolved) || 0);
@@ -324,6 +330,7 @@ const WebSocketProvider = ({ children }) => {
 
   const clearUnreadForTable = useCallback((deviceId: string | number) => {
     const key = String(deviceId);
+    unreadRevisionRef.current += 1;
     setUnreadTables((prev) => {
       const next = prev.filter((t) => String(t.deviceId) !== key);
       const safeCount = next.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0);
@@ -386,15 +393,21 @@ const WebSocketProvider = ({ children }) => {
 
   const incrementUnreadForTable = useCallback((deviceId: string | number, tableName?: string) => {
     const key = String(deviceId);
+    const resolvedTableName = resolveUnreadTableName(
+      key,
+      tableName,
+      dashboardTablesRef.current,
+    );
+    unreadRevisionRef.current += 1;
     setUnreadTables((prev) => {
       const existing = prev.find((t) => String(t.deviceId) === key);
       const next = existing
         ? prev.map((t) =>
           String(t.deviceId) === key
-            ? { ...t, unreadCount: t.unreadCount + 1, tableName: tableName || t.tableName }
+            ? { ...t, unreadCount: t.unreadCount + 1, tableName: resolvedTableName || t.tableName }
             : t
         )
-        : [...prev, { deviceId: key, tableName: tableName || `Table ${key}`, unreadCount: 1 }];
+        : [...prev, { deviceId: key, tableName: resolvedTableName, unreadCount: 1 }];
 
       const safeCount = next.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0);
       setUnreadCount(safeCount);
@@ -419,11 +432,13 @@ const WebSocketProvider = ({ children }) => {
 
     let cancelled = false;
     const fetchTablesAndUnreadState = async (force = false) => {
+      const requestRevision = unreadRevisionRef.current;
       try {
         const { data } = await cachedGet<DashboardTable[]>(endpoint, {}, { ttlMs: 20_000, force });
         if (cancelled || !Array.isArray(data)) return;
 
         setDashboardTables(data);
+        dashboardTablesRef.current = data;
         const rows: UnreadTable[] = isChefDashboard
           ? []
           : data
@@ -434,14 +449,19 @@ const WebSocketProvider = ({ children }) => {
             }))
             .filter((row: UnreadTable) => !!row.deviceId && row.unreadCount > 0);
 
-        const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
-        syncUnreadState(total, rows);
+        if (isUnreadSnapshotCurrent(requestRevision, unreadRevisionRef.current)) {
+          const total = rows.reduce((sum, row) => sum + row.unreadCount, 0);
+          syncUnreadState(total, rows);
+        }
       } catch (error) {
         console.warn("Failed to refresh tables and unread state (non-blocking):", error);
       }
     };
 
-    void fetchTablesAndUnreadState();
+    void fetchTablesAndUnreadState(true);
+    const interval = window.setInterval(() => {
+      void fetchTablesAndUnreadState(true);
+    }, 4000);
 
     const handleFocus = () => {
       void fetchTablesAndUnreadState(true);
@@ -456,6 +476,7 @@ const WebSocketProvider = ({ children }) => {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
@@ -533,7 +554,10 @@ const WebSocketProvider = ({ children }) => {
                 scheduleActiveChatReadSync(deviceId);
               } else if (deviceId !== undefined && deviceId !== null) {
                 console.log("Incrementing Global Unread Count (Incoming Device Msg)");
-                incrementUnreadForTable(deviceId, parsedMessage.table_name);
+                incrementUnreadForTable(
+                  deviceId,
+                  parsedMessage.table_name || parsedMessage.sender,
+                );
               } else {
                 setUnreadCountSafe((prev) => prev + 1);
               }
