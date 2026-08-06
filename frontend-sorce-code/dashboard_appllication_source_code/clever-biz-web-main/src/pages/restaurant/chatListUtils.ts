@@ -64,7 +64,6 @@ export const touchChatLatestActivity = <T extends StaffTableChat>(
 export const getChatMessageFingerprint = (message: ChatMessageLike) => [
   message.id ?? "",
   message.device_id ?? "",
-  message.guest_session_id ?? "",
   message.timestamp ?? "",
   message.message ?? "",
   String(message.is_from_device ?? ""),

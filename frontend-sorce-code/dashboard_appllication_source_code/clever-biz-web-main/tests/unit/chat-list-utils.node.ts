@@ -62,7 +62,12 @@ test("the chat-room and restaurant-room copies share one exact fingerprint", () 
     timestamp: "2026-08-05T11:38:42.123Z",
     is_from_device: false,
   };
-  const restaurantCopy = { ...roomCopy };
+  const restaurantCopy = {
+    device_id: roomCopy.device_id,
+    message: roomCopy.message,
+    timestamp: roomCopy.timestamp,
+    is_from_device: roomCopy.is_from_device,
+  };
   const separateSend = {
     ...roomCopy,
     timestamp: "2026-08-05T11:38:43.001Z",
