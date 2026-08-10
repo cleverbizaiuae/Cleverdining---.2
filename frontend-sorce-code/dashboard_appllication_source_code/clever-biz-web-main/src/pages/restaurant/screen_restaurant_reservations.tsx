@@ -1244,11 +1244,11 @@ const ScreenRestaurantReservations = () => {
               </label>
               <label>
                 <span className="mb-1 block text-xs font-medium text-slate-600">Date</span>
-                <input type="date" value={createForm.date} onChange={(event) => updateCreateForm("date", event.target.value)} disabled={createMode === "walk_in"} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE] disabled:bg-slate-50" />
+                <input type="date" value={createForm.date} onChange={(event) => updateCreateForm("date", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
                 <span className="mb-1 block text-xs font-medium text-slate-600">Time</span>
-                <input type="time" value={createForm.time} onChange={(event) => updateCreateForm("time", event.target.value)} disabled={createMode === "walk_in"} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE] disabled:bg-slate-50" />
+                <input type="time" value={createForm.time} onChange={(event) => updateCreateForm("time", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label className="sm:col-span-2">
                 <span className="mb-1 block text-xs font-medium text-slate-600">Duration minutes</span>
@@ -1262,7 +1262,7 @@ const ScreenRestaurantReservations = () => {
             <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
               <button type="button" onClick={() => setCreateMode(null)} className="h-9 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
               <button type="button" onClick={submitCreateReservation} disabled={actionLoading} className="h-9 rounded-lg bg-[#0055FE] px-4 text-sm font-semibold text-white hover:bg-[#0047D1] disabled:opacity-60">
-                {actionLoading ? "Saving..." : createMode === "walk_in" ? "Seat Walk-in" : "Create Reservation"}
+                {actionLoading ? "Saving..." : "Create Reservation"}
               </button>
             </div>
           </div>
