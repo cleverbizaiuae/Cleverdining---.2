@@ -28,7 +28,11 @@ def ensure_order_notes_column() -> bool:
 
             description = connection.introspection.get_table_description(cursor, "order_order")
             columns = {col.name for col in description}
-            missing = [field_name for field_name in ["notes", "amount_paid"] if field_name not in columns]
+            missing = [
+                field_name
+                for field_name in ["notes", "amount_paid", "is_walk_in"]
+                if field_name not in columns
+            ]
             if not missing:
                 return True
 

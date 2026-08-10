@@ -8,6 +8,7 @@ from accounts.models import ChefStaff
 from accounts.permissions import IsOwnerChefOrStaff
 
 from .models import Order
+from .schema_guard import ensure_order_notes_column
 from .serializers import OrderDetailSerializer
 
 
@@ -15,6 +16,7 @@ class OrderWalkInAPIView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerChefOrStaff]
 
     def patch(self, request, pk):
+        ensure_order_notes_column()
         is_walk_in = request.data.get("isWalkIn")
         if not isinstance(is_walk_in, bool):
             return Response(
