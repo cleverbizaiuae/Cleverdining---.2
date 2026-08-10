@@ -18,6 +18,7 @@ class Order(models.Model):
     tip_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     tip_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     tip_type = models.CharField(max_length=20, choices=[('percentage','Percentage'), ('custom_amount','Custom Amount'), ('custom_percentage','Custom Percentage')], default='custom_amount', null=True, blank=True)
+    is_walk_in = models.BooleanField(default=False)
     created_time = models.DateTimeField(auto_now_add=True)
     updated_time = models.DateTimeField(auto_now=True)
 

@@ -103,6 +103,7 @@ interface OrdersStats {
   ongoing_orders: number;
   today_completed_order_count: number;
   total_completed_orders: number;
+  walk_ins?: number;
 }
 
 // Define the context type

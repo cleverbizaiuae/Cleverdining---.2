@@ -712,7 +712,8 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
             stats = {
                 "total_completed_orders": completed_orders.count(),
                 "today_completed_order_count": completed_today.count(),
-                "ongoing_orders": full_queryset.filter(status__in=ongoing_statuses).count()
+                "ongoing_orders": full_queryset.filter(status__in=ongoing_statuses).count(),
+                "walk_ins": full_queryset.filter(status__in=ongoing_statuses, is_walk_in=True).count(),
             }
 
             return self.get_paginated_response({
@@ -732,7 +733,8 @@ class OwnerRestaurantOrdersAPIView(generics.ListAPIView):
                     "stats": {
                         "total_completed_orders": 0,
                         "today_completed_order_count": 0,
-                        "ongoing_orders": 0
+                        "ongoing_orders": 0,
+                        "walk_ins": 0,
                     },
                     "orders": []
                 }
@@ -961,6 +963,7 @@ class ChefStaffOrdersAPIView(generics.ListAPIView):
             "total_completed_orders": total_completed,
             "today_completed_order_count": today_completed,
             "ongoing_orders": total_ongoing,
+            "walk_ins": full_queryset.filter(status__in=ongoing_statuses, is_walk_in=True).count(),
         }
 
         return self.get_paginated_response({

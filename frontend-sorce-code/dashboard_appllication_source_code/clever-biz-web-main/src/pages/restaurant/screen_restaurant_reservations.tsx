@@ -5,6 +5,7 @@ import axiosInstance from "@/lib/axios";
 import { useRole } from "@/hooks/useRole";
 import { Fragment } from "react";
 import {
+  ArrowRight,
   ArrowRightLeft,
   CalendarCheck,
   CalendarDays,
@@ -440,7 +441,7 @@ const makeDefaultCreateForm = (date: Date | null, mode: CreateMode): CreateReser
     date: normaliseDateInput(base),
     time: `${String(base.getHours()).padStart(2, "0")}:${String(base.getMinutes()).padStart(2, "0")}`,
     guestCount: "2",
-    durationMinutes: mode === "walk_in" ? "60" : "90",
+    durationMinutes: "90",
     customRequest: "",
   };
 };
@@ -590,6 +591,11 @@ const ScreenRestaurantReservations = () => {
       });
   }, [allDevices, areaFilter, normalizedReservations]);
 
+  const availableWalkInTables = useMemo(
+    () => tableRows.filter((row) => row.tableStatus === "available").map((row) => row.device),
+    [tableRows],
+  );
+
   const historyRows = useMemo(() => {
     return normalizedReservations.filter((reservation) => {
       const haystack = `${reservation.customerName || ""} ${reservation.cellNumber || ""} ${reservation.id || ""}`.toLowerCase();
@@ -649,7 +655,9 @@ const ScreenRestaurantReservations = () => {
 
   const submitCreateReservation = async () => {
     if (!createMode) return;
-    if (!createForm.customerName.trim()) return toast.error("Customer name is required");
+    const isWalkIn = createMode === "walk_in";
+    if (!isWalkIn && !createForm.customerName.trim()) return toast.error("Customer name is required");
+    if (!isWalkIn && !createForm.phone.trim()) return toast.error("Phone is required");
     if (!createForm.tableId) return toast.error("Select a table");
     if (!createForm.date || !createForm.time) return toast.error("Date and time are required");
     const email = createForm.email.trim();
@@ -660,17 +668,17 @@ const ScreenRestaurantReservations = () => {
     try {
       const reservationTime = buildLocalDateTime(createForm.date, createForm.time);
       await axiosInstance.post(`${getReservationBase(userRole)}/`, {
-        customerName: createForm.customerName.trim(),
-        phone: createForm.phone.trim(),
+        customerName: createForm.customerName.trim() || "Walk-in Guest",
+        phone: createForm.phone.trim() || "Not provided",
         email: email || null,
         tableId: createForm.tableId,
         guestCount: Number(createForm.guestCount) || 1,
         reservationTime,
         durationMinutes: Number(createForm.durationMinutes) || 90,
         customRequest: createForm.customRequest.trim(),
-        source: createMode === "walk_in" ? "walk_in" : "dashboard",
-        status: createMode === "walk_in" ? "seated" : "confirmed",
-        actualSeatedTime: createMode === "walk_in" ? new Date().toISOString() : null,
+        source: isWalkIn ? "walk_in" : "dashboard",
+        status: isWalkIn ? "seated" : "confirmed",
+        actualSeatedTime: isWalkIn ? new Date().toISOString() : null,
       });
       toast.success(createMode === "walk_in" ? "Walk-in seated" : "Reservation created");
       setCreateMode(null);
@@ -1122,14 +1130,91 @@ const ScreenRestaurantReservations = () => {
         </div>
       )}
 
-      {createMode && (
+      {createMode === "walk_in" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button type="button" aria-label="Close quick walk-in backdrop" onClick={() => setCreateMode(null)} className="absolute inset-0 bg-black/60" />
+          <section role="dialog" aria-modal="true" aria-labelledby="quick-walk-in-title" className="relative z-10 w-full max-w-[440px] rounded-[14px] border border-slate-200 bg-white px-7 pb-7 pt-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ArrowRight className="h-4 w-4 text-amber-500" strokeWidth={2} />
+                  <h2 id="quick-walk-in-title" className="text-lg font-bold text-slate-900">Quick Walk-in</h2>
+                </div>
+                <p className="mt-1 text-sm text-slate-400">Seat a customer immediately</p>
+              </div>
+              <button type="button" aria-label="Close quick walk-in" onClick={() => setCreateMode(null)} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-800">
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+
+            <div className="mt-8 space-y-5">
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-medium text-slate-600">Table *</span>
+                <span className="relative block">
+                  <select value={createForm.tableId} onChange={(event) => updateCreateForm("tableId", event.target.value)} required className="h-12 w-full appearance-none rounded-[10px] border border-[#3478F6] bg-white px-3 pr-10 text-sm text-slate-700 outline-none ring-1 ring-[#3478F6]/30 focus:border-[#0055FE] focus:ring-[#0055FE]/30">
+                    <option value="">Select available table</option>
+                    {availableWalkInTables.map((device: any) => <option key={device.id} value={device.id}>{device.table_name || device.name || `Table ${device.id}`}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={1.8} />
+                </span>
+              </label>
+
+              <div>
+                <span className="mb-1 block text-[13px] font-medium text-slate-600">Guests *</span>
+                <div className="grid grid-cols-[38px_minmax(0,1fr)_38px] gap-2">
+                  <button
+                    type="button"
+                    aria-label="Decrease guests"
+                    onClick={() => updateCreateForm("guestCount", String(Math.max(1, (Number(createForm.guestCount) || 1) - 1)))}
+                    disabled={(Number(createForm.guestCount) || 1) <= 1}
+                    className="h-12 rounded-[10px] border border-slate-700 bg-white text-lg text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    −
+                  </button>
+                  <div className="flex h-12 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm">{Math.max(1, Number(createForm.guestCount) || 1)}</div>
+                  <button
+                    type="button"
+                    aria-label="Increase guests"
+                    onClick={() => updateCreateForm("guestCount", String((Number(createForm.guestCount) || 1) + 1))}
+                    className="h-12 rounded-[10px] border border-slate-700 bg-white text-lg text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-medium text-slate-600">Name (optional)</span>
+                <input value={createForm.customerName} onChange={(event) => updateCreateForm("customerName", event.target.value)} placeholder="Leave blank if not given" className="h-12 w-full rounded-[10px] border border-slate-200 px-3 text-sm text-slate-700 shadow-sm outline-none placeholder:text-slate-400 focus:border-[#0055FE]" />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-medium text-slate-600">Duration</span>
+                <span className="relative block">
+                  <select value={createForm.durationMinutes} onChange={(event) => updateCreateForm("durationMinutes", event.target.value)} className="h-12 w-full appearance-none rounded-[10px] border border-slate-200 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm outline-none focus:border-[#0055FE]">
+                    {[30, 45, 60, 75, 90, 120, 150, 180].map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={1.8} />
+                </span>
+              </label>
+            </div>
+
+            <button type="button" onClick={submitCreateReservation} disabled={actionLoading} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-4 rounded-[10px] bg-[#7EDCB8] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#69D3AA] disabled:cursor-not-allowed disabled:opacity-60">
+              <ArrowRight className="h-4 w-4" strokeWidth={2.2} />
+              {actionLoading ? "Seating..." : "Seat Immediately"}
+            </button>
+          </section>
+        </div>
+      )}
+
+      {createMode === "reservation" && (
         <div className="fixed inset-0 z-50">
           <button type="button" aria-label="Close create reservation backdrop" onClick={() => setCreateMode(null)} className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
           <div className="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
-                <h2 className="text-base font-bold text-slate-900">{createMode === "walk_in" ? "Seat Walk-in" : "New Reservation"}</h2>
-                <p className="text-xs text-slate-400">{createMode === "walk_in" ? "Creates an active seated booking immediately." : "Creates a confirmed dashboard reservation."}</p>
+                <h2 className="text-base font-bold text-slate-900">New Reservation</h2>
+                <p className="text-xs text-slate-400">Creates a confirmed dashboard reservation.</p>
               </div>
               <button type="button" aria-label="Close create reservation" onClick={() => setCreateMode(null)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-700"><X className="h-4 w-4" strokeWidth={1.8} /></button>
             </div>

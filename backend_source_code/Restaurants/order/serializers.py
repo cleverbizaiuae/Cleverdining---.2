@@ -128,6 +128,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     isPartiallyPaid = serializers.SerializerMethodField()
     bill_payment_status = serializers.SerializerMethodField()
     payment_progress = serializers.SerializerMethodField()
+    isWalkIn = serializers.BooleanField(source='is_walk_in', read_only=True)
 
     def get_special_request(self, obj):
         return obj.notes or ""
@@ -233,7 +234,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'order_items', 'status','payment_status','total_price', 'amount_paid', 'amountPaid', 'remaining_amount', 'remainingAmount', 'is_fully_paid', 'isFullyPaid', 'is_partially_paid', 'isPartiallyPaid', 'bill_payment_status', 'payment_progress', 'tip_amount', 'tip_type', 'notes', 'special_request', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'currency', 'google_review_url']
+        fields = ['id', 'order_items', 'status','payment_status','total_price', 'amount_paid', 'amountPaid', 'remaining_amount', 'remainingAmount', 'is_fully_paid', 'isFullyPaid', 'is_partially_paid', 'isPartiallyPaid', 'bill_payment_status', 'payment_progress', 'tip_amount', 'tip_type', 'notes', 'special_request', 'is_walk_in', 'isWalkIn', 'created_time', 'updated_time', 'device', 'restaurant','device_name', 'device_table_name', 'payments', 'restaurant_name', 'currency', 'google_review_url']
 
 class CartItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)

@@ -5,7 +5,7 @@ import { WebSocketContext } from "@/hooks/WebSocketProvider";
 import { getStaffOrderFromViewState } from "@/hooks/staffServiceAlerts";
 import PaymentGatewayModal, { type GatewayProvider } from "../model/PaymentGatewayModal";
 import axiosInstance from "@/lib/axios";
-import { cachedGet } from "@/lib/requestCache";
+import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import {
   Search,
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
   Eye,
   Moon,
   ChevronDown,
+  PersonStanding,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { getActiveRestaurantCurrency, getActiveRestaurantRegion } from "@/lib/utils";
@@ -36,6 +37,47 @@ const MetricCard = ({ title, value, icon: Icon, colorClass, bgClass, iconBgClass
     </div>
   </div>
 );
+
+type WalkInOrder = {
+  id: number;
+  isWalkIn?: boolean;
+  is_walk_in?: boolean;
+};
+
+type WalkInPillProps = {
+  order: WalkInOrder;
+  updating: boolean;
+  onToggle: (order: WalkInOrder) => void;
+};
+
+const isWalkInOrder = (order: WalkInOrder) => Boolean(order.isWalkIn ?? order.is_walk_in);
+
+const WalkInPill = ({ order, updating, onToggle }: WalkInPillProps) => {
+  const isWalkIn = isWalkInOrder(order);
+  const title = isWalkIn ? "Walk-in — click to unmark" : "Mark as walk-in";
+
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={isWalkIn}
+      disabled={updating}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle(order);
+      }}
+      className={`inline-flex h-6 shrink-0 items-center justify-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
+        isWalkIn
+          ? "border-sky-300 bg-sky-50 text-sky-600"
+          : "border-slate-200 bg-slate-50 text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600"
+      }`}
+    >
+      <PersonStanding size={12} aria-hidden="true" />
+      {isWalkIn && <span>Walk-in</span>}
+    </button>
+  );
+};
 
 const parseTimings = (notes: string | null | undefined): Record<string, string> => {
   if (!notes) return {};
@@ -195,6 +237,7 @@ const ScreenRestaurantOrderList = () => {
   const [selectedProvider, setSelectedProvider] = useState<GatewayProvider>("stripe");
   const [showDropdown, setShowDropdown] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
+  const [walkInUpdatingIds, setWalkInUpdatingIds] = useState<Set<number>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -383,6 +426,26 @@ const ScreenRestaurantOrderList = () => {
     await updateOrderStatus(orderId, newStatus);
   };
 
+  const handleToggleWalkIn = async (order: WalkInOrder) => {
+    if (walkInUpdatingIds.has(order.id)) return;
+
+    const nextValue = !isWalkInOrder(order);
+    setWalkInUpdatingIds((current) => new Set(current).add(order.id));
+    try {
+      await axiosInstance.patch(`/api/orders/${order.id}/walk-in`, { isWalkIn: nextValue });
+      invalidateApiCache("orders");
+      await fetchOrders(ordersCurrentPage, debouncedSearchQuery);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || "Could not update the walk-in marker.");
+    } finally {
+      setWalkInUpdatingIds((current) => {
+        const next = new Set(current);
+        next.delete(order.id);
+        return next;
+      });
+    }
+  };
+
   const orderNotesSource =
     selectedOrder?.notes ||
     selectedOrder?.special_request ||
@@ -404,7 +467,7 @@ const ScreenRestaurantOrderList = () => {
     <div className="flex flex-col gap-6">
 
       {/* METRIC CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Ongoing Orders"
           value={ordersStats?.ongoing_orders ?? ordersStats?.total_ongoing_orders ?? 0}
@@ -428,6 +491,14 @@ const ScreenRestaurantOrderList = () => {
           colorClass="text-[#0055FE]"
           bgClass="bg-white"
           iconBgClass="bg-[#0055FE]/10"
+        />
+        <MetricCard
+          title="Walk-ins"
+          value={ordersStats?.walk_ins || 0}
+          icon={PersonStanding}
+          colorClass="text-sky-500"
+          bgClass="bg-white"
+          iconBgClass="bg-sky-50"
         />
       </div>
 
@@ -516,7 +587,14 @@ const ScreenRestaurantOrderList = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-900">Order #{order.id}</p>
-                    <p className="text-xs text-slate-500">Table {order.tableNo || "N/A"}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-xs text-slate-500">Table {order.tableNo || "N/A"}</p>
+                      <WalkInPill
+                        order={order}
+                        updating={walkInUpdatingIds.has(order.id)}
+                        onToggle={handleToggleWalkIn}
+                      />
+                    </div>
                   </div>
                   <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${paymentBadgeClass(getPaymentInfo(order))}`}>
                     {paymentBadgeLabel(order)}
@@ -589,7 +667,16 @@ const ScreenRestaurantOrderList = () => {
                 activeOrders.map((order: any) => (
                   <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-5 py-3 text-sm font-medium text-slate-900">#{order.id}</td>
-                    <td className="px-5 py-3 text-xs text-slate-600">{order.tableNo || "N/A"}</td>
+                    <td className="px-5 py-3 text-xs text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <span>{order.tableNo || "N/A"}</span>
+                        <WalkInPill
+                          order={order}
+                          updating={walkInUpdatingIds.has(order.id)}
+                          onToggle={handleToggleWalkIn}
+                        />
+                      </div>
+                    </td>
                     <td className="px-5 py-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${paymentBadgeClass(getPaymentInfo(order))}`}>
                         {paymentBadgeLabel(order)}

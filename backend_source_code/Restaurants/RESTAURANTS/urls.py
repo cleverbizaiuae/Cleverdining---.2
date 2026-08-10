@@ -40,6 +40,7 @@ from payment.provider_views import (
     PaymentProviderTestAPIView,
     PaymentProviderWebhookAPIView,
 )
+from order.walk_in_views import OrderWalkInAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -59,6 +60,8 @@ urlpatterns = [
     path('api/seed-multi-location/', SeedMultiLocationAPIView.as_view()),
     path('api/ensure-location-metrics', EnsureLocationMetricsAPIView.as_view()),
     path('api/ensure-location-metrics/', EnsureLocationMetricsAPIView.as_view()),
+    path('api/orders/<int:pk>/walk-in', OrderWalkInAPIView.as_view(), name='order-walk-in'),
+    path('api/orders/<int:pk>/walk-in/', OrderWalkInAPIView.as_view()),
     path('api/brand-config', BrandConfigAPIView.as_view()),
     path('api/integrations', IntegrationAPIView.as_view()),
     path('api/integrations/', IntegrationAPIView.as_view()),
