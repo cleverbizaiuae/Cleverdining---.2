@@ -235,6 +235,12 @@ class Dialog360IntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         ensure_schema.assert_called_once_with()
 
+    def test_reservation_conversation_uses_dedicated_state_table(self):
+        self.assertEqual(
+            WhatsAppConversation._meta.db_table,
+            "whatsapp_reservation_conversations",
+        )
+
     @patch("integrations.whatsapp_360dialog.requests.post")
     def test_greeting_restarts_an_in_progress_conversation(self, send):
         send.return_value = Mock(status_code=200, text="{}")

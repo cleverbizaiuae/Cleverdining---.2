@@ -234,11 +234,17 @@ class WhatsAppConversation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "whatsapp_conversations"
+        db_table = "whatsapp_reservation_conversations"
         unique_together = ("restaurant", "phone", "provider")
         indexes = [
-            models.Index(fields=["restaurant", "state"]),
-            models.Index(fields=["phone", "updated_at"]),
+            models.Index(
+                fields=["restaurant", "state"],
+                name="whatsapp_co_restaur_d203da_idx",
+            ),
+            models.Index(
+                fields=["phone", "updated_at"],
+                name="whatsapp_co_phone_21e96d_idx",
+            ),
         ]
 
     def __str__(self):
