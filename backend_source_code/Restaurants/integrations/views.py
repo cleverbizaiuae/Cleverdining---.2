@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from django.conf import settings
 from django.http import HttpResponse
 from rest_framework import status
@@ -9,7 +11,11 @@ from rest_framework.views import APIView
 
 from accounts.models import ChefStaff
 from restaurant.models import Restaurant
-from .whatsapp_360dialog import handle_360dialog_webhook, verify_token_matches
+from .dialog360_config import Dialog360ConfigurationError, configure_360dialog_webhook
+from .whatsapp_360dialog import (
+    handle_360dialog_webhook,
+    verify_token_matches,
+)
 
 
 class Dialog360WebhookView(APIView):
@@ -26,7 +32,7 @@ class Dialog360WebhookView(APIView):
 
     def post(self, request):
         result = handle_360dialog_webhook(request.data if isinstance(request.data, dict) else {})
-        # WhatsApp providers expect 200 quickly. Business-level errors are returned for logs only.
+        # Process before acknowledging so a short-lived web worker cannot drop the reply.
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -42,10 +48,14 @@ class Dialog360SettingsView(APIView):
         return None
 
     def _payload(self, request, restaurant: Restaurant) -> dict:
-        callback_url = request.build_absolute_uri("/api/integrations/360dialog/webhook")
-        if restaurant.whatsapp_webhook_callback_url != callback_url:
-            restaurant.whatsapp_webhook_callback_url = callback_url
-            restaurant.save(update_fields=["whatsapp_webhook_callback_url", "updated_at"])
+        callback_url = request.build_absolute_uri("/api/integrations/360dialog/webhook/")
+        webhook_registered = restaurant.whatsapp_webhook_callback_url == callback_url
+        configured = bool(
+            restaurant.whatsapp_enabled
+            and restaurant.whatsapp_phone_number_id
+            and restaurant.whatsapp_access_token
+            and webhook_registered
+        )
         return {
             "provider": restaurant.whatsapp_provider or "manual",
             "enabled": bool(restaurant.whatsapp_enabled),
@@ -57,11 +67,12 @@ class Dialog360SettingsView(APIView):
             "apiVersion": restaurant.whatsapp_api_version or "v20.0",
             "verifyToken": restaurant.whatsapp_webhook_verify_token or getattr(settings, "WHATSAPP_360DIALOG_VERIFY_TOKEN", ""),
             "callbackUrl": callback_url,
+            "webhookRegistered": webhook_registered,
             "greetingTone": restaurant.whatsapp_greeting_tone or "classic",
             "emojiStyle": restaurant.whatsapp_emoji_style or "minimal",
             "signoff": restaurant.whatsapp_signoff or "",
             "specialPhrases": restaurant.whatsapp_special_phrases or {},
-            "configured": bool(restaurant.whatsapp_enabled and restaurant.whatsapp_waba_id and restaurant.whatsapp_phone_number_id and restaurant.whatsapp_access_token),
+            "configured": configured,
         }
 
     def get(self, request):
@@ -97,11 +108,48 @@ class Dialog360SettingsView(APIView):
             value = request.data.get(incoming)
             if incoming == "provider" and not value:
                 value = "360dialog"
+            if incoming == "apiKey" and not str(value or "").strip():
+                continue
             setattr(restaurant, field, value)
             updated.append(field)
         if "provider" not in request.data:
             restaurant.whatsapp_provider = "360dialog"
             updated.append("whatsapp_provider")
+
+        if not restaurant.whatsapp_webhook_verify_token:
+            restaurant.whatsapp_webhook_verify_token = secrets.token_urlsafe(32)
+            updated.append("whatsapp_webhook_verify_token")
+
+        register_value = request.data.get("registerWebhook")
+        register_webhook = (
+            bool(restaurant.whatsapp_enabled and restaurant.whatsapp_chatbot_enabled)
+            if register_value is None
+            else str(register_value).strip().lower() in {"1", "true", "yes", "on"}
+        )
+        webhook_registered = False
+        if register_webhook and restaurant.whatsapp_enabled and restaurant.whatsapp_chatbot_enabled:
+            if not restaurant.whatsapp_phone_number_id:
+                return Response(
+                    {"phoneNumberId": ["Phone Number ID is required before enabling WhatsApp reservations."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not restaurant.whatsapp_access_token:
+                return Response(
+                    {"apiKey": ["360dialog API key is required before enabling WhatsApp reservations."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            callback_url = request.build_absolute_uri("/api/integrations/360dialog/webhook/")
+            try:
+                configure_360dialog_webhook(restaurant.whatsapp_access_token, callback_url)
+            except Dialog360ConfigurationError as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+            restaurant.whatsapp_webhook_callback_url = callback_url
+            updated.append("whatsapp_webhook_callback_url")
+            webhook_registered = True
+
         if updated:
             restaurant.save(update_fields=list(set(updated + ["updated_at"])))
-        return Response(self._payload(request, restaurant))
+        payload = self._payload(request, restaurant)
+        if webhook_registered:
+            payload["webhookRegistered"] = True
+        return Response(payload)
