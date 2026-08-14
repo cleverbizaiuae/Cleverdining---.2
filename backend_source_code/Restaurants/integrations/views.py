@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 
 from django.conf import settings
@@ -17,6 +18,8 @@ from .whatsapp_360dialog import (
     verify_token_matches,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class Dialog360WebhookView(APIView):
     authentication_classes = []
@@ -31,7 +34,11 @@ class Dialog360WebhookView(APIView):
         return Response({"error": "Invalid 360dialog webhook verification token"}, status=status.HTTP_403_FORBIDDEN)
 
     def post(self, request):
-        result = handle_360dialog_webhook(request.data if isinstance(request.data, dict) else {})
+        try:
+            result = handle_360dialog_webhook(request.data if isinstance(request.data, dict) else {})
+        except Exception:
+            logger.exception("Unhandled 360dialog webhook processing failure")
+            result = {"handled": False, "action": "processing_failed"}
         # Process before acknowledging so a short-lived web worker cannot drop the reply.
         return Response(result, status=status.HTTP_200_OK)
 

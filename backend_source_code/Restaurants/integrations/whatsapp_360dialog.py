@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone as dt_timezone
@@ -17,6 +18,8 @@ from customer.models import Lead, WhatsAppConversation
 from device.models import Device, Reservation
 from device.serializers import ReservationSerializer
 from restaurant.models import Restaurant
+
+logger = logging.getLogger(__name__)
 
 DIALOG_360_MESSAGES_URL = "https://waba-v2.360dialog.io/messages"
 TERMINAL_RESERVATION_STATUSES = {"finished", "cancelled", "cancel", "no_show"}
@@ -49,14 +52,22 @@ def _dig(data: dict[str, Any], *keys: str) -> Any:
 
 
 def _first_change_value(payload: dict[str, Any]) -> dict[str, Any]:
-    try:
-        entry = payload.get("entry") or []
-        changes = entry[0].get("changes") or []
-        value = changes[0].get("value") or {}
-        if isinstance(value, dict):
-            return value
-    except Exception:
-        pass
+    first_value: dict[str, Any] | None = None
+    for entry in payload.get("entry") or []:
+        if not isinstance(entry, dict):
+            continue
+        for change in entry.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+            value = change.get("value") or {}
+            if not isinstance(value, dict):
+                continue
+            if first_value is None:
+                first_value = value
+            if value.get("messages"):
+                return value
+    if first_value is not None:
+        return first_value
     return payload
 
 
@@ -101,6 +112,8 @@ def parse_360dialog_message(payload: dict[str, Any]) -> Dialog360Message | None:
         return None
 
     message = messages[0]
+    if not isinstance(message, dict):
+        return None
     metadata = value.get("metadata") or payload.get("metadata") or {}
     contacts = value.get("contacts") or payload.get("contacts") or []
     contact = contacts[0] if contacts else {}
@@ -242,8 +255,8 @@ def _broadcast_reservation(reservation: Reservation) -> None:
             f"restaurant_{reservation.restaurant_id}",
             {"type": "reservation_created", "reservation": ReservationSerializer(reservation).data},
         )
-    except Exception as exc:
-        print(f"360dialog reservation broadcast skipped: {exc}")
+    except Exception:
+        logger.exception("360dialog reservation broadcast skipped")
 
 
 def _upsert_lead(message: Dialog360Message, confirmed: bool = False) -> None:
@@ -461,11 +474,47 @@ def send_360dialog_text(restaurant: Restaurant, to: str, body: str) -> bool:
             timeout=8,
         )
         if response.status_code >= 400:
-            print(f"360dialog send failed {response.status_code}: {response.text[:500]}")
+            logger.error(
+                "360dialog outbound send failed restaurant_id=%s status=%s response=%s",
+                restaurant.id,
+                response.status_code,
+                response.text[:500],
+            )
         return response.status_code < 400
-    except requests.RequestException as exc:
-        print(f"360dialog send error: {exc}")
+    except requests.RequestException:
+        logger.exception("360dialog outbound send error restaurant_id=%s", restaurant.id)
         return False
+
+
+def _save_conversation(conversation: WhatsAppConversation, message: Dialog360Message) -> bool:
+    try:
+        conversation.save()
+        return True
+    except Exception:
+        logger.exception(
+            "360dialog conversation save failed restaurant_id=%s message_id=%s",
+            message.restaurant.id if message.restaurant else None,
+            message.message_id,
+        )
+        return False
+
+
+def _send_reply_result(
+    message: Dialog360Message,
+    body: str,
+    action: str,
+    **details: Any,
+) -> dict[str, Any]:
+    sent = send_360dialog_text(message.restaurant, message.sender_phone, body)
+    result: dict[str, Any] = {
+        "handled": sent,
+        "action": action if sent else "outbound_send_failed",
+        "outbound_sent": sent,
+        **details,
+    }
+    if not sent:
+        result["intended_action"] = action
+    return result
 
 
 def _missing_prompt(missing: list[str], restaurant: Restaurant) -> str:
@@ -479,47 +528,101 @@ def _missing_prompt(missing: list[str], restaurant: Restaurant) -> str:
 def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
     message = parse_360dialog_message(payload)
     if not message:
+        logger.info("360dialog webhook ignored because it contained no customer message")
         return {"handled": False, "reason": "No customer message in payload"}
     if not message.restaurant:
+        logger.warning(
+            "360dialog webhook could not match restaurant phone_number_id=%s waba_id=%s",
+            message.phone_number_id,
+            message.waba_id,
+        )
         return {"handled": False, "reason": "No restaurant matched this WABA or phone number"}
 
     restaurant = message.restaurant
-    _upsert_lead(message, confirmed=False)
-
     text = message.text or ""
     lower = text.lower().strip()
 
     if not restaurant.whatsapp_chatbot_enabled:
         return {"handled": True, "action": "chatbot_disabled"}
 
-    conversation = _get_conversation(message)
+    logger.info(
+        "360dialog inbound customer message matched restaurant_id=%s message_id=%s",
+        restaurant.id,
+        message.message_id,
+    )
+
+    lead_recorded = True
+    try:
+        _upsert_lead(message, confirmed=False)
+    except Exception:
+        lead_recorded = False
+        logger.exception(
+            "360dialog lead update failed without blocking reply restaurant_id=%s message_id=%s",
+            restaurant.id,
+            message.message_id,
+        )
+
+    try:
+        conversation = _get_conversation(message)
+    except Exception:
+        logger.exception(
+            "360dialog conversation load failed; sending stateless greeting restaurant_id=%s message_id=%s",
+            restaurant.id,
+            message.message_id,
+        )
+        reply = _question_for("name", restaurant)
+        return _send_reply_result(
+            message,
+            reply,
+            "conversation_started",
+            awaiting="name",
+            conversation_persisted=False,
+            lead_recorded=lead_recorded,
+        )
 
     if lower in CANCEL_WORDS:
         conversation.state = "cancelled"
         conversation.context = {}
         reply = "No problem, I have cancelled this booking request. Message us again anytime to make a reservation."
         conversation.last_response = reply
-        conversation.save()
-        send_360dialog_text(restaurant, message.sender_phone, reply)
-        return {"handled": True, "action": "conversation_cancelled"}
+        persisted = _save_conversation(conversation, message)
+        return _send_reply_result(
+            message,
+            reply,
+            "conversation_cancelled",
+            conversation_persisted=persisted,
+            lead_recorded=lead_recorded,
+        )
 
     if lower in RESTART_WORDS:
         conversation.state = "collecting"
         conversation.context = {"awaiting": "name"}
         reply = _question_for("name", restaurant)
         conversation.last_response = reply
-        conversation.save()
-        send_360dialog_text(restaurant, message.sender_phone, reply)
-        return {"handled": True, "action": "conversation_restarted"}
+        persisted = _save_conversation(conversation, message)
+        return _send_reply_result(
+            message,
+            reply,
+            "conversation_restarted",
+            awaiting="name",
+            conversation_persisted=persisted,
+            lead_recorded=lead_recorded,
+        )
 
-    if lower in {"hi", "hello", "hey", "start", "book", "booking", "reservation"} and conversation.state in {"idle", "completed", "cancelled"}:
+    if lower in {"hi", "hello", "hey", "start", "book", "booking", "reservation"}:
         conversation.state = "collecting"
         conversation.context = {"awaiting": "name"}
         reply = _question_for("name", restaurant)
         conversation.last_response = reply
-        conversation.save()
-        send_360dialog_text(restaurant, message.sender_phone, reply)
-        return {"handled": True, "action": "conversation_started", "awaiting": "name"}
+        persisted = _save_conversation(conversation, message)
+        return _send_reply_result(
+            message,
+            reply,
+            "conversation_started",
+            awaiting="name",
+            conversation_persisted=persisted,
+            lead_recorded=lead_recorded,
+        )
 
     if conversation.state == "confirming" and lower in YES_WORDS:
         try:
@@ -532,9 +635,29 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
             conversation.context = context
             reply = _question_for(missing, restaurant)
             conversation.last_response = reply
-            conversation.save()
-            send_360dialog_text(restaurant, message.sender_phone, reply)
-            return {"handled": True, "action": "confirmation_missing_fields", "awaiting": missing}
+            persisted = _save_conversation(conversation, message)
+            return _send_reply_result(
+                message,
+                reply,
+                "confirmation_missing_fields",
+                awaiting=missing,
+                conversation_persisted=persisted,
+                lead_recorded=lead_recorded,
+            )
+        except Exception:
+            logger.exception(
+                "360dialog reservation creation failed restaurant_id=%s message_id=%s",
+                restaurant.id,
+                message.message_id,
+            )
+            reply = "I could not complete that reservation right now. Please try again in a moment."
+            return _send_reply_result(
+                message,
+                reply,
+                "reservation_creation_failed",
+                conversation_persisted=True,
+                lead_recorded=lead_recorded,
+            )
 
         conversation.state = "completed"
         conversation.context = {**(conversation.context or {}), "reservation_id": reservation.id, "awaiting": None}
@@ -551,10 +674,24 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
                 f"{local_dt.strftime('%d %b %Y at %I:%M %p')} is pending table confirmation."
             )
         conversation.last_response = reply
-        conversation.save()
-        _upsert_lead(message, confirmed=(reservation.status == "confirmed"))
-        send_360dialog_text(restaurant, message.sender_phone, reply)
-        return {"handled": True, "action": "reservation_created", "reservation_id": reservation.id, "status": reservation.status}
+        persisted = _save_conversation(conversation, message)
+        try:
+            _upsert_lead(message, confirmed=(reservation.status == "confirmed"))
+        except Exception:
+            logger.exception(
+                "360dialog confirmed lead update failed restaurant_id=%s reservation_id=%s",
+                restaurant.id,
+                reservation.id,
+            )
+        return _send_reply_result(
+            message,
+            reply,
+            "reservation_created",
+            reservation_id=reservation.id,
+            status=reservation.status,
+            conversation_persisted=persisted,
+            lead_recorded=lead_recorded,
+        )
 
     if conversation.state in {"idle", "completed", "cancelled"}:
         conversation.state = "collecting"
@@ -567,18 +704,29 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         conversation.context = context
         reply = _question_for(missing_field, restaurant)
         conversation.last_response = reply
-        conversation.save()
-        send_360dialog_text(restaurant, message.sender_phone, reply)
-        return {"handled": True, "action": "requested_field", "awaiting": missing_field}
+        persisted = _save_conversation(conversation, message)
+        return _send_reply_result(
+            message,
+            reply,
+            "requested_field",
+            awaiting=missing_field,
+            conversation_persisted=persisted,
+            lead_recorded=lead_recorded,
+        )
 
     context["awaiting"] = "confirmation"
     conversation.state = "confirming"
     conversation.context = context
     reply = _reservation_summary(context, restaurant)
-    send_360dialog_text(restaurant, message.sender_phone, reply)
     conversation.last_response = reply
-    conversation.save()
-    return {"handled": True, "action": "requested_confirmation"}
+    persisted = _save_conversation(conversation, message)
+    return _send_reply_result(
+        message,
+        reply,
+        "requested_confirmation",
+        conversation_persisted=persisted,
+        lead_recorded=lead_recorded,
+    )
 
 
 def verify_token_matches(token: str) -> bool:
