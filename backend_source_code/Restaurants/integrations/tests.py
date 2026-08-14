@@ -185,6 +185,57 @@ class Dialog360IntegrationTests(TestCase):
         self.assertEqual(conversation.context["time"], "19:30")
 
     @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_name_reply_formats_advance_to_guest_question(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+
+        name_replies = [
+            ("Pranay", "Pranay"),
+            ("Pranay Bhardwaj", "Pranay Bhardwaj"),
+            ("Name- Pranay", "Pranay"),
+            ("Name: Pranay Bhardwaj", "Pranay Bhardwaj"),
+        ]
+
+        for index, (reply, expected_name) in enumerate(name_replies, start=1):
+            with self.subTest(reply=reply):
+                WhatsAppConversation.objects.filter(restaurant=self.restaurant).delete()
+                self.client.post(
+                    "/api/integrations/360dialog/webhook/",
+                    self.inbound_payload(message_id=f"wamid.name-start.{index}"),
+                    format="json",
+                )
+
+                response = self.client.post(
+                    "/api/integrations/360dialog/webhook/",
+                    self.inbound_payload(text=reply, message_id=f"wamid.name-reply.{index}"),
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["action"], "requested_field")
+                self.assertEqual(response.json()["awaiting"], "guests")
+                self.assertIn("How many guests", send.call_args.kwargs["json"]["text"]["body"])
+                conversation = WhatsAppConversation.objects.get(
+                    restaurant=self.restaurant,
+                    phone="971500001234",
+                    provider="360dialog",
+                )
+                self.assertEqual(conversation.context["customer_name"], expected_name)
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_conversation_schema_is_checked_before_state_lookup(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+
+        with patch("integrations.whatsapp_360dialog.ensure_customer_intelligence_schema") as ensure_schema:
+            response = self.client.post(
+                "/api/integrations/360dialog/webhook/",
+                self.inbound_payload(),
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        ensure_schema.assert_called_once_with()
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
     def test_greeting_restarts_an_in_progress_conversation(self, send):
         send.return_value = Mock(status_code=200, text="{}")
         WhatsAppConversation.objects.create(

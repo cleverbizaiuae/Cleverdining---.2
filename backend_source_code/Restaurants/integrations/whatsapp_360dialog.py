@@ -15,6 +15,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from customer.models import Lead, WhatsAppConversation
+from customer.schema_guard import ensure_customer_intelligence_schema
 from device.models import Device, Reservation
 from device.serializers import ReservationSerializer
 from restaurant.models import Restaurant
@@ -26,6 +27,10 @@ TERMINAL_RESERVATION_STATUSES = {"finished", "cancelled", "cancel", "no_show"}
 YES_WORDS = {"yes", "y", "confirm", "confirmed", "ok", "okay", "book", "book it", "sure"}
 CANCEL_WORDS = {"cancel", "stop", "nevermind", "never mind", "no"}
 RESTART_WORDS = {"restart", "start over", "edit", "change"}
+NAME_PREFIX_PATTERN = re.compile(
+    r"^\s*(?:(?:my\s+)?name\s*(?:is\b|[:=\-])|i\s+am\b|i'?m\b|this\s+is\b)\s*",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -220,14 +225,15 @@ def _parse_customer_name(text: str, fallback: str) -> str:
 
 
 def _parse_explicit_customer_name(text: str) -> str | None:
-    match = re.search(r"\b(?:name is|i am|i'm|this is)\s+([A-Za-z][A-Za-z .'-]{1,50})", text, re.I)
-    if match:
-        return match.group(1).strip().title()
-    return None
+    value = NAME_PREFIX_PATTERN.sub("", text or "", count=1).strip()
+    if not value or value == (text or "").strip():
+        return None
+    return _plain_name(value)
 
 
 def _plain_name(text: str) -> str | None:
-    value = re.sub(r"[^A-Za-z .'-]", "", text or "").strip()
+    value = NAME_PREFIX_PATTERN.sub("", text or "", count=1)
+    value = re.sub(r"[^A-Za-z .'-]", "", value).strip()
     if 2 <= len(value) <= 60 and any(char.isalpha() for char in value):
         return value.title()
     return None
@@ -287,6 +293,9 @@ def _upsert_lead(message: Dialog360Message, confirmed: bool = False) -> None:
 
 
 def _get_conversation(message: Dialog360Message) -> WhatsAppConversation:
+    # Production databases can predate this integration. Ensure the persisted
+    # conversation state exists before processing the next answer.
+    ensure_customer_intelligence_schema()
     conversation, _ = WhatsAppConversation.objects.get_or_create(
         restaurant=message.restaurant,
         phone=message.sender_phone,

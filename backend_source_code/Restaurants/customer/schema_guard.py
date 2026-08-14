@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db import connection
 
-from .models import Customer, CustomerRestaurantLink, GameScore, LoyaltyTransaction
+from .models import Customer, CustomerRestaurantLink, GameScore, LoyaltyTransaction, WhatsAppConversation
 
 _CUSTOMER_INTELLIGENCE_SCHEMA_READY = False
 
@@ -25,6 +25,7 @@ def ensure_customer_intelligence_schema(force: bool = False) -> bool:
             CustomerRestaurantLink,
             LoyaltyTransaction,
             GameScore,
+            WhatsAppConversation,
         ]
 
         changed = False
