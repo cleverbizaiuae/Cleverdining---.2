@@ -43,6 +43,7 @@ class Dialog360Message:
     sender_name: str
     message_id: str
     chat_id: str
+    timestamp: str
     text: str
     raw: dict[str, Any]
 
@@ -57,22 +58,22 @@ def _dig(data: dict[str, Any], *keys: str) -> Any:
 
 
 def _first_change_value(payload: dict[str, Any]) -> dict[str, Any]:
-    first_value: dict[str, Any] | None = None
-    for entry in payload.get("entry") or []:
+    entries = payload.get("entry") or []
+    for entry in entries:
         if not isinstance(entry, dict):
             continue
         for change in entry.get("changes") or []:
             if not isinstance(change, dict):
                 continue
+            if change.get("field") != "messages":
+                continue
             value = change.get("value") or {}
             if not isinstance(value, dict):
                 continue
-            if first_value is None:
-                first_value = value
             if value.get("messages"):
                 return value
-    if first_value is not None:
-        return first_value
+    if entries:
+        return {}
     return payload
 
 
@@ -112,7 +113,7 @@ def _find_restaurant(phone_number_id: str, waba_id: str, display_phone_number: s
 
 def parse_360dialog_message(payload: dict[str, Any]) -> Dialog360Message | None:
     value = _first_change_value(payload)
-    messages = value.get("messages") or payload.get("messages") or []
+    messages = value.get("messages") or []
     if not messages:
         return None
 
@@ -130,7 +131,14 @@ def parse_360dialog_message(payload: dict[str, Any]) -> Dialog360Message | None:
     sender_name = str(_dig(contact, "profile", "name") or message.get("profile_name") or "Guest")
     message_id = str(message.get("id") or "")
     chat_id = str(message.get("context", {}).get("id") or sender_phone)
+    message_timestamp = str(message.get("timestamp") or "")
     text = _extract_text(message)
+    sender_digits = re.sub(r"\D", "", sender_phone)
+    business_digits = re.sub(r"\D", "", display_phone_number)
+    if not sender_phone or not message_id or not text:
+        return None
+    if sender_digits and business_digits and sender_digits == business_digits:
+        return None
     restaurant = _find_restaurant(phone_number_id, waba_id, display_phone_number)
 
     return Dialog360Message(
@@ -142,6 +150,7 @@ def parse_360dialog_message(payload: dict[str, Any]) -> Dialog360Message | None:
         sender_name=sender_name,
         message_id=message_id,
         chat_id=chat_id,
+        timestamp=message_timestamp,
         text=text,
         raw=payload,
     )
@@ -304,14 +313,24 @@ def _get_conversation(message: Dialog360Message) -> WhatsAppConversation:
             "state": "idle",
             "context": {},
             "external_chat_id": message.chat_id or "",
-            "last_message_id": message.message_id or "",
+            "last_message_id": "",
         },
     )
+    return conversation
+
+
+def _message_sent_at(message: Dialog360Message) -> datetime | None:
+    try:
+        return datetime.fromtimestamp(int(message.timestamp), tz=dt_timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _record_inbound_message(conversation: WhatsAppConversation, message: Dialog360Message) -> None:
     conversation.external_chat_id = message.chat_id or conversation.external_chat_id
-    conversation.last_message_id = message.message_id or conversation.last_message_id
+    conversation.last_message_id = message.message_id
     conversation.last_message = message.text[:4000]
     conversation.expires_at = timezone.now() + timedelta(hours=6)
-    return conversation
 
 
 def _context_date(value: Any) -> datetime.date | None:
@@ -562,16 +581,6 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
 
     lead_recorded = True
     try:
-        _upsert_lead(message, confirmed=False)
-    except Exception:
-        lead_recorded = False
-        logger.exception(
-            "360dialog lead update failed without blocking reply restaurant_id=%s message_id=%s",
-            restaurant.id,
-            message.message_id,
-        )
-
-    try:
         conversation = _get_conversation(message)
     except Exception:
         logger.exception(
@@ -579,6 +588,15 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
             restaurant.id,
             message.message_id,
         )
+        try:
+            _upsert_lead(message, confirmed=False)
+        except Exception:
+            lead_recorded = False
+            logger.exception(
+                "360dialog lead update failed without blocking reply restaurant_id=%s message_id=%s",
+                restaurant.id,
+                message.message_id,
+            )
         reply = _question_for("name", restaurant)
         return _send_reply_result(
             message,
@@ -587,6 +605,45 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
             awaiting="name",
             conversation_persisted=False,
             lead_recorded=lead_recorded,
+        )
+
+    if conversation.last_message_id == message.message_id:
+        logger.info(
+            "360dialog duplicate inbound message ignored restaurant_id=%s message_id=%s",
+            restaurant.id,
+            message.message_id,
+        )
+        return {
+            "handled": True,
+            "action": "duplicate_ignored",
+            "outbound_sent": False,
+        }
+
+    sent_at = _message_sent_at(message)
+    stale_cutoff = conversation.updated_at - timedelta(seconds=5)
+    if conversation.last_message_id and sent_at and sent_at < stale_cutoff:
+        logger.info(
+            "360dialog stale inbound message ignored restaurant_id=%s message_id=%s sent_at=%s",
+            restaurant.id,
+            message.message_id,
+            sent_at.isoformat(),
+        )
+        return {
+            "handled": True,
+            "action": "stale_message_ignored",
+            "outbound_sent": False,
+        }
+
+    _record_inbound_message(conversation, message)
+
+    try:
+        _upsert_lead(message, confirmed=False)
+    except Exception:
+        lead_recorded = False
+        logger.exception(
+            "360dialog lead update failed without blocking reply restaurant_id=%s message_id=%s",
+            restaurant.id,
+            message.message_id,
         )
 
     if lower in CANCEL_WORDS:

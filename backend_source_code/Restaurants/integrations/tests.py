@@ -1,6 +1,8 @@
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -33,7 +35,8 @@ class Dialog360IntegrationTests(TestCase):
         )
         self.client = APIClient()
 
-    def inbound_payload(self, text="Hi", message_id="wamid.1"):
+    def inbound_payload(self, text="Hi", message_id="wamid.1", timestamp=None):
+        timestamp = timestamp or str(int(timezone.now().timestamp()))
         return {
             "object": "whatsapp_business_account",
             "entry": [
@@ -53,7 +56,7 @@ class Dialog360IntegrationTests(TestCase):
                                     {
                                         "from": "971500001234",
                                         "id": message_id,
-                                        "timestamp": "1786700000",
+                                        "timestamp": timestamp,
                                         "text": {"body": text},
                                         "type": "text",
                                     }
@@ -147,6 +150,93 @@ class Dialog360IntegrationTests(TestCase):
         self.assertEqual(request.args[0], "https://waba-v2.360dialog.io/messages")
         self.assertEqual(request.kwargs["headers"]["D360-API-KEY"], "secret-api-key")
         self.assertIn("What name", request.kwargs["json"]["text"]["body"])
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_duplicate_message_id_is_ignored_without_second_reply(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+        payload = self.inbound_payload(message_id="wamid.duplicate")
+
+        first_response = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            payload,
+            format="json",
+        )
+        second_response = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["action"], "conversation_started")
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(second_response.json()["action"], "duplicate_ignored")
+        self.assertFalse(second_response.json()["outbound_sent"])
+        self.assertEqual(send.call_count, 1)
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_status_callback_does_not_trigger_a_reply(self, send):
+        payload = self.inbound_payload()
+        value = payload["entry"][0]["changes"][0]["value"]
+        value.pop("messages")
+        value["statuses"] = [{"id": "wamid.sent", "status": "delivered"}]
+
+        response = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["handled"])
+        send.assert_not_called()
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_business_number_echo_does_not_trigger_a_reply(self, send):
+        payload = self.inbound_payload()
+        value = payload["entry"][0]["changes"][0]["value"]
+        value["contacts"][0]["wa_id"] = "15554446810"
+        value["messages"][0]["from"] = "+15554446810"
+
+        response = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["handled"])
+        send.assert_not_called()
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_stale_replayed_message_does_not_restart_completed_conversation(self, send):
+        conversation = WhatsAppConversation.objects.create(
+            restaurant=self.restaurant,
+            phone="971500001234",
+            provider="360dialog",
+            state="completed",
+            context={"reservation_id": 123, "awaiting": None},
+            last_message_id="wamid.latest",
+        )
+        old_timestamp = str(int((timezone.now() - timedelta(hours=1)).timestamp()))
+
+        response = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            self.inbound_payload(
+                text="Hi",
+                message_id="wamid.old",
+                timestamp=old_timestamp,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["action"], "stale_message_ignored")
+        self.assertFalse(response.json()["outbound_sent"])
+        send.assert_not_called()
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.state, "completed")
+        self.assertEqual(conversation.last_message_id, "wamid.latest")
 
     @patch("integrations.whatsapp_360dialog.requests.post")
     def test_complete_question_sequence_reaches_confirmation(self, send):
