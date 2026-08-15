@@ -81,6 +81,7 @@ type Dialog360Settings = {
 
 const BRAND = "#0055FE";
 const WHATSAPP = "#25D366";
+const HISTORY_PAGE_SIZE = 200;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const formatApiError = (data: any, fallback: string) => {
@@ -424,6 +425,34 @@ const getReservationBase = (role?: string | null) => {
   return "/api/staff/reservations";
 };
 
+const normalizeReservationRecords = (records: any[], devices: any[]) =>
+  (records || []).map((reservation: any) => {
+    const status = backendStatusToUi(reservation.status);
+    const source: SourceKey = reservation.source || reservation.bookingSource || reservation.source_type || "dashboard";
+    const tableId = Number(reservation.tableNo || reservation.device || 0);
+    const table = (devices || []).find((device: any) => Number(device.id) === tableId) as any;
+    return {
+      ...reservation,
+      statusKey: status,
+      sourceKey: sourceConfig[source] ? source : "dashboard",
+      tableId,
+      tableName:
+        reservation.deviceName ||
+        reservation.device_name ||
+        reservation.tableName ||
+        reservation.tableNoName ||
+        table?.table_name ||
+        table?.name ||
+        `Table ${reservation.tableNo || "-"}`,
+      area: table?.region || table?.area || "Primary",
+      duration: reservation.duration || `${reservation.durationMinutes || reservation.duration_minutes || 90} min`,
+      occasion: reservation.occasion || "-",
+      seating: reservation.seating || "Standard",
+      createdAt: reservation.createdAt || reservation.created_at || reservation.reservationTime,
+      updatedAt: reservation.updatedAt || reservation.updated_at || reservation.reservationTime,
+    };
+  });
+
 const buildLocalDateTime = (date: string, timeValue: string) => {
   const [year, month, day] = date.split("-").map(Number);
   const [hour, minute] = timeValue.split(":").map(Number);
@@ -483,6 +512,10 @@ const ScreenRestaurantReservations = () => {
   const [historySource, setHistorySource] = useState("all");
   const [historyStart, setHistoryStart] = useState("");
   const [historyEnd, setHistoryEnd] = useState("");
+  const [historyReservations, setHistoryReservations] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [dialog360Settings, setDialog360Settings] = useState<Dialog360Settings | null>(null);
   const [dialog360Loading, setDialog360Loading] = useState(true);
 
@@ -496,6 +529,57 @@ const ScreenRestaurantReservations = () => {
     fetchReservations(reservationsCurrentPage, debouncedSearchQuery, dateString);
     fetchReservationStatusReport();
   }, [reservationsCurrentPage, debouncedSearchQuery, selectedDate, fetchReservations, fetchReservationStatusReport]);
+
+  useEffect(() => {
+    if (tab !== "history") return;
+    let active = true;
+
+    const loadHistory = async () => {
+      setHistoryLoading(true);
+      setHistoryError("");
+      try {
+        const collected: any[] = [];
+        let page = 1;
+        let hasNext = true;
+
+        while (hasNext) {
+          const response = await axiosInstance.get(`${getReservationBase(userRole)}/`, {
+            params: { page, page_size: HISTORY_PAGE_SIZE },
+          });
+          const payload = response.data;
+          const batch = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload?.results)
+              ? payload.results
+              : [];
+          collected.push(...batch);
+          hasNext = !Array.isArray(payload) && batch.length > 0 && Boolean(payload?.next);
+          page += 1;
+        }
+
+        if (active) {
+          const uniqueReservations = Array.from(
+            new Map(
+              collected.map((reservation: any, index: number) => [
+                String(reservation.id ?? `${reservation.reservationTime ?? "reservation"}-${index}`),
+                reservation,
+              ]),
+            ).values(),
+          );
+          setHistoryReservations(uniqueReservations);
+        }
+      } catch {
+        if (active) setHistoryError("Unable to load reservation history.");
+      } finally {
+        if (active) setHistoryLoading(false);
+      }
+    };
+
+    void loadHistory();
+    return () => {
+      active = false;
+    };
+  }, [historyRefreshKey, tab, userRole]);
 
   useEffect(() => {
     fetchAllDevices(1, "");
@@ -521,27 +605,15 @@ const ScreenRestaurantReservations = () => {
     };
   }, []);
 
-  const normalizedReservations = useMemo(() => {
-    return (reservations || []).map((reservation: any) => {
-      const status = backendStatusToUi(reservation.status);
-      const source: SourceKey = reservation.source || reservation.bookingSource || reservation.source_type || "dashboard";
-      const tableId = Number(reservation.tableNo || reservation.device || 0);
-      const table = (allDevices || []).find((device: any) => Number(device.id) === tableId) as any;
-      return {
-        ...reservation,
-        statusKey: status,
-        sourceKey: sourceConfig[source] ? source : "dashboard",
-        tableId,
-        tableName: reservation.deviceName || reservation.device_name || reservation.tableName || reservation.tableNoName || table?.table_name || table?.name || `Table ${reservation.tableNo || "-"}`,
-        area: table?.region || table?.area || "Primary",
-        duration: reservation.duration || `${reservation.durationMinutes || reservation.duration_minutes || 90} min`,
-        occasion: reservation.occasion || "-",
-        seating: reservation.seating || "Standard",
-        createdAt: reservation.createdAt || reservation.created_at || reservation.reservationTime,
-        updatedAt: reservation.updatedAt || reservation.updated_at || reservation.reservationTime,
-      };
-    });
-  }, [allDevices, reservations]);
+  const normalizedReservations = useMemo(
+    () => normalizeReservationRecords(reservations || [], allDevices || []),
+    [allDevices, reservations],
+  );
+
+  const normalizedHistoryReservations = useMemo(
+    () => normalizeReservationRecords(historyReservations, allDevices || []),
+    [allDevices, historyReservations],
+  );
 
   const filteredReservations = useMemo(() => {
     return normalizedReservations.filter((reservation) => {
@@ -597,7 +669,7 @@ const ScreenRestaurantReservations = () => {
   );
 
   const historyRows = useMemo(() => {
-    return normalizedReservations.filter((reservation) => {
+    return normalizedHistoryReservations.filter((reservation) => {
       const haystack = `${reservation.customerName || ""} ${reservation.cellNumber || ""} ${reservation.id || ""}`.toLowerCase();
       if (historySearch && !haystack.includes(historySearch.toLowerCase())) return false;
       if (historyStatus !== "all" && reservation.statusKey !== historyStatus) return false;
@@ -607,7 +679,7 @@ const ScreenRestaurantReservations = () => {
       if (historyEnd && time > new Date(historyEnd).setHours(23, 59, 59, 999)) return false;
       return true;
     });
-  }, [historyEnd, historySearch, historySource, historyStart, historyStatus, normalizedReservations]);
+  }, [historyEnd, historySearch, historySource, historyStart, historyStatus, normalizedHistoryReservations]);
 
   const historyStats = useMemo(() => {
     const total = historyRows.length;
@@ -1060,7 +1132,8 @@ const ScreenRestaurantReservations = () => {
             <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)} className="h-8 rounded-md border border-slate-200 px-2 text-xs text-slate-600"><option value="all">All statuses</option>{Object.entries(statusConfig).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select>
             <select value={historySource} onChange={(event) => setHistorySource(event.target.value)} className="h-8 rounded-md border border-slate-200 px-2 text-xs text-slate-600"><option value="all">All sources</option>{Object.entries(sourceConfig).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select>
             <CalendarDays className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.8} /><input type="date" value={historyStart} onChange={(event) => setHistoryStart(event.target.value)} className="h-8 rounded-md border border-slate-200 px-2 text-xs" /><span className="text-slate-300">-</span><input type="date" value={historyEnd} onChange={(event) => setHistoryEnd(event.target.value)} className="h-8 rounded-md border border-slate-200 px-2 text-xs" />
-            <button type="button" onClick={exportHistory} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"><Download className="h-3.5 w-3.5" strokeWidth={1.8} />Export CSV</button>
+            <button type="button" onClick={() => setHistoryRefreshKey((value) => value + 1)} disabled={historyLoading} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"><RefreshCw className={`h-3.5 w-3.5 ${historyLoading ? "animate-spin" : ""}`} strokeWidth={1.8} />Refresh</button>
+            <button type="button" onClick={exportHistory} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"><Download className="h-3.5 w-3.5" strokeWidth={1.8} />Export CSV</button>
           </div>
 
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -1068,7 +1141,11 @@ const ScreenRestaurantReservations = () => {
               <table className="w-full text-left">
                 <thead className="border-b border-slate-100 bg-slate-50/60"><tr>{["Guest", "Date & Time", "Guests", "Table", "Duration", "Source", "Status", ""].map((heading) => <th key={heading} className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">{heading}</th>)}</tr></thead>
                 <tbody>
-                  {historyRows.length > 0 ? historyRows.map((reservation) => (
+                  {historyLoading && normalizedHistoryReservations.length === 0 ? (
+                    <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">Loading reservation history...</td></tr>
+                  ) : historyError && normalizedHistoryReservations.length === 0 ? (
+                    <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-red-600"><div className="flex flex-col items-center gap-2"><span>{historyError}</span><button type="button" onClick={() => setHistoryRefreshKey((value) => value + 1)} className="rounded-md border border-red-200 px-3 py-1 text-xs font-semibold hover:bg-red-50">Retry</button></div></td></tr>
+                  ) : historyRows.length > 0 ? historyRows.map((reservation) => (
                     <Fragment key={reservation.id}>
                       <tr key={reservation.id} onClick={() => setExpandedHistoryId(expandedHistoryId === reservation.id ? null : reservation.id)} className="cursor-pointer border-b border-slate-50 transition-colors hover:bg-slate-50/60">
                         <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-500">{initials(reservation.customerName)}</span><div><p className="text-xs font-semibold text-slate-900">{reservation.customerName}</p><p className="text-[10px] text-slate-400">{reservation.cellNumber}</p></div></div></td>
@@ -1082,11 +1159,11 @@ const ScreenRestaurantReservations = () => {
                       </tr>
                       {expandedHistoryId === reservation.id && <tr className="border-b border-slate-100 bg-slate-50/80"><td colSpan={8} className="px-6 py-4"><div className="grid grid-cols-2 gap-4 text-xs sm:grid-cols-4"><div><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Email</p><p className="text-slate-700">{reservation.email || "-"}</p></div><div><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Occasion</p><p className="text-slate-700">{reservation.occasion}</p></div><div><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Seating</p><p className="text-slate-700">{reservation.seating}</p></div><div><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Request</p><p className="text-slate-700">{reservation.customRequest || "-"}</p></div></div></td></tr>}
                     </Fragment>
-                  )) : <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">No reservation history found</td></tr>}
+                  )) : <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">No historical reservations match these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
-            <div className="border-t border-slate-100 px-4 py-3 text-right text-xs text-slate-400">{historyRows.length} of {normalizedReservations.length} reservations</div>
+            <div className="border-t border-slate-100 px-4 py-3 text-right text-xs text-slate-400">{historyRows.length} of {normalizedHistoryReservations.length} reservations</div>
           </div>
         </div>
       )}
