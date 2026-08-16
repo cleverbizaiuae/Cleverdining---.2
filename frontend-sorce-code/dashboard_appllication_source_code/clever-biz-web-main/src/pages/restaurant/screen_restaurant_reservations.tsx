@@ -807,6 +807,31 @@ const ScreenRestaurantReservations = () => {
     await runReservationAction(reservation, "cancel", { reason });
   };
 
+  const editReservationTime = async (reservation: any) => {
+    const current = new Date(reservation.reservationTime);
+    const date = window.prompt("New reservation date (YYYY-MM-DD)", normaliseDateInput(current));
+    if (!date) return;
+    const time = window.prompt(
+      "New reservation time (HH:MM)",
+      `${String(current.getHours()).padStart(2, "0")}:${String(current.getMinutes()).padStart(2, "0")}`,
+    );
+    if (!time) return;
+    setOpenMenuId(null);
+    setActionLoading(true);
+    try {
+      await axiosInstance.patch(`${getReservationBase(userRole)}/${reservation.id}/`, {
+        reservationTime: buildLocalDateTime(date, time),
+      });
+      toast.success("Reservation date and time updated");
+      setSelectedReservation(null);
+      await refreshReservationData();
+    } catch (error: any) {
+      toast.error(formatApiError(error?.response?.data, "That time is not available"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const exportHistory = () => {
     const rows = [
       ["Guest", "Phone", "Date", "Guests", "Table", "Source", "Status"],
@@ -863,12 +888,11 @@ const ScreenRestaurantReservations = () => {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard label="Total Today" value={todaysReservations.length} color="bg-[#0055FE]" />
         <KpiCard label="Confirmed" value={counts.confirmed} color="bg-blue-500" />
         <KpiCard label="Pending Approval" value={counts.pending} color="bg-amber-500" />
         <KpiCard label="Seated Now" value={counts.seated} color="bg-emerald-500" />
-        <KpiCard label="No-Shows Today" value={counts.no_show} color="bg-rose-500" />
         <KpiCard label="WhatsApp Requests" value={counts.whatsapp} color="bg-[#25D366]" />
       </div>
 
@@ -955,9 +979,56 @@ const ScreenRestaurantReservations = () => {
             </div>
           </div>
 
-          <div className="hidden overflow-visible rounded-xl border border-slate-200 bg-white md:block">
-            <div className="overflow-x-auto rounded-xl">
-              <table className="w-full text-left">
+          {viewMode === "timeline" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="space-y-2">
+                {tableRows.map(({ device }) => {
+                  const bookings = filteredReservations
+                    .filter((reservation) => Number(reservation.tableId) === Number(device.id))
+                    .sort((a, b) => new Date(a.reservationTime).getTime() - new Date(b.reservationTime).getTime());
+                  return (
+                    <div key={device.id} className="grid min-h-14 grid-cols-[120px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 py-2 last:border-0">
+                      <div><p className="text-sm font-semibold text-slate-800">{device.table_name || device.name}</p><p className="text-[10px] text-slate-400">Capacity {device.capacity || "-"}</p></div>
+                      <div className="flex min-w-0 flex-wrap gap-2">
+                        {bookings.length ? bookings.map((reservation) => (
+                          <button key={reservation.id} type="button" onClick={() => setSelectedReservation(reservation)} className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-left text-xs text-blue-800">
+                            <span className="font-semibold">{formatTime(reservation.reservationTime, locale, timezone)}</span> · {reservation.customerName} · {reservation.guestNo} guests
+                          </button>
+                        )) : <span className="text-xs text-slate-400">No bookings</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {viewMode === "board" && (
+            <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
+              {(["pending", "confirmed", "seated", "finished", "cancelled", "no_show"] as StatusFilter[]).map((columnStatus) => (
+                <section key={columnStatus} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">{columnStatus === "finished" ? "Completed" : columnStatus.replace("_", " ")}</h3>
+                  <div className="space-y-2">
+                    {filteredReservations.filter((reservation) => filterToStatus(reservation.statusKey) === columnStatus).map((reservation) => (
+                      <button key={reservation.id} type="button" onClick={() => setSelectedReservation(reservation)} className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm">
+                        <p className="text-xs font-semibold text-slate-800">{reservation.customerName}</p>
+                        <p className="mt-1 text-[10px] text-slate-500">{reservation.tableName} · {formatTime(reservation.reservationTime, locale, timezone)}</p>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
+          <div className={`${viewMode === "list" ? "hidden md:block" : "hidden"} overflow-visible rounded-xl border border-slate-200 bg-white`}>
+            <div className="rounded-xl">
+              <table className="w-full table-fixed text-left">
+                <colgroup>
+                  <col className="w-[20%]" /><col className="w-[10%]" /><col className="w-[7%]" />
+                  <col className="w-[13%]" /><col className="w-[10%]" /><col className="w-[10%]" />
+                  <col className="w-[12%]" /><col className="w-[13%]" /><col className="w-[5%]" />
+                </colgroup>
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     {[
@@ -971,7 +1042,7 @@ const ScreenRestaurantReservations = () => {
                       "Status",
                       "",
                     ].map((heading) => (
-                      <th key={heading} className="whitespace-nowrap px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{heading}</th>
+                      <th key={heading} className="px-2 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-400">{heading}</th>
                     ))}
                   </tr>
                 </thead>
@@ -980,26 +1051,27 @@ const ScreenRestaurantReservations = () => {
                     const config = statusConfig[reservation.statusKey];
                     return (
                       <tr key={reservation.id} className={`border-l-4 transition-colors hover:bg-slate-50/60 ${config.border} ${reservation.statusKey === "pending" ? "bg-amber-50/30" : ""}`}>
-                        <td className="px-4 py-3">
+                        <td className="break-words px-2 py-3">
                           <button type="button" onClick={() => setSelectedReservation(reservation)} className="text-left">
                             <p className="text-sm font-semibold text-slate-900 hover:text-[#0055FE]">{reservation.customerName}</p>
                             <p className="text-xs text-slate-400">{reservation.cellNumber}</p>
                           </button>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-600">{reservation.tableName}</td>
-                        <td className="px-4 py-3"><span className="inline-flex items-center gap-1 text-sm text-slate-600"><Users className="h-3 w-3 text-slate-400" strokeWidth={1.8} />{reservation.guestNo}</span></td>
-                        <td className="px-4 py-3"><p className="text-sm font-medium text-slate-800">{formatTime(reservation.reservationTime, locale, timezone)}</p><p className="text-[10px] text-slate-400">{relativeTime(reservation.reservationTime)}</p></td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-500">{reservation.duration}</td>
-                        <td className="px-4 py-3 text-sm text-slate-500">{reservation.occasion}</td>
-                        <td className="px-4 py-3"><SourceBadge source={reservation.sourceKey} /></td>
-                        <td className="px-4 py-3"><StatusBadge status={reservation.statusKey} /></td>
-                        <td className="relative px-4 py-3 text-right">
+                        <td className="break-words px-2 py-3 text-xs text-slate-600">{reservation.tableName}</td>
+                        <td className="px-2 py-3"><span className="inline-flex items-center gap-1 text-xs text-slate-600"><Users className="h-3 w-3 text-slate-400" strokeWidth={1.8} />{reservation.guestNo}</span></td>
+                        <td className="px-2 py-3"><p className="text-xs font-medium text-slate-800">{formatTime(reservation.reservationTime, locale, timezone)}</p><p className="text-[9px] text-slate-400">{relativeTime(reservation.reservationTime)}</p></td>
+                        <td className="break-words px-2 py-3 text-xs text-slate-500">{reservation.duration}</td>
+                        <td className="break-words px-2 py-3 text-xs text-slate-500">{reservation.occasion}</td>
+                        <td className="px-2 py-3"><SourceBadge source={reservation.sourceKey} /></td>
+                        <td className="px-2 py-3"><StatusBadge status={reservation.statusKey} /></td>
+                        <td className="relative px-1 py-3 text-right">
                           <button type="button" onClick={() => setOpenMenuId(openMenuId === reservation.id ? null : reservation.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-700">
                             <MoreHorizontal className="h-4 w-4" strokeWidth={1.8} />
                           </button>
                           {openMenuId === reservation.id && (
                             <div className="absolute right-4 top-10 z-20 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
                               <GhostAction onClick={() => { setSelectedReservation(reservation); setOpenMenuId(null); }}><Eye className="mr-2 h-4 w-4 text-slate-500" strokeWidth={1.8} />View Details</GhostAction>
+                              <GhostAction onClick={() => editReservationTime(reservation)}><CalendarDays className="mr-2 h-4 w-4 text-blue-600" strokeWidth={1.8} />Edit Date / Time</GhostAction>
                               <GhostAction onClick={() => openWhatsApp(reservation.cellNumber)}><MessageCircle className="mr-2 h-4 w-4 text-[#25D366]" strokeWidth={1.8} />Message on WhatsApp</GhostAction>
                               <GhostAction onClick={() => runReservationAction(reservation, "confirm")}><CheckCircle2 className="mr-2 h-4 w-4 text-blue-600" strokeWidth={1.8} />Confirm Booking</GhostAction>
                               <GhostAction onClick={() => runReservationAction(reservation, "mark-seated")}><UserCheck className="mr-2 h-4 w-4 text-emerald-600" strokeWidth={1.8} />Mark as Seated</GhostAction>
@@ -1021,7 +1093,7 @@ const ScreenRestaurantReservations = () => {
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white md:hidden">
+          <div className={`${viewMode === "list" ? "divide-y divide-slate-100 md:hidden" : "hidden"} rounded-xl border border-slate-200 bg-white`}>
             {filteredReservations.length > 0 ? filteredReservations.map((reservation) => {
               const config = statusConfig[reservation.statusKey];
               return (
@@ -1182,6 +1254,7 @@ const ScreenRestaurantReservations = () => {
                 <p className="mt-0.5 text-xs text-slate-400">#{String(selectedReservation.id).padStart(8, "0").slice(0, 8).toUpperCase()}</p>
                 <div className="mt-2 flex flex-wrap gap-2"><StatusBadge status={selectedReservation.statusKey} /><SourceBadge source={selectedReservation.sourceKey} /></div>
                 <button type="button" onClick={() => openWhatsApp(selectedReservation.cellNumber)} className="mt-3 inline-flex items-center rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1ea855]"><MessageCircle className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />Message on WhatsApp</button>
+                <button type="button" onClick={() => editReservationTime(selectedReservation)} className="ml-2 mt-3 inline-flex items-center rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><CalendarDays className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />Edit Date / Time</button>
               </section>
 
               <section className="rounded-xl bg-slate-50 p-4">

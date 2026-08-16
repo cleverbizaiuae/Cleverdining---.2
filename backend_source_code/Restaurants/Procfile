@@ -1,1 +1,2 @@
 web: bash run.sh
+reservation_worker: python manage.py run_reservation_scheduler

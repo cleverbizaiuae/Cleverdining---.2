@@ -8,6 +8,12 @@ python manage.py verify_schema --skip-type-check
 python manage.py seed_pranay_menu
 python manage.py warm_upsell_intelligence
 
+# Keep reservation lifecycle transitions and reminders running on deployments
+# that only provision the web process (the default Render setup).
+if [ "${RUN_RESERVATION_SCHEDULER:-true}" = "true" ]; then
+  python manage.py run_reservation_scheduler &
+fi
+
 # Start ASGI server (HTTP + WebSocket compatible).
 # Gunicorn supervises Uvicorn workers and restarts them cleanly if one wedges.
 # Multiple workers are safe for Channels only when Redis is configured.

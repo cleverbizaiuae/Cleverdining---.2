@@ -3,6 +3,7 @@ from accounts.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone as dj_timezone
 import uuid
+from datetime import time
 
 class Restaurant(models.Model):
     REGION_CHOICES = [
@@ -48,6 +49,9 @@ class Restaurant(models.Model):
     qr_codes = models.PositiveIntegerField(default=10)
     table_count = models.PositiveIntegerField(default=10)
     payment_processor = models.CharField(max_length=30, default='stripe')
+    reservation_duration_minutes = models.PositiveIntegerField(default=90)
+    reservation_slot_start = models.TimeField(default=time(18, 0))
+    reservation_slot_end = models.TimeField(default=time(22, 0))
     
     # Subscription
     subscription_start = models.DateTimeField(default=dj_timezone.now)

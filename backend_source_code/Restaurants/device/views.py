@@ -10,7 +10,16 @@ from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework import serializers
 from .models import Device,Reservation
-from .serializers import DeviceSerializer,ReservationSerializer,ReservationStatusUpdateSerializer
+from .serializers import DeviceSerializer,ReservationSerializer,ReservationStatusUpdateSerializer,ReservationUpdateSerializer
+from .reservation_services import (
+    ReservationConflictError,
+    available_slots,
+    available_tables,
+    conflicting_reservation,
+    create_for_device,
+    reservation_end,
+    reschedule,
+)
 from accounts.models import User
 from restaurant.models import Restaurant
 from .paginations import DevicePagination,ReservationPagination
@@ -391,6 +400,7 @@ def _device_response(device, username=None):
         "id": device.id,
         "table_name": device.table_name or "",
         "table_number": device.table_number or "",
+        "capacity": device.capacity,
         "region": device.region or "Primary",
         "restaurant": restaurant_id,
         "restaurant_id": restaurant_id,
@@ -463,7 +473,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             base_qs = Device.objects.select_related(
                 'user'
             ).only(
-                'id', 'table_name', 'region', 'table_number', 'uuid',
+                'id', 'table_name', 'region', 'table_number', 'capacity', 'uuid',
                 'action', 'table_token', 'qr_code_image', 'restaurant_id',
                 'user_id', 'user__id', 'user__username',
             ).prefetch_related(
@@ -674,10 +684,18 @@ class CreateReservationAPIView(APIView):
             return Response({"error": "Invalid device ID"}, status=status.HTTP_400_BAD_REQUEST)
 
         data["restaurant"] = device.restaurant.id
-
         serializer = ReservationSerializer(data=data)
         if serializer.is_valid():
-            reservation = serializer.save()
+            values = dict(serializer.validated_data)
+            values.pop('device', None)
+            values.pop('restaurant', None)
+            values.pop('table_name', None)
+            values.pop('table_capacity', None)
+            values.pop('end_time', None)
+            try:
+                reservation = create_for_device(device=device, **values)
+            except ReservationConflictError as exc:
+                return Response({"error": str(exc), "conflict": True}, status=status.HTTP_409_CONFLICT)
             try:
                 rdata = ReservationSerializer(reservation).data
                 async_to_sync(channel_layer.group_send)(
@@ -743,20 +761,10 @@ class ReservationViewSet(viewsets.ModelViewSet):
         return None
 
     def _reservation_end(self, reservation):
-        if reservation.end_time:
-            return reservation.end_time
-        minutes = int(reservation.duration_minutes or 90) + int(reservation.buffer_minutes or 10)
-        return reservation.reservation_time + timedelta(minutes=minutes)
+        return reservation_end(reservation)
 
     def _conflicting_reservation(self, device_id, start_time, end_time, exclude_id=None):
-        qs = Reservation.objects.filter(device_id=device_id).exclude(status__in=self.terminal_statuses)
-        if exclude_id:
-            qs = qs.exclude(id=exclude_id)
-        for reservation in qs.only('id', 'reservation_time', 'end_time', 'duration_minutes', 'buffer_minutes', 'status'):
-            existing_end = self._reservation_end(reservation)
-            if reservation.reservation_time < end_time and existing_end > start_time:
-                return reservation
-        return None
+        return conflicting_reservation(device_id, start_time, end_time, exclude_id=exclude_id)
 
     def _broadcast_reservation(self, reservation, event_type="reservation_updated"):
         try:
@@ -804,7 +812,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.action in ['partial_update', 'update']:
-            return ReservationStatusUpdateSerializer
+            return ReservationUpdateSerializer
         return ReservationSerializer  
 
     def create(self, request, *args, **kwargs):
@@ -849,7 +857,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         data.setdefault('table_name', device.table_name)
         data.setdefault('status', 'confirmed')
         data.setdefault('source', 'dashboard')
-        data.setdefault('duration_minutes', 90)
+        data.setdefault('duration_minutes', device.restaurant.reservation_duration_minutes)
         data.setdefault('buffer_minutes', 10)
 
         start_time = self._parse_slot_datetime(data.get('reservation_time') or data.get('reservationTime'))
@@ -863,33 +871,73 @@ class ReservationViewSet(viewsets.ModelViewSet):
         data['duration_minutes'] = duration
         data['buffer_minutes'] = buffer
 
-        force = str(request.query_params.get('force', '')).lower() == 'true'
-        conflict = self._conflicting_reservation(device.id, start_time, end_time)
-        if conflict and not force:
-            return Response({
-                "error": "Reservation conflicts with an existing booking.",
-                "conflict": True,
-                "reservationId": conflict.id,
-            }, status=status.HTTP_409_CONFLICT)
-
         serializer = ReservationSerializer(data=data)
         serializer.is_valid(raise_exception=True)
-        reservation = serializer.save()
+        values = dict(serializer.validated_data)
+        values.pop('device', None)
+        values.pop('restaurant', None)
+        values.pop('table_name', None)
+        values.pop('table_capacity', None)
+        values.pop('end_time', None)
+        try:
+            reservation = create_for_device(device=device, **values)
+        except ReservationConflictError as exc:
+            return Response({
+                "error": str(exc),
+                "conflict": True,
+                "reservationId": exc.reservation.id if exc.reservation else None,
+            }, status=status.HTTP_409_CONFLICT)
         self._broadcast_reservation(reservation, event_type="reservation_created")
         payload = ReservationSerializer(reservation).data
-        if conflict and force:
-            payload["warning"] = "Created with force override despite a table conflict."
         return Response(payload, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
         reservation = self.get_object()
         self._assert_reservation_access(reservation)
 
-        serializer = self.get_serializer(reservation, data=request.data, partial=True)
+        data = request.data.copy()
+        aliases = {
+            'reservationTime': 'reservation_time', 'durationMinutes': 'duration_minutes',
+            'bufferMinutes': 'buffer_minutes', 'guestCount': 'guest_no', 'tableId': 'device',
+            'customRequest': 'custom_request',
+        }
+        for source_key, target_key in aliases.items():
+            if data.get(source_key) not in [None, ''] and data.get(target_key) in [None, '']:
+                data[target_key] = data[source_key]
+        serializer = self.get_serializer(reservation, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
-        reservation = serializer.save()
+        values = dict(serializer.validated_data)
+        schedule_fields = {'reservation_time', 'duration_minutes', 'buffer_minutes', 'guest_no', 'device'}
+        if schedule_fields.intersection(values):
+            target_device = values.get('device') or reservation.device
+            if target_device and target_device.restaurant_id != reservation.restaurant_id:
+                return Response({'device': ['Table does not belong to this restaurant.']}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                reservation = reschedule(
+                    reservation,
+                    reservation_time=values.get('reservation_time', reservation.reservation_time),
+                    guest_no=values.get('guest_no', reservation.guest_no),
+                    duration_minutes=values.get('duration_minutes', reservation.duration_minutes),
+                    buffer_minutes=values.get('buffer_minutes', reservation.buffer_minutes),
+                    device=target_device,
+                )
+            except ReservationConflictError as exc:
+                return Response({'error': str(exc), 'conflict': True}, status=status.HTTP_409_CONFLICT)
+        for field in ('custom_request', 'status', 'status_reason'):
+            if field in values:
+                setattr(reservation, field, values[field])
+        if values.get('status') in {'confirmed', 'accept', 'overdue', 'seated', 'extended'}:
+            conflict = self._conflicting_reservation(
+                reservation.device_id,
+                reservation.reservation_time,
+                self._reservation_end(reservation),
+                exclude_id=reservation.id,
+            )
+            if conflict:
+                return Response({'error': 'Reservation conflicts with an existing booking.', 'conflict': True}, status=status.HTTP_409_CONFLICT)
+        reservation.save()
         self._broadcast_reservation(reservation)
-        return Response(serializer.data)
+        return Response(ReservationSerializer(reservation).data)
 
     @action(detail=False, methods=['get'], url_path='check-conflict')
     def check_conflict(self, request):
@@ -911,25 +959,40 @@ class ReservationViewSet(viewsets.ModelViewSet):
         start_time = self._parse_slot_datetime(date_value=date_value, time_value=time_value)
         if not start_time:
             return Response({"error": "date and time are required."}, status=status.HTTP_400_BAD_REQUEST)
-        end_time = start_time + timedelta(minutes=duration + 10)
         restaurants = self._user_restaurants()
-        tables = Device.objects.filter(restaurant__in=restaurants, action='active').select_related('restaurant').order_by('region', 'table_name')
-        available_tables = []
-        for table in tables:
-            capacity = int(getattr(table, 'capacity', 0) or party_size)
-            if capacity < party_size:
-                continue
-            if not self._conflicting_reservation(table.id, start_time, end_time):
-                available_tables.append(DeviceSerializer(table, context={'request': request}).data)
+        table_payloads = []
+        for restaurant in restaurants:
+            for table in available_tables(restaurant, start_time, party_size, duration_minutes=duration):
+                table_payloads.append(DeviceSerializer(table, context={'request': request}).data)
         return Response({
-            "available": len(available_tables) > 0,
-            "tableCount": len(available_tables),
-            "tables": available_tables,
+            "available": len(table_payloads) > 0,
+            "tableCount": len(table_payloads),
+            "tables": table_payloads,
         })
+
+    @action(detail=False, methods=['get'], url_path='available-slots')
+    def available_slot_list(self, request):
+        date_value = parse_date(str(request.query_params.get('date') or ''))
+        party_size = int(request.query_params.get('partySize') or request.query_params.get('party_size') or 1)
+        exclude_id = request.query_params.get('excludeId') or request.query_params.get('exclude_id')
+        restaurants = self._user_restaurants()
+        if not date_value or not restaurants:
+            return Response({'error': 'date is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        slots = available_slots(restaurants[0], date_value, party_size, exclude_id=exclude_id)
+        return Response({'available': bool(slots), 'slots': slots})
 
     @action(detail=True, methods=['post'], url_path='confirm')
     def confirm(self, request, pk=None):
-        return self._update_reservation_action(self.get_object(), {
+        reservation = self.get_object()
+        conflict = self._conflicting_reservation(
+            reservation.device_id,
+            reservation.reservation_time,
+            self._reservation_end(reservation),
+            exclude_id=reservation.id,
+        )
+        if conflict:
+            return Response({'error': 'Reservation conflicts with an existing booking.', 'conflict': True}, status=status.HTTP_409_CONFLICT)
+        return self._update_reservation_action(reservation, {
             "status": "confirmed",
             "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
             "status_reason": request.data.get('notes') or request.data.get('reason') or "",
@@ -937,7 +1000,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='mark-seated')
     def mark_seated(self, request, pk=None):
-        return self._update_reservation_action(self.get_object(), {
+        reservation = self.get_object()
+        conflict = self._conflicting_reservation(
+            reservation.device_id, reservation.reservation_time, self._reservation_end(reservation), exclude_id=reservation.id
+        )
+        if conflict:
+            return Response({'error': 'Reservation conflicts with an existing booking.', 'conflict': True}, status=status.HTTP_409_CONFLICT)
+        return self._update_reservation_action(reservation, {
             "status": "seated",
             "actual_seated_time": now(),
             "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
@@ -949,9 +1018,15 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation = self.get_object()
         minutes = int(request.data.get('minutes') or request.data.get('extensionMinutes') or 30)
         base_end = self._reservation_end(reservation)
+        new_end = base_end + timedelta(minutes=minutes)
+        conflict = self._conflicting_reservation(
+            reservation.device_id, base_end, new_end, exclude_id=reservation.id
+        )
+        if conflict:
+            return Response({'error': 'The table is reserved during that extension.', 'conflict': True}, status=status.HTTP_409_CONFLICT)
         return self._update_reservation_action(reservation, {
             "status": "extended",
-            "end_time": base_end + timedelta(minutes=minutes),
+            "end_time": new_end,
             "extension_minutes": int(reservation.extension_minutes or 0) + minutes,
             "updated_by_staff_id": str(request.data.get('staffId') or request.user.id),
             "status_reason": request.data.get('notes') or f"Extended by {minutes} minutes",
@@ -976,9 +1051,10 @@ class ReservationViewSet(viewsets.ModelViewSet):
             table = Device.objects.get(id=table_id, restaurant=reservation.restaurant)
         except (TypeError, ValueError, Device.DoesNotExist):
             return Response({"tableId": ["Target table not found."]}, status=status.HTTP_400_BAD_REQUEST)
+        if table.action != 'active' or table.capacity < reservation.guest_no:
+            return Response({"tableId": ["Target table cannot seat this party."]}, status=status.HTTP_400_BAD_REQUEST)
         conflict = self._conflicting_reservation(table.id, reservation.reservation_time, self._reservation_end(reservation), exclude_id=reservation.id)
-        force = bool(request.data.get('force'))
-        if conflict and not force:
+        if conflict:
             return Response({"conflict": True, "reservationId": conflict.id}, status=status.HTTP_409_CONFLICT)
         return self._update_reservation_action(reservation, {
             "device": table,
@@ -1092,7 +1168,7 @@ class DeviceViewSetall(viewsets.ReadOnlyModelViewSet):
             base_qs = Device.objects.select_related(
                 'user'
             ).only(
-                'id', 'table_name', 'region', 'table_number', 'uuid',
+                'id', 'table_name', 'region', 'table_number', 'capacity', 'uuid',
                 'action', 'table_token', 'qr_code_image', 'restaurant_id',
                 'user_id', 'user__id', 'user__username',
             ).prefetch_related(
@@ -1167,7 +1243,8 @@ class PublicDeviceByUUIDView(APIView):
                 "table_name": device.table_name,
                 "restaurant_id": device.restaurant.id,
                 "restaurant_name": device.restaurant.resturent_name,
-                "table_number": device.table_number
+                "table_number": device.table_number,
+                "capacity": device.capacity,
             })
         except Device.DoesNotExist:
             return Response({"error": "Device not found"}, status=404)
@@ -1198,7 +1275,7 @@ class SimpleDeviceListView(APIView):
                 .filter(restaurant_id=restaurant_id)
                 .select_related('user')
                 .only(
-                    'id', 'table_name', 'region', 'table_number', 'uuid',
+                    'id', 'table_name', 'region', 'table_number', 'capacity', 'uuid',
                     'action', 'table_token', 'qr_code_image', 'restaurant_id',
                     'user_id', 'user__id', 'user__username',
                 )
@@ -1233,6 +1310,7 @@ class SimpleDeviceListView(APIView):
                         "table_name": device.table_name or "",
                         "region": device.region or "",
                         "table_number": device.table_number or "",
+                        "capacity": device.capacity,
                         "restaurant": restaurant_id,
                         "restaurant_id": restaurant_id,
                         "action": device.action or "active",
@@ -1315,6 +1393,7 @@ class SimpleDeviceListView(APIView):
             table_name = _normalize_table_value(request.data.get('table_name'))
             table_number = _normalize_table_value(request.data.get('table_number')) or _derive_table_number(table_name)
             region = _normalize_table_value(request.data.get('region'), "Primary") or "Primary"
+            capacity = max(1, int(request.data.get('capacity') or 4))
 
             if not table_name:
                 return Response({"table_name": ["Table name is required."]}, status=400)
@@ -1364,6 +1443,7 @@ class SimpleDeviceListView(APIView):
                     table_name=table_name,
                     table_number=table_number,
                     region=region,
+                    capacity=capacity,
                     user=device_user,
                     restaurant=restaurant,
                     action='active'
@@ -1378,6 +1458,7 @@ class SimpleDeviceListView(APIView):
                     "id": device.id,
                     "table_name": device.table_name,
                     "table_number": device.table_number,
+                    "capacity": device.capacity,
                     "region": device.region,
                     "restaurant": restaurant.id,
                     "restaurant_name": restaurant.resturent_name,
@@ -1438,7 +1519,7 @@ class SimpleDeviceListAllView(APIView):
                 .filter(restaurant_id__in=restaurant_ids)
                 .select_related('user')
                 .only(
-                    'id', 'table_name', 'region', 'table_number', 'uuid',
+                    'id', 'table_name', 'region', 'table_number', 'capacity', 'uuid',
                     'action', 'table_token', 'qr_code_image', 'restaurant_id',
                     'user_id', 'user__id', 'user__username',
                 )
@@ -1478,6 +1559,7 @@ class SimpleDeviceListAllView(APIView):
                         "table_name": device.table_name or "",
                         "region": device.region or "",
                         "table_number": device.table_number or "",
+                        "capacity": device.capacity,
                         "restaurant": device.restaurant_id,
                         "restaurant_id": device.restaurant_id,
                         "action": device.action or "active",

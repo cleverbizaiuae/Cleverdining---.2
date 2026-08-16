@@ -7,6 +7,8 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from customer.models import WhatsAppConversation
+from device.models import Device, Reservation
+from device.reservation_services import create_for_device
 from restaurant.models import Restaurant
 
 from .dialog360_config import Dialog360ConfigurationError
@@ -32,6 +34,15 @@ class Dialog360IntegrationTests(TestCase):
             whatsapp_phone_number_id="phone-number-1",
             whatsapp_business_display_number="+15554446810",
             whatsapp_access_token="secret-api-key",
+            timezone="UTC",
+        )
+        self.table_user = User.objects.create_user(
+            email="dialog360-table@example.com", username="dialog360-table",
+            password="test-password", role="customer",
+        )
+        Device.objects.create(
+            table_name="T1", table_number="1", capacity=4, user=self.table_user,
+            restaurant=self.restaurant, action="active",
         )
         self.client = APIClient()
 
@@ -127,7 +138,7 @@ class Dialog360IntegrationTests(TestCase):
         handle.assert_called_once_with(payload)
 
     @patch("integrations.whatsapp_360dialog.requests.post")
-    def test_greeting_starts_question_flow_and_sends_name_question(self, send):
+    def test_greeting_starts_question_flow_and_sends_date_question(self, send):
         send.return_value = Mock(status_code=200, text="{}")
 
         response = self.client.post(
@@ -145,11 +156,11 @@ class Dialog360IntegrationTests(TestCase):
             provider="360dialog",
         )
         self.assertEqual(conversation.state, "collecting")
-        self.assertEqual(conversation.context["awaiting"], "name")
+        self.assertEqual(conversation.context["awaiting"], "date")
         request = send.call_args
         self.assertEqual(request.args[0], "https://waba-v2.360dialog.io/messages")
         self.assertEqual(request.kwargs["headers"]["D360-API-KEY"], "secret-api-key")
-        self.assertIn("What name", request.kwargs["json"]["text"]["body"])
+        self.assertIn("Which date", request.kwargs["json"]["text"]["body"])
 
     @patch("integrations.whatsapp_360dialog.requests.post")
     def test_duplicate_message_id_is_ignored_without_second_reply(self, send):
@@ -243,11 +254,12 @@ class Dialog360IntegrationTests(TestCase):
         send.return_value = Mock(status_code=200, text="{}")
 
         steps = [
-            ("Hi", "conversation_started", "name", "What name"),
-            ("Pranay", "requested_field", "guests", "How many guests"),
-            ("2", "requested_field", "date", "Which date"),
-            ("tomorrow", "requested_field", "time", "What time"),
-            ("7:30pm", "requested_confirmation", None, "Reply YES to confirm"),
+            ("Hi", "conversation_started", "date", "Which date"),
+            ("tomorrow", "requested_field", "time", "Available times"),
+            ("7:30pm", "requested_field", "guests", "How many guests"),
+            ("2", "requested_field", "name", "What name"),
+            ("Pranay", "requested_field", "special_request", "special request"),
+            ("NONE", "requested_confirmation", None, "Reply CONFIRM"),
         ]
 
         for index, (text, action, awaiting, reply_text) in enumerate(steps, start=1):
@@ -275,6 +287,77 @@ class Dialog360IntegrationTests(TestCase):
         self.assertEqual(conversation.context["time"], "19:30")
 
     @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_confirm_rechecks_and_creates_confirmed_reservation(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+        sequence = ["Hi", "tomorrow", "7:30pm", "2", "Pranay", "NONE", "CONFIRM"]
+        response = None
+        for index, text in enumerate(sequence, start=1):
+            response = self.client.post(
+                "/api/integrations/360dialog/webhook/",
+                self.inbound_payload(text=text, message_id=f"wamid.confirm.{index}"),
+                format="json",
+            )
+        self.assertEqual(response.json()["action"], "reservation_created")
+        self.assertEqual(response.json()["status"], "confirmed")
+        reservation = Reservation.objects.get(pk=response.json()["reservation_id"])
+        self.assertIsNotNone(reservation.device_id)
+        self.assertEqual(reservation.status, "confirmed")
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_confirmed_booking_can_change_time_more_than_two_hours_before(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+        reservation = create_for_device(
+            device=Device.objects.get(restaurant=self.restaurant),
+            reservation_time=(timezone.now() + timedelta(days=2)).replace(hour=18, minute=0, second=0, microsecond=0),
+            guest_no=2, customer_name="Pranay", cell_number="971500001234",
+            source="whatsapp", status="confirmed",
+        )
+        WhatsAppConversation.objects.create(
+            restaurant=self.restaurant, phone="971500001234", provider="360dialog",
+            state="completed", context={"reservation_id": reservation.id},
+        )
+        first = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            self.inbound_payload(text="I need to change my booking", message_id="wamid.change.1"),
+            format="json",
+        )
+        second = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            self.inbound_payload(text="TIME", message_id="wamid.change.2"),
+            format="json",
+        )
+        third = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            self.inbound_payload(text="8:00pm", message_id="wamid.change.3"),
+            format="json",
+        )
+        self.assertEqual(first.json()["action"], "reschedule_started")
+        self.assertEqual(second.json()["action"], "reschedule_value_required")
+        self.assertEqual(third.json()["action"], "reservation_rescheduled")
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.reservation_time.hour, 20)
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_change_inside_two_hours_is_rejected(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+        reservation = create_for_device(
+            device=Device.objects.get(restaurant=self.restaurant),
+            reservation_time=timezone.now() + timedelta(hours=1), guest_no=2,
+            customer_name="Pranay", cell_number="971500001234", source="whatsapp", status="confirmed",
+        )
+        WhatsAppConversation.objects.create(
+            restaurant=self.restaurant, phone="971500001234", provider="360dialog",
+            state="completed", context={"reservation_id": reservation.id},
+        )
+        response = self.client.post(
+            "/api/integrations/360dialog/webhook/",
+            self.inbound_payload(text="modify", message_id="wamid.change.late"),
+            format="json",
+        )
+        self.assertEqual(response.json()["action"], "reschedule_too_late")
+        self.assertIn("at least 2 hours", send.call_args.kwargs["json"]["text"]["body"])
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
     def test_name_reply_formats_advance_to_guest_question(self, send):
         send.return_value = Mock(status_code=200, text="{}")
 
@@ -288,10 +371,17 @@ class Dialog360IntegrationTests(TestCase):
         for index, (reply, expected_name) in enumerate(name_replies, start=1):
             with self.subTest(reply=reply):
                 WhatsAppConversation.objects.filter(restaurant=self.restaurant).delete()
-                self.client.post(
-                    "/api/integrations/360dialog/webhook/",
-                    self.inbound_payload(message_id=f"wamid.name-start.{index}"),
-                    format="json",
+                WhatsAppConversation.objects.create(
+                    restaurant=self.restaurant,
+                    phone="971500001234",
+                    provider="360dialog",
+                    state="collecting",
+                    context={
+                        "date": (timezone.now() + timedelta(days=1)).date().isoformat(),
+                        "guests": 2,
+                        "time": "19:30",
+                        "awaiting": "name",
+                    },
                 )
 
                 response = self.client.post(
@@ -302,8 +392,8 @@ class Dialog360IntegrationTests(TestCase):
 
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["action"], "requested_field")
-                self.assertEqual(response.json()["awaiting"], "guests")
-                self.assertIn("How many guests", send.call_args.kwargs["json"]["text"]["body"])
+                self.assertEqual(response.json()["awaiting"], "special_request")
+                self.assertIn("special request", send.call_args.kwargs["json"]["text"]["body"])
                 conversation = WhatsAppConversation.objects.get(
                     restaurant=self.restaurant,
                     phone="971500001234",
@@ -350,14 +440,14 @@ class Dialog360IntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["action"], "conversation_started")
-        self.assertEqual(response.json()["awaiting"], "name")
+        self.assertEqual(response.json()["awaiting"], "date")
         conversation = WhatsAppConversation.objects.get(
             restaurant=self.restaurant,
             phone="971500001234",
             provider="360dialog",
         )
-        self.assertEqual(conversation.context, {"awaiting": "name"})
-        self.assertIn("What name", send.call_args.kwargs["json"]["text"]["body"])
+        self.assertEqual(conversation.context, {"awaiting": "date"})
+        self.assertIn("Which date", send.call_args.kwargs["json"]["text"]["body"])
 
     @patch("integrations.whatsapp_360dialog.requests.post")
     @patch("integrations.whatsapp_360dialog._upsert_lead")

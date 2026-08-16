@@ -15,7 +15,7 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Device
-        fields = ['id', 'table_name', 'region', 'table_number', 'restaurant', 'restaurant_id', 'action','restaurant_name','username','user_id', 'qr_code_image', 'table_url', 'active_session_id', 'unread_count', 'last_message_time']
+        fields = ['id', 'table_name', 'region', 'table_number', 'capacity', 'restaurant', 'restaurant_id', 'action','restaurant_name','username','user_id', 'qr_code_image', 'table_url', 'active_session_id', 'unread_count', 'last_message_time']
         read_only_fields =['username', 'restaurant_name','restaurant']
 
     def get_restaurant_name(self, obj):
@@ -116,8 +116,10 @@ class ReservationSerializer(serializers.ModelSerializer):
             'actual_end_time','actualEndTime','extension_minutes','extensionMinutes','updated_by_staff_id',
             'status_reason','whatsapp_phone_number_id','whatsapp_chat_id','whatsapp_message_id',
             'raw_customer_text','ai_confidence','missing_fields','created_at','updated_at','device',
-            'device_name','tableId','restaurant',
+            'device_name','tableId','restaurant','reminder_24h_sent_at','reminder_2h_sent_at',
+            'follow_up_sent_at',
         ]
+        read_only_fields = ['reminder_24h_sent_at', 'reminder_2h_sent_at', 'follow_up_sent_at']
 
 
 
@@ -126,3 +128,12 @@ class ReservationStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
         fields = ['status', 'status_reason']
+
+
+class ReservationUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reservation
+        fields = [
+            'reservation_time', 'duration_minutes', 'buffer_minutes', 'guest_no',
+            'device', 'custom_request', 'status', 'status_reason',
+        ]

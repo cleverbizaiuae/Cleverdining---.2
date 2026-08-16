@@ -15,6 +15,7 @@ class Device(models.Model):
     table_name = models.CharField(max_length=50)
     region = models.CharField(max_length=50, default='Primary', blank=True)
     table_number = models.CharField(max_length=20, null=True, blank=True)  # New field for table identifier
+    capacity = models.PositiveIntegerField(default=4)
     uuid = models.UUIDField(default=uuid_lib.uuid4, editable=False, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='devices')
@@ -121,6 +122,9 @@ class Reservation(models.Model):
     raw_customer_text = models.TextField(null=True, blank=True)
     ai_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     missing_fields = models.TextField(null=True, blank=True)
+    reminder_24h_sent_at = models.DateTimeField(null=True, blank=True)
+    reminder_2h_sent_at = models.DateTimeField(null=True, blank=True)
+    follow_up_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

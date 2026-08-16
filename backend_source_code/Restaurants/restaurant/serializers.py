@@ -11,7 +11,8 @@ class RestaurantSerializer(serializers.ModelSerializer):
             'resturent_name', 'location', 'region', 'currency', 'timezone',
             'country_code', 'default_payment_provider', 'city', 'country', 'phone_number',
             'package', 'image', 'logo', 'owner', 'google_review_url',
-            'qr_codes', 'table_count', 'payment_processor'
+            'qr_codes', 'table_count', 'payment_processor', 'reservation_duration_minutes',
+            'reservation_slot_start', 'reservation_slot_end'
         ]
 
 
