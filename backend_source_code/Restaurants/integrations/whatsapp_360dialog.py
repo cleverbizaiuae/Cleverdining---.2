@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone as dt_timezone
+from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -492,7 +492,7 @@ def _create_reservation_from_context(
         source="whatsapp",
         reservation_time=reservation_time,
         duration_minutes=restaurant.reservation_duration_minutes,
-        buffer_minutes=10,
+        buffer_minutes=0,
         status="confirmed",
         custom_request=str(context.get("special_request") or ""),
         whatsapp_phone_number_id=message.phone_number_id or None,
@@ -515,7 +515,7 @@ def _latest_upcoming_reservation(message: Dialog360Message) -> Reservation | Non
     ).select_related('restaurant', 'device').order_by('reservation_time').first()
 
 
-def _slot_alternatives(reservation: Reservation, requested_time: datetime) -> str:
+def _slot_alternatives(reservation: Reservation, requested_time: datetime) -> tuple[str, date | None]:
     local = requested_time.astimezone(_restaurant_tz(reservation.restaurant))
     slots = available_slots(
         reservation.restaurant,
@@ -524,11 +524,42 @@ def _slot_alternatives(reservation: Reservation, requested_time: datetime) -> st
         exclude_id=reservation.id,
     )
     if slots:
-        return "Available alternatives: " + ", ".join(slot['label'] for slot in slots) + "."
+        return (
+            "Available alternatives: " + ", ".join(slot['label'] for slot in slots) + ".",
+            local.date(),
+        )
     next_date, next_slots = next_available_date(reservation.restaurant, local.date(), reservation.guest_no)
     if next_date and next_slots:
-        return f"The next available date is {next_date.strftime('%d %b')} at " + ", ".join(slot['label'] for slot in next_slots) + "."
-    return "No suitable alternative is currently available in the next 14 days."
+        return (
+            f"The next available date is {next_date.strftime('%d %b')} at "
+            + ", ".join(slot['label'] for slot in next_slots)
+            + ".",
+            next_date,
+        )
+    return "No suitable alternative is currently available in the next 14 days.", None
+
+
+def _reschedule_value_prompt(reservation: Reservation, field: str) -> str:
+    if field == "date":
+        return "What new date would you like? Reply DD/MM/YYYY."
+    local_current = reservation.reservation_time.astimezone(_restaurant_tz(reservation.restaurant))
+    slots = available_slots(
+        reservation.restaurant,
+        local_current.date(),
+        reservation.guest_no,
+        exclude_id=reservation.id,
+    )
+    current_value = local_current.strftime("%H:%M")
+    alternatives = [slot["label"] for slot in slots if slot["time"] != current_value]
+    if alternatives:
+        return (
+            f"What new time would you like on {local_current.strftime('%d %b')}? "
+            "Available slots: " + ", ".join(alternatives) + "."
+        )
+    return (
+        f"There are no other available times on {local_current.strftime('%d %b')}. "
+        "Reply DATE if you would like to choose another date."
+    )
 
 
 def _is_change_request(text: str) -> bool:
@@ -564,6 +595,62 @@ def send_360dialog_text(restaurant: Restaurant, to: str, body: str) -> bool:
         return response.status_code < 400
     except requests.RequestException:
         logger.exception("360dialog outbound send error restaurant_id=%s", restaurant.id)
+        return False
+
+
+def send_360dialog_template(
+    restaurant: Restaurant,
+    to: str,
+    template_name: str,
+    *,
+    language: str = "en",
+    body_parameters: list[str] | None = None,
+) -> bool:
+    api_key = getattr(restaurant, "whatsapp_access_token", None)
+    template_name = str(template_name or "").strip()
+    if not api_key or not to or not template_name:
+        return False
+    template: dict[str, Any] = {
+        "name": template_name,
+        "language": {"code": str(language or "en").strip() or "en"},
+    }
+    if body_parameters:
+        template["components"] = [{
+            "type": "body",
+            "parameters": [
+                {"type": "text", "text": str(value)[:1024]}
+                for value in body_parameters
+            ],
+        }]
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": re.sub(r"\D", "", to),
+        "type": "template",
+        "template": template,
+    }
+    try:
+        response = requests.post(
+            DIALOG_360_MESSAGES_URL,
+            json=payload,
+            headers={"D360-API-KEY": api_key, "Content-Type": "application/json"},
+            timeout=8,
+        )
+        if response.status_code >= 400:
+            logger.error(
+                "360dialog template send failed restaurant_id=%s template=%s status=%s response=%s",
+                restaurant.id,
+                template_name,
+                response.status_code,
+                response.text[:500],
+            )
+        return response.status_code < 400
+    except requests.RequestException:
+        logger.exception(
+            "360dialog template send error restaurant_id=%s template=%s",
+            restaurant.id,
+            template_name,
+        )
         return False
 
 
@@ -710,7 +797,18 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         context["awaiting"] = lower
         conversation.context = context
         conversation.state = "rescheduling_value"
-        reply = "What new date would you like? Reply DD/MM/YYYY." if lower == "date" else "What new time would you like?"
+        try:
+            reservation = Reservation.objects.select_related('restaurant', 'device').get(
+                pk=context.get('reservation_id'), restaurant=restaurant
+            )
+        except Reservation.DoesNotExist:
+            conversation.state = "completed"
+            conversation.context = {}
+            reply = "I could not find that booking. Please contact the restaurant for help."
+            conversation.last_response = reply
+            persisted = _save_conversation(conversation, message)
+            return _send_reply_result(message, reply, "reservation_not_found", conversation_persisted=persisted)
+        reply = _reschedule_value_prompt(reservation, lower)
         conversation.last_response = reply
         persisted = _save_conversation(conversation, message)
         return _send_reply_result(message, reply, "reschedule_value_required", awaiting=lower, conversation_persisted=persisted)
@@ -728,6 +826,20 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
             conversation.last_response = reply
             persisted = _save_conversation(conversation, message)
             return _send_reply_result(message, reply, "reservation_not_found", conversation_persisted=persisted)
+        if lower in {"date", "time"}:
+            context["change_field"] = lower
+            context["awaiting"] = lower
+            conversation.context = context
+            reply = _reschedule_value_prompt(reservation, lower)
+            conversation.last_response = reply
+            persisted = _save_conversation(conversation, message)
+            return _send_reply_result(
+                message,
+                reply,
+                "reschedule_value_required",
+                awaiting=lower,
+                conversation_persisted=persisted,
+            )
         if reservation.reservation_time - timezone.now() < timedelta(hours=2):
             conversation.state = "completed"
             reply = "Sorry, changes can only be made at least 2 hours before your reservation."
@@ -739,7 +851,7 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
             new_date = _parse_date(text, _restaurant_tz(restaurant))
             new_clock = local_current.time().replace(tzinfo=None)
         else:
-            new_date = local_current.date()
+            new_date = _context_date(context.get('date')) or local_current.date()
             new_clock = _parse_time(text)
         if not new_date or not new_clock:
             reply = "I could not understand that value. Please send a valid date or time."
@@ -750,7 +862,13 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             reservation = reschedule(reservation, reservation_time=requested, allow_reassign=True)
         except ReservationConflictError:
-            reply = "That option is unavailable. " + _slot_alternatives(reservation, requested)
+            alternatives, alternative_date = _slot_alternatives(reservation, requested)
+            if alternative_date:
+                context['change_field'] = 'time'
+                context['awaiting'] = 'time'
+                context['date'] = alternative_date.isoformat()
+                conversation.context = context
+            reply = "That option is unavailable. " + alternatives
             conversation.last_response = reply
             persisted = _save_conversation(conversation, message)
             return _send_reply_result(message, reply, "reschedule_unavailable", conversation_persisted=persisted)
@@ -758,7 +876,11 @@ def handle_360dialog_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         conversation.state = "completed"
         conversation.context = {"reservation_id": reservation.id, "awaiting": None}
         local_updated = reservation.reservation_time.astimezone(_restaurant_tz(restaurant))
-        reply = f"Your reservation is updated to {local_updated.strftime('%d %b %Y at %I:%M %p')}. Your table will be assigned automatically."
+        reply = (
+            f"Updated to {local_updated.strftime('%I:%M %p')} on "
+            f"{local_updated.strftime('%d %b %Y')} for {reservation.guest_no} guest(s) "
+            f"under {reservation.customer_name}. Confirmed! Your table is assigned automatically."
+        )
         conversation.last_response = reply
         persisted = _save_conversation(conversation, message)
         return _send_reply_result(message, reply, "reservation_rescheduled", reservation_id=reservation.id, conversation_persisted=persisted)

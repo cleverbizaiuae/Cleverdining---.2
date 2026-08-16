@@ -333,6 +333,7 @@ class Dialog360IntegrationTests(TestCase):
         )
         self.assertEqual(first.json()["action"], "reschedule_started")
         self.assertEqual(second.json()["action"], "reschedule_value_required")
+        self.assertIn("Available slots", send.call_args_list[-2].kwargs["json"]["text"]["body"])
         self.assertEqual(third.json()["action"], "reservation_rescheduled")
         reservation.refresh_from_db()
         self.assertEqual(reservation.reservation_time.hour, 20)
@@ -356,6 +357,145 @@ class Dialog360IntegrationTests(TestCase):
         )
         self.assertEqual(response.json()["action"], "reschedule_too_late")
         self.assertIn("at least 2 hours", send.call_args.kwargs["json"]["text"]["body"])
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_conflicting_date_change_accepts_an_offered_time_on_the_new_date(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+        table = Device.objects.get(restaurant=self.restaurant)
+        original_time = (timezone.now() + timedelta(days=2)).replace(
+            hour=18, minute=0, second=0, microsecond=0
+        )
+        new_date_time = (timezone.now() + timedelta(days=3)).replace(
+            hour=18, minute=0, second=0, microsecond=0
+        )
+        reservation = create_for_device(
+            device=table,
+            reservation_time=original_time,
+            guest_no=2,
+            customer_name="Pranay",
+            cell_number="971500001234",
+            source="whatsapp",
+            status="confirmed",
+        )
+        create_for_device(
+            device=table,
+            reservation_time=new_date_time,
+            guest_no=2,
+            customer_name="Conflict",
+            cell_number="971500009999",
+            source="dashboard",
+            status="confirmed",
+        )
+        WhatsAppConversation.objects.create(
+            restaurant=self.restaurant,
+            phone="971500001234",
+            provider="360dialog",
+            state="completed",
+            context={"reservation_id": reservation.id},
+        )
+
+        messages = [
+            ("change", "wamid.date-change.1"),
+            ("DATE", "wamid.date-change.2"),
+            (new_date_time.strftime("%d/%m/%Y"), "wamid.date-change.3"),
+            ("8:00pm", "wamid.date-change.4"),
+        ]
+        responses = [
+            self.client.post(
+                "/api/integrations/360dialog/webhook/",
+                self.inbound_payload(text=text, message_id=message_id),
+                format="json",
+            )
+            for text, message_id in messages
+        ]
+
+        self.assertEqual(responses[2].json()["action"], "reschedule_unavailable")
+        self.assertIn("Available alternatives", send.call_args_list[-2].kwargs["json"]["text"]["body"])
+        self.assertEqual(responses[3].json()["action"], "reservation_rescheduled")
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.reservation_time.date(), new_date_time.date())
+        self.assertEqual(reservation.reservation_time.hour, 20)
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_fully_booked_reschedule_date_accepts_time_on_next_available_date(self, send):
+        send.return_value = Mock(status_code=200, text="{}")
+        table = Device.objects.get(restaurant=self.restaurant)
+        original_time = (timezone.now() + timedelta(days=2)).replace(
+            hour=18, minute=0, second=0, microsecond=0
+        )
+        full_date_start = (timezone.now() + timedelta(days=3)).replace(
+            hour=18, minute=0, second=0, microsecond=0
+        )
+        reservation = create_for_device(
+            device=table,
+            reservation_time=original_time,
+            guest_no=2,
+            customer_name="Pranay",
+            cell_number="971500001234",
+            source="whatsapp",
+            status="confirmed",
+        )
+        for index, hour_offset in enumerate((0, 1.5, 3)):
+            create_for_device(
+                device=table,
+                reservation_time=full_date_start + timedelta(hours=hour_offset),
+                guest_no=2,
+                customer_name=f"Full Day {index}",
+                cell_number=f"97150000999{index}",
+                source="dashboard",
+                status="confirmed",
+            )
+        WhatsAppConversation.objects.create(
+            restaurant=self.restaurant,
+            phone="971500001234",
+            provider="360dialog",
+            state="completed",
+            context={"reservation_id": reservation.id},
+        )
+
+        messages = [
+            ("change", "wamid.next-date.1"),
+            ("DATE", "wamid.next-date.2"),
+            (full_date_start.strftime("%d/%m/%Y"), "wamid.next-date.3"),
+            ("8:00pm", "wamid.next-date.4"),
+        ]
+        responses = [
+            self.client.post(
+                "/api/integrations/360dialog/webhook/",
+                self.inbound_payload(text=text, message_id=message_id),
+                format="json",
+            )
+            for text, message_id in messages
+        ]
+
+        self.assertEqual(responses[2].json()["action"], "reschedule_unavailable")
+        self.assertIn("next available date", send.call_args_list[-2].kwargs["json"]["text"]["body"])
+        self.assertEqual(responses[3].json()["action"], "reservation_rescheduled")
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.reservation_time.date(), (full_date_start + timedelta(days=1)).date())
+        self.assertEqual(reservation.reservation_time.hour, 20)
+
+    @patch("integrations.whatsapp_360dialog.requests.post")
+    def test_template_sender_builds_360dialog_utility_payload(self, send):
+        from integrations.whatsapp_360dialog import send_360dialog_template
+
+        send.return_value = Mock(status_code=200, text="{}")
+        sent = send_360dialog_template(
+            self.restaurant,
+            "971500001234",
+            "reservation_reminder_24h",
+            language="en",
+            body_parameters=["07:30 PM", self.restaurant.resturent_name],
+        )
+
+        self.assertTrue(sent)
+        payload = send.call_args.kwargs["json"]
+        self.assertEqual(payload["type"], "template")
+        self.assertEqual(payload["template"]["name"], "reservation_reminder_24h")
+        self.assertEqual(
+            payload["template"]["components"][0]["parameters"][0]["text"],
+            "07:30 PM",
+        )
 
     @patch("integrations.whatsapp_360dialog.requests.post")
     def test_name_reply_formats_advance_to_guest_question(self, send):

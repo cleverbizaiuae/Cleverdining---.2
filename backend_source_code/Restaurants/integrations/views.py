@@ -117,6 +117,11 @@ class Dialog360SettingsView(APIView):
                 value = "360dialog"
             if incoming == "apiKey" and not str(value or "").strip():
                 continue
+            if incoming == "specialPhrases" and not isinstance(value, dict):
+                return Response(
+                    {"specialPhrases": ["Expected an object of approved template settings."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             setattr(restaurant, field, value)
             updated.append(field)
         if "provider" not in request.data:

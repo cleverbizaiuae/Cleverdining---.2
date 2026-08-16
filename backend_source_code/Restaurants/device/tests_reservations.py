@@ -1,8 +1,10 @@
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from accounts.models import User
 from device.management.commands.process_reservations import process_reservations
@@ -70,8 +72,11 @@ class ReservationRuleTests(TestCase):
         slots = available_slots(self.restaurant, start.date(), 2)
         slot_times = {slot['time'] for slot in slots}
         self.assertNotIn('18:00', slot_times)
-        self.assertNotIn('19:30', slot_times)
+        self.assertNotIn('19:00', slot_times)
+        self.assertIn('19:30', slot_times)
         self.assertIn('20:00', slot_times)
+        reservation = self.table.reservations.get()
+        self.assertEqual(reservation.end_time - reservation.reservation_time, timedelta(minutes=90))
 
     def test_customer_reschedule_can_reassign_but_never_double_book(self):
         second_user = User.objects.create_user(
@@ -91,6 +96,45 @@ class ReservationRuleTests(TestCase):
         self.assertEqual(updated.device_id, second_table.id)
         with self.assertRaises(ReservationConflictError):
             reschedule(existing, reservation_time=start, device=second_table)
+
+    def test_reschedule_resets_time_based_reminders(self):
+        start = self._future()
+        reservation = create_for_device(
+            device=self.table,
+            reservation_time=start,
+            guest_no=2,
+            reminder_24h_sent_at=timezone.now(),
+            reminder_2h_sent_at=timezone.now(),
+            **self._values(),
+        )
+        reschedule(reservation, reservation_time=start + timedelta(hours=1))
+        reservation.refresh_from_db()
+        self.assertIsNone(reservation.reminder_24h_sent_at)
+        self.assertIsNone(reservation.reminder_2h_sent_at)
+
+    def test_dashboard_date_filter_uses_restaurant_timezone(self):
+        self.restaurant.timezone = 'Asia/Dubai'
+        self.restaurant.save(update_fields=['timezone'])
+        utc_date = (timezone.now() + timedelta(days=2)).date()
+        start = datetime.combine(utc_date, time(23, 30), tzinfo=ZoneInfo('UTC'))
+        reservation = create_for_device(
+            device=self.table,
+            reservation_time=start,
+            guest_no=2,
+            **self._values('Timezone Guest', '+971500000016'),
+        )
+        client = APIClient()
+        client.force_authenticate(self.owner)
+
+        local_date = start.astimezone(ZoneInfo('Asia/Dubai')).date()
+        response = client.get('/owners/reservations/', {'date': local_date.isoformat(), 'page_size': 1000})
+        self.assertEqual(response.status_code, 200)
+        records = response.data.get('results', response.data)
+        self.assertIn(reservation.id, [record['id'] for record in records])
+
+        response = client.get('/owners/reservations/', {'date': utc_date.isoformat(), 'page_size': 1000})
+        records = response.data.get('results', response.data)
+        self.assertNotIn(reservation.id, [record['id'] for record in records])
 
     @patch('device.management.commands.process_reservations.send_360dialog_text', return_value=True)
     def test_lifecycle_and_reminders_are_idempotent(self, send_text):
@@ -115,3 +159,25 @@ class ReservationRuleTests(TestCase):
         calls_after_first_run = send_text.call_count
         process_reservations()
         self.assertEqual(send_text.call_count, calls_after_first_run)
+
+    @patch('device.management.commands.process_reservations.send_360dialog_text', return_value=True)
+    @patch('device.management.commands.process_reservations.send_360dialog_template', return_value=True)
+    def test_reminders_use_approved_template_when_configured(self, send_template, send_text):
+        self.restaurant.whatsapp_special_phrases = {
+            'reminder24hTemplate': 'reservation_reminder_24h',
+            'templateLanguage': 'en',
+        }
+        self.restaurant.save(update_fields=['whatsapp_special_phrases'])
+        reminder_start = timezone.now() + timedelta(hours=24)
+        create_for_available_table(
+            restaurant=self.restaurant,
+            reservation_time=reminder_start,
+            guest_no=2,
+            **self._values('Template Reminder', '+971500000015'),
+        )
+
+        process_reservations()
+
+        send_template.assert_called_once()
+        self.assertEqual(send_template.call_args.args[2], 'reservation_reminder_24h')
+        send_text.assert_not_called()

@@ -33,6 +33,7 @@ from rest_framework.exceptions import PermissionDenied
 from django.utils.dateparse import parse_date, parse_datetime
 from core.filter_backends import SchemaSafeDjangoFilterBackend as DjangoFilterBackend
 from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 from django.db.models import Q
 from django.utils import timezone as django_timezone
 from django.utils.timezone import now
@@ -806,7 +807,20 @@ class ReservationViewSet(viewsets.ModelViewSet):
         if date_str:
             parsed_date = parse_date(date_str)
             if parsed_date:
-                queryset = queryset.filter(reservation_time__date=parsed_date)
+                date_query = Q()
+                for restaurant in self._user_restaurants():
+                    try:
+                        restaurant_tz = ZoneInfo(restaurant.timezone or 'Asia/Dubai')
+                    except Exception:
+                        restaurant_tz = ZoneInfo('Asia/Dubai')
+                    local_start = datetime.combine(parsed_date, time.min, tzinfo=restaurant_tz)
+                    local_end = local_start + timedelta(days=1)
+                    date_query |= Q(
+                        restaurant=restaurant,
+                        reservation_time__gte=local_start.astimezone(ZoneInfo('UTC')),
+                        reservation_time__lt=local_end.astimezone(ZoneInfo('UTC')),
+                    )
+                queryset = queryset.filter(date_query) if date_query else queryset.none()
 
         return queryset.order_by('-reservation_time')
 
@@ -858,13 +872,16 @@ class ReservationViewSet(viewsets.ModelViewSet):
         data.setdefault('status', 'confirmed')
         data.setdefault('source', 'dashboard')
         data.setdefault('duration_minutes', device.restaurant.reservation_duration_minutes)
-        data.setdefault('buffer_minutes', 10)
+        data.setdefault('buffer_minutes', 0)
 
         start_time = self._parse_slot_datetime(data.get('reservation_time') or data.get('reservationTime'))
         if not start_time:
             return Response({"reservation_time": ["A valid reservation time is required."]}, status=status.HTTP_400_BAD_REQUEST)
         duration = int(data.get('duration_minutes') or data.get('durationMinutes') or 90)
-        buffer = int(data.get('buffer_minutes') or data.get('bufferMinutes') or 10)
+        buffer_value = data.get('buffer_minutes')
+        if buffer_value in [None, '']:
+            buffer_value = data.get('bufferMinutes')
+        buffer = int(0 if buffer_value in [None, ''] else buffer_value)
         end_time = self._parse_slot_datetime(data.get('end_time') or data.get('endTime')) or start_time + timedelta(minutes=duration + buffer)
         data['reservation_time'] = start_time
         data['end_time'] = end_time
@@ -1393,7 +1410,12 @@ class SimpleDeviceListView(APIView):
             table_name = _normalize_table_value(request.data.get('table_name'))
             table_number = _normalize_table_value(request.data.get('table_number')) or _derive_table_number(table_name)
             region = _normalize_table_value(request.data.get('region'), "Primary") or "Primary"
-            capacity = max(1, int(request.data.get('capacity') or 4))
+            try:
+                capacity = int(request.data.get('capacity') or 4)
+            except (TypeError, ValueError):
+                return Response({"capacity": ["Enter a whole number."]}, status=400)
+            if not 1 <= capacity <= 100:
+                return Response({"capacity": ["Capacity must be between 1 and 100."]}, status=400)
 
             if not table_name:
                 return Response({"table_name": ["Table name is required."]}, status=400)

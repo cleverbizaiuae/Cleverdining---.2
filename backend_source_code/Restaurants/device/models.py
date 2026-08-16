@@ -108,7 +108,7 @@ class Reservation(models.Model):
     reservation_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.PositiveIntegerField(default=90)
-    buffer_minutes = models.PositiveIntegerField(default=10)
+    buffer_minutes = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='hold')
     custom_request = models.TextField(blank=True, default='')
     actual_seated_time = models.DateTimeField(null=True, blank=True)

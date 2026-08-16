@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.conf import settings
+from django.utils.dateparse import parse_time
 import requests
 
 from restaurant.models import Restaurant
@@ -16,6 +17,21 @@ class RestaurantSettingsView(APIView):
     Accessible by: Owner, Manager
     """
     permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def settings_payload(restaurant):
+        return {
+            "id": restaurant.id,
+            "resturent_name": getattr(restaurant, 'resturent_name', '') or '',
+            "location": getattr(restaurant, 'location', '') or '',
+            "phone_number": getattr(restaurant, 'phone_number', '') or '',
+            "google_review_url": getattr(restaurant, 'google_review_url', None),
+            "reservation_duration_minutes": int(
+                getattr(restaurant, 'reservation_duration_minutes', 90) or 90
+            ),
+            "reservation_slot_start": restaurant.reservation_slot_start.strftime('%H:%M'),
+            "reservation_slot_end": restaurant.reservation_slot_end.strftime('%H:%M'),
+        }
     
     def get_restaurant(self, user):
         """Get restaurant for the authenticated user - BULLETPROOF"""
@@ -46,13 +62,7 @@ class RestaurantSettingsView(APIView):
                     "error": "No restaurant found for this user"
                 }, status=status.HTTP_200_OK)  # Return 200 with empty data to prevent UI crash
             
-            return Response({
-                "id": restaurant.id,
-                "resturent_name": getattr(restaurant, 'resturent_name', '') or '',
-                "location": getattr(restaurant, 'location', '') or '',
-                "phone_number": getattr(restaurant, 'phone_number', '') or '',
-                "google_review_url": getattr(restaurant, 'google_review_url', None),
-            })
+            return Response(self.settings_payload(restaurant))
         except Exception as e:
             print(f"RestaurantSettingsView.get error: {e}")
             import traceback
@@ -72,24 +82,70 @@ class RestaurantSettingsView(APIView):
             if not restaurant:
                 return Response({"error": "No restaurant found"}, status=status.HTTP_404_NOT_FOUND)
             
-            google_review_url = request.data.get('google_review_url')
-            
-            # Validate URL format if provided
-            if google_review_url:
-                google_review_url = google_review_url.strip()
-                # Basic validation - should be a google domain
-                if not google_review_url.startswith('http'):
+            updated_fields = []
+
+            if 'google_review_url' in request.data:
+                google_review_url = request.data.get('google_review_url')
+                if google_review_url:
+                    google_review_url = str(google_review_url).strip()
+                    if not google_review_url.startswith(('http://', 'https://')):
+                        return Response(
+                            {"error": "Invalid URL format. Must start with http:// or https://"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                restaurant.google_review_url = google_review_url or None
+                updated_fields.append('google_review_url')
+
+            if 'reservation_duration_minutes' in request.data:
+                try:
+                    duration = int(request.data.get('reservation_duration_minutes'))
+                except (TypeError, ValueError):
                     return Response(
-                        {"error": "Invalid URL format. Must start with http:// or https://"},
-                        status=status.HTTP_400_BAD_REQUEST
+                        {"reservation_duration_minutes": ["Enter a whole number of minutes."]},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
-            
-            restaurant.google_review_url = google_review_url if google_review_url else None
-            restaurant.save()
-            
+                if not 15 <= duration <= 480:
+                    return Response(
+                        {"reservation_duration_minutes": ["Duration must be between 15 and 480 minutes."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                restaurant.reservation_duration_minutes = duration
+                updated_fields.append('reservation_duration_minutes')
+
+            start = restaurant.reservation_slot_start
+            end = restaurant.reservation_slot_end
+            if 'reservation_slot_start' in request.data:
+                start = parse_time(str(request.data.get('reservation_slot_start') or ''))
+                if start is None:
+                    return Response(
+                        {"reservation_slot_start": ["Enter a valid time in HH:MM format."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if 'reservation_slot_end' in request.data:
+                end = parse_time(str(request.data.get('reservation_slot_end') or ''))
+                if end is None:
+                    return Response(
+                        {"reservation_slot_end": ["Enter a valid time in HH:MM format."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if start >= end:
+                return Response(
+                    {"reservation_slot_end": ["Reservation end time must be after the start time."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if 'reservation_slot_start' in request.data:
+                restaurant.reservation_slot_start = start
+                updated_fields.append('reservation_slot_start')
+            if 'reservation_slot_end' in request.data:
+                restaurant.reservation_slot_end = end
+                updated_fields.append('reservation_slot_end')
+
+            if updated_fields:
+                restaurant.save(update_fields=[*updated_fields, 'updated_at'])
+
             return Response({
                 "message": "Settings updated successfully",
-                "google_review_url": restaurant.google_review_url
+                **self.settings_payload(restaurant),
             })
         except Exception as e:
             print(f"RestaurantSettingsView.patch error: {e}")
@@ -132,4 +188,3 @@ class GenerateImageView(APIView):
             return Response({"error": f"Generation Error: {str(e)}"}, status=500)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-

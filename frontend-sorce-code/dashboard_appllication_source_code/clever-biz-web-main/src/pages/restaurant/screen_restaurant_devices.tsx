@@ -42,6 +42,7 @@ const getApiErrorMessage = (error: any, fallback: string) => {
   if (typeof data.detail === "string") return data.detail;
   if (typeof data.error === "string") return data.error;
   if (Array.isArray(data.table_name) && data.table_name[0]) return data.table_name[0];
+  if (Array.isArray(data.capacity) && data.capacity[0]) return data.capacity[0];
   if (typeof data.message === "string") return data.message;
   return fallback;
 };
@@ -90,7 +91,8 @@ export const ScreenRestaurantDevices = () => {
 
   const [formData, setFormData] = useState({
     name: "",
-    area: "Primary"
+    area: "Primary",
+    capacity: "4",
   });
 
   const tableLimit = Number(deviceStats?.table_limit || 0);
@@ -132,7 +134,11 @@ export const ScreenRestaurantDevices = () => {
 
   const openEditModal = (device: any) => {
     setSelectedDevice(device);
-    setFormData({ name: device.table_name || device.name || "", area: device.region || device.area || "Primary" });
+    setFormData({
+      name: device.table_name || device.name || "",
+      area: device.region || device.area || "Primary",
+      capacity: String(device.capacity || 4),
+    });
     setFormError(null);
     setIsEditModalOpen(true);
   };
@@ -151,8 +157,15 @@ export const ScreenRestaurantDevices = () => {
     }
     const tableName = formData.name.trim();
     const area = formData.area.trim() || "Primary";
+    const capacity = Number(formData.capacity);
     if (!tableName) {
       const message = "Please enter a table name.";
+      setFormError(message);
+      toast.error(message);
+      return;
+    }
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100) {
+      const message = "Capacity must be a whole number between 1 and 100.";
       setFormError(message);
       toast.error(message);
       return;
@@ -167,12 +180,13 @@ export const ScreenRestaurantDevices = () => {
       await axiosInstance.post(endpoint, {
         table_name: tableName,
         table_number: deriveTableNumber(tableName),
-        region: area
+        region: area,
+        capacity,
       });
       toast.success("Table created successfully");
       setIsAddModalOpen(false);
       setFormError(null);
-      setFormData({ name: "", area: "Primary" });
+      setFormData({ name: "", area: "Primary", capacity: "4" });
       await Promise.all([fetchAllDevices(1, devicesSearchQuery), fetchDeviceStats()]);
     } catch (error: any) {
       console.error("Create failed", error);
@@ -193,8 +207,15 @@ export const ScreenRestaurantDevices = () => {
     if (!selectedDevice) return;
     const tableName = formData.name.trim();
     const area = formData.area.trim() || "Primary";
+    const capacity = Number(formData.capacity);
     if (!tableName) {
       const message = "Please enter a table name.";
+      setFormError(message);
+      toast.error(message);
+      return;
+    }
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100) {
+      const message = "Capacity must be a whole number between 1 and 100.";
       setFormError(message);
       toast.error(message);
       return;
@@ -205,7 +226,8 @@ export const ScreenRestaurantDevices = () => {
       await axiosInstance.patch(`/owners/devices/${selectedDevice.id}/`, {
         table_name: tableName,
         table_number: deriveTableNumber(tableName),
-        region: area
+        region: area,
+        capacity,
       });
       toast.success("Table updated successfully");
       setIsEditModalOpen(false);
@@ -298,7 +320,7 @@ export const ScreenRestaurantDevices = () => {
                   toast.error("Table limit reached");
                   return;
                 }
-                setFormData({ name: "", area: "Primary" });
+                setFormData({ name: "", area: "Primary", capacity: "4" });
                 setFormError(null);
                 setIsAddModalOpen(true);
               }}
@@ -335,7 +357,7 @@ export const ScreenRestaurantDevices = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900 truncate">{device.name || device.table_name}</p>
-                    <p className="text-xs text-slate-500">{device.region || "Primary"} area</p>
+                    <p className="text-xs text-slate-500">{device.region || "Primary"} area · Capacity {device.capacity || 4}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => openEditModal(device)} className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
@@ -396,6 +418,7 @@ export const ScreenRestaurantDevices = () => {
               <tr>
                 <th className="px-6 py-4">Table Name</th>
                 <th className="px-6 py-4">Area</th>
+                <th className="px-6 py-4">Capacity</th>
                 <th className="px-6 py-4">URL</th>
                 <th className="px-6 py-4 text-center">Action</th>
               </tr>
@@ -406,6 +429,7 @@ export const ScreenRestaurantDevices = () => {
                   <tr key={device.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-slate-900">{device.name || device.table_name}</td>
                     <td className="px-6 py-4 text-slate-600 font-medium">{device.region || "Primary"}</td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">{device.capacity || 4}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <span className="text-xs text-slate-400 truncate max-w-[200px]">
@@ -443,7 +467,7 @@ export const ScreenRestaurantDevices = () => {
                 ))
               ) : devicesError ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center">
+                  <td colSpan={5} className="px-6 py-12 text-center">
                     <p className="text-sm font-medium text-red-600">{devicesError}</p>
                     <button
                       type="button"
@@ -456,7 +480,7 @@ export const ScreenRestaurantDevices = () => {
                 </tr>
               ) : (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
                     No tables found
                   </td>
                 </tr>
@@ -532,6 +556,22 @@ export const ScreenRestaurantDevices = () => {
 	                }
 	              }}
 	            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Guest Capacity</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              value={formData.capacity}
+              onChange={e => {
+                setFormData({ ...formData, capacity: e.target.value });
+                if (formError) setFormError(null);
+              }}
+            />
+            <p className="mt-1.5 text-xs text-slate-400">Used to hide reservation times that cannot seat the party.</p>
           </div>
           {isEditModalOpen && (
             <div>

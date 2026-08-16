@@ -23,6 +23,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings,
   Table2,
   Timer,
   Unlock,
@@ -33,7 +34,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 type TabKey = "reservations" | "tables" | "history";
@@ -77,6 +78,19 @@ type Dialog360Settings = {
   channelId: string;
   callbackUrl: string;
   verifyToken: string;
+  specialPhrases?: {
+    reminder24hTemplate?: string;
+    reminder2hTemplate?: string;
+    followUpTemplate?: string;
+    templateLanguage?: string;
+    [key: string]: unknown;
+  };
+};
+
+type ReservationSettings = {
+  reservation_duration_minutes: number;
+  reservation_slot_start: string;
+  reservation_slot_end: string;
 };
 
 const BRAND = "#0055FE";
@@ -153,6 +167,51 @@ const normaliseDateInput = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const getZonedInputParts = (date: Date, timezone: string) => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
+  );
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+    date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour}:${values.minute}`,
+  };
+};
+
+const timeZoneOffsetMs = (date: Date, timezone: string) => {
+  const parts = getZonedInputParts(date, timezone);
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - date.getTime();
+};
+
+const buildRestaurantDateTime = (date: string, timeValue: string, timezone: string) => {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = timeValue.split(":").map(Number);
+  const wallClockUtc = Date.UTC(year, month - 1, day, hour || 0, minute || 0, 0);
+  let offset = timeZoneOffsetMs(new Date(wallClockUtc), timezone);
+  let instant = wallClockUtc - offset;
+  const refinedOffset = timeZoneOffsetMs(new Date(instant), timezone);
+  if (refinedOffset !== offset) {
+    offset = refinedOffset;
+    instant = wallClockUtc - offset;
+  }
+  return new Date(instant).toISOString();
+};
+
 const parseDateInput = (value: string) => {
   if (!value) return null;
   const [year, month, day] = value.split("-").map(Number);
@@ -221,6 +280,127 @@ const KpiCard = ({ label, value, color }: { label: string; value: number | strin
   </div>
 );
 
+const ReservationSettingsCard = ({
+  onLoaded,
+}: {
+  onLoaded: (settings: ReservationSettings) => void;
+}) => {
+  const [settings, setSettings] = useState<ReservationSettings>({
+    reservation_duration_minutes: 90,
+    reservation_slot_start: "18:00",
+    reservation_slot_end: "22:00",
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    axiosInstance
+      .get("/owners/restaurant-settings/")
+      .then((response) => {
+        if (!mounted) return;
+        const next = {
+          reservation_duration_minutes: Number(response.data?.reservation_duration_minutes) || 90,
+          reservation_slot_start: response.data?.reservation_slot_start || "18:00",
+          reservation_slot_end: response.data?.reservation_slot_end || "22:00",
+        };
+        setSettings(next);
+        onLoaded(next);
+      })
+      .catch(() => {
+        if (mounted) toast.error("Could not load reservation settings");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [onLoaded]);
+
+  const updateSetting = (key: keyof ReservationSettings, value: string) => {
+    setSettings((previous) => ({
+      ...previous,
+      [key]: key === "reservation_duration_minutes" ? Number(value) : value,
+    }));
+  };
+
+  const saveSettings = async () => {
+    const duration = Number(settings.reservation_duration_minutes);
+    if (!Number.isInteger(duration) || duration < 15 || duration > 480) {
+      toast.error("Dining duration must be between 15 and 480 minutes");
+      return;
+    }
+    if (!settings.reservation_slot_start || !settings.reservation_slot_end) {
+      toast.error("Choose both the first and last reservation time");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await axiosInstance.patch("/owners/restaurant-settings/", settings);
+      const next = {
+        reservation_duration_minutes: Number(response.data?.reservation_duration_minutes) || duration,
+        reservation_slot_start: response.data?.reservation_slot_start || settings.reservation_slot_start,
+        reservation_slot_end: response.data?.reservation_slot_end || settings.reservation_slot_end,
+      };
+      setSettings(next);
+      onLoaded(next);
+      toast.success("Reservation settings saved");
+    } catch (error: any) {
+      toast.error(formatApiError(error?.response?.data, "Could not save reservation settings"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0055FE]">
+            <Settings className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Reservation Settings</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              The dining duration is the exact time a table remains occupied. New bookings use these live hours.
+            </p>
+          </div>
+        </div>
+        <div className="grid w-full gap-3 sm:grid-cols-4 lg:max-w-[700px]">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-500">Dining duration</span>
+            <div className="relative">
+              <input
+                type="number"
+                min={15}
+                max={480}
+                step={15}
+                disabled={loading}
+                value={settings.reservation_duration_minutes}
+                onChange={(event) => updateSetting("reservation_duration_minutes", event.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm outline-none focus:border-[#0055FE]"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">min</span>
+            </div>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-500">First slot</span>
+            <input type="time" disabled={loading} value={settings.reservation_slot_start} onChange={(event) => updateSetting("reservation_slot_start", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-500">Last slot</span>
+            <input type="time" disabled={loading} value={settings.reservation_slot_end} onChange={(event) => updateSetting("reservation_slot_end", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+          </label>
+          <button type="button" onClick={saveSettings} disabled={loading || saving} className="h-10 self-end rounded-lg bg-[#0055FE] px-4 text-sm font-semibold text-white hover:bg-[#0047D1] disabled:opacity-60">
+            {saving ? "Saving..." : "Save Settings"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Dialog360StatusCard = ({
   settings,
   loading,
@@ -243,6 +423,10 @@ const Dialog360StatusCard = ({
     channelId: "",
     verifyToken: "",
     apiKey: "",
+    reminder24hTemplate: "",
+    reminder2hTemplate: "",
+    followUpTemplate: "",
+    templateLanguage: "en",
   });
 
   useEffect(() => {
@@ -256,6 +440,10 @@ const Dialog360StatusCard = ({
       channelId: settings?.channelId || "",
       verifyToken: settings?.verifyToken || "",
       apiKey: "",
+      reminder24hTemplate: String(settings?.specialPhrases?.reminder24hTemplate || ""),
+      reminder2hTemplate: String(settings?.specialPhrases?.reminder2hTemplate || ""),
+      followUpTemplate: String(settings?.specialPhrases?.followUpTemplate || ""),
+      templateLanguage: String(settings?.specialPhrases?.templateLanguage || "en"),
     }));
   }, [settings]);
 
@@ -266,7 +454,7 @@ const Dialog360StatusCard = ({
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const payload: Record<string, string | boolean> = {
+      const payload: Record<string, unknown> = {
         provider: "360dialog",
         enabled: form.enabled,
         chatbotEnabled: form.chatbotEnabled,
@@ -275,6 +463,13 @@ const Dialog360StatusCard = ({
         displayNumber: form.displayNumber.trim(),
         channelId: form.channelId.trim(),
         verifyToken: form.verifyToken.trim(),
+        specialPhrases: {
+          ...(settings?.specialPhrases || {}),
+          reminder24hTemplate: form.reminder24hTemplate.trim(),
+          reminder2hTemplate: form.reminder2hTemplate.trim(),
+          followUpTemplate: form.followUpTemplate.trim(),
+          templateLanguage: form.templateLanguage.trim() || "en",
+        },
       };
       if (form.apiKey.trim()) payload.apiKey = form.apiKey.trim();
       const response = await axiosInstance.patch("/owners/whatsapp/360dialog-settings/", payload);
@@ -379,7 +574,26 @@ const Dialog360StatusCard = ({
               <span className="text-xs font-semibold text-slate-500">360dialog API Key</span>
               <input value={form.apiKey} onChange={(event) => updateForm("apiKey", event.target.value)} type="password" placeholder={settings?.configured ? "Leave blank to keep existing key" : "Paste API key"} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
             </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">24-hour reminder template</span>
+              <input value={form.reminder24hTemplate} onChange={(event) => updateForm("reminder24hTemplate", event.target.value)} placeholder="reservation_reminder_24h" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">2-hour reminder template</span>
+              <input value={form.reminder2hTemplate} onChange={(event) => updateForm("reminder2hTemplate", event.target.value)} placeholder="reservation_reminder_2h" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Post-visit template</span>
+              <input value={form.followUpTemplate} onChange={(event) => updateForm("followUpTemplate", event.target.value)} placeholder="reservation_follow_up" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Template language</span>
+              <input value={form.templateLanguage} onChange={(event) => updateForm("templateLanguage", event.target.value)} placeholder="en" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
+            </label>
           </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Use approved 360dialog utility-template names so reminders are delivered after WhatsApp's 24-hour service window.
+          </p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-3">
               <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
@@ -433,6 +647,12 @@ const normalizeReservationRecords = (records: any[], devices: any[]) =>
     const table = (devices || []).find((device: any) => Number(device.id) === tableId) as any;
     return {
       ...reservation,
+      customerName: reservation.customerName || reservation.customer_name || "Guest",
+      guestNo: Number(reservation.guestNo ?? reservation.guestCount ?? reservation.guest_no ?? 0),
+      cellNumber: reservation.cellNumber || reservation.phone || reservation.cell_number || "",
+      reservationTime: reservation.reservationTime || reservation.reservation_time,
+      endTime: reservation.endTime || reservation.end_time,
+      customRequest: reservation.customRequest || reservation.custom_request || "",
       statusKey: status,
       sourceKey: sourceConfig[source] ? source : "dashboard",
       tableId,
@@ -453,24 +673,22 @@ const normalizeReservationRecords = (records: any[], devices: any[]) =>
     };
   });
 
-const buildLocalDateTime = (date: string, timeValue: string) => {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = timeValue.split(":").map(Number);
-  return new Date(year, month - 1, day, hour || 0, minute || 0).toISOString();
-};
-
-const makeDefaultCreateForm = (date: Date | null, mode: CreateMode): CreateReservationForm => {
-  const nowDate = new Date();
-  const base = mode === "walk_in" ? nowDate : date || nowDate;
+const makeDefaultCreateForm = (
+  date: Date | null,
+  mode: CreateMode,
+  timezone: string,
+  durationMinutes = 90,
+): CreateReservationForm => {
+  const nowParts = getZonedInputParts(new Date(), timezone);
   return {
     customerName: "",
     phone: "",
     email: "",
     tableId: "",
-    date: normaliseDateInput(base),
-    time: `${String(base.getHours()).padStart(2, "0")}:${String(base.getMinutes()).padStart(2, "0")}`,
+    date: mode === "walk_in" ? nowParts.date : date ? normaliseDateInput(date) : nowParts.date,
+    time: nowParts.time,
     guestCount: "2",
-    durationMinutes: "90",
+    durationMinutes: String(durationMinutes),
     customRequest: "",
   };
 };
@@ -481,7 +699,6 @@ const ScreenRestaurantReservations = () => {
   const { userRole } = useRole();
   const {
     reservations,
-    reservationsCount,
     reservationsCurrentPage,
     reservationsSearchQuery,
     reservationStatusReport,
@@ -504,7 +721,14 @@ const ScreenRestaurantReservations = () => {
   const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [createMode, setCreateMode] = useState<CreateMode | null>(null);
-  const [createForm, setCreateForm] = useState<CreateReservationForm>(() => makeDefaultCreateForm(new Date(), "reservation"));
+  const [reservationSettings, setReservationSettings] = useState<ReservationSettings>({
+    reservation_duration_minutes: 90,
+    reservation_slot_start: "18:00",
+    reservation_slot_end: "22:00",
+  });
+  const [createForm, setCreateForm] = useState<CreateReservationForm>(() =>
+    makeDefaultCreateForm(new Date(), "reservation", timezone),
+  );
   const [actionLoading, setActionLoading] = useState(false);
   const [areaFilter, setAreaFilter] = useState("All Areas");
   const [historySearch, setHistorySearch] = useState("");
@@ -513,6 +737,7 @@ const ScreenRestaurantReservations = () => {
   const [historyStart, setHistoryStart] = useState("");
   const [historyEnd, setHistoryEnd] = useState("");
   const [historyReservations, setHistoryReservations] = useState<any[]>([]);
+  const [dayReservations, setDayReservations] = useState<any[] | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
@@ -605,9 +830,50 @@ const ScreenRestaurantReservations = () => {
     };
   }, []);
 
+  const loadDayReservations = useCallback(async () => {
+    if (!selectedDate || !userRole) {
+      setDayReservations([]);
+      return;
+    }
+    try {
+      const response = await axiosInstance.get(`${getReservationBase(userRole)}/`, {
+        params: {
+          date: normaliseDateInput(selectedDate),
+          page_size: 1000,
+        },
+      });
+      const payload = response.data;
+      setDayReservations(
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.results)
+            ? payload.results
+            : [],
+      );
+    } catch {
+      setDayReservations(null);
+    }
+  }, [selectedDate, userRole]);
+
+  const reservationRefreshSignature = useMemo(
+    () => (reservations || []).map((reservation: any) => `${reservation.id}:${reservation.status}:${reservation.updatedAt || reservation.updated_at || ""}`).join("|"),
+    [reservations],
+  );
+
+  useEffect(() => {
+    void loadDayReservations();
+  }, [loadDayReservations, reservationRefreshSignature]);
+
   const normalizedReservations = useMemo(
     () => normalizeReservationRecords(reservations || [], allDevices || []),
     [allDevices, reservations],
+  );
+
+  const normalizedDayReservations = useMemo(
+    () => dayReservations === null
+      ? normalizedReservations
+      : normalizeReservationRecords(dayReservations, allDevices || []),
+    [allDevices, dayReservations, normalizedReservations],
   );
 
   const normalizedHistoryReservations = useMemo(
@@ -616,16 +882,21 @@ const ScreenRestaurantReservations = () => {
   );
 
   const filteredReservations = useMemo(() => {
-    return normalizedReservations.filter((reservation) => {
+    return normalizedDayReservations.filter((reservation) => {
       if (statusFilter !== "all" && filterToStatus(reservation.statusKey) !== statusFilter) return false;
+      const query = debouncedSearchQuery.trim().toLowerCase();
+      if (query) {
+        const haystack = `${reservation.id || ""} ${reservation.customerName || ""} ${reservation.cellNumber || ""} ${reservation.tableName || ""}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
       return true;
     });
-  }, [normalizedReservations, statusFilter]);
+  }, [debouncedSearchQuery, normalizedDayReservations, statusFilter]);
 
-  const todaysReservations = normalizedReservations;
+  const todaysReservations = normalizedDayReservations;
   const counts = useMemo(() => {
     const base = {
-      all: normalizedReservations.length,
+      all: normalizedDayReservations.length,
       pending: 0,
       confirmed: 0,
       seated: 0,
@@ -634,13 +905,13 @@ const ScreenRestaurantReservations = () => {
       no_show: 0,
       whatsapp: 0,
     };
-    normalizedReservations.forEach((reservation) => {
+    normalizedDayReservations.forEach((reservation) => {
       const status = filterToStatus(reservation.statusKey);
       if (status in base) base[status as keyof typeof base] += 1;
       if (reservation.sourceKey === "whatsapp") base.whatsapp += 1;
     });
     return base;
-  }, [normalizedReservations]);
+  }, [normalizedDayReservations]);
 
   const areas = useMemo(() => {
     const set = new Set<string>(["All Areas"]);
@@ -652,7 +923,7 @@ const ScreenRestaurantReservations = () => {
     return (allDevices || [])
       .filter((device: any) => areaFilter === "All Areas" || (device.region || device.area || "Primary") === areaFilter)
       .map((device: any) => {
-        const deviceReservations = normalizedReservations
+        const deviceReservations = normalizedDayReservations
           .filter((reservation) => Number(reservation.tableId) === Number(device.id))
           .sort((a, b) => new Date(a.reservationTime).getTime() - new Date(b.reservationTime).getTime());
         const current = deviceReservations.find((reservation) => ["seated", "extended"].includes(reservation.statusKey));
@@ -661,12 +932,46 @@ const ScreenRestaurantReservations = () => {
         const tableStatus = action === "hold" ? "unavailable" : current ? "occupied" : next ? "reserved" : "available";
         return { device, current, next, tableStatus };
       });
-  }, [allDevices, areaFilter, normalizedReservations]);
+  }, [allDevices, areaFilter, normalizedDayReservations]);
 
-  const availableWalkInTables = useMemo(
-    () => tableRows.filter((row) => row.tableStatus === "available").map((row) => row.device),
-    [tableRows],
-  );
+  const availableWalkInTables = useMemo(() => {
+    let walkInStart = Date.now();
+    try {
+      walkInStart = new Date(
+        buildRestaurantDateTime(createForm.date, createForm.time, timezone),
+      ).getTime();
+    } catch {
+      // The form validation will report an invalid date or time before submit.
+    }
+    const duration = Number(createForm.durationMinutes) || reservationSettings.reservation_duration_minutes || 90;
+    const walkInEnd = walkInStart + duration * 60_000;
+    const guests = Number(createForm.guestCount) || 1;
+    const occupyingStatuses = new Set(["confirmed", "accept", "overdue", "seated", "extended"]);
+
+    return (allDevices || []).filter((device: any) => {
+      if (String(device.action || "active").toLowerCase() !== "active") return false;
+      if (Number(device.capacity || 0) < guests) return false;
+      return !normalizedDayReservations.some((reservation: any) => {
+        if (Number(reservation.tableId) !== Number(device.id)) return false;
+        if (!occupyingStatuses.has(String(reservation.status || "").toLowerCase())) return false;
+        const start = new Date(reservation.reservationTime).getTime();
+        const fallbackDuration = Number(reservation.durationMinutes || reservation.duration_minutes || 90);
+        const end = reservation.endTime
+          ? new Date(reservation.endTime).getTime()
+          : start + fallbackDuration * 60_000;
+        return start < walkInEnd && end > walkInStart;
+      });
+    });
+  }, [
+    allDevices,
+    createForm.date,
+    createForm.durationMinutes,
+    createForm.guestCount,
+    createForm.time,
+    normalizedDayReservations,
+    reservationSettings.reservation_duration_minutes,
+    timezone,
+  ]);
 
   const historyRows = useMemo(() => {
     return normalizedHistoryReservations.filter((reservation) => {
@@ -717,7 +1022,14 @@ const ScreenRestaurantReservations = () => {
   };
 
   const openCreateDialog = (mode: CreateMode) => {
-    setCreateForm(makeDefaultCreateForm(selectedDate, mode));
+    setCreateForm(
+      makeDefaultCreateForm(
+        selectedDate,
+        mode,
+        timezone,
+        reservationSettings.reservation_duration_minutes,
+      ),
+    );
     setCreateMode(mode);
   };
 
@@ -738,7 +1050,7 @@ const ScreenRestaurantReservations = () => {
     }
     setActionLoading(true);
     try {
-      const reservationTime = buildLocalDateTime(createForm.date, createForm.time);
+      const reservationTime = buildRestaurantDateTime(createForm.date, createForm.time, timezone);
       await axiosInstance.post(`${getReservationBase(userRole)}/`, {
         customerName: createForm.customerName.trim() || "Walk-in Guest",
         phone: createForm.phone.trim() || "Not provided",
@@ -764,7 +1076,10 @@ const ScreenRestaurantReservations = () => {
 
   const refreshReservationData = async () => {
     const dateString = selectedDate ? normaliseDateInput(selectedDate) : undefined;
-    await fetchReservations(reservationsCurrentPage, debouncedSearchQuery, dateString);
+    await Promise.all([
+      fetchReservations(reservationsCurrentPage, debouncedSearchQuery, dateString),
+      loadDayReservations(),
+    ]);
   };
 
   const runReservationAction = async (reservation: any, action: string, body: Record<string, any> = {}) => {
@@ -809,18 +1124,19 @@ const ScreenRestaurantReservations = () => {
 
   const editReservationTime = async (reservation: any) => {
     const current = new Date(reservation.reservationTime);
-    const date = window.prompt("New reservation date (YYYY-MM-DD)", normaliseDateInput(current));
+    const currentParts = getZonedInputParts(current, timezone);
+    const date = window.prompt("New reservation date (YYYY-MM-DD)", currentParts.date);
     if (!date) return;
     const time = window.prompt(
       "New reservation time (HH:MM)",
-      `${String(current.getHours()).padStart(2, "0")}:${String(current.getMinutes()).padStart(2, "0")}`,
+      currentParts.time,
     );
     if (!time) return;
     setOpenMenuId(null);
     setActionLoading(true);
     try {
       await axiosInstance.patch(`${getReservationBase(userRole)}/${reservation.id}/`, {
-        reservationTime: buildLocalDateTime(date, time),
+        reservationTime: buildRestaurantDateTime(date, time, timezone),
       });
       toast.success("Reservation date and time updated");
       setSelectedReservation(null);
@@ -896,6 +1212,7 @@ const ScreenRestaurantReservations = () => {
         <KpiCard label="WhatsApp Requests" value={counts.whatsapp} color="bg-[#25D366]" />
       </div>
 
+      <ReservationSettingsCard onLoaded={setReservationSettings} />
       <Dialog360StatusCard settings={dialog360Settings} loading={dialog360Loading} onSaved={setDialog360Settings} />
 
       <div className="mb-6">
@@ -1116,13 +1433,8 @@ const ScreenRestaurantReservations = () => {
             }) : <div className="p-12 text-center text-sm text-slate-500">No reservations found</div>}
           </div>
 
-          <div className="flex items-center justify-between py-6 text-sm text-slate-500">
-            <span>{filteredReservations.length} of {reservationsCount || normalizedReservations.length} reservations</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setReservationsCurrentPage(Math.max(1, reservationsCurrentPage - 1))} disabled={reservationsCurrentPage === 1} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">Previous</button>
-              <span className="rounded-lg border border-transparent px-3 py-1.5 text-xs font-medium text-slate-500">Page {reservationsCurrentPage}</span>
-              <button type="button" onClick={() => setReservationsCurrentPage(reservationsCurrentPage + 1)} disabled={normalizedReservations.length < 10} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">Next</button>
-            </div>
+          <div className="py-6 text-sm text-slate-500">
+            {filteredReservations.length} of {normalizedDayReservations.length} reservations
           </div>
         </div>
       )}

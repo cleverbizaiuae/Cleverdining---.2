@@ -31,6 +31,11 @@ class DeviceSerializer(serializers.ModelSerializer):
             pass
         return None
 
+    def validate_capacity(self, value):
+        if not 1 <= value <= 100:
+            raise serializers.ValidationError("Capacity must be between 1 and 100.")
+        return value
+
     def get_table_url(self, obj):
         try:
             if not getattr(obj, 'restaurant_id', None):
