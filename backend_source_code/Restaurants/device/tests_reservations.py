@@ -181,3 +181,26 @@ class ReservationRuleTests(TestCase):
         send_template.assert_called_once()
         self.assertEqual(send_template.call_args.args[2], 'reservation_reminder_24h')
         send_text.assert_not_called()
+
+    @patch('device.management.commands.process_reservations.send_360dialog_text', return_value=True)
+    @patch('device.management.commands.process_reservations.send_360dialog_template', return_value=True)
+    def test_follow_up_template_receives_restaurant_name(self, send_template, send_text):
+        self.restaurant.whatsapp_special_phrases = {
+            'followUpTemplate': 'reservation_follow_up',
+            'templateLanguage': 'en',
+        }
+        self.restaurant.save(update_fields=['whatsapp_special_phrases'])
+        create_for_available_table(
+            restaurant=self.restaurant,
+            reservation_time=timezone.now() - timedelta(hours=21),
+            guest_no=2,
+            status='finished',
+            **{key: value for key, value in self._values('Follow-up Guest', '+971500000017').items() if key != 'status'},
+        )
+
+        process_reservations()
+
+        send_template.assert_called_once()
+        self.assertEqual(send_template.call_args.args[2], 'reservation_follow_up')
+        self.assertEqual(send_template.call_args.kwargs['body_parameters'], [self.restaurant.resturent_name])
+        send_text.assert_not_called()

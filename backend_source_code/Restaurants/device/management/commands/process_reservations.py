@@ -125,6 +125,7 @@ def process_reservations(now=None):
                 reservation,
                 'followUpTemplate',
                 body,
+                [reservation.restaurant.resturent_name],
             ):
                 reservation.follow_up_sent_at = current
                 reservation.save(update_fields=['follow_up_sent_at', 'updated_at'])
