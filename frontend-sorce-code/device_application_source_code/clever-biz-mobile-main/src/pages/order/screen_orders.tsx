@@ -35,6 +35,7 @@ import {
   shouldRemoveFromActiveOrders,
 } from "./order-lifecycle";
 import { GameHub } from "@/components/Games";
+import { useOnlinePaymentAvailability } from "@/hooks/useOnlinePaymentAvailability";
 
 type BackendOrderItem = {
   id?: number;
@@ -256,6 +257,8 @@ const ScreenOrders = () => {
   const ordersStorageKey = tableInfo.ordersStorageKey;
   const treatKey = tableInfo.treatStorageKey;
   const chatStorageKey = tableInfo.chatStorageKey;
+  const { available: onlinePaymentAvailable, loading: onlinePaymentLoading } =
+    useOnlinePaymentAvailability(tableInfo.restaurantId);
 
   const [orders, setOrders] = useState<Order[]>(() => readStoredOrders(ordersStorageKey));
   const [loading, setLoading] = useState(orders.length === 0);
@@ -267,7 +270,7 @@ const ScreenOrders = () => {
   const [selectedItemKeys, setSelectedItemKeys] = useState<Set<string>>(new Set());
   const [tipType, setTipType] = useState<TipOption>("none");
   const [customTipInput, setCustomTipInput] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
 
@@ -284,6 +287,12 @@ const ScreenOrders = () => {
   const paymentCompletionStartedRef = useRef(false);
   const [highlightedOrderIds, setHighlightedOrderIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"list" | "games">("list");
+
+  useEffect(() => {
+    if (!onlinePaymentLoading && !onlinePaymentAvailable && paymentMethod !== "cash") {
+      setPaymentMethod("cash");
+    }
+  }, [onlinePaymentAvailable, onlinePaymentLoading, paymentMethod]);
 
   const chwaziPointersRef = useRef<Map<number, ChwaziPointer>>(new Map());
   const chwaziIntervalRef = useRef<number | null>(null);
@@ -1304,9 +1313,9 @@ const ScreenOrders = () => {
                       <p className={SECTION_LABEL_CLASS}>Payment Method</p>
                       <div className={`grid gap-2 ${isAndroid ? "grid-cols-3" : "grid-cols-2"}`}>
                         {[
-                          { id: "card", label: "Card" },
+                          ...(onlinePaymentAvailable ? [{ id: "card", label: "Card" }] : []),
                           { id: "cash", label: "Cash" },
-                          ...(isAndroid ? [{ id: "googlepay", label: "G Pay" }] : []),
+                          ...(isAndroid && onlinePaymentAvailable ? [{ id: "googlepay", label: "G Pay" }] : []),
                         ].map((method) => {
                           const isActive = paymentMethod === method.id;
                           return (
@@ -1331,6 +1340,11 @@ const ScreenOrders = () => {
                           );
                         })}
                       </div>
+                      {!onlinePaymentLoading && !onlinePaymentAvailable && (
+                        <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                          Online payment is unavailable until this restaurant connects a payment provider. Please choose cash.
+                        </p>
+                      )}
                     </div>
                   </div>
 

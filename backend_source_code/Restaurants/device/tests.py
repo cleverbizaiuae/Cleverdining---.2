@@ -119,6 +119,23 @@ class DeviceListErrorTests(TestCase):
         self.assertNotIn("whatsapp_provider", sql)
         self.assertNotIn("whatsapp_360dialog_channel_id", sql)
 
+    @patch("device.views._send_device_credentials_email_async")
+    @patch("device.models.Device.generate_qr_code")
+    def test_optional_area_stays_blank_when_omitted(self, _generate_qr, _send_email):
+        client = APIClient()
+        client.force_authenticate(self.owner)
+
+        response = client.post(
+            "/owners/devices/",
+            {"table_name": "Area Optional", "table_number": "12", "capacity": 4},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        device = Device.objects.get(table_name="Area Optional")
+        self.assertEqual(device.region, "")
+        self.assertEqual(response.json()["region"], "")
+
 
 class ResolveTableSessionIsolationTests(TestCase):
     def setUp(self):

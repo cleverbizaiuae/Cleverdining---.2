@@ -137,6 +137,11 @@ const getPaymentInfo = (order: any) => {
   };
 };
 
+const isTerminalPaidOrder = (order: any) => {
+  const info = getPaymentInfo(order);
+  return info.isFullyPaid && ["delivered", "completed"].includes(info.fulfillmentStatus);
+};
+
 const ScreenRestaurantOrderList = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -622,8 +627,10 @@ const ScreenRestaurantOrderList = () => {
                 <div className="flex items-center justify-between gap-3">
                   <select
                     value={order.status.toLowerCase()}
+                    disabled={isTerminalPaidOrder(order)}
                     onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                    className={`min-w-0 flex-1 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold uppercase outline-none ${getStatusColor(order.status)}`}
+                    title={isTerminalPaidOrder(order) ? "Paid delivered orders are final" : "Update order status"}
+                    className={`min-w-0 flex-1 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold uppercase outline-none disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(order.status)}`}
                   >
                     <option value="pending" className="text-yellow-600">Pending</option>
                     <option value="preparing" className="text-orange-600">Preparing</option>
@@ -697,8 +704,10 @@ const ScreenRestaurantOrderList = () => {
                       {/* STATUS DROPDOWN */}
                       <select
                         value={order.status.toLowerCase()}
+                        disabled={isTerminalPaidOrder(order)}
                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                        className={`text-xs font-semibold uppercase bg-slate-50 border-none outline-none cursor-pointer ${getStatusColor(order.status)}`}
+                        title={isTerminalPaidOrder(order) ? "Paid delivered orders are final" : "Update order status"}
+                        className={`text-xs font-semibold uppercase bg-slate-50 border-none outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(order.status)}`}
                       >
                         <option value="pending" className="text-yellow-600">Pending</option>
                         <option value="preparing" className="text-orange-600">Preparing</option>
@@ -717,7 +726,7 @@ const ScreenRestaurantOrderList = () => {
                         >
                           <Eye size={16} />
                         </button>
-                        <div className="relative">
+                        {!isTerminalPaidOrder(order) && <div className="relative">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -736,7 +745,7 @@ const ScreenRestaurantOrderList = () => {
                               <button onClick={() => { handleStatusChange(order.id, 'cancelled'); setOpenActionMenuId(null); }} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel Order</button>
                             </div>
                           )}
-                        </div>
+                        </div>}
                       </div>
                     </td>
                   </tr>

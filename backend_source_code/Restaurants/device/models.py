@@ -13,7 +13,7 @@ from datetime import timedelta
 
 class Device(models.Model):
     table_name = models.CharField(max_length=50)
-    region = models.CharField(max_length=50, default='Primary', blank=True)
+    region = models.CharField(max_length=50, default='', blank=True)
     table_number = models.CharField(max_length=20, null=True, blank=True)  # New field for table identifier
     capacity = models.PositiveIntegerField(default=4)
     uuid = models.UUIDField(default=uuid_lib.uuid4, editable=False, unique=True)

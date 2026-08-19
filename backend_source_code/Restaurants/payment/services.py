@@ -74,8 +74,8 @@ def _mark_order_payment_progress(order, paid_amount):
         order.payment_status = 'paid'
         if order.status == 'awaiting_payment':
             order.status = 'pending'
-        elif order.status not in {'cancelled', 'completed'}:
-            order.status = 'delivered'
+        elif order.status == 'awaiting_cash':
+            order.status = 'served'
     elif paid > PAYMENT_EPSILON:
         order.payment_status = 'partially_paid'
         if order.status == 'awaiting_cash':
@@ -126,8 +126,8 @@ def settle_bulk_split_payment(payment):
             order.payment_status = 'paid'
             if order.status == 'awaiting_payment':
                 order.status = 'pending'
-            elif order.status not in {'cancelled', 'completed'}:
-                order.status = 'delivered'
+            elif order.status == 'awaiting_cash':
+                order.status = 'served'
         else:
             order.amount_paid = min(order_total, _q_money(order_total * paid_ratio))
             order.payment_status = 'partially_paid' if order.amount_paid > PAYMENT_EPSILON else 'unpaid'
@@ -308,13 +308,32 @@ class PaymentService:
                 is_enabled=True,
             ).first()
 
+        # Generic "card" checkout should use any active configured provider,
+        # rather than getting stuck on an empty default gateway record.
+        if not explicit_requested:
+            candidates = PaymentGateway.objects.filter(
+                restaurant=restaurant,
+                provider__in=list(allowed),
+                is_active=True,
+                is_enabled=True,
+            ).order_by("provider")
+            configured_gateway = next(
+                (candidate for candidate in candidates if candidate.has_credentials()),
+                None,
+            )
+            if configured_gateway:
+                gateway = configured_gateway
+
         # Legacy fallback for StripeDetails-backed setups.
         if not gateway and (not resolved_provider or resolved_provider == 'stripe'):
              try:
                 stripe_details = StripeDetails.objects.get(restaurant=restaurant)
+                secret_key = stripe_details.get_decrypted_secret_key()
+                if not str(secret_key or "").strip():
+                    raise StripeDetails.DoesNotExist
                 class LegacyGateway:
                     def get_decrypted_secret(self):
-                        return stripe_details.get_decrypted_secret_key()
+                        return secret_key
                 return StripeAdapter(LegacyGateway())
              except StripeDetails.DoesNotExist:
                 pass
@@ -322,6 +341,11 @@ class PaymentService:
         if not gateway:
             raise ValidationError(
                 f"No active payment gateway found for provider: {resolved_provider or 'any'}"
+            )
+
+        if not gateway.has_credentials():
+            raise ValidationError(
+                "Online payments are not configured for this restaurant. Please choose cash or ask staff for help."
             )
             
         adapter_class = PaymentService.ADAPTERS.get(gateway.provider)

@@ -43,6 +43,7 @@ import {
   toSafeNumber,
 } from "../utils/pricing";
 import { shouldShowReviewOrderModal } from "./cart-review";
+import { useOnlinePaymentAvailability } from "../hooks/useOnlinePaymentAvailability";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -110,6 +111,14 @@ const ScreenCart = () => {
   const tableInfo = useMemo(() => getTableIdentity(), []);
   const brandConfig = useActiveBrandConfig();
   const payBeforeOrder = brandConfig.payBeforeOrder;
+  const { available: onlinePaymentAvailable, loading: onlinePaymentLoading } =
+    useOnlinePaymentAvailability(tableInfo.restaurantId);
+
+  useEffect(() => {
+    if (!onlinePaymentLoading && !onlinePaymentAvailable && paymentMethod === "card") {
+      setPaymentMethod("cash");
+    }
+  }, [onlinePaymentAvailable, onlinePaymentLoading, paymentMethod]);
 
   const getCategoryKey = (item: CartItem): string => {
     if (Number.isInteger(item.category) && item.category > 0) {
@@ -992,10 +1001,6 @@ const ScreenCart = () => {
                   <MapPin className="w-3 h-3" strokeWidth={1.8} />
                   Table {tableNumber}
                 </span>
-                <span className="flex items-center gap-1 bg-primary/8 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
-                  <Clock3 className="w-3 h-3" strokeWidth={1.8} />
-                  ~15–20 min
-                </span>
               </div>
             </div>
 
@@ -1049,7 +1054,7 @@ const ScreenCart = () => {
                 <div className="shrink-0 space-y-1.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Payment Method</p>
                   <div className="flex gap-2">
-                    {(["card", "cash"] as const).map((method) => (
+                    {([...(onlinePaymentAvailable ? ["card" as const] : []), "cash" as const]).map((method) => (
                       <button
                         key={method}
                         onClick={() => setPaymentMethod(method)}
@@ -1073,6 +1078,11 @@ const ScreenCart = () => {
                       </button>
                     ))}
                   </div>
+                  {!onlinePaymentLoading && !onlinePaymentAvailable && (
+                    <p className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] font-medium text-amber-700">
+                      Online payment is unavailable until this restaurant connects a payment provider.
+                    </p>
+                  )}
                 </div>
               )}
 

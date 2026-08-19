@@ -463,6 +463,35 @@ class PaymentCompletionNavigationTests(TestCase):
         self.assertEqual(self.order.status, "awaiting_cash")
         self.assertEqual(self.order.payment_status, "pending_cash")
 
+    def test_cash_confirmation_preserves_preparing_status(self):
+        self.order.status = "preparing"
+        self.order.save(update_fields=["status", "updated_time"])
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.patch(f"/owners/orders/confirm-cash/{self.order.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, "paid")
+        self.assertEqual(self.order.status, "preparing")
+
+    def test_paid_delivered_order_cannot_be_cancelled(self):
+        self.order.status = "delivered"
+        self.order.payment_status = "paid"
+        self.order.amount_paid = self.order.total_price
+        self.order.save(update_fields=["status", "payment_status", "amount_paid", "updated_time"])
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.patch(
+            f"/owners/orders/status/{self.order.id}/",
+            {"status": "cancelled"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "delivered")
+
     def test_paid_order_can_be_polled_for_completion_transition(self):
         self.order.payment_status = "paid"
         self.order.status = "delivered"

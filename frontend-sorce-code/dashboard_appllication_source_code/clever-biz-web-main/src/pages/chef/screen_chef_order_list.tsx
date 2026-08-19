@@ -121,6 +121,10 @@ const ScreenChefOrderList = () => {
     }
   };
 
+  const isTerminalPaidOrder = (order: any) =>
+    String(order.payment_status || "").toLowerCase() === "paid" &&
+    ["delivered", "completed"].includes(String(order.status || "").toLowerCase());
+
   return (
     <div className="flex flex-col gap-6">
 
@@ -223,8 +227,10 @@ const ScreenChefOrderList = () => {
                       {/* STATUS DROPDOWN */}
                       <select
                         value={order.status.toLowerCase()}
+                        disabled={isTerminalPaidOrder(order)}
                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                        className={`text-xs font-semibold uppercase bg-slate-50 border-none outline-none cursor-pointer ${getStatusColor(order.status)}`}
+                        title={isTerminalPaidOrder(order) ? "Paid delivered orders are final" : "Update order status"}
+                        className={`text-xs font-semibold uppercase bg-slate-50 border-none outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(order.status)}`}
                       >
                         <option value="pending" className="text-yellow-600">Pending</option>
                         <option value="preparing" className="text-orange-600">Preparing</option>
@@ -241,7 +247,7 @@ const ScreenChefOrderList = () => {
                         >
                           <Eye size={16} />
                         </button>
-                        <div className="relative group">
+                        {!isTerminalPaidOrder(order) && <div className="relative group">
                           <button className="text-[#0055FE] hover:bg-[#0055FE]/10 p-1.5 rounded transition-colors">
                             <MoreHorizontal size={16} />
                           </button>
@@ -249,7 +255,7 @@ const ScreenChefOrderList = () => {
                             <button onClick={() => handleStatusChange(order.id, 'delivered')} className="block w-full text-left px-3 py-2 text-xs text-green-600 hover:bg-slate-50">Deliver</button>
                             <button onClick={() => handleStatusChange(order.id, 'cancelled')} className="block w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-slate-50">Cancel</button>
                           </div>
-                        </div>
+                        </div>}
                       </div>
                     </td>
                   </tr>

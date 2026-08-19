@@ -91,7 +91,7 @@ export const ScreenRestaurantDevices = () => {
 
   const [formData, setFormData] = useState({
     name: "",
-    area: "Primary",
+    area: "",
     capacity: "4",
   });
 
@@ -136,7 +136,7 @@ export const ScreenRestaurantDevices = () => {
     setSelectedDevice(device);
     setFormData({
       name: device.table_name || device.name || "",
-      area: device.region || device.area || "Primary",
+      area: device.region || device.area || "",
       capacity: String(device.capacity || 4),
     });
     setFormError(null);
@@ -156,7 +156,7 @@ export const ScreenRestaurantDevices = () => {
       return;
     }
     const tableName = formData.name.trim();
-    const area = formData.area.trim() || "Primary";
+    const area = formData.area.trim();
     const capacity = Number(formData.capacity);
     if (!tableName) {
       const message = "Please enter a table name.";
@@ -186,7 +186,7 @@ export const ScreenRestaurantDevices = () => {
       toast.success("Table created successfully");
       setIsAddModalOpen(false);
       setFormError(null);
-      setFormData({ name: "", area: "Primary", capacity: "4" });
+      setFormData({ name: "", area: "", capacity: "4" });
       await Promise.all([fetchAllDevices(1, devicesSearchQuery), fetchDeviceStats()]);
     } catch (error: any) {
       console.error("Create failed", error);
@@ -206,7 +206,7 @@ export const ScreenRestaurantDevices = () => {
   const handleEditSubmit = async () => {
     if (!selectedDevice) return;
     const tableName = formData.name.trim();
-    const area = formData.area.trim() || "Primary";
+    const area = formData.area.trim();
     const capacity = Number(formData.capacity);
     if (!tableName) {
       const message = "Please enter a table name.";
@@ -320,7 +320,7 @@ export const ScreenRestaurantDevices = () => {
                   toast.error("Table limit reached");
                   return;
                 }
-                setFormData({ name: "", area: "Primary", capacity: "4" });
+                setFormData({ name: "", area: "", capacity: "4" });
                 setFormError(null);
                 setIsAddModalOpen(true);
               }}
@@ -357,7 +357,7 @@ export const ScreenRestaurantDevices = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900 truncate">{device.name || device.table_name}</p>
-                    <p className="text-xs text-slate-500">{device.region || "Primary"} area · Capacity {device.capacity || 4}</p>
+                    <p className="text-xs text-slate-500">{device.region ? `${device.region} area · ` : ""}Capacity {device.capacity || 4}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => openEditModal(device)} className="p-2 text-[#0055FE] hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
@@ -428,7 +428,7 @@ export const ScreenRestaurantDevices = () => {
                 allDevices.map((device: any) => (
                   <tr key={device.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-slate-900">{device.name || device.table_name}</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">{device.region || "Primary"}</td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">{device.region || "—"}</td>
                     <td className="px-6 py-4 text-slate-600 font-medium">{device.capacity || 4}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">

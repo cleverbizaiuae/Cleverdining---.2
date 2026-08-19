@@ -356,14 +356,9 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               </h3>
 
               {/* Meta Info Row */}
-              <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center text-sm text-muted-foreground">
                 <span className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                   Popular
-                </span>
-                <span className="w-1 h-1 bg-muted-foreground/40 rounded-full" />
-                <span className="flex items-center gap-1">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  20-30 min
                 </span>
               </div>
 
@@ -404,7 +399,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 onClick={handleAddToCart}
                 disabled={isAddingToCart || !hasValidItem}
                 className={cn(
-                  "flex h-14 min-w-0 flex-1 items-center justify-center gap-2 truncate rounded-full px-4 text-sm font-bold text-white shadow-xl transition-transform active:scale-[0.98] sm:h-16 sm:text-base",
+                  "flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 text-sm font-bold text-white shadow-xl transition-transform active:scale-[0.98] sm:h-16 sm:px-4 sm:text-base",
                   isAddingToCart
                     ? "bg-emerald-500 shadow-xl shadow-emerald-500/25 scale-[1.01]"
                     : !hasValidItem
@@ -420,15 +415,17 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 ) : (
                   <>
                     <ShoppingBag className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={1.8} />
-                    <span className="truncate px-1 font-semibold whitespace-nowrap">{hasValidItem ? "Add" : "Loading"}</span>
-                    <span className="text-sm sm:text-base font-bold whitespace-nowrap">
-                      {currencyCode} {getLineTotal({ price: effectiveUnitPrice }, quantity).toFixed(2)}
-                    </span>
-                    {hasDiscount && (
-                      <span className="text-xs font-semibold text-white/70 line-through">
-                        {currencyCode} {(originalUnitPrice * quantity).toFixed(2)}
+                    <span className="shrink-0 font-semibold whitespace-nowrap">{hasValidItem ? "Add" : "Loading"}</span>
+                    <span className="flex min-w-0 flex-col items-end leading-tight">
+                      <span className="whitespace-nowrap text-sm font-bold sm:text-base">
+                        {currencyCode} {getLineTotal({ price: effectiveUnitPrice }, quantity).toFixed(2)}
                       </span>
-                    )}
+                      {hasDiscount && (
+                        <span className="whitespace-nowrap text-[10px] font-semibold text-white/70 line-through sm:text-xs">
+                          {currencyCode} {(originalUnitPrice * quantity).toFixed(2)}
+                        </span>
+                      )}
+                    </span>
                   </>
                 )}
               </button>

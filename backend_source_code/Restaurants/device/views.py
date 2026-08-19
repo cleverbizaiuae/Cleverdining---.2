@@ -402,7 +402,7 @@ def _device_response(device, username=None):
         "table_name": device.table_name or "",
         "table_number": device.table_number or "",
         "capacity": device.capacity,
-        "region": device.region or "Primary",
+        "region": device.region or "",
         "restaurant": restaurant_id,
         "restaurant_id": restaurant_id,
         "restaurant_name": restaurant_name,
@@ -532,7 +532,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             if not table_name:
                 raise serializers.ValidationError({"table_name": "Table name is required."})
 
-            region = _normalize_table_value(serializer.validated_data.get("region"), "Primary") or "Primary"
+            region = _normalize_table_value(serializer.validated_data.get("region"))
             table_number = _normalize_table_value(serializer.validated_data.get("table_number")) or _derive_table_number(table_name)
 
             duplicate = Device.objects.filter(
@@ -1409,7 +1409,7 @@ class SimpleDeviceListView(APIView):
             # Get and normalize device data from request
             table_name = _normalize_table_value(request.data.get('table_name'))
             table_number = _normalize_table_value(request.data.get('table_number')) or _derive_table_number(table_name)
-            region = _normalize_table_value(request.data.get('region'), "Primary") or "Primary"
+            region = _normalize_table_value(request.data.get('region'))
             try:
                 capacity = int(request.data.get('capacity') or 4)
             except (TypeError, ValueError):

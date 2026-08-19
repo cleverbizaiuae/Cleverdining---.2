@@ -1682,39 +1682,39 @@ const ScreenRestaurantReservations = () => {
             </div>
             <div className="grid gap-3 p-5 sm:grid-cols-2">
               <label className="sm:col-span-2">
-                <span className="mb-1 block text-xs font-medium text-slate-600">Customer name</span>
-                <input value={createForm.customerName} onChange={(event) => updateCreateForm("customerName", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Customer name <span className="text-red-500">*</span></span>
+                <input required aria-required="true" value={createForm.customerName} onChange={(event) => updateCreateForm("customerName", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-medium text-slate-600">Phone</span>
-                <input value={createForm.phone} onChange={(event) => updateCreateForm("phone", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Phone <span className="text-red-500">*</span></span>
+                <input required aria-required="true" value={createForm.phone} onChange={(event) => updateCreateForm("phone", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
                 <span className="mb-1 block text-xs font-medium text-slate-600">Email <span className="text-slate-400">(optional)</span></span>
                 <input type="email" value={createForm.email} onChange={(event) => updateCreateForm("email", event.target.value)} placeholder="guest@example.com" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-medium text-slate-600">Table</span>
-                <select value={createForm.tableId} onChange={(event) => updateCreateForm("tableId", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]">
+                <span className="mb-1 block text-xs font-medium text-slate-600">Table <span className="text-red-500">*</span></span>
+                <select required aria-required="true" value={createForm.tableId} onChange={(event) => updateCreateForm("tableId", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]">
                   <option value="">Select table</option>
                   {(allDevices || []).map((device: any) => <option key={device.id} value={device.id}>{device.table_name || device.name || `Table ${device.id}`}</option>)}
                 </select>
               </label>
               <label>
-                <span className="mb-1 block text-xs font-medium text-slate-600">Guests</span>
-                <input type="number" min="1" value={createForm.guestCount} onChange={(event) => updateCreateForm("guestCount", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Guests <span className="text-red-500">*</span></span>
+                <input required aria-required="true" type="number" min="1" value={createForm.guestCount} onChange={(event) => updateCreateForm("guestCount", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-medium text-slate-600">Date</span>
-                <input type="date" value={createForm.date} onChange={(event) => updateCreateForm("date", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Date <span className="text-red-500">*</span></span>
+                <input required aria-required="true" type="date" value={createForm.date} onChange={(event) => updateCreateForm("date", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label>
-                <span className="mb-1 block text-xs font-medium text-slate-600">Time</span>
-                <input type="time" value={createForm.time} onChange={(event) => updateCreateForm("time", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Time <span className="text-red-500">*</span></span>
+                <input required aria-required="true" type="time" value={createForm.time} onChange={(event) => updateCreateForm("time", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label className="sm:col-span-2">
-                <span className="mb-1 block text-xs font-medium text-slate-600">Duration minutes</span>
-                <input type="number" min="15" step="15" value={createForm.durationMinutes} onChange={(event) => updateCreateForm("durationMinutes", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
+                <span className="mb-1 block text-xs font-medium text-slate-600">Duration minutes <span className="text-red-500">*</span></span>
+                <input required aria-required="true" type="number" min="15" step="15" value={createForm.durationMinutes} onChange={(event) => updateCreateForm("durationMinutes", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#0055FE]" />
               </label>
               <label className="sm:col-span-2">
                 <span className="mb-1 block text-xs font-medium text-slate-600">Special request</span>

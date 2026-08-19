@@ -56,6 +56,36 @@ class PreOrderPaymentSettlementTests(TestCase):
         self.assertEqual(order.status, "pending")
         self.assertEqual(str(order.amount_paid), "50.00")
 
+    def test_payment_preserves_latest_kitchen_status(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="preparing",
+            payment_status="unpaid",
+            total_price="50.00",
+        )
+
+        _mark_order_payment_progress(order, "50.00")
+
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, "paid")
+        self.assertEqual(order.status, "preparing")
+
+    def test_cash_waiting_status_moves_to_served_after_payment(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="awaiting_cash",
+            payment_status="pending_cash",
+            total_price="50.00",
+        )
+
+        _mark_order_payment_progress(order, "50.00")
+
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, "paid")
+        self.assertEqual(order.status, "served")
+
 
 class CompletedGuestPaymentSessionTests(TestCase):
     def setUp(self):
@@ -146,6 +176,25 @@ class CompletedGuestPaymentSessionTests(TestCase):
         self.assertTrue(result["fully_paid"])
         self.assertTrue(self.session.is_active)
         self.assertTrue(Cart.objects.filter(guest_session=self.session).exists())
+
+    def test_completed_card_payment_preserves_preparing_status(self):
+        self.order.status = "preparing"
+        self.order.save(update_fields=["status", "updated_time"])
+
+        with (
+            patch.object(PaymentService, "_emit_order_update"),
+            patch.object(PaymentService, "_emit_payment_update"),
+            patch("payment.services.async_to_sync") as async_to_sync,
+        ):
+            async_to_sync.return_value = lambda *_args, **_kwargs: None
+            PaymentService._finalize_completed_payment(
+                self.payment,
+                {"amount": "50.00", "status": "completed"},
+            )
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, "paid")
+        self.assertEqual(self.order.status, "preparing")
 
 
 class PaymentProviderWebhookTests(TestCase):
@@ -383,3 +432,17 @@ class PaymentProviderVisibilityTests(TestCase):
             set(PAYMENT_PROVIDER_CODES),
             set(PROVIDER_CLASSES),
         )
+
+    def test_unconfigured_gateway_returns_customer_safe_error(self):
+        PaymentGateway.objects.create(
+            restaurant=self.restaurant,
+            provider="stripe",
+            is_enabled=True,
+            is_active=True,
+        )
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "Online payments are not configured for this restaurant",
+        ):
+            PaymentService.get_adapter(self.restaurant, provider="stripe")

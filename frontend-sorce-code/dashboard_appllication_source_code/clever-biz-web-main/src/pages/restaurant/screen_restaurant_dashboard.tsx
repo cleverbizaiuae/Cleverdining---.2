@@ -536,6 +536,7 @@ const ScreenRestaurantDashboard = () => {
 
   // Generic Form Data
   const [catFormData, setCatFormData] = useState({ name: "", image: null as File | null });
+  const [categoryNameError, setCategoryNameError] = useState("");
   const [subCatFormData, setSubCatFormData] = useState({ Category_name: "", parent_category: "" });
 
 
@@ -1312,7 +1313,7 @@ const ScreenRestaurantDashboard = () => {
               </div>
               {(userRole === 'owner' || userRole === 'manager') && (
                 <div className="grid grid-cols-1 min-[420px]:grid-cols-3 sm:flex sm:items-center gap-2">
-                  <button data-testid="add-category-btn" className="h-9 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddCategory(true)}>
+                  <button data-testid="add-category-btn" className="h-9 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => { setCategoryNameError(""); setShowAddCategory(true); }}>
                     <FolderPlus size={14} /> Add Category
                   </button>
                   <button data-testid="add-sub-category-btn" className="h-9 px-3 border border-[#0055FE] text-[#0055FE] hover:bg-[#0055FE]/5 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap" onClick={() => setShowAddSubCategory(true)}>
@@ -1561,7 +1562,7 @@ const ScreenRestaurantDashboard = () => {
                       {(userRole === 'owner' || userRole === 'manager') && (
                         <td className="px-5 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => { setEditingCategory(cat); setShowEditCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
+                            <button onClick={() => { setCategoryNameError(""); setEditingCategory(cat); setShowEditCategory(true); }} className="p-1.5 text-[#0055FE] hover:bg-blue-50 rounded transition-colors"><Pencil size={14} /></button>
                             <button onClick={() => { setCategoryToDelete(cat); setShowDeleteCategory(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
                           </div>
                         </td>
@@ -1629,19 +1630,27 @@ const ScreenRestaurantDashboard = () => {
       {/* ADD/EDIT CATEGORY MODAL */}
       <Modal
         isOpen={showAddCategory || showEditCategory}
-        onClose={() => { setShowAddCategory(false); setShowEditCategory(false); setCatFormData({ name: "", image: null }); }}
+        onClose={() => { setShowAddCategory(false); setShowEditCategory(false); setCategoryNameError(""); setCatFormData({ name: "", image: null }); }}
         title={showEditCategory ? "Edit Category" : "Add Category"}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Category Name</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Category Name <span className="text-red-500">*</span></label>
             <input
               type="text"
+              required
+              aria-required="true"
+              aria-invalid={Boolean(categoryNameError)}
+              aria-describedby={categoryNameError ? "category-name-error" : undefined}
               placeholder="Category Name"
-              className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className={`w-full h-10 px-3 border rounded-lg text-sm focus:ring-2 outline-none ${categoryNameError ? "border-red-400 focus:border-red-500 focus:ring-red-500/10" : "border-slate-200 focus:border-[#0055FE] focus:ring-[#0055FE]/10"}`}
               value={showEditCategory ? editingCategory?.Category_name : catFormData.name}
-              onChange={e => showEditCategory ? setEditingCategory({ ...editingCategory, Category_name: e.target.value }) : setCatFormData({ ...catFormData, name: e.target.value })}
+              onChange={e => {
+                if (categoryNameError) setCategoryNameError("");
+                showEditCategory ? setEditingCategory({ ...editingCategory, Category_name: e.target.value }) : setCatFormData({ ...catFormData, name: e.target.value });
+              }}
             />
+            {categoryNameError && <p id="category-name-error" role="alert" className="mt-1.5 text-xs font-medium text-red-600">{categoryNameError}</p>}
           </div>
 
           {/* IMAGE UPLOADER WITH AI */}
@@ -1657,17 +1666,22 @@ const ScreenRestaurantDashboard = () => {
             disabled={isCategorySubmitting}
             onClick={async () => {
               if (isCategorySubmitting) return;
+              const categoryName = String(showEditCategory ? editingCategory?.Category_name : catFormData.name).trim();
+              if (!categoryName) {
+                setCategoryNameError("Category name is required.");
+                return;
+              }
               setIsCategorySubmitting(true);
               try {
                 const formData = new FormData();
                 if (showEditCategory) {
-                  formData.append('Category_name', editingCategory.Category_name);
+                  formData.append('Category_name', categoryName);
                   if (catFormData.image) formData.append('image', catFormData.image);
                   await updateCategory(editingCategory.id, formData);
                   setShowEditCategory(false);
                   setCatFormData({ name: "", image: null });
                 } else {
-                  formData.append('Category_name', catFormData.name);
+                  formData.append('Category_name', categoryName);
                   if (catFormData.image) formData.append('image', catFormData.image);
                   await createCategory(formData);
                   setShowAddCategory(false);

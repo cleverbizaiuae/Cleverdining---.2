@@ -1139,13 +1139,13 @@ const LayoutDashboard = () => {
       />
       {!isSubRoute && <MenuUpsellPrimer items={filteredItems} />}
       <div
-        className="flex min-h-screen justify-center overflow-hidden bg-slate-100 text-foreground"
+        className="flex min-h-[100dvh] justify-center overflow-x-hidden bg-slate-100 text-foreground"
         style={{ ["--primary" as string]: brandPrimaryHsl } as React.CSSProperties}
       >
-        <div className="relative flex h-[100dvh] min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-background text-foreground shadow-2xl">
+        <div className="relative flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-background text-foreground shadow-2xl">
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto pb-[calc(60px+env(safe-area-inset-bottom))] relative">
+        <div className="relative flex-1 pb-[calc(60px+env(safe-area-inset-bottom))]">
           {!isSubRoute ? (
             <div className="flex flex-col min-h-full">
               <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-md">
@@ -1324,7 +1324,7 @@ const LayoutDashboard = () => {
               </header>
 
               {/* Main Content (Menu Feed) */}
-              <main className="px-4 py-4 flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+              <main className="flex flex-1 flex-col gap-4 px-4 py-4">
                 {!categoriesLoaded || !itemsLoaded ? (
                   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" strokeWidth={1.8} />
@@ -1362,7 +1362,7 @@ const LayoutDashboard = () => {
               </main>
             </div>
           ) : (
-            <div className="h-full">
+            <div className="min-h-[100dvh]">
               <Outlet />
             </div>
           )}

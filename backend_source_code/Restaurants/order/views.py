@@ -94,6 +94,22 @@ def _block_unpaid_kitchen_release(order, new_status):
     return None
 
 
+def _block_terminal_order_change(order, new_status):
+    """Paid delivered/completed orders are immutable apart from idempotent writes."""
+    current_status = str(order.status or "").lower()
+    requested_status = str(new_status or "").lower()
+    payment_status = str(order.payment_status or "").lower()
+    is_terminal = current_status == "completed" or (
+        current_status == "delivered" and payment_status == "paid"
+    )
+    if is_terminal and requested_status != current_status:
+        return Response(
+            {"error": "Paid delivered orders are final and cannot be changed or cancelled."},
+            status=status.HTTP_409_CONFLICT,
+        )
+    return None
+
+
 def _cancel_pending_payments(order):
     """Retire pending payment attempts when their order is cancelled."""
     from payment.models import Payment
@@ -279,7 +295,7 @@ class ConfirmCashPaymentAPIView(APIView):
 
     def patch(self, request, pk):
         from payment.models import Payment
-        from payment.services import PaymentService, settle_bulk_split_payment
+        from payment.services import PaymentService, _mark_order_payment_progress, settle_bulk_split_payment
         from payment.split_bill import apply_successful_payment
         from django.utils import timezone
         import uuid
@@ -297,7 +313,6 @@ class ConfirmCashPaymentAPIView(APIView):
         if order.payment_status == 'paid':
              return Response({"message": "Order is already paid"}, status=status.HTTP_200_OK)
 
-        was_awaiting_payment = order.status == 'awaiting_payment'
         pending_cash_payment = Payment.objects.filter(
             order=order,
             provider='cash',
@@ -359,10 +374,7 @@ class ConfirmCashPaymentAPIView(APIView):
         orders_to_update = [order]
         
         for o in orders_to_update:
-            o.status = 'pending' if was_awaiting_payment else 'delivered'
-            o.amount_paid = o.total_price
-            o.payment_status = 'paid'
-            o.save(update_fields=['status', 'amount_paid', 'payment_status', 'updated_time'])
+            _mark_order_payment_progress(o, o.total_price)
             
             # CREATE PAYMENT RECORD
             payment_created = False
@@ -777,19 +789,9 @@ class OwnerUpdateOrderStatusAPIView(APIView):
         release_block = _block_unpaid_kitchen_release(order, new_status)
         if release_block is not None:
             return release_block
-
-
-        
-        # Allow cancelling a completed order (Voiding)
-        if order.status == "completed" and new_status == "cancelled":
-             pass # Allow passing through to update
-        
-        # Allow re-marking as completed (Idempotent - checks payment/messages again)
-        elif order.status == "completed" and new_status == "completed":
-             pass 
-             
-        elif order.status == "completed":
-            return Response({"error": "Order is already completed/delivered."}, status=status.HTTP_400_BAD_REQUEST)
+        terminal_block = _block_terminal_order_change(order, new_status)
+        if terminal_block is not None:
+            return terminal_block
 
         order.status = new_status
         if new_status == "cancelled":
@@ -995,15 +997,15 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
 
 
         
-        if order.status == "completed":
-            return Response({"detail": "Order already completed"}, status=status.HTTP_400_BAD_REQUEST)
-
         completion_block = _block_unpaid_completion(order, new_status)
         if completion_block is not None:
             return completion_block
         release_block = _block_unpaid_kitchen_release(order, new_status)
         if release_block is not None:
             return release_block
+        terminal_block = _block_terminal_order_change(order, new_status)
+        if terminal_block is not None:
+            return terminal_block
 
         order.status = new_status
         if new_status == "cancelled":

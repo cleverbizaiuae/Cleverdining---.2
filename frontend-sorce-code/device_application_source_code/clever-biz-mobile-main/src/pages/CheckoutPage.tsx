@@ -5,6 +5,7 @@ import CheckoutButton from "./CheckoutButton";
 import { ApplePayButton, GooglePayButton, useWalletAvailability } from "../components/WalletPayment";
 import { getRegionConfig } from "../config/regionConfig";
 import { cachedGet } from "../lib/requestCache";
+import { useOnlinePaymentAvailability } from "../hooks/useOnlinePaymentAvailability";
 // import CheckoutButton from "../components/CheckoutButton";
 
 type SplitType = "full_bill" | "evenly" | "my_items";
@@ -76,7 +77,7 @@ export default function CheckoutPage() {
     }
   }, [orderId, isBulkCheckout, navigate]);
 
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | 'payme' | 'apple_pay' | 'google_pay'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash' | 'payme' | 'apple_pay' | 'google_pay'>('cash');
   const [orderData, setOrderData] = useState<any>(null);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [billSummary, setBillSummary] = useState<BillSummary | null>(null);
@@ -138,7 +139,15 @@ export default function CheckoutPage() {
 
   // Get restaurant ID from order data for wallet availability check
   const restaurantId = orderData?.restaurant || allOrders[0]?.restaurant || null;
+  const { available: onlinePaymentAvailable, loading: onlinePaymentLoading } =
+    useOnlinePaymentAvailability(restaurantId);
   const { availability: walletAvailability, loading: walletLoading } = useWalletAvailability(restaurantId);
+
+  useEffect(() => {
+    if (!onlinePaymentLoading && !onlinePaymentAvailable && paymentMethod !== "cash") {
+      setPaymentMethod("cash");
+    }
+  }, [onlinePaymentAvailable, onlinePaymentLoading, paymentMethod]);
 
   // Fetch Order Data to get Subtotal
   useEffect(() => {
@@ -581,27 +590,29 @@ export default function CheckoutPage() {
           <h2 className="text-base font-semibold mb-2 text-foreground">Payment Method</h2>
 
           <div className="space-y-2">
-            <label
-              className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
-              ${paymentMethod === 'card' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
-            `}
-            >
-              <input
-                type="radio"
-                name="payment"
-                value="card"
-                checked={paymentMethod === 'card'}
-                onChange={() => setPaymentMethod('card')}
-                className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
-              />
-              <div className="flex-1">
-                <span className="font-semibold block text-foreground">Pay by Card</span>
-                <span className="text-sm text-muted-foreground">Secure online payment</span>
-              </div>
-              <span className="text-2xl">💳</span>
-            </label>
+            {onlinePaymentAvailable && (
+              <label
+                className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
+                ${paymentMethod === 'card' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
+              `}
+              >
+                <input
+                  type="radio"
+                  name="payment"
+                  value="card"
+                  checked={paymentMethod === 'card'}
+                  onChange={() => setPaymentMethod('card')}
+                  className="mr-3 h-5 w-5 accent-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <span className="font-semibold block text-foreground">Pay by Card</span>
+                  <span className="text-sm text-muted-foreground">Secure online payment</span>
+                </div>
+                <span className="text-2xl">💳</span>
+              </label>
+            )}
 
-            {isUkRestaurant && (
+            {isUkRestaurant && onlinePaymentAvailable && (
               <label
                 className={`flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200
                 ${paymentMethod === 'payme' ? 'border-primary bg-primary/5 shadow-sm shadow-primary/15' : 'border-border hover:border-primary/40'}
@@ -624,7 +635,7 @@ export default function CheckoutPage() {
             )}
 
             {/* WALLET PAYMENT OPTIONS */}
-            {!walletLoading && (isBulkCheckout || splitType === "full_bill") && (walletAvailability.apple_pay_available || walletAvailability.google_pay_available) && (
+            {onlinePaymentAvailable && !walletLoading && (isBulkCheckout || splitType === "full_bill") && (walletAvailability.apple_pay_available || walletAvailability.google_pay_available) && (
               <div className="pt-2 border-t border-border">
                 <p className="text-xs text-muted-foreground uppercase font-medium mb-2">Express Checkout</p>
                 <div className="space-y-2">
@@ -672,6 +683,12 @@ export default function CheckoutPage() {
                   )}
                 </div>
               </div>
+            )}
+
+            {!onlinePaymentLoading && !onlinePaymentAvailable && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                Online payment is unavailable until this restaurant connects a payment provider. Please choose cash.
+              </p>
             )}
 
             <label
