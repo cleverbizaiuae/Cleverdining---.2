@@ -510,9 +510,12 @@ export const ScreenRestaurantDevices = () => {
       >
         <div className="space-y-4">
 	          <div>
-	            <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
+	            <label className="block text-xs font-medium text-slate-700 mb-1">Table Name <span className="text-red-500">*</span></label>
 	            <input
 	              type="text"
+	              required
+	              aria-required="true"
+	              aria-invalid={Boolean(formError && !formData.name.trim())}
 	              placeholder="e.g. Table 1"
 	              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
 	              value={formData.name}

@@ -83,7 +83,8 @@ const ScreenAdminLogin = () => {
                 localStorage.removeItem("restaurantId");
             }
 
-            toast.success(`Welcome back, ${user.username || "User"} !`);
+            const displayName = user.display_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";
+            toast.success(`Welcome back, ${displayName} !`);
 
             // Role Validation & Redirection
             // We strictly redirect based on the ACTUAL role from DB

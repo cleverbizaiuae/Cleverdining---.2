@@ -127,7 +127,11 @@ const RestaurantLayout = () => {
   const user = userStr ? JSON.parse(userStr) : { username: "Manager", role: "manager" };
   const currentRole = resolveSidebarRole(user, location.pathname);
   const displayUser = user?.user || user || {};
-  const username = String(displayUser?.username || user?.username || "Manager");
+  const fullName = [displayUser?.first_name, displayUser?.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const username = String(displayUser?.display_name || fullName || displayUser?.username || user?.username || "Manager");
   const roleLabel = currentRole === "owner" ? "Manager" : currentRole;
 
   // Determine Base Path based on current URL
@@ -361,7 +365,7 @@ const RestaurantLayout = () => {
           {/* Right: Profile */}
           <div className="flex items-center gap-4 h-full">
             <div className="hidden sm:flex flex-col items-end pr-4 border-r border-slate-200 h-10 justify-center">
-              <p className="text-base font-bold text-slate-900 leading-tight">Welcome</p>
+              <p className="text-base font-bold text-slate-900 leading-tight">Welcome, {username}</p>
               <p className="text-xs font-semibold text-[#0055FE] capitalize">{roleLabel}</p>
             </div>
 

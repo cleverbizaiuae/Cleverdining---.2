@@ -598,9 +598,14 @@ class ChefStaffViewSet(viewsets.ModelViewSet):
         if instance.restaurant.owner != request.user:
              return Response({"error": "You do not have permission to change this password."}, status=status.HTTP_403_FORBIDDEN)
 
+        old_password = request.data.get('old_password')
         new_password = request.data.get('new_password')
+        if not old_password:
+             return Response({"old_password": ["Old password is required."]}, status=status.HTTP_400_BAD_REQUEST)
         if not new_password:
-             return Response({"error": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
+             return Response({"new_password": ["New password is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not instance.user.check_password(old_password):
+             return Response({"old_password": ["Old password is incorrect."]}, status=status.HTTP_400_BAD_REQUEST)
              
         instance.user.set_password(new_password)
         instance.user.save()

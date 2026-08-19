@@ -266,6 +266,7 @@ class OwnerRegisterView(APIView):
             status_value = self._pick(data, 'status')
             package_value = self._pick(data, 'package')
             owner_password = self._pick(data, 'owner_password', 'ownerPassword')
+            location_value = self._pick(data, 'location', 'address')
             phone_value = self._pick(data, 'phone', 'phone_number')
             email_value = self._pick(data, 'email')
             city_value = self._pick(data, 'city')
@@ -292,6 +293,8 @@ class OwnerRegisterView(APIView):
                 restaurant.package = package_value
             if owner_password is not None:
                 restaurant.owner_password = owner_password
+            if location_value is not None:
+                restaurant.location = str(location_value).strip()
             if city_value is not None:
                 restaurant.city = str(city_value).strip()
             if country_value is not None:

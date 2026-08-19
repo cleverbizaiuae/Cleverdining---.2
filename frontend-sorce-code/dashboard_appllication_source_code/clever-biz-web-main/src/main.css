@@ -553,6 +553,100 @@ color: var(--color-primary-text) !important;
 }
 
 /* <<<<<===================== Custom date picker*/
+
+/* Payment calendar: keep the popup large, high-contrast, and easy to scan. */
+.cleverbiz-payment-calendar-popper {
+  z-index: 60 !important;
+}
+
+.cleverbiz-payment-calendar.react-datepicker {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 0.75rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-family: inherit !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18) !important;
+  overflow: hidden;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__header {
+  display: block;
+  padding: 0.875rem 0.75rem 0.5rem;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__current-month {
+  color: #0f172a !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  line-height: 1.25rem !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day-names,
+.cleverbiz-payment-calendar .react-datepicker__week {
+  display: flex;
+  justify-content: space-between;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day-name,
+.cleverbiz-payment-calendar .react-datepicker__day {
+  display: inline-flex;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  margin: 0.125rem !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem !important;
+  color: #334155 !important;
+  font-size: 0.8125rem !important;
+  line-height: 1 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day-name {
+  height: 1.75rem !important;
+  margin-top: 0.5rem !important;
+  color: #64748b !important;
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day:hover {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day--selected,
+.cleverbiz-payment-calendar .react-datepicker__day--keyboard-selected {
+  background: #0055fe !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day--today:not(.react-datepicker__day--selected) {
+  border: 1px solid #0055fe !important;
+  color: #0055fe !important;
+  font-weight: 600 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__day--outside-month {
+  color: #cbd5e1 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__navigation {
+  top: 0.8rem !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__navigation-icon::before {
+  top: 0.35rem !important;
+  border-color: #475569 !important;
+}
+
+.cleverbiz-payment-calendar .react-datepicker__month {
+  margin: 0.75rem !important;
+}
+
 .scrollbar-hide {
   scrollbar-width: none;
   /* Firefox */

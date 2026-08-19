@@ -87,6 +87,20 @@ const normalisePlanLabel = (pkg: string) => {
     return "Enterprise";
 };
 
+const PAYMENT_PROVIDER_LABELS: Record<string, string> = {
+    stripe: "Stripe",
+    checkout: "Checkout.com",
+    paytabs: "PayTabs",
+    payme: "Payme",
+    adyen: "Adyen",
+    worldpay: "Worldpay",
+    sumup: "SumUp",
+    square: "Square",
+};
+
+const getPaymentProviderLabel = (provider: string) =>
+    PAYMENT_PROVIDER_LABELS[provider] || provider;
+
 const ScreenSuperAdminManagement = () => {
     const queryClient = useQueryClient();
     const [searchQuery, setSearchQuery] = useState("");
@@ -111,6 +125,7 @@ const ScreenSuperAdminManagement = () => {
     // Edit Form
     const [editForm, setEditForm] = useState({
         region: "UAE" as "UAE" | "UK",
+        location: "",
         phone: "",
         email: "",
         city: "",
@@ -198,6 +213,7 @@ const ScreenSuperAdminManagement = () => {
         mutationFn: async (data: {
             id: string;
             region: "UAE" | "UK";
+            location: string;
             phone: string;
             email: string;
             city: string;
@@ -207,23 +223,20 @@ const ScreenSuperAdminManagement = () => {
             paymentProcessor: string;
             package: string;
         }) => {
-            try {
-                const payload = {
-                    region: data.region,
-                    phone: data.phone,
-                    email: data.email,
-                    city: data.city,
-                    country: data.country,
-                    qrCodes: data.qrCodes,
-                    tableCount: data.tableCount,
-                    paymentProcessor: data.paymentProcessor,
-                    package: data.package,
-                };
-                const response = await axiosInstance.patch(`/owners/registered-restaurants/${data.id}/`, payload);
-                return response.data;
-            } catch {
-                return data;
-            }
+            const payload = {
+                region: data.region,
+                location: data.location,
+                phone: data.phone,
+                email: data.email,
+                city: data.city,
+                country: data.country,
+                qrCodes: data.qrCodes,
+                tableCount: data.tableCount,
+                paymentProcessor: data.paymentProcessor,
+                package: data.package,
+            };
+            const response = await axiosInstance.patch(`/owners/registered-restaurants/${data.id}/`, payload);
+            return response.data;
         },
         onMutate: async (data) => {
             await queryClient.cancelQueries({ queryKey: ['registered-restaurants'] });
@@ -235,8 +248,14 @@ const ScreenSuperAdminManagement = () => {
 
             return { previousRestaurants };
         },
-        onSuccess: () => {
+        onSuccess: (_response, updatedRestaurant) => {
             invalidateApiCache("registered-restaurants");
+            queryClient.invalidateQueries({ queryKey: ['registered-restaurants'] });
+            setSelectedRestaurant((currentRestaurant) =>
+                currentRestaurant?.id === updatedRestaurant.id
+                    ? { ...currentRestaurant, ...updatedRestaurant }
+                    : currentRestaurant
+            );
             toast.success("Restaurant updated");
             setIsEditing(false);
         },
@@ -356,6 +375,16 @@ const ScreenSuperAdminManagement = () => {
     const totalRestaurants = restaurants.length;
     const onHoldCount = restaurants.filter(r => r.status === 'on_hold').length;
     const activeToday = restaurants.filter(r => r.status === 'active').length;
+    const isNewRestaurantComplete = [
+        newRestaurant.name,
+        newRestaurant.ownerName,
+        newRestaurant.location,
+        newRestaurant.city,
+        newRestaurant.country,
+        newRestaurant.phone,
+        newRestaurant.email,
+        newRestaurant.ownerPassword,
+    ].every((value) => value.trim().length > 0);
 
     const filteredRestaurants = useMemo(() => {
         const lowerQ = searchQuery.toLowerCase();
@@ -402,6 +431,7 @@ const ScreenSuperAdminManagement = () => {
         setSelectedRestaurant(restaurant);
         setEditForm({
             region: restaurant.region || "UAE",
+            location: restaurant.location || "",
             phone: restaurant.phone || "",
             email: restaurant.email || "",
             city: restaurant.city || "",
@@ -894,13 +924,7 @@ const ScreenSuperAdminManagement = () => {
                                                     .filter((provider) => provider !== "cash")
                                                     .map((provider) => (
                                                         <option key={provider} value={provider}>
-                                                            {provider === "checkout"
-                                                                ? "Checkout.com"
-                                                                : provider === "paytabs"
-                                                                    ? "PayTabs"
-                                                                    : provider === "payme"
-                                                                        ? "Payme"
-                                                                        : "Stripe"}
+                                                            {getPaymentProviderLabel(provider)}
                                                         </option>
                                                     ))}
                                             </select>
@@ -922,7 +946,9 @@ const ScreenSuperAdminManagement = () => {
                             <button
                                 data-testid="submit-btn"
                                 onClick={() => createRestaurantMutation.mutate(newRestaurant)}
-                                disabled={createRestaurantMutation.isPending || !newRestaurant.name || !newRestaurant.city || !newRestaurant.phone || !newRestaurant.email}
+                                disabled={createRestaurantMutation.isPending || !isNewRestaurantComplete}
+                                aria-disabled={createRestaurantMutation.isPending || !isNewRestaurantComplete}
+                                title={!isNewRestaurantComplete ? "Complete all required fields before registering" : undefined}
                                 className="px-5 py-2.5 bg-[#0055FE] hover:bg-[#0047D1] disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
                             >
                                 {createRestaurantMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -1172,6 +1198,10 @@ const ScreenSuperAdminManagement = () => {
                                     <label className="block text-xs font-medium text-slate-700 mb-1">Country</label>
                                     <input type="text" value={editForm.country} onChange={(e) => setEditForm({ ...editForm, country: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
                                 </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Location / Address</label>
+                                    <input type="text" value={editForm.location} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#0055FE] outline-none" />
+                                </div>
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
@@ -1190,13 +1220,7 @@ const ScreenSuperAdminManagement = () => {
                                                 .filter((provider) => provider !== "cash")
                                                 .map((provider) => (
                                                     <option key={provider} value={provider}>
-                                                        {provider === "checkout"
-                                                            ? "Checkout.com"
-                                                            : provider === "paytabs"
-                                                                ? "PayTabs"
-                                                                : provider === "payme"
-                                                                    ? "Payme"
-                                                                    : "Stripe"}
+                                                        {getPaymentProviderLabel(provider)}
                                                     </option>
                                                 ))}
                                         </select>

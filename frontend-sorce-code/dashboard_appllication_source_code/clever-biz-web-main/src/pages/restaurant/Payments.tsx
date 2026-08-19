@@ -389,11 +389,33 @@ export const Payments = () => {
                     <div className="flex flex-wrap items-center gap-3">
                         <label className="flex items-center gap-2 text-sm text-slate-600">
                             <span>From:</span>
-                            <DatePicker selected={startDate} onChange={setStartDate} placeholderText="dd/mm/yyyy" className="h-10 w-32 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0055FE]" />
+                            <DatePicker
+                                selected={startDate}
+                                onChange={setStartDate}
+                                placeholderText="dd/mm/yyyy"
+                                dateFormat="dd/MM/yyyy"
+                                calendarStartDay={1}
+                                showPopperArrow={false}
+                                calendarClassName="cleverbiz-payment-calendar"
+                                popperClassName="cleverbiz-payment-calendar-popper"
+                                className="h-10 w-32 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
+                                aria-label="Payment start date"
+                            />
                         </label>
                         <label className="flex items-center gap-2 text-sm text-slate-600">
                             <span>To:</span>
-                            <DatePicker selected={endDate} onChange={setEndDate} placeholderText="dd/mm/yyyy" className="h-10 w-32 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0055FE]" />
+                            <DatePicker
+                                selected={endDate}
+                                onChange={setEndDate}
+                                placeholderText="dd/mm/yyyy"
+                                dateFormat="dd/MM/yyyy"
+                                calendarStartDay={1}
+                                showPopperArrow={false}
+                                calendarClassName="cleverbiz-payment-calendar"
+                                popperClassName="cleverbiz-payment-calendar-popper"
+                                className="h-10 w-32 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10"
+                                aria-label="Payment end date"
+                            />
                         </label>
                         <button onClick={() => fetchPayments(false)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#0055FE] text-[#0055FE] transition-colors hover:bg-[#0055FE]/5" aria-label="Refresh payments">
                             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />

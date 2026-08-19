@@ -13,6 +13,7 @@ import {
   User
 } from "lucide-react";
 import axiosInstance from "@/lib/axios";
+import { invalidateApiCache } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 
 // --- COMPONENTS ---
@@ -45,6 +46,7 @@ const ScreenRestaurantManagement = () => {
     fetchMembers,
     createMember,
     updateMemberStatus,
+    setMembers,
     setMembersSearchQuery,
   } = useOwner();
 
@@ -70,6 +72,10 @@ const ScreenRestaurantManagement = () => {
     newPassword: "",
     confirmPassword: ""
   });
+  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const isCreateFormComplete = Boolean(
+    formData.name.trim() && formData.email.trim() && formData.password
+  );
 
   // Effects
   useEffect(() => {
@@ -97,6 +103,7 @@ const ScreenRestaurantManagement = () => {
   const openPasswordModal = (member: any) => {
     setSelectedMember(member);
     setPasswordData({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    setPasswordErrors({});
     setIsPasswordModalOpen(true);
   };
 
@@ -149,9 +156,17 @@ const ScreenRestaurantManagement = () => {
         // User requested removing username field.
         role: formData.role
       });
+      invalidateApiCache("chef-staff");
+      setMembers((currentMembers) =>
+        currentMembers.map((member) =>
+          member.id === selectedMember.id
+            ? { ...member, first_name: formData.name, role: formData.role }
+            : member
+        )
+      );
       toast.success("Member updated successfully");
       setIsEditModalOpen(false);
-      fetchMembers();
+      await fetchMembers();
     } catch (error) {
       console.error("Update failed", error);
       toast.error("Failed to update member");
@@ -162,20 +177,38 @@ const ScreenRestaurantManagement = () => {
 
   const handlePasswordSubmit = async () => {
     if (!selectedMember) return;
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error("Passwords do not match");
+    const errors: Record<string, string> = {};
+    if (!passwordData.oldPassword) errors.oldPassword = "Old password is required.";
+    if (!passwordData.newPassword) errors.newPassword = "New password is required.";
+    if (!passwordData.confirmPassword) errors.confirmPassword = "Please confirm the new password.";
+    if (passwordData.newPassword && passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      toast.error("Please complete the required password fields.");
       return;
     }
+    setPasswordErrors({});
     setLoading(true);
     try {
       await axiosInstance.post(`/owners/chef-staff/${selectedMember.id}/change-password/`, {
+        old_password: passwordData.oldPassword,
         new_password: passwordData.newPassword
       });
       toast.success("Password changed successfully");
       setIsPasswordModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Password change failed", error);
-      toast.error("Failed to change password");
+      const oldPasswordError = error.response?.data?.old_password?.[0];
+      const newPasswordError = error.response?.data?.new_password?.[0];
+      if (oldPasswordError || newPasswordError) {
+        setPasswordErrors({
+          ...(oldPasswordError ? { oldPassword: oldPasswordError } : {}),
+          ...(newPasswordError ? { newPassword: newPasswordError } : {}),
+        });
+      }
+      toast.error(oldPasswordError || newPasswordError || error.response?.data?.error || "Failed to change password");
     } finally {
       setLoading(false);
     }
@@ -332,9 +365,11 @@ const ScreenRestaurantManagement = () => {
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Create Member">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Name <span className="text-red-500">*</span></label>
             <input
               type="text"
+              required
+              aria-required="true"
               placeholder="Full Name"
               className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.name}
@@ -342,9 +377,11 @@ const ScreenRestaurantManagement = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
             <input
               type="email"
+              required
+              aria-required="true"
               placeholder="user@restaurant.com"
               className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.email}
@@ -353,9 +390,11 @@ const ScreenRestaurantManagement = () => {
           </div>
           {/* Username field removed as per request - Email used as username */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Password <span className="text-red-500">*</span></label>
             <input
               type="password"
+              required
+              aria-required="true"
               placeholder="••••••••"
               className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={formData.password}
@@ -377,7 +416,7 @@ const ScreenRestaurantManagement = () => {
           <button
             data-testid="submit-btn"
             onClick={handleCreateSubmit}
-            disabled={loading}
+            disabled={loading || !isCreateFormComplete}
             className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
           >
             {loading ? "Creating..." : "Create Member"}
@@ -426,31 +465,52 @@ const ScreenRestaurantManagement = () => {
         <div className="space-y-4">
           <p className="text-sm text-slate-600">Change password for <span className="font-bold text-slate-900">{selectedMember?.first_name}</span></p>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Old Password</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Old Password <span className="text-red-500">*</span></label>
             <input
               type="password"
+              required
+              aria-required="true"
+              aria-invalid={Boolean(passwordErrors.oldPassword)}
               className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={passwordData.oldPassword}
-              onChange={e => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+              onChange={e => {
+                setPasswordData({ ...passwordData, oldPassword: e.target.value });
+                if (passwordErrors.oldPassword) setPasswordErrors({ ...passwordErrors, oldPassword: "" });
+              }}
             />
+            {passwordErrors.oldPassword && <p className="mt-1 text-xs font-medium text-red-600" role="alert">{passwordErrors.oldPassword}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">New Password</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">New Password <span className="text-red-500">*</span></label>
             <input
               type="password"
+              required
+              aria-required="true"
+              aria-invalid={Boolean(passwordErrors.newPassword)}
               className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={passwordData.newPassword}
-              onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+              onChange={e => {
+                setPasswordData({ ...passwordData, newPassword: e.target.value });
+                if (passwordErrors.newPassword) setPasswordErrors({ ...passwordErrors, newPassword: "" });
+              }}
             />
+            {passwordErrors.newPassword && <p className="mt-1 text-xs font-medium text-red-600" role="alert">{passwordErrors.newPassword}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Confirm Password</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Confirm Password <span className="text-red-500">*</span></label>
             <input
               type="password"
+              required
+              aria-required="true"
+              aria-invalid={Boolean(passwordErrors.confirmPassword)}
               className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
               value={passwordData.confirmPassword}
-              onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+              onChange={e => {
+                setPasswordData({ ...passwordData, confirmPassword: e.target.value });
+                if (passwordErrors.confirmPassword) setPasswordErrors({ ...passwordErrors, confirmPassword: "" });
+              }}
             />
+            {passwordErrors.confirmPassword && <p className="mt-1 text-xs font-medium text-red-600" role="alert">{passwordErrors.confirmPassword}</p>}
           </div>
           <button
             onClick={handlePasswordSubmit}

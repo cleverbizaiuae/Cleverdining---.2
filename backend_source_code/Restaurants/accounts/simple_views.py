@@ -105,6 +105,9 @@ class SimpleLoginView(APIView):
             user_data = {
                 'id': user.id,
                 'username': user.username or '',
+                'first_name': user.first_name or '',
+                'last_name': user.last_name or '',
+                'display_name': user.get_full_name().strip() or user.username or '',
                 'email': user.email or '',
                 'role': user.role or 'customer',
                 'restaurants': [],

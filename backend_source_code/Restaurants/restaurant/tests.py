@@ -208,6 +208,35 @@ class NewRestaurantMenuIsolationTests(TestCase):
         self.assertFalse(Category.objects.filter(restaurant=restaurant).exists())
         self.assertFalse(Item.objects.filter(restaurant=restaurant).exists())
 
+    def test_super_admin_restaurant_address_update_is_persisted_and_returned(self):
+        owner = User.objects.create_user(
+            email="address-owner@example.com",
+            username="Address Owner",
+            password="test-password",
+            role="owner",
+        )
+        restaurant = Restaurant.objects.create(
+            resturent_name="Address Restaurant",
+            location="Old Address",
+            phone_number="+971500009997",
+            owner=owner,
+        )
+
+        response = self.client.patch(
+            f"/owners/registered-restaurants/{restaurant.id}/",
+            {"location": "New Address, Level 2"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        restaurant.refresh_from_db()
+        self.assertEqual(restaurant.location, "New Address, Level 2")
+
+        response = self.client.get("/owners/registered-restaurants/")
+        self.assertEqual(response.status_code, 200, response.json())
+        payload = next(item for item in response.json() if item["id"] == str(restaurant.id))
+        self.assertEqual(payload["location"], "New Address, Level 2")
+
     def test_new_owner_menu_endpoints_do_not_return_another_restaurants_menu(self):
         owner, _ = self.register_new_restaurant()
         self.client.force_authenticate(owner)
