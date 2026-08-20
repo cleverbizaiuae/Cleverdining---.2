@@ -624,9 +624,19 @@ color: var(--color-primary-text) !important;
   font-weight: 600 !important;
 }
 
-.cleverbiz-payment-calendar .react-datepicker__day--today:not(.react-datepicker__day--selected) {
+.cleverbiz-payment-calendar .react-datepicker__day--today:not(.react-datepicker__day--selected):not(.react-datepicker__day--keyboard-selected) {
   border: 1px solid #0055fe !important;
   color: #0055fe !important;
+  font-weight: 600 !important;
+}
+
+/* React DatePicker can focus today with --keyboard-selected even when another
+   date is stored in the input. Keep today's number readable on that blue state. */
+.cleverbiz-payment-calendar .react-datepicker__day--today.react-datepicker__day--selected,
+.cleverbiz-payment-calendar .react-datepicker__day--today.react-datepicker__day--keyboard-selected {
+  border: 1px solid #0055fe !important;
+  background: #0055fe !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
 }
 
