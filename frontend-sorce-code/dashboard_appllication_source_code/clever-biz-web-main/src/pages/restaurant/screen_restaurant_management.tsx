@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useOwner } from "@/context/ownerContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   Search,
   Plus,
@@ -66,6 +66,11 @@ const ScreenRestaurantManagement = () => {
     password: "",
     role: "staff",
   });
+  const [createErrors, setCreateErrors] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
   const [passwordData, setPasswordData] = useState({
     oldPassword: "",
@@ -73,10 +78,6 @@ const ScreenRestaurantManagement = () => {
     confirmPassword: ""
   });
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
-  const isCreateFormComplete = Boolean(
-    formData.name.trim() && formData.email.trim() && formData.password
-  );
-
   // Effects
   useEffect(() => {
     fetchMembers();
@@ -113,14 +114,39 @@ const ScreenRestaurantManagement = () => {
   };
 
   // API Actions
-  const handleCreateSubmit = async () => {
+  const validateCreateForm = () => {
+    const errors = {
+      name: formData.name.trim() ? "" : "Name is required.",
+      email: formData.email.trim() ? "" : "Email is required.",
+      password: formData.password ? "" : "Password is required.",
+    };
+
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errors.email = "Enter a valid email address.";
+    }
+
+    setCreateErrors(errors);
+    return !Object.values(errors).some(Boolean);
+  };
+
+  const clearCreateError = (field: keyof typeof createErrors) => {
+    setCreateErrors((current) => current[field] ? { ...current, [field]: "" } : current);
+  };
+
+  const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!validateCreateForm()) {
+      toast.error("Please complete the required fields.");
+      return;
+    }
+
     setLoading(true);
     try {
       // Create FormData properly
       const data = new FormData();
-      data.append("first_name", formData.name); // Send name as first_name
-      data.append("email", formData.email); // Append email
-      data.append("username", formData.email); // Use email as username
+      data.append("first_name", formData.name.trim()); // Send name as first_name
+      data.append("email", formData.email.trim()); // Append email
+      data.append("username", formData.email.trim()); // Use email as username
       data.append("password", formData.password);
       data.append("role", formData.role);
 
@@ -134,9 +160,9 @@ const ScreenRestaurantManagement = () => {
         password: "",
         role: "staff",
       });
+      setCreateErrors({ name: "", email: "", password: "" });
       fetchMembers();
     } catch (error: any) {
-      console.error(error);
       console.error(error);
       // toast handled in context
 
@@ -255,6 +281,7 @@ const ScreenRestaurantManagement = () => {
             <button
               onClick={() => {
                 setFormData({ name: "", email: "", password: "", role: "staff" });
+                setCreateErrors({ name: "", email: "", password: "" });
                 setIsAddModalOpen(true);
               }}
               className="h-9 bg-[#0055FE] hover:bg-[#0047D1] text-white px-4 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
@@ -362,19 +389,37 @@ const ScreenRestaurantManagement = () => {
       {/* --- MODALS --- */}
 
       {/* Add Member Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Create Member">
-        <div className="space-y-4">
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setCreateErrors({ name: "", email: "", password: "" });
+        }}
+        title="Create Member"
+      >
+        <form noValidate onSubmit={handleCreateSubmit} className="space-y-4">
+          {Object.values(createErrors).some(Boolean) && (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Please complete the required fields below.
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Name <span className="text-red-500">*</span></label>
             <input
               type="text"
               required
               aria-required="true"
+              aria-invalid={Boolean(createErrors.name)}
+              aria-describedby={createErrors.name ? "create-member-name-error" : undefined}
               placeholder="Full Name"
-              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className={`w-full h-12 px-4 border rounded-xl text-sm text-slate-900 focus:ring-2 outline-none ${createErrors.name ? "border-red-400 focus:border-red-500 focus:ring-red-100" : "border-slate-200 focus:border-[#0055FE] focus:ring-[#0055FE]/10"}`}
               value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              onChange={e => {
+                setFormData({ ...formData, name: e.target.value });
+                clearCreateError("name");
+              }}
             />
+            {createErrors.name && <p id="create-member-name-error" className="mt-1 text-xs text-red-600">{createErrors.name}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
@@ -382,11 +427,17 @@ const ScreenRestaurantManagement = () => {
               type="email"
               required
               aria-required="true"
+              aria-invalid={Boolean(createErrors.email)}
+              aria-describedby={createErrors.email ? "create-member-email-error" : undefined}
               placeholder="user@restaurant.com"
-              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className={`w-full h-12 px-4 border rounded-xl text-sm text-slate-900 focus:ring-2 outline-none ${createErrors.email ? "border-red-400 focus:border-red-500 focus:ring-red-100" : "border-slate-200 focus:border-[#0055FE] focus:ring-[#0055FE]/10"}`}
               value={formData.email}
-              onChange={e => setFormData({ ...formData, email: e.target.value })}
+              onChange={e => {
+                setFormData({ ...formData, email: e.target.value });
+                clearCreateError("email");
+              }}
             />
+            {createErrors.email && <p id="create-member-email-error" className="mt-1 text-xs text-red-600">{createErrors.email}</p>}
           </div>
           {/* Username field removed as per request - Email used as username */}
           <div>
@@ -395,11 +446,17 @@ const ScreenRestaurantManagement = () => {
               type="password"
               required
               aria-required="true"
+              aria-invalid={Boolean(createErrors.password)}
+              aria-describedby={createErrors.password ? "create-member-password-error" : undefined}
               placeholder="••••••••"
-              className="w-full h-12 px-4 border border-slate-200 rounded-xl text-sm text-slate-900 focus:border-[#0055FE] focus:ring-2 focus:ring-[#0055FE]/10 outline-none"
+              className={`w-full h-12 px-4 border rounded-xl text-sm text-slate-900 focus:ring-2 outline-none ${createErrors.password ? "border-red-400 focus:border-red-500 focus:ring-red-100" : "border-slate-200 focus:border-[#0055FE] focus:ring-[#0055FE]/10"}`}
               value={formData.password}
-              onChange={e => setFormData({ ...formData, password: e.target.value })}
+              onChange={e => {
+                setFormData({ ...formData, password: e.target.value });
+                clearCreateError("password");
+              }}
             />
+            {createErrors.password && <p id="create-member-password-error" className="mt-1 text-xs text-red-600">{createErrors.password}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
@@ -414,14 +471,14 @@ const ScreenRestaurantManagement = () => {
             </select>
           </div>
           <button
+            type="submit"
             data-testid="submit-btn"
-            onClick={handleCreateSubmit}
-            disabled={loading || !isCreateFormComplete}
+            disabled={loading}
             className="w-full h-12 mt-2 bg-[#0055FE] hover:bg-[#0047D1] text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 flex items-center justify-center"
           >
             {loading ? "Creating..." : "Create Member"}
           </button>
-        </div>
+        </form>
       </Modal>
 
       {/* Edit Member Modal */}
