@@ -20,6 +20,7 @@ from .reservation_services import (
     reservation_end,
     reschedule,
 )
+from .session_services import expire_inactive_guest_sessions, occupied_device_count
 from accounts.models import User
 from restaurant.models import Restaurant
 from .paginations import DevicePagination,ReservationPagination
@@ -505,6 +506,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         try:
             restaurant_ids = _resolve_user_restaurant_ids(user)
             if restaurant_ids:
+                expire_inactive_guest_sessions(restaurant_ids)
                 return base_qs.filter(restaurant_id__in=restaurant_ids).order_by('-id')
         except Exception as e:
             print(f"DEBUG_DEVICES: Queryset filtering failed: {e}")
@@ -645,9 +647,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
             from django.db.models import Count, Q
 
+            expire_inactive_guest_sessions([restaurant.pk])
+
             device_counts = Device.objects.filter(restaurant=restaurant).aggregate(
                 total=Count('id'),
-                active=Count('id', filter=Q(action='active')),
                 hold=Count('id', filter=Q(action='hold')),
             )
             table_limit = int(getattr(restaurant, "table_count", 0) or 0)
@@ -655,7 +658,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             return Response({
                 "restaurant": restaurant.resturent_name,
                 "total_devices": current_tables,
-                "active_devices": device_counts["active"] or 0,
+                "active_devices": occupied_device_count(restaurant.pk),
                 "hold_devices": device_counts["hold"] or 0,
                 "table_limit": table_limit,
                 "can_create_table": not (table_limit > 0 and current_tables >= table_limit),
@@ -828,6 +831,20 @@ class ReservationViewSet(viewsets.ModelViewSet):
         if self.action in ['partial_update', 'update']:
             return ReservationUpdateSerializer
         return ReservationSerializer  
+
+    def perform_destroy(self, instance):
+        self._assert_reservation_access(instance)
+        restaurant_id = instance.restaurant_id
+        reservation_id = instance.id
+        instance.delete()
+        if restaurant_id:
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"restaurant_{restaurant_id}",
+                    {"type": "reservation_deleted", "reservation_id": reservation_id},
+                )
+            except Exception as exc:
+                print(f"Reservation delete WS error (non-fatal): {exc}")
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
@@ -1287,6 +1304,8 @@ class SimpleDeviceListView(APIView):
             restaurant_id = restaurant.pk
             restaurant_name = restaurant.resturent_name or ""
 
+            expire_inactive_guest_sessions([restaurant_id])
+
             devices = (
                 Device.objects
                 .filter(restaurant_id=restaurant_id)
@@ -1527,6 +1546,8 @@ class SimpleDeviceListAllView(APIView):
             
             if not restaurant_ids:
                 return _no_restaurant_response()
+
+            expire_inactive_guest_sessions(restaurant_ids)
             
             from django.db.models import Count, Max, Prefetch
             from .models import GuestSession
@@ -1634,9 +1655,10 @@ class SimpleDeviceStatsView(APIView):
 
             from django.db.models import Count, Q
 
+            expire_inactive_guest_sessions([restaurant.pk])
+
             device_counts = Device.objects.filter(restaurant_id=restaurant.pk).aggregate(
                 total=Count('id'),
-                active=Count('id', filter=Q(action='active')),
                 hold=Count('id', filter=Q(action='hold')),
             )
             table_limit = int(getattr(restaurant, "table_count", 0) or 0)
@@ -1644,7 +1666,7 @@ class SimpleDeviceStatsView(APIView):
             return Response({
                 "restaurant": restaurant.resturent_name or "",
                 "total_devices": current_tables,
-                "active_devices": device_counts["active"] or 0,
+                "active_devices": occupied_device_count(restaurant.pk),
                 "hold_devices": device_counts["hold"] or 0,
                 "table_limit": table_limit,
                 "can_create_table": not (table_limit > 0 and current_tables >= table_limit),

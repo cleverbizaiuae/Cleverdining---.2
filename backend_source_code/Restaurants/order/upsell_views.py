@@ -24,7 +24,7 @@ from item.models import Item
 from restaurant.models import Restaurant
 from .models import ItemAssociation, OrderItem, UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 from .schema_guard import ensure_upsell_tables
-from .upsell import build_item_context_upsell_suggestions
+from .upsell import apply_suggestion_tone, build_item_context_upsell_suggestions
 from .upsell_cache import get_restaurant_upsell_cache_versions
 from .upsell_knowledge import (
     build_upsell_agent_context,
@@ -304,24 +304,26 @@ def _compute_pairing_intelligence(restaurant: Restaurant, min_frequency: int = 2
             order__status__in=completed_statuses,
             order__created_time__gte=cutoff,
         )
-        .values("order_id", "item_id")
-        .order_by("order_id")
+        .values("order_id", "item_id", "id")
+        .order_by("order_id", "id")
     )
 
-    order_to_item_ids = defaultdict(set)
+    order_to_item_ids = defaultdict(list)
     for row in order_item_rows:
-        order_to_item_ids[int(row["order_id"])].add(int(row["item_id"]))
+        item_id = int(row["item_id"])
+        order_items = order_to_item_ids[int(row["order_id"])]
+        if item_id not in order_items:
+            order_items.append(item_id)
 
     directed_pair_counts = defaultdict(int)
     item_counts = defaultdict(int)
     for item_ids in order_to_item_ids.values():
-        sorted_ids = sorted(item_ids)
-        for source_id in sorted_ids:
+        for source_id in item_ids:
             item_counts[source_id] += 1
-        for source_id in sorted_ids:
-            for target_id in sorted_ids:
-                if source_id == target_id:
-                    continue
+        # Preserve observed add order. A->B is learned only when B was actually
+        # added after A; do not manufacture the reverse B->A association.
+        for source_index, source_id in enumerate(item_ids):
+            for target_id in item_ids[source_index + 1:]:
                 directed_pair_counts[(source_id, target_id)] += 1
 
     now_ts = timezone.now()
@@ -1034,6 +1036,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 if is_agent_selection
                 else str(row.get("message") or "")
             )
+            suggestion_copy = apply_suggestion_tone(setting, item, suggestion_copy)
             image_url = ""
             try:
                 if getattr(item, "image1", None):

@@ -8,6 +8,7 @@ import React, {
 import { captureWebSocketFailure } from "../monitoring/sentry";
 import { getTableIdentity, removeLocalStorageSynced, setLocalStorageSynced } from "../lib/tableIdentity";
 import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
+import toast from "react-hot-toast";
 
 type WebSocketContextType = {
   ws: WebSocket | null;
@@ -210,6 +211,19 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.type === "order_cancelled") {
+          const eventSessionId = firstString(data.session_id, data.guest_session_id);
+          const eventDeviceId = firstString(data.table_id, data.device_id);
+          const eventHasTarget = Boolean(eventSessionId || eventDeviceId);
+          const eventMatchesSession = Boolean(eventSessionId && session_id && String(eventSessionId) === String(session_id));
+          const eventMatchesDevice = Boolean(eventDeviceId && device_id && String(eventDeviceId) === String(device_id));
+
+          if (!eventHasTarget || eventMatchesSession || eventMatchesDevice) {
+            toast.error(data.message || "Your order has been cancelled by the restaurant.", { duration: 6000 });
+          }
+          return;
+        }
+
         if ((data.type === 'order_status_update' && data.session_ended) || data.type === 'session_closed') {
           const eventSessionId = firstString(data.session_id, data.guest_session_id);
           const eventDeviceId = firstString(data.table_id, data.device_id);

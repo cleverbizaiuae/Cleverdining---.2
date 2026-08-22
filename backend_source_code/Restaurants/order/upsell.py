@@ -636,6 +636,25 @@ def _copy_for_pairing(cart_items: List[Item], candidate: Item, setting: UpsellSe
     return label, reason
 
 
+def apply_suggestion_tone(setting: UpsellSetting, candidate: Item, suggestion_copy: str) -> str:
+    """Guarantee that the configured customer-facing tone reaches the final response."""
+    tone_aliases = {
+        "professional": "premium",
+        "playful": "friendly",
+        "luxury_casual": "friendly",
+    }
+    tone = tone_aliases.get(setting.tone, setting.tone)
+    item_name = candidate.item_name or "this item"
+    if tone == "premium":
+        return f"Complete your selection with {item_name}."
+    if tone == "minimal":
+        currency = str(getattr(candidate.restaurant, "currency", "") or "").strip()
+        price = Decimal(str(candidate.price or 0)).quantize(Decimal("0.01"))
+        price_label = f"{currency} {price}".strip()
+        return f"Add {item_name}? +{price_label}"
+    return str(suggestion_copy or "").strip() or f"You might like {item_name}."
+
+
 def _current_hour_for_restaurant(tz_name: str) -> int:
     try:
         current = timezone.localtime(timezone.now(), timezone=ZoneInfo(tz_name))

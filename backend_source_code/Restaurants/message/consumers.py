@@ -203,6 +203,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "reason": event.get("reason"),
         }))
 
+    async def order_cancelled(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "order_cancelled",
+            "message": event.get("message", "Your order has been cancelled by the restaurant."),
+            "order_id": event.get("order_id"),
+            "device_id": event.get("device_id"),
+            "guest_session_id": event.get("guest_session_id"),
+        }))
+
     async def chat_cleared(self, event):
         await self.send(text_data=json.dumps(event))
 
@@ -802,6 +811,12 @@ class RestaurantConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "type": "reservation_updated",
             "reservation": event["reservation"]
+        }))
+
+    async def reservation_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "reservation_deleted",
+            "reservation_id": event["reservation_id"],
         }))
 
     async def upsell_event_updated(self, event):

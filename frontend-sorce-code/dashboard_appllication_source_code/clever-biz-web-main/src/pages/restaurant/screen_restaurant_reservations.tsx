@@ -26,6 +26,7 @@ import {
   Settings,
   Table2,
   Timer,
+  Trash2,
   Unlock,
   UserCheck,
   Users,
@@ -1122,6 +1123,22 @@ const ScreenRestaurantReservations = () => {
     await runReservationAction(reservation, "cancel", { reason });
   };
 
+  const deleteReservation = async (reservation: any) => {
+    if (!window.confirm(`Delete the reservation for ${reservation.customerName}? This cannot be undone.`)) return;
+    setOpenMenuId(null);
+    setActionLoading(true);
+    try {
+      await axiosInstance.delete(`${getReservationBase(userRole)}/${reservation.id}/`);
+      setSelectedReservation(null);
+      toast.success("Reservation deleted");
+      await refreshReservationData();
+    } catch (error: any) {
+      toast.error(formatApiError(error?.response?.data, "Failed to delete reservation"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const editReservationTime = async (reservation: any) => {
     const current = new Date(reservation.reservationTime);
     const currentParts = getZonedInputParts(current, timezone);
@@ -1397,6 +1414,7 @@ const ScreenRestaurantReservations = () => {
                               <GhostAction onClick={() => moveReservation(reservation)}><ArrowRightLeft className="mr-2 h-4 w-4 text-slate-500" strokeWidth={1.8} />Reassign Table</GhostAction>
                               <GhostAction danger onClick={() => cancelReservation(reservation)}><XCircle className="mr-2 h-4 w-4" strokeWidth={1.8} />Cancel Reservation</GhostAction>
                               <GhostAction danger onClick={() => runReservationAction(reservation, "no-show")}><UserX className="mr-2 h-4 w-4 text-rose-700" strokeWidth={1.8} />Mark No-Show</GhostAction>
+                              <GhostAction danger onClick={() => deleteReservation(reservation)}><Trash2 className="mr-2 h-4 w-4" strokeWidth={1.8} />Delete Reservation</GhostAction>
                             </div>
                           )}
                         </td>
@@ -1567,6 +1585,7 @@ const ScreenRestaurantReservations = () => {
                 <div className="mt-2 flex flex-wrap gap-2"><StatusBadge status={selectedReservation.statusKey} /><SourceBadge source={selectedReservation.sourceKey} /></div>
                 <button type="button" onClick={() => openWhatsApp(selectedReservation.cellNumber)} className="mt-3 inline-flex items-center rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1ea855]"><MessageCircle className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />Message on WhatsApp</button>
                 <button type="button" onClick={() => editReservationTime(selectedReservation)} className="ml-2 mt-3 inline-flex items-center rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"><CalendarDays className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />Edit Date / Time</button>
+                <button type="button" disabled={actionLoading} onClick={() => deleteReservation(selectedReservation)} className="ml-2 mt-3 inline-flex items-center rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />Delete Reservation</button>
               </section>
 
               <section className="rounded-xl bg-slate-50 p-4">

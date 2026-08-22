@@ -163,8 +163,8 @@ class DailyStatsAPIView(APIView):
         today_start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
         queryset = _order_queryset(request).filter(created_time__gte=today_start, created_time__lt=today_end)
-        active_queryset = queryset.exclude(status="cancelled")
-        paid_queryset = queryset.filter(PAID_ORDER_FILTER)
+        active_queryset = queryset.exclude(status__in=["cancelled", "canceled"])
+        paid_queryset = active_queryset.filter(PAID_ORDER_FILTER)
 
         revenue = _to_decimal(paid_queryset.aggregate(total=Sum("total_price"))["total"])
         orders_count = active_queryset.count()
@@ -205,10 +205,13 @@ class SalesAnalyticsAPIView(APIView):
         rows = (
             _order_queryset(request)
             .filter(created_time__gte=start, created_time__lte=end)
-            .filter(PAID_ORDER_FILTER)
+            .exclude(status__in=["cancelled", "canceled"])
             .annotate(period=trunc("created_time"))
             .values("period")
-            .annotate(revenue=Sum("total_price"), orders=Count("id"))
+            .annotate(
+                revenue=Sum("total_price", filter=PAID_ORDER_FILTER),
+                orders=Count("id"),
+            )
             .order_by("period")
         )
 

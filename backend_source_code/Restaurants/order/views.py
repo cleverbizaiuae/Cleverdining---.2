@@ -26,6 +26,7 @@ from payment.schema_guard import ensure_payment_schema
 from decimal import Decimal
 channel_layer = get_channel_layer()
 from message.models import ChatMessage
+from device.reservation_services import active_reservation
 from datetime import datetime
 from calendar import monthrange
 
@@ -135,6 +136,23 @@ def _cancel_pending_payments(order):
         order.payment_status = "unpaid"
 
 
+def _notify_customer_order_cancelled(order):
+    """Push a targeted cancellation notice through the customer's live chat socket."""
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"restaurant_chat_{order.restaurant_id}",
+            {
+                "type": "order_cancelled",
+                "order_id": order.id,
+                "device_id": order.device_id,
+                "guest_session_id": order.guest_session_id,
+                "message": f"Order #{order.id} has been cancelled by the restaurant.",
+            },
+        )
+    except Exception as exc:
+        print(f"[WS-NOTIFY] Failed to send order cancellation to customer: {exc}")
+
+
 
 class OrderCreateAPIView(generics.CreateAPIView):
     serializer_class = OrderCreateSerializerFixed
@@ -199,6 +217,16 @@ class OrderCreateAPIView(generics.CreateAPIView):
 
         device = session.device
         restaurant = device.restaurant
+
+        blocking_reservation = active_reservation(device.id)
+        if blocking_reservation:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({
+                "code": "table_reserved",
+                "message": "This table is currently reserved and cannot accept new orders.",
+                "reservation_id": blocking_reservation.id,
+                "reserved_until": blocking_reservation.end_time,
+            })
         
         # --- BUSINESS DAY LOGIC ---
         from restaurant.models import BusinessDay
@@ -797,6 +825,8 @@ class OwnerUpdateOrderStatusAPIView(APIView):
         if new_status == "cancelled":
             _cancel_pending_payments(order)
         order.save(update_fields=['status', 'payment_status', 'updated_time'])
+        if new_status == "cancelled":
+            _notify_customer_order_cancelled(order)
 
         import sys
         cl_backend = type(channel_layer).__name__
@@ -1011,6 +1041,8 @@ class ChefStaffUpdateOrderStatusAPIView(APIView):
         if new_status == "cancelled":
             _cancel_pending_payments(order)
         order.save(update_fields=['status', 'payment_status', 'updated_time'])
+        if new_status == "cancelled":
+            _notify_customer_order_cancelled(order)
 
         if order.status == "completed":
             ChatMessage.objects.filter(
@@ -1140,7 +1172,9 @@ class OrderAnalyticsAPIView(APIView):
                 qs = Order.objects.filter(
                     restaurant_id__in=restaurant_ids,
                     created_time__range=[s_date, e_date]
-                ).filter(Q(status='completed') | Q(payment_status='paid'))
+                ).exclude(status__in=['cancelled', 'canceled']).filter(
+                    Q(status='completed') | Q(payment_status='paid')
+                )
 
                 # Aggregate by Time Unit
                 aggregated = (
