@@ -246,7 +246,7 @@ const TRIGGER_OPTIONS: Array<{
   {
     key: "show_after_add_to_cart",
     label: "After Add to Cart",
-    description: "One smart suggestion fires the moment a customer adds any item. This is the highest-converting moment - customer is in buying mode.",
+    description: "One smart suggestion appears on the first add, then refreshes only after a meaningful cart change so customers are not interrupted after every item.",
     icon: ShoppingCart,
   },
   {
@@ -269,7 +269,7 @@ const SMART_SUGGESTION_ROWS = [
   ["Has a main + dessert", "Suggests a drink next"],
   ["Has a main + drink + dessert", "Suggests a starter or premium add-on"],
   ["Has a drink only", "Suggests a main dish first"],
-  ["Has a dessert only", "Suggests a hot drink or juice"],
+  ["Has a dessert only", "Suggests a main dish first"],
   ["Has a starter only", "Suggests a main dish"],
 ];
 
