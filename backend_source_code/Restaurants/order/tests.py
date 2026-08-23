@@ -2196,7 +2196,7 @@ class UpsellKnowledgeEngineTests(TestCase):
             limit=5,
             apply_surface_limit=False,
         )
-        chosen = rows[-1]["item"]
+        chosen = rows[0]["item"]
         request = APIRequestFactory().get(
             "/api/upsell/smart-suggestions",
             {
@@ -2211,7 +2211,7 @@ class UpsellKnowledgeEngineTests(TestCase):
             "suggest_nothing": False,
             "suggested_item_id": chosen.id,
             "suggested_item_name": chosen.item_name,
-            "target_role": rows[-1]["target_role"],
+            "target_role": rows[0]["target_role"],
             "reason": None,
             "reasoning": "Best valid candidate for this cart.",
             "suggestion_copy": "A lighter finish for your order.",
@@ -2232,6 +2232,45 @@ class UpsellKnowledgeEngineTests(TestCase):
             all(row["decision_source"] == "llm" for row in response.data["results"])
         )
         self.assertEqual(response.data["knowledge_base"]["llm_status"], "ok")
+
+    def test_balanced_smart_suggestions_only_offer_primary_culinary_pair_to_llm(self):
+        request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "add_to_cart",
+                "limit": 2,
+            },
+        )
+
+        def choose_only_candidate(context, **_kwargs):
+            self.assertEqual(
+                [candidate["id"] for candidate in context["candidates"]],
+                [self.cola.id],
+            )
+            return (
+                {
+                    "suggest_nothing": False,
+                    "suggested_item_id": self.cola.id,
+                    "suggested_item_name": self.cola.item_name,
+                    "target_role": context["candidates"][0]["target_role"],
+                    "reason": None,
+                    "reasoning": "The strongest culinary match for a burger.",
+                    "suggestion_copy": "The classic drink pairing for your burger.",
+                    "confidence": 0.95,
+                },
+                "ok",
+            )
+
+        with patch("order.upsell_views.call_upsell_llm", side_effect=choose_only_candidate):
+            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], self.cola.id)
+        self.assertEqual(response.data["results"][0]["decision_source"], "llm")
 
     def test_smart_suggestions_returns_pending_without_a_deterministic_result(self):
         request = APIRequestFactory().get(

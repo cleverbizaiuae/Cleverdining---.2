@@ -1153,8 +1153,20 @@ def _build_upsell_suggestions_for_items(
             score += 12
             reasons["gap"] = reasons.get("gap", 0) + 12
 
+        candidate_profiles = set(candidate_metadata.get("profiles") or _item_profiles(candidate))
+        primary_culinary_pair = False
         culinary_points = 0
         for cart_source in cart_source_items:
+            source_metadata = item_intelligence.get(str(cart_source.id), {})
+            source_profiles = set(
+                source_metadata.get("profiles") or _item_profiles(cart_source)
+            )
+            if any(
+                FOOD_PROFILE_PAIRINGS.get(source_profile, ())[:1]
+                and FOOD_PROFILE_PAIRINGS[source_profile][0] in candidate_profiles
+                for source_profile in source_profiles
+            ):
+                primary_culinary_pair = True
             culinary_points += int(
                 pair_compatibility.get(str(cart_source.id), {}).get(str(candidate.id), 0)
             )
@@ -1191,7 +1203,6 @@ def _build_upsell_suggestions_for_items(
             reasons["pair"] = reasons.get("pair", 0) + category_pair_points
 
         time_points = 0
-        candidate_profiles = set(candidate_metadata.get("profiles") or _item_profiles(candidate))
         if 6 <= hour < 11:
             if {"coffee", "tea"} & candidate_profiles:
                 time_points = 10
@@ -1311,6 +1322,7 @@ def _build_upsell_suggestions_for_items(
                     f"target {target_role}; venue {venue_type}; backend score {int(score)}."
                 ),
                 "manual_pair": candidate.id in pair_boost_targets,
+                "primary_culinary_pair": primary_culinary_pair,
                 "historical_max_strength": float(historical.get("max_strength", 0.0)) if historical else 0.0,
                 "historical_max_frequency": int(historical.get("max_frequency", 0.0)) if historical else 0,
                 "historical_total_frequency": float(historical.get("total_frequency", 0.0)) if historical else 0.0,

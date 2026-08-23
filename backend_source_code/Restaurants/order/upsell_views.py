@@ -927,6 +927,17 @@ class UpsellSmartSuggestionsAPIView(APIView):
             for row in engine_rows
             if row.get("item") and row["item"].id not in excluded_ids
         ]
+        # Balanced recommendations must preserve the backend's strongest
+        # culinary pairing. The LLM still writes the customer-facing copy, but
+        # it cannot replace a primary match (for example, burger + cola) with a
+        # weaker candidate from the broader valid shortlist.
+        strategy = str(getattr(setting, "strategy", "balanced") or "balanced").strip().lower()
+        if strategy in {"balanced", "highest_conversion"}:
+            primary_pair_rows = [
+                row for row in eligible_engine_rows if row.get("primary_culinary_pair")
+            ]
+            if primary_pair_rows:
+                eligible_engine_rows = primary_pair_rows
         cart_items = list(
             Item.objects.select_related("category", "sub_category").filter(
                 restaurant=restaurant,
