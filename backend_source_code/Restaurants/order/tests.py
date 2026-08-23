@@ -228,6 +228,45 @@ class PayBeforeOrderFlowTests(TestCase):
         self.assertEqual(visible_attempts[0]["provider"], "cash")
         self.assertEqual(visible_attempts[0]["status"], "pending")
 
+    def test_bulk_cash_request_preserves_latest_fulfilment_status(self):
+        self.brand_config.pay_before_order = False
+        self.brand_config.save(update_fields=["pay_before_order"])
+        response = self._place_order("card")
+        self.assertEqual(response.status_code, 201)
+        order = Order.objects.get(pk=response.json()["id"])
+        order.status = "served"
+        order.save(update_fields=["status", "updated_time"])
+        sent_events = []
+
+        def fake_async_to_sync(_callable):
+            def send(group, payload):
+                sent_events.append((group, payload))
+
+            return send
+
+        with patch("payment.views.async_to_sync", side_effect=fake_async_to_sync):
+            cash_response = self.client.post(
+                "/api/customer/create-bulk-checkout-session/",
+                {"provider": "cash"},
+                format="json",
+                HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+            )
+
+        self.assertEqual(cash_response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "served")
+        self.assertEqual(order.payment_status, "pending_cash")
+
+        session_events = [
+            payload
+            for group, payload in sent_events
+            if group == f"session_{self.session.id}"
+        ]
+        self.assertEqual(len(session_events), 1)
+        self.assertEqual(session_events[0]["type"], "payment_status_update")
+        self.assertEqual(session_events[0]["payment_status"], "pending_cash")
+        self.assertNotIn("status", session_events[0])
+
     def test_cancelling_order_retires_pending_cash_payment(self):
         self.brand_config.pay_before_order = False
         self.brand_config.save(update_fields=["pay_before_order"])

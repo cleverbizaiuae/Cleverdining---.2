@@ -693,12 +693,11 @@ class PaymeAdapter(PaymentAdapter):
 
 class CashAdapter(PaymentAdapter):
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
-        # Prepayment orders must remain outside the kitchen until staff confirms
-        # collection. Post-meal orders can remain in the normal cash-wait state.
-        is_prepayment = order.status == 'awaiting_payment'
-        order.status = 'awaiting_payment' if is_prepayment else 'awaiting_cash'
+        # Cash collection changes payment state only. Fulfilment remains owned
+        # by the kitchen/staff, including ready, served, and delivered orders.
+        # Prepayment orders already use awaiting_payment and remain there.
         order.payment_status = 'pending_cash'
-        order.save()
+        order.save(update_fields=['payment_status', 'updated_time'])
 
         # Broadcast Cash Alert to Restaurant (Dashboard)
         from channels.layers import get_channel_layer

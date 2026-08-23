@@ -279,9 +279,8 @@ class CreateBulkCheckoutSessionView(APIView):
                 if not all_orders:
                      return Response({'error': 'No orders to process'}, status=400)
 
-                # Record cash as the active payment method for every order.
-                # CashAdapter deliberately preserves awaiting_payment so
-                # pay-before orders cannot reach the kitchen before collection.
+                # Record cash as the active payment method without changing the
+                # latest fulfilment status selected by kitchen/staff.
                 for cash_order in all_orders:
                     outstanding = max(
                         Decimal(cash_order.total_price or 0)
@@ -351,19 +350,17 @@ class CreateBulkCheckoutSessionView(APIView):
                 except Exception as ws_err:
                     print(f"[CASH-PAYMENT] ⚠️ Redis/WS notification failed (restaurant alert): {ws_err}", file=sys.stderr)
                 
-                # Notify User Session
-                bulk_status = (
-                    'awaiting_payment'
-                    if any(order.status == 'awaiting_payment' for order in all_orders)
-                    else 'awaiting_cash'
-                )
+                # Notify the customer about payment state only. Sending an
+                # order_status_update here previously reverted every order to
+                # awaiting_cash even when staff had already served it.
                 try:
                     async_to_sync(channel_layer.group_send)(
                         f"session_{session.id}",
                         {
-                            "type": "order_status_update", 
-                            "status": bulk_status,
-                            "bulk": True
+                            "type": "payment_status_update",
+                            "payment_status": "pending_cash",
+                            "order_ids": [order.id for order in all_orders],
+                            "bulk": True,
                         }
                     )
                 except Exception as ws_err:

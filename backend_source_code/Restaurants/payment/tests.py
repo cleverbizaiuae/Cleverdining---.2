@@ -12,6 +12,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 from accounts.models import User
 from payment.models import Payment, PaymentGateway, PaymentProviderEvent
 from payment.models import StripeDetails
+from payment.adapters import CashAdapter
 from payment.provider_registry import PAYMENT_PROVIDER_CODES, PROVIDER_CLASSES
 from payment.services import PaymentService, _mark_order_payment_progress
 from restaurant.models import Restaurant
@@ -85,6 +86,27 @@ class PreOrderPaymentSettlementTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.payment_status, "paid")
         self.assertEqual(order.status, "served")
+
+    def test_cash_request_preserves_latest_fulfilment_status(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="served",
+            payment_status="unpaid",
+            total_price="50.00",
+        )
+
+        CashAdapter(None).create_payment_session(
+            order,
+            "https://customer.example/payment/success",
+            "https://customer.example/payment/cancel",
+            amount="50.00",
+            metadata={"suppress_cash_alert": True},
+        )
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, "served")
+        self.assertEqual(order.payment_status, "pending_cash")
 
 
 class CompletedGuestPaymentSessionTests(TestCase):
