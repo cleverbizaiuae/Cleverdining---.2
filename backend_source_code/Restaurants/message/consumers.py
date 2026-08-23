@@ -187,8 +187,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({"error": f"Error: {str(e)}"}))
 
     async def chat_message(self, event):
-        # Unified Handler: Just push whatever comes to the socket
+        # Restaurant chat uses one shared channel group so staff can monitor all
+        # tables. Never forward another table/session's chat event to a guest.
+        if self.is_guest and not self._chat_event_matches_guest(event):
+            return
         await self.send(text_data=json.dumps(event))
+
+    def _chat_event_matches_guest(self, event):
+        event_session_id = str(
+            event.get('guest_session_id') or event.get('session_id') or ''
+        ).strip()
+        connection_session_id = str(getattr(self, 'session_id', '') or '').strip()
+        if event_session_id and connection_session_id:
+            return event_session_id == connection_session_id
+
+        event_device_id = str(
+            event.get('device_id') or event.get('table_id') or ''
+        ).strip()
+        connection_device_id = str(getattr(self, 'device_id', '') or '').strip()
+        return bool(
+            event_device_id
+            and connection_device_id
+            and event_device_id == connection_device_id
+        )
 
     async def session_closed(self, event):
         # Forward the target metadata so shared restaurant-room clients can

@@ -8,6 +8,45 @@ from device.models import Device
 from restaurant.models import Restaurant
 
 from .models import ChatMessage
+from .consumers import ChatConsumer
+
+
+class CustomerChatRoutingTests(TestCase):
+    def setUp(self):
+        self.consumer = ChatConsumer()
+        self.consumer.is_guest = True
+        self.consumer.device_id = "1"
+        self.consumer.session_id = "101"
+
+    def test_manager_message_for_current_table_is_delivered(self):
+        self.assertTrue(self.consumer._chat_event_matches_guest({
+            "type": "chat_message",
+            "guest_session_id": "101",
+            "device_id": "1",
+            "is_from_device": False,
+        }))
+
+    def test_manager_message_for_other_table_is_rejected(self):
+        self.assertFalse(self.consumer._chat_event_matches_guest({
+            "type": "chat_message",
+            "guest_session_id": "202",
+            "device_id": "2",
+            "is_from_device": False,
+        }))
+
+    def test_manager_message_for_old_session_on_same_table_is_rejected(self):
+        self.assertFalse(self.consumer._chat_event_matches_guest({
+            "type": "chat_message",
+            "guest_session_id": "202",
+            "device_id": "1",
+            "is_from_device": False,
+        }))
+
+    def test_untargeted_chat_message_is_rejected(self):
+        self.assertFalse(self.consumer._chat_event_matches_guest({
+            "type": "chat_message",
+            "is_from_device": False,
+        }))
 
 
 class ClearChatPreservesTableTests(TestCase):
