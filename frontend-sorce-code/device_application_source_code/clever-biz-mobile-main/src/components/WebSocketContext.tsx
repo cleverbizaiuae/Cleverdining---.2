@@ -8,6 +8,7 @@ import React, {
 import { captureWebSocketFailure } from "../monitoring/sentry";
 import { getTableIdentity, removeLocalStorageSynced, setLocalStorageSynced } from "../lib/tableIdentity";
 import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
+import { isChatMessageForCurrentTable } from "../lib/chatMessageTarget";
 import toast from "react-hot-toast";
 
 type WebSocketContextType = {
@@ -211,6 +212,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (!isChatMessageForCurrentTable(data, {
+          guestSessionId: session_id,
+          deviceId: device_id,
+        })) {
+          return;
+        }
+
         if (data.type === "order_cancelled") {
           const eventSessionId = firstString(data.session_id, data.guest_session_id);
           const eventDeviceId = firstString(data.table_id, data.device_id);
