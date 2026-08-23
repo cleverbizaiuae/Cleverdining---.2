@@ -106,6 +106,7 @@ class PayBeforeOrderFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["status"], "awaiting_payment")
+        self.assertEqual(response.json()["order_items"][0]["item_id"], self.item.id)
 
         self.client.force_authenticate(self.owner)
         owner_response = self.client.get("/owners/orders/")
@@ -715,6 +716,25 @@ class UpsellAnalyticsImageTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_staff_cannot_access_manager_upsell_analytics(self):
+        staff = User.objects.create_user(
+            email="upsell-staff@example.com",
+            username="Upsell Staff",
+            password="test-password",
+            role="staff",
+        )
+        ChefStaff.objects.create(
+            restaurant=self.restaurant,
+            user=staff,
+            action="accepted",
+        )
+        request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(request, user=staff)
+
+        response = UpsellAnalyticsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 403)
+
 
 class UpsellKnowledgeEngineTests(TestCase):
     def setUp(self):
@@ -1175,6 +1195,19 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         self.assertGreater(len(rows), 0)
         self.assertEqual(rows[0]["item"].category.category_type, "main")
+
+    def test_dessert_only_suggests_main_before_a_drink(self):
+        rows = build_item_context_upsell_suggestions(
+            self.restaurant,
+            [self.ice_cream.id],
+            trigger_point="cart",
+            source_item_id=self.ice_cream.id,
+            limit=4,
+        )
+
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["item"].category.category_type, "main")
+        self.assertEqual(rows[0]["target_role"], "MAIN")
 
     def test_repeated_category_declines_suppress_that_category(self):
         rows = build_item_context_upsell_suggestions(

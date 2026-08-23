@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import ChefStaff
+from accounts.permissions import IsOwnerRole
 from category.models import Category
 from category.schema_guard import ensure_category_schema
 from device.models import GuestSession
@@ -482,6 +483,11 @@ class UpsellSettingsAPIView(APIView):
         _ensure_upsell_schema()
         if not (request.user and request.user.is_authenticated):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        if getattr(request.user, "role", None) not in {"owner", "manager"}:
+            return Response(
+                {"detail": "You do not have permission to manage AI Upsell settings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         restaurant = get_restaurant_for_user(request.user)
         if not restaurant:
             return Response({"detail": "Restaurant not found for user."}, status=status.HTTP_404_NOT_FOUND)
@@ -497,7 +503,7 @@ class UpsellSettingsAPIView(APIView):
 
 
 class UpsellRulesAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def get(self, request):
         _ensure_upsell_schema()
@@ -529,7 +535,7 @@ class UpsellRulesAPIView(APIView):
 
 
 class UpsellApplyPairingsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def post(self, request):
         _ensure_upsell_schema()
@@ -581,7 +587,7 @@ class UpsellApplyPairingsAPIView(APIView):
 
 
 class UpsellRuleDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def delete(self, request, pk: int):
         _ensure_upsell_schema()
@@ -1098,7 +1104,7 @@ class UpsellSmartSuggestionsAPIView(APIView):
 
 
 class UpsellAnalyticsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def get(self, request):
         _ensure_upsell_schema()
@@ -1297,7 +1303,7 @@ class UpsellAnalyticsAPIView(APIView):
 
 
 class UpsellEventsByTableAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def get(self, request):
         _ensure_upsell_schema()
@@ -1357,7 +1363,7 @@ class UpsellEventsByTableAPIView(APIView):
 
 
 class UpsellItemsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def get(self, request):
         _ensure_upsell_schema()
@@ -1456,7 +1462,7 @@ class UpsellItemsAPIView(APIView):
 
 
 class UpsellPairingIntelligenceAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerRole]
 
     def get(self, request):
         _ensure_upsell_schema()

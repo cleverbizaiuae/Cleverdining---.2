@@ -8,6 +8,7 @@ const CART_COUNT_KEY = "cb_suggest_cart";
 const PREPAY_COUNT_KEY = "cb_suggest_prepay";
 const TOTAL_COUNT_KEY = "cb_suggest_total";
 const TOTAL_DECLINE_SCORE_KEY = "cb_suggest_decline_score";
+const LAST_ADD_TO_CART_CONTEXT_KEY = "cb_suggest_last_add_context";
 
 export type UpsellTouchpoint = "add_to_cart" | "cart" | "before_payment";
 export type UpsellAggressiveness = "subtle" | "moderate" | "aggressive";
@@ -72,8 +73,54 @@ export function resetUpsellSession(): void {
     sessionStorage.removeItem(PREPAY_COUNT_KEY);
     sessionStorage.removeItem(TOTAL_COUNT_KEY);
     sessionStorage.removeItem(TOTAL_DECLINE_SCORE_KEY);
+    sessionStorage.removeItem(LAST_ADD_TO_CART_CONTEXT_KEY);
   } catch {
     // Non-blocking
+  }
+}
+
+function normalizeCartItemIds(itemIds: number[]): number[] {
+  return Array.from(
+    new Set(
+      itemIds
+        .map((itemId) => Number(itemId))
+        .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+export function shouldRefreshAddToCartUpsell(itemIds: number[]): boolean {
+  const currentIds = normalizeCartItemIds(itemIds);
+  if (!currentIds.length) return false;
+
+  try {
+    const raw = sessionStorage.getItem(LAST_ADD_TO_CART_CONTEXT_KEY);
+    if (!raw) return true;
+    const previousIds = normalizeCartItemIds(JSON.parse(raw));
+    if (!previousIds.length) return true;
+
+    const currentSet = new Set(currentIds);
+    const previousSet = new Set(previousIds);
+    const removedCount = previousIds.filter((itemId) => !currentSet.has(itemId)).length;
+    const addedCount = currentIds.filter((itemId) => !previousSet.has(itemId)).length;
+
+    // A removal changes the meal composition immediately. For additions, wait
+    // until at least two new products have accumulated so moderate/aggressive
+    // modes do not interrupt the guest after every single add.
+    return removedCount > 0 || addedCount >= 2;
+  } catch {
+    return true;
+  }
+}
+
+export function markAddToCartUpsellContext(itemIds: number[]): void {
+  try {
+    sessionStorage.setItem(
+      LAST_ADD_TO_CART_CONTEXT_KEY,
+      JSON.stringify(normalizeCartItemIds(itemIds)),
+    );
+  } catch {
+    // Non-blocking session optimization.
   }
 }
 

@@ -30,6 +30,8 @@ import {
   markUpsellItemAccepted,
   markUpsellItemDismissed,
   markUpsellItemsShown,
+  markAddToCartUpsellContext,
+  shouldRefreshAddToCartUpsell,
   trackUpsellCategoryDecline,
   trackUpsellCategoryView,
 } from "../lib/upsellSession";
@@ -329,6 +331,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       shownSignatureRef.current = signature;
 
       markUpsellItemsShown(shownItems.map((suggestion) => suggestion.id));
+      markAddToCartUpsellContext(cartItemIds);
       incrementUpsellTouchpointCount("add_to_cart", shownItems.length);
       void logUpsellShownBatch({
         triggerPoint: "add_to_cart",
@@ -382,6 +385,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       const currentSessionLimit = getUpsellSessionCap(currentAggressiveness);
       const shouldRequest =
         isUpsellTriggerEnabled(settings, "add_to_cart") &&
+        shouldRefreshAddToCartUpsell(cartItemIds) &&
         canShowUpsellSession(currentAggressiveness) &&
         canShowUpsellTouchpoint("add_to_cart", currentTriggerLimit, currentSessionLimit);
 

@@ -536,7 +536,7 @@ def get_gap_priority(
     if has_cold_drink and not has_main:
         return _filter_declined_roles([ROLE_MAIN, ROLE_STARTER, ROLE_DESSERT], declined_roles)
     if has_dessert and not has_any_drink:
-        return _filter_declined_roles([ROLE_DRINK_HOT, ROLE_DRINK_COLD], declined_roles)
+        return _filter_declined_roles([ROLE_MAIN, ROLE_DRINK_HOT, ROLE_DRINK_COLD], declined_roles)
     if has_starter and not has_main:
         return _filter_declined_roles([ROLE_MAIN, ROLE_DRINK_COLD, ROLE_DESSERT], declined_roles)
     return []

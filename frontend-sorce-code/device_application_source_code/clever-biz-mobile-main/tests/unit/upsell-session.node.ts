@@ -5,7 +5,9 @@ import {
   getUpsellSessionCap,
   getUpsellTriggerLimit,
   incrementUpsellTouchpointCount,
+  markAddToCartUpsellContext,
   resetUpsellSession,
+  shouldRefreshAddToCartUpsell,
   type UpsellAggressiveness,
 } from "../../src/lib/upsellSession.ts";
 
@@ -71,5 +73,13 @@ incrementUpsellTouchpointCount("add_to_cart", 2);
 assert.equal(getRemainingUpsellAllowance("add_to_cart", "subtle"), 0);
 assert.equal(getRemainingUpsellAllowance("cart", "subtle"), 1);
 assert.equal(canShowUpsellSession("subtle"), true);
+
+resetUpsellSession();
+assert.equal(shouldRefreshAddToCartUpsell([1]), true);
+markAddToCartUpsellContext([1]);
+assert.equal(shouldRefreshAddToCartUpsell([1, 2]), false);
+assert.equal(shouldRefreshAddToCartUpsell([1, 2, 3]), true);
+markAddToCartUpsellContext([1, 2, 3]);
+assert.equal(shouldRefreshAddToCartUpsell([2, 3]), true);
 
 console.log("upsell session allowance checks passed");

@@ -36,6 +36,29 @@ import {
 } from "./order-lifecycle";
 import { GameHub } from "@/components/Games";
 import { useOnlinePaymentAvailability } from "@/hooks/useOnlinePaymentAvailability";
+import { OptimizedImage } from "@/components/OptimizedImage";
+import {
+  fetchUpsellSettings,
+  fetchUpsellSuggestions,
+  isUpsellTriggerEnabled,
+  logUpsellAssociationStat,
+  logUpsellEvent,
+  logUpsellShownBatch,
+  type UpsellSuggestion,
+} from "@/lib/upsellApi";
+import {
+  canShowUpsellSession,
+  canShowUpsellTouchpoint,
+  getRemainingUpsellAllowance,
+  getUpsellExcludedItemIds,
+  getUpsellSessionCap,
+  getUpsellTriggerLimit,
+  incrementUpsellTouchpointCount,
+  markUpsellItemAccepted,
+  markUpsellItemDismissed,
+  markUpsellItemsShown,
+} from "@/lib/upsellSession";
+import { getEffectiveItemPrice } from "@/utils/pricing";
 
 type BackendOrderItem = {
   id?: number;
@@ -77,6 +100,7 @@ type TreatPayload = {
 
 type FlatOrderItem = {
   key: string;
+  itemId?: number;
   orderId: string;
   backendOrderId?: string;
   name: string;
@@ -273,6 +297,9 @@ const ScreenOrders = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
+  const [beforePaymentUpsell, setBeforePaymentUpsell] = useState<UpsellSuggestion | null>(null);
+  const [beforePaymentUpsellLoading, setBeforePaymentUpsellLoading] = useState(false);
+  const [addingBeforePaymentUpsell, setAddingBeforePaymentUpsell] = useState(false);
 
   const [treat, setTreat] = useState<TreatPayload | null>(() => readStoredTreat(treatKey));
 
@@ -285,6 +312,7 @@ const ScreenOrders = () => {
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const sessionClearedRef = useRef(false);
   const paymentCompletionStartedRef = useRef(false);
+  const beforePaymentShownSignatureRef = useRef("");
   const [highlightedOrderIds, setHighlightedOrderIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"list" | "games">("list");
 
@@ -519,6 +547,7 @@ const ScreenOrders = () => {
         const price = toNumber(item.price);
         return {
           key: `${order.id}::${index}::${item.name || item.item_name || "item"}`,
+          itemId: Number(item.item_id || 0) || undefined,
           orderId: String(order.id),
           backendOrderId: order.backendId,
           name: item.name || item.item_name || "Item",
@@ -575,6 +604,164 @@ const ScreenOrders = () => {
   const grandTotal = subtotal + tipAmount;
   const displayTotal = splitMode === "count" ? grandTotal / Math.max(splitCount, 1) : grandTotal;
   const hasPayableOrders = unpaidOrders.length > 0;
+  const orderedItemIds = useMemo(
+    () => Array.from(new Set(allItems.map((item) => Number(item.itemId || 0)).filter((itemId) => itemId > 0))),
+    [allItems],
+  );
+  const orderedItemIdsFingerprint = orderedItemIds.join(",");
+
+  const loadBeforePaymentUpsell = useCallback(async () => {
+    if (!hasPayableOrders || !orderedItemIds.length) {
+      setBeforePaymentUpsell(null);
+      return;
+    }
+
+    setBeforePaymentUpsellLoading(true);
+    try {
+      const settings = await fetchUpsellSettings();
+      const aggressiveness = settings.aggressiveness || "moderate";
+      const triggerLimit = getUpsellTriggerLimit("before_payment", aggressiveness);
+      const sessionLimit = getUpsellSessionCap(aggressiveness);
+      if (
+        !isUpsellTriggerEnabled(settings, "before_payment") ||
+        !canShowUpsellSession(aggressiveness) ||
+        !canShowUpsellTouchpoint("before_payment", triggerLimit, sessionLimit)
+      ) {
+        setBeforePaymentUpsell(null);
+        return;
+      }
+
+      const suggestions = await fetchUpsellSuggestions({
+        triggerPoint: "before_payment",
+        limit: 1,
+        restaurantId: Number(tableInfo.restaurantId || 0) || undefined,
+        cartItemIds: orderedItemIds,
+        excludeItemIds: Array.from(new Set([...orderedItemIds, ...getUpsellExcludedItemIds()])),
+      }, { preferRecent: true });
+      const remainingAllowance = getRemainingUpsellAllowance("before_payment", aggressiveness);
+      setBeforePaymentUpsell(remainingAllowance > 0 ? suggestions[0] || null : null);
+    } catch {
+      setBeforePaymentUpsell(null);
+    } finally {
+      setBeforePaymentUpsellLoading(false);
+    }
+  }, [hasPayableOrders, orderedItemIds, tableInfo.restaurantId]);
+
+  useEffect(() => {
+    void loadBeforePaymentUpsell();
+  }, [loadBeforePaymentUpsell]);
+
+  useEffect(() => {
+    if (!isCheckoutOpen || !beforePaymentUpsell) return;
+    const signature = `${orderedItemIdsFingerprint}:${beforePaymentUpsell.id}`;
+    if (beforePaymentShownSignatureRef.current === signature) return;
+    beforePaymentShownSignatureRef.current = signature;
+    markUpsellItemsShown([beforePaymentUpsell.id]);
+    incrementUpsellTouchpointCount("before_payment", 1);
+    void Promise.allSettled([
+      logUpsellShownBatch({
+        triggerPoint: "before_payment",
+        suggestions: [beforePaymentUpsell],
+        cartValueAtTime: fullSubtotal,
+        cartItemCount: allItems.reduce((sum, item) => sum + item.quantity, 0),
+        metadata: { surface: "payment_checkout" },
+      }),
+      logUpsellAssociationStat({
+        triggerPoint: "before_payment",
+        action: "shown",
+        sourceItemIds: orderedItemIds,
+        upsellItemId: beforePaymentUpsell.id,
+        metadata: { surface: "payment_checkout" },
+      }),
+    ]);
+  }, [allItems, beforePaymentUpsell, fullSubtotal, isCheckoutOpen, orderedItemIds, orderedItemIdsFingerprint]);
+
+  const addBeforePaymentUpsell = async () => {
+    if (!beforePaymentUpsell || addingBeforePaymentUpsell) return;
+    const guestToken = localStorage.getItem("guest_session_token");
+    if (!guestToken) {
+      toast.error("Table session expired. Please scan the QR code again.");
+      return;
+    }
+
+    setAddingBeforePaymentUpsell(true);
+    try {
+      const rawUserInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+      const restaurant = Number(
+        tableInfo.restaurantId || rawUserInfo?.user?.restaurants?.[0]?.id || rawUserInfo?.restaurant_id || 0,
+      );
+      const device = Number(
+        tableInfo.deviceId || rawUserInfo?.user?.restaurants?.[0]?.device_id || rawUserInfo?.device_id || 0,
+      );
+      if (!restaurant || !device) throw new Error("Table details are unavailable.");
+
+      const suggestion = beforePaymentUpsell;
+      const response = await axiosInstance.post(
+        `/api/customer/orders/?guest_token=${encodeURIComponent(guestToken)}`,
+        {
+          restaurant,
+          device,
+          order_items: [{ item: suggestion.id, quantity: 1 }],
+          guest_session_token: guestToken,
+          payment_method: "card",
+        },
+        { headers: { "X-Guest-Session-Token": guestToken } },
+      );
+
+      markUpsellItemAccepted(suggestion.id);
+      setBeforePaymentUpsell(null);
+      beforePaymentShownSignatureRef.current = "";
+      invalidateApiCache("/api/customer/uncomplete/orders/");
+      await fetchBackendOrders();
+      toast.success(`${suggestion.item_name} added to your order`);
+      void Promise.allSettled([
+        logUpsellEvent({
+          triggerPoint: "before_payment",
+          action: "accepted",
+          suggestion,
+          cartValueAtTime: fullSubtotal,
+          cartItemCount: allItems.reduce((sum, item) => sum + item.quantity, 0),
+          metadata: { surface: "payment_checkout", supplemental_order_id: response?.data?.id },
+        }),
+        logUpsellAssociationStat({
+          triggerPoint: "before_payment",
+          action: "accepted",
+          sourceItemIds: orderedItemIds,
+          upsellItemId: suggestion.id,
+          upsellPrice: getEffectiveItemPrice(suggestion),
+          metadata: { surface: "payment_checkout", supplemental_order_id: response?.data?.id },
+        }),
+      ]);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setAddingBeforePaymentUpsell(false);
+    }
+  };
+
+  const dismissBeforePaymentUpsell = () => {
+    if (!beforePaymentUpsell) return;
+    const suggestion = beforePaymentUpsell;
+    markUpsellItemDismissed(suggestion.id);
+    setBeforePaymentUpsell(null);
+    void Promise.allSettled([
+      logUpsellEvent({
+        triggerPoint: "before_payment",
+        action: "declined",
+        suggestion,
+        cartValueAtTime: fullSubtotal,
+        cartItemCount: allItems.reduce((sum, item) => sum + item.quantity, 0),
+        metadata: { surface: "payment_checkout" },
+      }),
+      logUpsellAssociationStat({
+        triggerPoint: "before_payment",
+        action: "dismissed",
+        sourceItemIds: orderedItemIds,
+        upsellItemId: suggestion.id,
+        metadata: { surface: "payment_checkout" },
+      }),
+    ]);
+  };
 
   const chosenPointer = useMemo(
     () => chwaziPoints.find((pointer) => pointer.id === chosenPointerId) || null,
@@ -1141,6 +1328,54 @@ const ScreenOrders = () => {
                       )}
                     </div>
 
+                    {(beforePaymentUpsell || beforePaymentUpsellLoading) && (
+                      <div className="space-y-2.5">
+                        <p className={SECTION_LABEL_CLASS}>Complete Your Order</p>
+                        {beforePaymentUpsell ? (
+                          <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-3">
+                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white bg-white">
+                              <OptimizedImage
+                                src={beforePaymentUpsell.image1}
+                                alt={beforePaymentUpsell.item_name}
+                                width={48}
+                                height={48}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-slate-800">{beforePaymentUpsell.item_name}</p>
+                              <p className="line-clamp-2 text-[11px] leading-4 text-slate-500">
+                                {beforePaymentUpsell.upsell_message || "A final touch that goes naturally with your order."}
+                              </p>
+                              <p className="mt-0.5 text-xs font-bold text-primary">
+                                {fmt(getEffectiveItemPrice(beforePaymentUpsell))}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 flex-col gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void addBeforePaymentUpsell()}
+                                disabled={addingBeforePaymentUpsell}
+                                className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                              >
+                                {addingBeforePaymentUpsell ? "Adding..." : "+ Add"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={dismissBeforePaymentUpsell}
+                                disabled={addingBeforePaymentUpsell}
+                                className="px-2 py-1 text-[10px] font-semibold text-slate-400 disabled:opacity-60"
+                              >
+                                No thanks
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-[74px] animate-pulse rounded-2xl border border-slate-100 bg-slate-50" aria-label="Loading final add-on" />
+                        )}
+                      </div>
+                    )}
+
                     <div className="space-y-2.5">
                       <p className={SECTION_LABEL_CLASS}>Split Bill</p>
                       <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl">
@@ -1218,7 +1453,7 @@ const ScreenOrders = () => {
                                   key={item.key}
                                   type="button"
                                   onClick={() => toggleItem(item.key)}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-colors ${
+                                  className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-colors ${
                                     idx > 0 ? "border-t border-slate-50" : ""
                                   } ${isChecked ? "bg-primary/5 border border-primary/20" : "bg-slate-50 border border-transparent hover:bg-slate-100"}`}
                                 >
@@ -1270,16 +1505,24 @@ const ScreenOrders = () => {
                         ].map((tip) => (
                           <button
                             key={tip.id}
+                            type="button"
                             onClick={() => setTipType(tip.id as TipOption)}
-                            className={`py-2 rounded-xl text-xs font-bold border-2 ${
+                            className={`flex min-w-0 flex-col items-center justify-center rounded-xl border-2 px-0.5 py-2 text-center font-bold leading-tight ${
                               tipType === tip.id
                                 ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
                                 : "border-slate-200 bg-white text-slate-500"
                             }`}
                           >
-                            {tip.id === "none"
-                              ? "None"
-                              : `${tip.label} (${fmt((subtotal * Number(tip.id)) / 100)})`}
+                            <span className="text-xs">{tip.label}</span>
+                            {tip.id !== "none" && (
+                              <span
+                                className={`mt-0.5 max-w-full truncate text-[9px] font-semibold ${
+                                  tipType === tip.id ? "text-white/80" : "text-slate-400"
+                                }`}
+                              >
+                                {fmt((subtotal * Number(tip.id)) / 100)}
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>

@@ -7,11 +7,12 @@ from django.db.models import Sum
 
 class OrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name')
+    item_id = serializers.IntegerField(read_only=True)
     image = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
-        fields = ['item_name', 'quantity', 'price', 'image']
+        fields = ['item_id', 'item_name', 'quantity', 'price', 'image']
     
     def get_image(self, obj):
         if obj.item and obj.item.image1:
