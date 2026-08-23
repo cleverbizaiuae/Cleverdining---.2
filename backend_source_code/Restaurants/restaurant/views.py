@@ -23,7 +23,21 @@ BRAND_CONFIG_CACHE_SECONDS = 60
 
 
 def _brand_config_cache_key(restaurant_id):
-    return f"brand-config:v2:{restaurant_id}"
+    return f"brand-config:v3:{restaurant_id}"
+
+
+def _with_restaurant_brand_fallbacks(request, payload, restaurant):
+    payload = dict(payload)
+    configured_name = str(payload.get("restaurantName") or "").strip()
+    if not configured_name or configured_name.lower() == "my restaurant":
+        payload["restaurantName"] = restaurant.resturent_name or "My Restaurant"
+
+    if not payload.get("logoUrl") and restaurant.logo:
+        try:
+            payload["logoUrl"] = request.build_absolute_uri(restaurant.logo.url)
+        except (ValueError, AttributeError):
+            pass
+    return payload
 
 
 def _brand_default_payload():
@@ -145,7 +159,11 @@ class BrandConfigAPIView(APIView):
                     "restaurant_name": restaurant.resturent_name or "My Restaurant",
                 },
             )
-            payload = dict(BrandConfigSerializer(config).data)
+            payload = _with_restaurant_brand_fallbacks(
+                request,
+                BrandConfigSerializer(config).data,
+                restaurant,
+            )
             payload["restaurantId"] = restaurant.pk
             if not payload.get("googleReviewUrl"):
                 payload["googleReviewUrl"] = restaurant.google_review_url
@@ -186,7 +204,11 @@ class BrandConfigAPIView(APIView):
                 restaurant.google_review_url = google_review_url or None
                 restaurant.save(update_fields=["google_review_url"])
 
-            payload = dict(BrandConfigSerializer(updated).data)
+            payload = _with_restaurant_brand_fallbacks(
+                request,
+                BrandConfigSerializer(updated).data,
+                restaurant,
+            )
             payload["restaurantId"] = restaurant.pk
             payload["googleReviewUrl"] = restaurant.google_review_url
             cache.delete(_brand_config_cache_key(restaurant.pk))

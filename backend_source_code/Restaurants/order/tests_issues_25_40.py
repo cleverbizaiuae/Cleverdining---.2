@@ -217,6 +217,27 @@ class TableOccupancyAndSessionRegressionTests(IssueRegressionFixture):
         self.assertEqual(occupied_device_count(self.restaurant.id), 1)
         self.assertNotEqual(unused_device.id, live_order_device.id)
 
+    def test_delivered_order_does_not_keep_table_active(self):
+        Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            guest_session=self.session,
+            status="delivered",
+            payment_status="paid",
+            total_price="24.00",
+            amount_paid="24.00",
+        )
+        GuestSession.objects.filter(pk=self.session.pk).update(
+            last_seen_at=timezone.now() - timedelta(minutes=31),
+        )
+
+        expired = expire_inactive_guest_sessions([self.restaurant.id])
+
+        self.session.refresh_from_db()
+        self.assertEqual(expired, 1)
+        self.assertFalse(self.session.is_active)
+        self.assertEqual(occupied_device_count(self.restaurant.id), 0)
+
 
 class ReservationDeletionRegressionTests(IssueRegressionFixture):
     def test_owner_can_delete_reservation(self):

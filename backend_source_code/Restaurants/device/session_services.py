@@ -13,7 +13,6 @@ ACTIVE_ORDER_STATUSES = (
     "preparing",
     "ready",
     "served",
-    "delivered",
     "awaiting_cash",
 )
 

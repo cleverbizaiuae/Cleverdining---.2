@@ -156,7 +156,7 @@ const SuccessPage = () => {
   const [restaurantId, setRestaurantId] = useState<string | null>(
     () => paymentParams.restaurantId || resolveStoredRestaurantId(),
   );
-  const { brand, isLoading: isBrandLoading } = useBrandConfigResult(
+  const { brand } = useBrandConfigResult(
     restaurantId,
     paymentParams.orderId,
   );
@@ -260,6 +260,12 @@ const SuccessPage = () => {
   }, [paymentParams.orderId]);
 
   useEffect(() => {
+    if (restaurantId) {
+      localStorage.setItem("last_paid_restaurant_id", restaurantId);
+    }
+  }, [restaurantId]);
+
+  useEffect(() => {
     if (!paymentVerified || sessionCleanedRef.current) return;
     sessionCleanedRef.current = true;
     clearGuestSessionStorage();
@@ -341,7 +347,7 @@ const SuccessPage = () => {
     );
   }
 
-  if (isBrandLoading || !brandAssetsReady) {
+  if (!brandAssetsReady) {
     return (
       <div
         className="fixed inset-0 isolate flex items-center justify-center overflow-hidden"

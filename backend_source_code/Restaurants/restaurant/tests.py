@@ -62,6 +62,26 @@ class BrandConfigPaymentTimingTests(TestCase):
         self.assertTrue(response.json()["payBeforeOrder"])
         self.assertEqual(response.json()["restaurantId"], self.restaurant.id)
 
+    def test_public_config_falls_back_to_restaurant_name_and_logo(self):
+        self.config.restaurant_name = "My Restaurant"
+        self.config.logo_url = None
+        self.config.save(update_fields=["restaurant_name", "logo_url"])
+        self.restaurant.logo.name = "media/restaurant_logos/fallback-logo.png"
+        self.restaurant.save(update_fields=["logo"])
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(
+            "/api/brand-config/",
+            {"restaurant_id": self.restaurant.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["restaurantName"], "Payment Settings Restaurant")
+        self.assertEqual(
+            response.json()["logoUrl"],
+            "http://testserver/media/media/restaurant_logos/fallback-logo.png",
+        )
+
     def test_public_config_can_resolve_restaurant_from_paid_order(self):
         device = Device.objects.create(
             table_name="T1",

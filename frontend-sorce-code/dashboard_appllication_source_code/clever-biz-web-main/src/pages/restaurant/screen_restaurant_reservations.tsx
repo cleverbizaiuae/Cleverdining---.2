@@ -476,9 +476,9 @@ const Dialog360StatusCard = ({
       const response = await axiosInstance.patch("/owners/whatsapp/360dialog-settings/", payload);
       onSaved(response.data);
       setEditing(false);
-      toast.success("360dialog settings saved");
+      toast.success("WhatsApp settings saved");
     } catch (error: any) {
-      toast.error(formatApiError(error?.response?.data, "Could not save 360dialog settings"));
+      toast.error(formatApiError(error?.response?.data, "Could not save WhatsApp settings"));
     } finally {
       setSaving(false);
     }
@@ -487,7 +487,7 @@ const Dialog360StatusCard = ({
   const copyWebhook = async () => {
     if (!settings?.callbackUrl) return;
     await navigator.clipboard?.writeText(settings.callbackUrl);
-    toast.success("360dialog webhook URL copied");
+    toast.success("WhatsApp webhook URL copied");
   };
 
   return (
@@ -499,7 +499,7 @@ const Dialog360StatusCard = ({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900">360dialog WhatsApp Reservations</h2>
+              <h2 className="text-base font-bold text-slate-900">WhatsApp Reservations</h2>
               <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isConfigured ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${isConfigured ? "bg-emerald-500" : "bg-amber-500"}`} />
                 {loading ? "Checking" : isConfigured ? "Connected" : "Setup required"}
@@ -564,7 +564,7 @@ const Dialog360StatusCard = ({
               <input value={form.displayNumber} onChange={(event) => updateForm("displayNumber", event.target.value)} placeholder="+971..." className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
             </label>
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold text-slate-500">360dialog Channel ID</span>
+              <span className="text-xs font-semibold text-slate-500">WhatsApp Channel ID</span>
               <input value={form.channelId} onChange={(event) => updateForm("channelId", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
             </label>
             <label className="space-y-1.5 md:col-span-2">
@@ -572,7 +572,7 @@ const Dialog360StatusCard = ({
               <input value={form.verifyToken} onChange={(event) => updateForm("verifyToken", event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
             </label>
             <label className="space-y-1.5 md:col-span-2">
-              <span className="text-xs font-semibold text-slate-500">360dialog API Key</span>
+              <span className="text-xs font-semibold text-slate-500">WhatsApp API Key</span>
               <input value={form.apiKey} onChange={(event) => updateForm("apiKey", event.target.value)} type="password" placeholder={settings?.configured ? "Leave blank to keep existing key" : "Paste API key"} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
             </label>
             <label className="space-y-1.5">
@@ -593,7 +593,7 @@ const Dialog360StatusCard = ({
             </label>
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Use approved 360dialog utility-template names so reminders are delivered after WhatsApp's 24-hour service window.
+            Use approved WhatsApp utility-template names so reminders are delivered after WhatsApp's 24-hour service window.
           </p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-3">
@@ -612,7 +612,7 @@ const Dialog360StatusCard = ({
               disabled={saving}
               className="inline-flex h-9 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Save 360dialog Setup"}
+              {saving ? "Saving..." : "Save WhatsApp Setup"}
             </button>
           </div>
         </div>

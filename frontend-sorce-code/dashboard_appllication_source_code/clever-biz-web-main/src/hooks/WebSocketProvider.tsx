@@ -250,6 +250,20 @@ const WebSocketProvider = ({ children }) => {
     }
   }, []);
 
+  const handleReadyOrderCollected = useCallback(async (alert: StaffReadyOrderAlert) => {
+    try {
+      await axiosInstance.patch(`/api/staff/orders/status/${alert.id}/`, {
+        status: "delivered",
+      });
+      setReadyOrderAlerts((previous) => previous.filter((entry) => entry.id !== alert.id));
+      toast.success(`Order #${alert.id} marked as collected.`);
+      await refreshStaffServiceAlerts();
+    } catch (error: any) {
+      const message = error?.response?.data?.error || error?.response?.data?.detail;
+      toast.error(message || "Could not mark the order as collected.");
+    }
+  }, [refreshStaffServiceAlerts]);
+
   // Cross-tab sync via BroadcastChannel
   useEffect(() => {
     const channelName = getUnreadSyncChannelName(id, dashboardRole);
@@ -876,7 +890,7 @@ const WebSocketProvider = ({ children }) => {
                           {isCash
                             ? `${tableName} would like to pay by cash`
                             : isReady
-                              ? `${tableName} is ready to serve`
+                              ? `${tableName} is ready to collect`
                               : `${tableName} needs a team member`}
                         </p>
                         {isCash && (
@@ -899,28 +913,45 @@ const WebSocketProvider = ({ children }) => {
                         )}
                       </div>
                     </div>
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        onClick={() => {
-                          if (isCash) {
-                            void handleCashCollected(entry.alert);
-                          } else if (isReady) {
-                            navigate(
+                    <div className="mt-3 flex justify-end gap-2">
+                      {isReady ? (
+                        <>
+                          <button
+                            onClick={() => navigate(
                               getStaffOrdersPath(window.location.pathname),
                               { state: createStaffOrderViewState(entry.alert.order) },
-                            );
-                          } else {
-                            void handleServiceAttended(entry.alert);
-                          }
-                        }}
-                        type="button"
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#0055FE] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#0044dd] active:scale-95"
-                      >
-                        {isReady
-                          ? <ArrowRight size={12} strokeWidth={2.5} />
-                          : <Check size={12} strokeWidth={2.5} />}
-                        {isCash ? "Cash Collected" : isReady ? "View Order" : "Attended"}
-                      </button>
+                            )}
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-[#0055FE]/20 bg-white px-4 py-2 text-xs font-bold text-[#0055FE] transition-all hover:bg-blue-50 active:scale-95"
+                          >
+                            <ArrowRight size={12} strokeWidth={2.5} />
+                            View Order
+                          </button>
+                          <button
+                            onClick={() => void handleReadyOrderCollected(entry.alert)}
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#0055FE] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#0044dd] active:scale-95"
+                          >
+                            <Check size={12} strokeWidth={2.5} />
+                            Collected
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (isCash) {
+                              void handleCashCollected(entry.alert);
+                            } else {
+                              void handleServiceAttended(entry.alert);
+                            }
+                          }}
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0055FE] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#0044dd] active:scale-95"
+                        >
+                          <Check size={12} strokeWidth={2.5} />
+                          {isCash ? "Cash Collected" : "Attended"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </motion.div>
