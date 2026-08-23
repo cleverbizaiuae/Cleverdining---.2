@@ -197,7 +197,7 @@ function MessagingUI() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-[calc(100dvh-60px-env(safe-area-inset-bottom))] flex-col overflow-hidden bg-background text-foreground">
       {/* 1. Header Section (Static in Flex) */}
       <div className="z-30 flex shrink-0 items-center gap-3 border-b border-border/30 bg-background/80 p-4 shadow-sm shadow-black/20 backdrop-blur-md">
         <div className="flex w-full items-center gap-3">
