@@ -5,6 +5,7 @@ from rest_framework import status
 from django.contrib.auth.hashers import check_password
 from .models import Staff
 from rest_framework_simplejwt.tokens import RefreshToken
+from accounts.login_utils import find_user_for_login
 
 class AdminLoginView(APIView):
     authentication_classes = [] # Public access
@@ -25,7 +26,7 @@ class AdminLoginView(APIView):
 
         try:
             # First try Legacy Staff model
-            staff_member = Staff.objects.get(email=email, role=role)
+            staff_member = Staff.objects.get(email__iexact=email, role=role)
             user = staff_member.user
             db_password = staff_member.password
             shop_id = staff_member.restaurant.id if staff_member.restaurant else None
@@ -38,7 +39,8 @@ class AdminLoginView(APIView):
                 # User model has role. 
                 # We need to find a ChefStaff entry where user.email = email and user.role = role
                 # AND action='accepted' (optional but recommended)
-                chef_staff = ChefStaff.objects.get(user__email=email, user__role=role, action='accepted')
+                login_user = find_user_for_login(email, password, allow_username=False)
+                chef_staff = ChefStaff.objects.get(user=login_user, user__role=role, action='accepted')
                 staff_member = chef_staff
                 user = chef_staff.user
                 db_password = user.password # ChefStaff uses User password

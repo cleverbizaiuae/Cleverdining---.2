@@ -27,6 +27,7 @@ from rest_framework import serializers
 from .utils import get_restaurant_owner_id
 from rest_framework.exceptions import NotFound
 from django.contrib.auth import authenticate
+from .login_utils import find_user_for_login
 
 logger = logging.getLogger(__name__)
 
@@ -187,17 +188,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             
             # MANUALLY AUTHENTICATE USER - This is the key fix
             # Try email first (since USERNAME_FIELD = 'email')
-            user = None
-            try:
-                user = User.objects.get(email=email_or_username)
-                logger.info(f"User found by email: {user.email}")
-            except User.DoesNotExist:
-                try:
-                    user = User.objects.get(username=email_or_username)
-                    logger.info(f"User found by username: {user.username}")
-                except User.DoesNotExist:
-                    logger.warning(f"User not found: {email_or_username}")
-                    raise AuthenticationFailed("Invalid email or password.")
+            user = find_user_for_login(email_or_username, password)
+            if user is None:
+                logger.warning(f"User not found: {email_or_username}")
+                raise AuthenticationFailed("Invalid email or password.")
+            logger.info(f"User found for login: {user.email}")
             
             # Check if user is active
             if not user.is_active:
@@ -214,9 +209,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             # Set the user for the parent serializer
             self.user = user
             
-            # Now call parent validate with username set to email (for token generation)
-            # This ensures the token is generated correctly
-            attrs['username'] = user.email  # Use email as username for token
+            # Restore the canonical email for Simple JWT's configured username field.
+            attrs['email'] = user.email
             data = super().validate(attrs)
             
             # Build user data response

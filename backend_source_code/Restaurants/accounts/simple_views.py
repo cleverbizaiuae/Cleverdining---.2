@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
+from .login_utils import find_user_for_login
 from restaurant.models import Restaurant
 from restaurant.region_config import resolve_region_defaults, get_region_config
 from django.db import transaction
@@ -57,19 +58,13 @@ class SimpleLoginView(APIView):
             logger.info(f"Login attempt for: {email}")
             
             # Step 2: Find user
-            user = None
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                # Try by username as fallback
-                try:
-                    user = User.objects.get(username=email)
-                except User.DoesNotExist:
-                    logger.warning(f"User not found: {email}")
-                    return Response(
-                        {"detail": "Invalid email or password", "error": "authentication_failed"},
-                        status=status.HTTP_401_UNAUTHORIZED
-                    )
+            user = find_user_for_login(email, password)
+            if user is None:
+                logger.warning(f"User not found: {email}")
+                return Response(
+                    {"detail": "Invalid email or password", "error": "authentication_failed"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
             
             # Step 3: Check if active
             if not user.is_active:
