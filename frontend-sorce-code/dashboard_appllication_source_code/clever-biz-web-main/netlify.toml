@@ -143,6 +143,12 @@
     Netlify-CDN-Cache-Control = "no-store, max-age=0"
 
 [[headers]]
+  for = "/sw-staff-dashboard-refresh.js"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+    Netlify-CDN-Cache-Control = "no-store, max-age=0"
+
+[[headers]]
   for = "/manifest.webmanifest"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"

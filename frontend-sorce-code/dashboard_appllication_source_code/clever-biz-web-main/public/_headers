@@ -62,6 +62,9 @@
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
   Netlify-CDN-Cache-Control: no-store, max-age=0
+/sw-staff-dashboard-refresh.js
+  Cache-Control: no-store, max-age=0
+  Netlify-CDN-Cache-Control: no-store, max-age=0
 /manifest.webmanifest
   Cache-Control: public, max-age=0, must-revalidate
   Netlify-CDN-Cache-Control: no-store, max-age=0
