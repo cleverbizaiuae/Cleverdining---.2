@@ -2,8 +2,9 @@ import { cn } from "clsx-for-tailwind";
 import { getSessionCurrencyCode } from "../../utils/regionSession";
 import { OptimizedImage } from "../../components/OptimizedImage";
 import { resolveMediaUrl } from "../../lib/media";
+import type { PreparationTimeSource } from "../../utils/preparationTime";
 
-export type FoodItemTypes = {
+export type FoodItemTypes = PreparationTimeSource & {
   id: number;
   item_name: string;
   price: string;

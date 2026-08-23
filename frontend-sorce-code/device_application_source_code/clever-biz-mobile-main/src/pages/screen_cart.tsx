@@ -44,6 +44,7 @@ import {
 } from "../utils/pricing";
 import { shouldShowReviewOrderModal } from "./cart-review";
 import { useOnlinePaymentAvailability } from "../hooks/useOnlinePaymentAvailability";
+import { getPreparationTimeLabel } from "../utils/preparationTime";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -1010,7 +1011,9 @@ const ScreenCart = () => {
                   Your Order
                 </p>
                 <div className="max-h-[clamp(4.75rem,28dvh,13.5rem)] touch-pan-y space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] [scrollbar-gutter:stable]">
-                  {validCartItems.map((item) => (
+                  {validCartItems.map((item) => {
+                    const preparationTimeLabel = getPreparationTimeLabel(item);
+                    return (
                       <div key={`review-${item.id}`} className="flex items-center gap-2.5 rounded-xl border border-border bg-secondary p-2">
                         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-background">
                           <OptimizedImage
@@ -1023,6 +1026,12 @@ const ScreenCart = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="truncate text-[13px] font-semibold text-foreground">{item.item_name}</p>
+                          {preparationTimeLabel && (
+                            <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                              <Clock3 className="h-3 w-3" strokeWidth={1.8} />
+                              {preparationTimeLabel}
+                            </p>
+                          )}
                           {itemTimings[String(item.id)] && (
                             <p className="text-[10px] text-primary font-medium mt-0.5">
                               {TIMING_LABEL[itemTimings[String(item.id)]!]}
@@ -1039,7 +1048,8 @@ const ScreenCart = () => {
                           <p className="text-[10px] text-slate-400">×{item.quantity}</p>
                         </div>
                       </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-1.5 flex shrink-0 items-center justify-between border-t border-border px-1 pt-1.5">

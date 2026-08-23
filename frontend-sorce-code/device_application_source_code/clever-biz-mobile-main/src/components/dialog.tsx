@@ -8,7 +8,7 @@ import { cachedGet } from "../lib/requestCache";
 import { resolveMediaUrl } from "../lib/media";
 import { getSessionCurrencyCode } from "../utils/regionSession";
 import { OptimizedImage } from "./OptimizedImage";
-import { CheckCircle2, Minus, Plus, ShoppingBag, UserRound, X } from "lucide-react";
+import { CheckCircle2, Clock3, Minus, Plus, ShoppingBag, UserRound, X } from "lucide-react";
 import {
   fetchUpsellSuggestions,
   prefetchUpsellSuggestions,
@@ -16,6 +16,7 @@ import {
 } from "../lib/upsellApi";
 import { getUpsellExcludedItemIds } from "../lib/upsellSession";
 import { getEffectiveItemPrice, getLineTotal, hasItemDiscount } from "../utils/pricing";
+import { getPreparationTimeLabel } from "../utils/preparationTime";
 
 interface ModalProps {
   isOpen: boolean;
@@ -71,6 +72,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
   const effectiveUnitPrice = item ? getEffectiveItemPrice(item) : 0;
   const originalUnitPrice = Number(String(item?.price || "0").replace(/[^0-9.-]/g, "")) || 0;
   const hasDiscount = item ? hasItemDiscount(item) : false;
+  const preparationTimeLabel = getPreparationTimeLabel(item);
 
   const truncatedName = item?.item_name || "Loading...";
   const hasValidItem =
@@ -206,6 +208,11 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       availability: item.availability !== false,
       video: String(item.video || ""),
       restaurant_name: String(item.restaurant_name || ""),
+      preparation_time_minutes: item.preparation_time_minutes,
+      preparation_time_min: item.preparation_time_min,
+      preparation_time_max: item.preparation_time_max,
+      preparation_time: item.preparation_time,
+      estimated_preparation_time: item.estimated_preparation_time,
     };
 
     const added = await addToCart(cartItem, quantity);
@@ -356,10 +363,19 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
               </h3>
 
               {/* Meta Info Row */}
-              <div className="flex items-center justify-center text-sm text-muted-foreground">
+              <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                   Popular
                 </span>
+                {preparationTimeLabel && (
+                  <>
+                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                    <span className="flex items-center gap-1">
+                      <Clock3 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      {preparationTimeLabel}
+                    </span>
+                  </>
+                )}
               </div>
 
               <p className="text-base text-muted-foreground leading-relaxed max-w-md mx-auto">

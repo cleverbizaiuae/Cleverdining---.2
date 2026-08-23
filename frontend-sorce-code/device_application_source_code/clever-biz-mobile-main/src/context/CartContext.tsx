@@ -3,10 +3,11 @@ import axiosInstance from "../lib/axios";
 import { resetUpsellSession, trackUpsellCategoryRemoved } from "../lib/upsellSession";
 import { getTableIdentity, TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
 import { getDiscountPercent, toSafeNumber } from "../utils/pricing";
+import type { PreparationTimeSource } from "../utils/preparationTime";
 
 export { TABLE_NAME, TABLE_NUMBER };
 
-export type CartItem = {
+export type CartItem = PreparationTimeSource & {
   id: number;
   item_name: string;
   price: string;
@@ -70,6 +71,11 @@ const sanitizeCartItems = (raw: unknown): CartItem[] => {
         availability: Boolean(entry.availability),
         video: String(entry.video || ""),
         restaurant_name: String(entry.restaurant_name || ""),
+        preparation_time_minutes: entry.preparation_time_minutes,
+        preparation_time_min: entry.preparation_time_min,
+        preparation_time_max: entry.preparation_time_max,
+        preparation_time: entry.preparation_time,
+        estimated_preparation_time: entry.estimated_preparation_time,
         quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
       } as CartItem;
     })
