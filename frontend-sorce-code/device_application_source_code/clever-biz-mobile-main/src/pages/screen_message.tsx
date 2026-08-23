@@ -19,7 +19,7 @@ function MessagingUI() {
   const { ws, sendMessage, setNewMessageFlag, messages, setMessages, connectionStatus, retryConnection } = useWebSocket();
 
   const [inputValue, setInputValue] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
   const userInfo = localStorage.getItem("userInfo");
   const userInfoContent = userInfo ? JSON.parse(userInfo) : null;
@@ -140,8 +140,9 @@ function MessagingUI() {
   }, [device_id, restaurant_id, userInfo, setMessages]); // Fixed: Removed messages.length to prevent stale overwrite loop
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    const messageList = messagesScrollRef.current;
+    if (messageList) {
+      messageList.scrollTo({ top: messageList.scrollHeight, behavior: "smooth" });
     }
   }, [messages]); // Scrolls whenever global messages update
 
@@ -236,7 +237,7 @@ function MessagingUI() {
       </div>
 
       {/* 2. Message Area (Flex Grow) */}
-      <div className="flex-1 overflow-y-auto bg-background p-4 scroll-smooth">
+      <div ref={messagesScrollRef} className="flex-1 overflow-y-auto bg-background p-4 scroll-smooth">
         <div className="flex flex-col space-y-4">
           {hasWifiDetails && (
             <div className="rounded-2xl border border-border bg-card p-4 shadow-sm shadow-black/20">
@@ -354,7 +355,6 @@ function MessagingUI() {
                 </motion.div>
               ))
           )}
-          <div ref={messagesEndRef} />
         </div>
       </div>
 
