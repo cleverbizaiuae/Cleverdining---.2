@@ -14,6 +14,7 @@ import {
   logUpsellAssociationStat,
   logUpsellEvent,
   logUpsellShownBatch,
+  prefetchUpsellSuggestions,
   summarizeCart,
   type UpsellSettingsSnapshot,
   type UpsellSuggestion,
@@ -537,6 +538,19 @@ const ScreenCart = () => {
       const orderTotal = Number(
         toSafeNumber(response?.data?.total_price ?? response?.data?.total ?? totalCost).toFixed(2)
       );
+
+      if (!payBeforeOrder) {
+        prefetchUpsellSuggestions({
+          triggerPoint: "before_payment",
+          restaurantId: cartRestaurantId,
+          limit: 1,
+          cartItemIds: validCartItemIds,
+          excludeItemIds: Array.from(new Set([
+            ...validCartItemIds,
+            ...getUpsellExcludedItemIds(),
+          ])),
+        });
+      }
 
       toast.success(
         payBeforeOrder && paymentMethod === "card"

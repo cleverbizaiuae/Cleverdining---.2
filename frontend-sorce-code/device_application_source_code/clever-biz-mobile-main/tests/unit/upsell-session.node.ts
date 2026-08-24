@@ -71,8 +71,13 @@ for (const aggressiveness of Object.keys(expectedLimits) as UpsellAggressiveness
 resetUpsellSession();
 incrementUpsellTouchpointCount("add_to_cart", 2);
 assert.equal(getRemainingUpsellAllowance("add_to_cart", "subtle"), 0);
-assert.equal(getRemainingUpsellAllowance("cart", "subtle"), 1);
-assert.equal(canShowUpsellSession("subtle"), true);
+assert.equal(getRemainingUpsellAllowance("cart", "subtle"), 0);
+assert.equal(canShowUpsellSession("subtle"), false);
+
+resetUpsellSession();
+incrementUpsellTouchpointCount("add_to_cart", 7);
+assert.equal(getRemainingUpsellAllowance("cart", "aggressive"), 0);
+assert.equal(canShowUpsellSession("aggressive"), false);
 
 resetUpsellSession();
 assert.equal(shouldRefreshAddToCartUpsell([1]), true);

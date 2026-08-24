@@ -806,10 +806,10 @@ class UpsellSmartSuggestionsAPIView(APIView):
                 action="shown",
                 trigger_point__in=("cart", "before_payment"),
             ).count()
-            suggestions_shown = (
-                min(menu_suggestions_shown, aggressiveness_policy["menu_max_calls"])
-                + min(cart_suggestions_shown, aggressiveness_policy["cart_max_calls"])
-            )
+            # The session limit is an absolute total across all trigger points.
+            # Never clamp an already-over-limit surface before checking it, or
+            # extra events can be hidden and a new surface incorrectly allowed.
+            suggestions_shown = menu_suggestions_shown + cart_suggestions_shown
             surface_trigger_points = (
                 ("add_to_cart",)
                 if trigger_point == "add_to_cart"

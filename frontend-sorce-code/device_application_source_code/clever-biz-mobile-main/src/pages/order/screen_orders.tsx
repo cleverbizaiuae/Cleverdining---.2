@@ -57,6 +57,7 @@ import {
   markUpsellItemAccepted,
   markUpsellItemDismissed,
   markUpsellItemsShown,
+  resetUpsellSession,
 } from "@/lib/upsellSession";
 import { getEffectiveItemPrice } from "@/utils/pricing";
 import { getCustomerErrorMessage } from "@/lib/customerErrorMessage";
@@ -606,46 +607,62 @@ const ScreenOrders = () => {
   );
   const orderedItemIdsFingerprint = orderedItemIds.join(",");
 
-  const loadBeforePaymentUpsell = useCallback(async () => {
-    if (!hasPayableOrders || !orderedItemIds.length) {
-      setBeforePaymentUpsell(null);
-      return;
-    }
-
-    setBeforePaymentUpsellLoading(true);
-    try {
-      const settings = await fetchUpsellSettings();
-      const aggressiveness = settings.aggressiveness || "moderate";
-      const triggerLimit = getUpsellTriggerLimit("before_payment", aggressiveness);
-      const sessionLimit = getUpsellSessionCap(aggressiveness);
-      if (
-        !isUpsellTriggerEnabled(settings, "before_payment") ||
-        !canShowUpsellSession(aggressiveness) ||
-        !canShowUpsellTouchpoint("before_payment", triggerLimit, sessionLimit)
-      ) {
-        setBeforePaymentUpsell(null);
-        return;
-      }
-
-      const suggestions = await fetchUpsellSuggestions({
-        triggerPoint: "before_payment",
-        limit: 1,
-        restaurantId: Number(tableInfo.restaurantId || 0) || undefined,
-        cartItemIds: orderedItemIds,
-        excludeItemIds: Array.from(new Set([...orderedItemIds, ...getUpsellExcludedItemIds()])),
-      }, { preferRecent: true });
-      const remainingAllowance = getRemainingUpsellAllowance("before_payment", aggressiveness);
-      setBeforePaymentUpsell(remainingAllowance > 0 ? suggestions[0] || null : null);
-    } catch {
-      setBeforePaymentUpsell(null);
-    } finally {
-      setBeforePaymentUpsellLoading(false);
-    }
-  }, [hasPayableOrders, orderedItemIds, tableInfo.restaurantId]);
-
   useEffect(() => {
+    let cancelled = false;
+    const requestItemIds = orderedItemIdsFingerprint
+      .split(",")
+      .map((itemId) => Number(itemId))
+      .filter((itemId) => Number.isInteger(itemId) && itemId > 0);
+
+    if (!hasPayableOrders || !requestItemIds.length) {
+      setBeforePaymentUpsell(null);
+      setBeforePaymentUpsellLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadBeforePaymentUpsell = async () => {
+      setBeforePaymentUpsellLoading(true);
+      try {
+        const settings = await fetchUpsellSettings();
+        const aggressiveness = settings.aggressiveness || "moderate";
+        const triggerLimit = getUpsellTriggerLimit("before_payment", aggressiveness);
+        const sessionLimit = getUpsellSessionCap(aggressiveness);
+        if (
+          !isUpsellTriggerEnabled(settings, "before_payment") ||
+          !canShowUpsellSession(aggressiveness) ||
+          !canShowUpsellTouchpoint("before_payment", triggerLimit, sessionLimit)
+        ) {
+          if (!cancelled) setBeforePaymentUpsell(null);
+          return;
+        }
+
+        const suggestions = await fetchUpsellSuggestions({
+          triggerPoint: "before_payment",
+          limit: 1,
+          restaurantId: Number(tableInfo.restaurantId || 0) || undefined,
+          cartItemIds: requestItemIds,
+          excludeItemIds: Array.from(new Set([
+            ...requestItemIds,
+            ...getUpsellExcludedItemIds(),
+          ])),
+        }, { preferRecent: true });
+        if (cancelled) return;
+        const remainingAllowance = getRemainingUpsellAllowance("before_payment", aggressiveness);
+        setBeforePaymentUpsell(remainingAllowance > 0 ? suggestions[0] || null : null);
+      } catch {
+        if (!cancelled) setBeforePaymentUpsell(null);
+      } finally {
+        if (!cancelled) setBeforePaymentUpsellLoading(false);
+      }
+    };
+
     void loadBeforePaymentUpsell();
-  }, [loadBeforePaymentUpsell]);
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPayableOrders, orderedItemIdsFingerprint, tableInfo.restaurantId]);
 
   useEffect(() => {
     if (!isCheckoutOpen || !beforePaymentUpsell) return;
@@ -939,6 +956,7 @@ const ScreenOrders = () => {
     sessionClearedRef.current = true;
     setOrders([]);
     await clearCart();
+    resetUpsellSession();
   }, [chatStorageKey, clearCart, ordersStorageKey]);
 
   const buildTipPayload = () => {

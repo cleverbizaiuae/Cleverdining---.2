@@ -2444,7 +2444,7 @@ class UpsellKnowledgeEngineTests(TestCase):
 
         setting.aggressiveness = "subtle"
         setting.save(update_fields=["aggressiveness"])
-        split_session_id = "subtle-menu-complete-cart-available"
+        split_session_id = "subtle-global-cap-survives-menu-overage"
         for index in range(2):
             UpsellEvent.objects.create(
                 restaurant=self.restaurant,
@@ -2454,25 +2454,6 @@ class UpsellKnowledgeEngineTests(TestCase):
                 upsell_item=self.cola,
                 upsell_item_name=f"{self.cola.item_name} {index}",
             )
-        rows = build_item_context_upsell_suggestions(
-            self.restaurant,
-            [self.burger.id],
-            trigger_point="cart",
-            source_item_id=self.burger.id,
-            limit=5,
-            apply_surface_limit=False,
-        )
-        chosen = rows[0]["item"]
-        llm_response = {
-            "suggest_nothing": False,
-            "suggested_item_id": chosen.id,
-            "suggested_item_name": chosen.item_name,
-            "target_role": rows[0]["target_role"],
-            "reason": None,
-            "reasoning": "The cart allowance is still available.",
-            "suggestion_copy": "One useful addition for your order.",
-            "confidence": 0.9,
-        }
         cart_request = APIRequestFactory().get(
             "/api/upsell/smart-suggestions",
             {
@@ -2483,12 +2464,16 @@ class UpsellKnowledgeEngineTests(TestCase):
                 "session_id": split_session_id,
             },
         )
-        with patch("order.upsell_views.call_upsell_llm", return_value=(llm_response, "ok")):
+        with patch("order.upsell_views.call_upsell_llm") as llm:
             cart_response = UpsellSmartSuggestionsAPIView.as_view()(cart_request)
 
         self.assertEqual(cart_response.status_code, 200)
-        self.assertEqual(cart_response.data["count"], 1)
-        self.assertEqual(cart_response.data["results"][0]["id"], chosen.id)
+        self.assertEqual(cart_response.data["count"], 0)
+        self.assertEqual(
+            cart_response.data["agent_decision"]["decision_source"],
+            "backend_session_cap",
+        )
+        llm.assert_not_called()
 
     def test_each_disabled_trigger_is_enforced_before_llm_selection(self):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)

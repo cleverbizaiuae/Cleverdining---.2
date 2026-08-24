@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../lib/axios";
-import { resetUpsellSession, trackUpsellCategoryRemoved } from "../lib/upsellSession";
+import { trackUpsellCategoryRemoved } from "../lib/upsellSession";
 import { getTableIdentity, TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
 import { getDiscountPercent, toSafeNumber } from "../utils/pricing";
 import type { PreparationTimeSource } from "../utils/preparationTime";
@@ -311,7 +311,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearCart = React.useCallback(async () => {
     setCart([]);
-    resetUpsellSession();
+    // Clearing one order must not reset the table guest's upsell allowance.
+    // The allowance is reset only when the complete guest session ends.
     const sessionToken = localStorage.getItem("guest_session_token");
     persistCart([], sessionToken);
     if (sessionToken) {
