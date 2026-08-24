@@ -278,6 +278,39 @@ class ResolveTableView(APIView):
         })
 
 
+class GuestSessionHeartbeatView(APIView):
+    """Refresh activity for a visible customer PWA session."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        session_token = (
+            request.headers.get('X-Guest-Session-Token')
+            or request.data.get('guest_session_token')
+        )
+        if not session_token:
+            return Response(
+                {'error': 'Guest session token is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        current = now()
+        updated = (
+            GuestSession.objects
+            .filter(session_token=session_token, is_active=True)
+            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=current))
+            .update(last_seen_at=current)
+        )
+        if not updated:
+            return Response(
+                {'error': 'Invalid or expired session.', 'active': False},
+                status=status.HTTP_410_GONE,
+            )
+
+        return Response({'active': True})
+
+
 class CloseTableSessionView(APIView):
     """
     Manual Session Closure by Staff.

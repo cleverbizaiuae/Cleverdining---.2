@@ -2,11 +2,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Compone
 import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 
 import { PrivateRouteGuard } from "./components/route-guard";
+import axiosInstance from "./lib/axios";
 import ScreenSplash from "./pages/screen_splash";
 import { ActiveBrandProvider, FONT_PRESETS, getBrandSplashSessionKey, hexToHsl, useBrandConfig } from "./lib/useBrandConfig";
 import { loadDashboardRuntime, loadHomeScreen } from "./lib/dashboardPreload";
 
 const CHUNK_RELOAD_KEY = "cb_chunk_reload_attempted";
+const GUEST_SESSION_HEARTBEAT_INTERVAL_MS = 60_000;
 
 function lazyWithRecovery<T extends ComponentType>(loader: () => Promise<{ default: T }>) {
   return lazy(async () => {
@@ -148,6 +150,51 @@ function App() {
     () => searchParams.get("restaurant_id") || resolveStoredRestaurantId(),
     [searchParams, location.pathname],
   );
+
+  useEffect(() => {
+    let stopped = false;
+    let heartbeatInFlight = false;
+
+    const sendHeartbeat = async () => {
+      if (
+        stopped ||
+        heartbeatInFlight ||
+        document.visibilityState !== "visible" ||
+        !localStorage.getItem("guest_session_token")
+      ) {
+        return;
+      }
+
+      heartbeatInFlight = true;
+      try {
+        await axiosInstance.post("/api/customer/session/heartbeat/");
+      } catch {
+        // A later authenticated request will surface an expired or invalid
+        // session. Heartbeats remain silent so they never interrupt ordering.
+      } finally {
+        heartbeatInFlight = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void sendHeartbeat();
+    };
+
+    void sendHeartbeat();
+    const intervalId = window.setInterval(
+      () => void sendHeartbeat(),
+      GUEST_SESSION_HEARTBEAT_INTERVAL_MS,
+    );
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", sendHeartbeat);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", sendHeartbeat);
+    };
+  }, []);
 
   useEffect(() => {
     // Only run auto-login/redirect logic if we are at the root path

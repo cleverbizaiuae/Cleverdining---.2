@@ -1,8 +1,10 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from accounts.models import ChefStaff, User
@@ -12,6 +14,7 @@ from order.models import Order
 from message.models import ChatMessage
 
 from .models import Device, GuestSession
+from .session_services import SESSION_INACTIVITY_TIMEOUT, expire_inactive_guest_sessions
 from .views import SimpleDeviceListView, _resolve_user_restaurant_ids
 
 
@@ -217,6 +220,79 @@ class ResolveTableSessionIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_resumed"])
         self.assertEqual(response.json()["guest_session_id"], active_session.id)
+
+
+class GuestSessionInactivityTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="heartbeat-owner@example.com",
+            username="heartbeat-owner",
+            password="test-password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Heartbeat Test Restaurant",
+            location="Dubai",
+            phone_number="+971500000077",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table 7",
+                table_number="7",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        self.session = GuestSession.objects.create(
+            device=self.device,
+            session_token="heartbeat-guest-session",
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+
+    def test_visible_guest_heartbeat_refreshes_last_seen(self):
+        stale_time = timezone.now() - SESSION_INACTIVITY_TIMEOUT - timedelta(minutes=1)
+        GuestSession.objects.filter(pk=self.session.pk).update(last_seen_at=stale_time)
+
+        response = APIClient().post(
+            "/api/customer/session/heartbeat/",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["active"])
+        self.session.refresh_from_db()
+        self.assertGreater(self.session.last_seen_at, stale_time)
+        self.assertEqual(
+            expire_inactive_guest_sessions(
+                [self.restaurant.id],
+                at=self.session.last_seen_at + SESSION_INACTIVITY_TIMEOUT - timedelta(seconds=1),
+            ),
+            0,
+        )
+
+    def test_expired_session_cannot_be_revived_by_heartbeat(self):
+        self.session.is_active = False
+        self.session.save(update_fields=["is_active", "last_seen_at"])
+
+        response = APIClient().post(
+            "/api/customer/session/heartbeat/",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+
+        self.assertEqual(response.status_code, 410)
+        self.assertFalse(response.json()["active"])
+
+    def test_manager_table_request_closes_abandoned_session(self):
+        stale_time = timezone.now() - SESSION_INACTIVITY_TIMEOUT - timedelta(minutes=1)
+        GuestSession.objects.filter(pk=self.session.pk).update(last_seen_at=stale_time)
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get("/owners/devices/")
+
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertFalse(self.session.is_active)
 
 
 class ActiveSessionMessageStateTests(TestCase):

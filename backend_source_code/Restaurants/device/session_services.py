@@ -6,7 +6,10 @@ from django.utils import timezone
 from .models import Device, GuestSession
 
 
-SESSION_INACTIVITY_TIMEOUT = timedelta(minutes=30)
+# The guest PWA refreshes last_seen_at once a minute while it is visible. Five
+# missed minutes gives mobile browsers enough tolerance for throttled timers,
+# while releasing an abandoned table quickly enough for restaurant staff.
+SESSION_INACTIVITY_TIMEOUT = timedelta(minutes=5)
 ACTIVE_ORDER_STATUSES = (
     "awaiting_payment",
     "pending",

@@ -18,7 +18,12 @@ from payment.views import (
 )
 from payment.wallet_views import WalletAvailabilityView, WalletPaymentConfirmView
 from restaurant.views import PublicRestaurantListView
-from device.views import PublicDeviceListView, PublicDeviceByUUIDView, ResolveTableView
+from device.views import (
+    GuestSessionHeartbeatView,
+    PublicDeviceByUUIDView,
+    PublicDeviceListView,
+    ResolveTableView,
+)
 
 
 router = DefaultRouter()
@@ -33,6 +38,7 @@ urlpatterns = [
     path('devices/', PublicDeviceListView.as_view(), name='public-devices'),
     path('devices/<uuid:uuid>/', PublicDeviceByUUIDView.as_view(), name='public-device-by-uuid'),
     path('resolve-table/', ResolveTableView.as_view(), name='resolve-table'),
+    path('session/heartbeat/', GuestSessionHeartbeatView.as_view(), name='guest-session-heartbeat'),
     path('orders/', OrderCreateAPIView.as_view(), name='order-create'),
     path('orders/<int:pk>/cancel/', OrderCancelAPIView.as_view(), name='order-cancel'),
     path('uncomplete/orders/', MyOrdersAPIView.as_view(), name='my-orders'),
