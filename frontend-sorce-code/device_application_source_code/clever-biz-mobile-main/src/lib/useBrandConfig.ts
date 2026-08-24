@@ -1,5 +1,6 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cachedGet } from "./requestCache";
+import { getBrandFontFamily, shouldApplyBrandVisualStyle } from "./brandVisualStyle";
 
 export type ThemePreset = "classic_clean" | "luxury_dark" | "warm_casual";
 export type FontPreset = "modern" | "elegant" | "bold";
@@ -64,9 +65,9 @@ export const DEFAULT_BRAND: BrandConfig = {
 };
 
 export const FONT_PRESETS = [
-  { value: "modern" as FontPreset, label: "Modern Clean", family: "'Inter', system-ui, sans-serif" },
-  { value: "elegant" as FontPreset, label: "Elegant Dining", family: "'Playfair Display', Georgia, serif" },
-  { value: "bold" as FontPreset, label: "Bold Casual", family: "'Plus Jakarta Sans', system-ui, sans-serif" },
+  { value: "modern" as FontPreset, label: "Modern Clean", family: getBrandFontFamily("modern") },
+  { value: "elegant" as FontPreset, label: "Elegant Dining", family: getBrandFontFamily("elegant") },
+  { value: "bold" as FontPreset, label: "Bold Casual", family: getBrandFontFamily("bold") },
 ];
 
 export function hexToHsl(hex: string): string {
@@ -157,7 +158,7 @@ export function hasMeaningfulBrandContent(brand: Pick<BrandConfig, "restaurantNa
 }
 
 export function shouldRenderBrandExperience(brand: BrandConfig): boolean {
-  return brand.brandingEnabled || hasMeaningfulBrandContent(brand);
+  return shouldApplyBrandVisualStyle(brand.brandingEnabled, hasMeaningfulBrandContent(brand));
 }
 
 function normalizeRestaurantId(restaurantId?: string | number | null): string | null {

@@ -46,7 +46,8 @@ import {
   type UpsellSettingsSnapshot,
   type UpsellSuggestion,
 } from "../lib/upsellApi";
-import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
+import { shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
+import { getBrandCoverOverlay, getBrandFontFamily } from "@/lib/brandVisualStyle";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
 import { getTableIdentity } from "@/lib/tableIdentity";
@@ -91,10 +92,6 @@ function hexToHsl(hex: string): string {
     }
   }
   return `${Math.round(hue * 360)} ${Math.round(sat * 100)}% ${Math.round(lum * 100)}%`;
-}
-
-function getFontFamily(fontPreset: string): string {
-  return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
 }
 
 const toCartItemFromUpsell = (suggestion: UpsellSuggestion): Omit<CartItem, "quantity"> => ({
@@ -789,8 +786,12 @@ const LayoutDashboard = () => {
       : "Welcome";
   const brandLogoUrl = hasBranding ? brand.logoUrl : null;
   const brandCoverUrl = hasBranding ? brand.coverImageUrl : null;
-  const brandFontFamily = brand.brandingEnabled ? getFontFamily(brand.fontPreset) : undefined;
+  const brandFontFamily = hasBranding ? getBrandFontFamily(brand.fontPreset) : undefined;
   const brandPrimaryHsl = useMemo(() => hexToHsl(brand.primaryColor), [brand.primaryColor]);
+  const coverOverlay = useMemo(
+    () => getBrandCoverOverlay(brand.themePreset, "menu"),
+    [brand.themePreset],
+  );
 
   const socialLinks = useMemo(
     () =>
@@ -1177,9 +1178,7 @@ const LayoutDashboard = () => {
                   ) : null}
                   <div
                     className="absolute inset-0"
-                    style={{
-                      background: "linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)",
-                    }}
+                    style={{ background: coverOverlay }}
                   />
 
                   {socialLinks.length > 0 ? (

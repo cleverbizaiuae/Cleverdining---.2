@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
-import { FONT_PRESETS, shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
+import { shouldRenderBrandExperience, useActiveBrandConfig } from "@/lib/useBrandConfig";
+import { getBrandCoverOverlay, getBrandFontFamily } from "@/lib/brandVisualStyle";
 
 type SplashState = "splash" | "collapsing" | "done";
-
-function getFontFamily(fontPreset: string): string {
-  return FONT_PRESETS.find((font) => font.value === fontPreset)?.family || FONT_PRESETS[0].family;
-}
 
 function hexToRgba(hex: string, alpha: number): string {
   const cleaned = (hex || "").replace("#", "");
@@ -55,7 +52,11 @@ export default function ScreenSplash({
         : "Welcome";
   const brandLogoUrl = hasBranding ? brand.logoUrl : null;
   const brandCoverUrl = hasBranding ? brand.coverImageUrl : null;
-  const brandFontFamily = brand.brandingEnabled ? getFontFamily(brand.fontPreset) : undefined;
+  const brandFontFamily = hasBranding ? getBrandFontFamily(brand.fontPreset) : undefined;
+  const coverOverlay = useMemo(
+    () => getBrandCoverOverlay(brand.themePreset, "splash"),
+    [brand.themePreset],
+  );
 
   const splashGradient = useMemo(() => {
     if (brand.themePreset === "luxury_dark") {
@@ -143,10 +144,7 @@ export default function ScreenSplash({
       ) : null}
       <div
         className="absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.82) 100%)",
-        }}
+        style={{ background: coverOverlay }}
       />
 
       <motion.div

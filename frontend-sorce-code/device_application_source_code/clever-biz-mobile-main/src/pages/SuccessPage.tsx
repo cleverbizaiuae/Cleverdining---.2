@@ -11,10 +11,10 @@ import {
   Twitter,
 } from "lucide-react";
 import {
-  FONT_PRESETS,
   shouldRenderBrandExperience,
   useBrandConfigResult,
 } from "@/lib/useBrandConfig";
+import { getBrandCoverOverlay, getBrandFontFamily } from "@/lib/brandVisualStyle";
 import { cachedGet } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
 import { useNavigate } from "react-router-dom";
@@ -279,7 +279,7 @@ const SuccessPage = () => {
 
   const resolvedGoogleReviewUrl = brand.googleReviewUrl || googleReviewUrl;
   const primaryColor = brand.primaryColor || "#0055FE";
-  const fontFamily = FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family;
+  const fontFamily = getBrandFontFamily(brand.fontPreset);
   const hasBranding = shouldRenderBrandExperience(brand);
   const coverBackground = useMemo(() => {
     if (brand.themePreset === "luxury_dark") {
@@ -290,12 +290,7 @@ const SuccessPage = () => {
     }
     return `linear-gradient(145deg, ${hexToRgba(primaryColor, 0.72)} 0%, ${primaryColor} 58%, #0f172a 125%)`;
   }, [brand.themePreset, primaryColor]);
-  const coverOverlay =
-    brand.themePreset === "luxury_dark"
-      ? "linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.60) 56%, rgba(0,0,0,0.78) 100%)"
-      : brand.themePreset === "warm_casual"
-        ? "linear-gradient(to bottom, rgba(67,20,7,0.42) 0%, rgba(67,20,7,0.57) 58%, rgba(15,23,42,0.76) 100%)"
-        : "linear-gradient(to bottom, rgba(15,23,42,0.38) 0%, rgba(15,23,42,0.52) 58%, rgba(15,23,42,0.76) 100%)";
+  const coverOverlay = getBrandCoverOverlay(brand.themePreset, "success");
   const brandAssetsReady =
     (!brand.logoUrl || logoImage.readySrc === brand.logoUrl || logoImage.failedSrc === brand.logoUrl) &&
     (!brand.coverImageUrl || coverImage.readySrc === brand.coverImageUrl || coverImage.failedSrc === brand.coverImageUrl);

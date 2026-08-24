@@ -4,7 +4,8 @@ import { Route, Routes, useSearchParams, useNavigate, useLocation } from "react-
 import { PrivateRouteGuard } from "./components/route-guard";
 import axiosInstance from "./lib/axios";
 import ScreenSplash from "./pages/screen_splash";
-import { ActiveBrandProvider, FONT_PRESETS, getBrandSplashSessionKey, hexToHsl, useBrandConfig } from "./lib/useBrandConfig";
+import { ActiveBrandProvider, getBrandSplashSessionKey, hexToHsl, shouldRenderBrandExperience, useBrandConfig } from "./lib/useBrandConfig";
+import { getBrandFontFamily } from "./lib/brandVisualStyle";
 import { loadDashboardRuntime, loadHomeScreen } from "./lib/dashboardPreload";
 
 const CHUNK_RELOAD_KEY = "cb_chunk_reload_attempted";
@@ -109,12 +110,9 @@ function BrandWrapper({
   restaurantId: string | number | null;
 }) {
   const brand = useBrandConfig(restaurantId);
-  const hasBranding = brand.brandingEnabled;
+  const hasBranding = shouldRenderBrandExperience(brand);
   const primaryHsl = useMemo(() => hexToHsl(brand.primaryColor || "#0055FE"), [brand.primaryColor]);
-  const fontFamily = useMemo(
-    () => FONT_PRESETS.find((font) => font.value === brand.fontPreset)?.family || FONT_PRESETS[0].family,
-    [brand.fontPreset],
-  );
+  const fontFamily = useMemo(() => getBrandFontFamily(brand.fontPreset), [brand.fontPreset]);
 
   useEffect(() => {
     const root = document.documentElement;
