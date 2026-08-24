@@ -115,7 +115,7 @@ class OrderReservationAndNotificationRegressionTests(IssueRegressionFixture):
             HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
         )
 
-    def test_order_is_rejected_while_table_reservation_is_active(self):
+    def test_order_is_allowed_while_table_reservation_is_active(self):
         current = timezone.now()
         Reservation.objects.create(
             customer_name="Reserved Guest",
@@ -131,9 +131,8 @@ class OrderReservationAndNotificationRegressionTests(IssueRegressionFixture):
 
         response = self._place_order()
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["code"], "table_reserved")
-        self.assertFalse(Order.objects.exists())
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Order.objects.count(), 1)
 
     def test_owner_cancellation_sends_targeted_customer_notice(self):
         order = Order.objects.create(

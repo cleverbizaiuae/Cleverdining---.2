@@ -26,7 +26,6 @@ from payment.schema_guard import ensure_payment_schema
 from decimal import Decimal
 channel_layer = get_channel_layer()
 from message.models import ChatMessage
-from device.reservation_services import active_reservation
 from datetime import datetime
 from calendar import monthrange
 
@@ -218,16 +217,6 @@ class OrderCreateAPIView(generics.CreateAPIView):
         device = session.device
         restaurant = device.restaurant
 
-        blocking_reservation = active_reservation(device.id)
-        if blocking_reservation:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({
-                "code": "table_reserved",
-                "message": "This table is currently reserved and cannot accept new orders.",
-                "reservation_id": blocking_reservation.id,
-                "reserved_until": blocking_reservation.end_time,
-            })
-        
         # --- BUSINESS DAY LOGIC ---
         from restaurant.models import BusinessDay
         business_day = BusinessDay.objects.filter(restaurant=restaurant, is_active=True).last()

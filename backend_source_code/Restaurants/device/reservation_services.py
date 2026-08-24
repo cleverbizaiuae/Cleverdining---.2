@@ -45,22 +45,6 @@ def conflicting_reservation(device_id, start, end, exclude_id=None):
     return None
 
 
-def active_reservation(device_id, at=None):
-    """Return the reservation occupying a table at the supplied instant."""
-    current = at or timezone.now()
-    queryset = Reservation.objects.filter(
-        device_id=device_id,
-        status__in=OCCUPYING_STATUSES,
-        reservation_time__lte=current,
-    ).order_by('reservation_time', 'id')
-    for reservation in queryset.only(
-        'id', 'reservation_time', 'end_time', 'duration_minutes', 'buffer_minutes'
-    ):
-        if reservation_end(reservation) > current:
-            return reservation
-    return None
-
-
 def _eligible_tables(restaurant, guests, lock=False):
     queryset = Device.objects.filter(
         restaurant=restaurant,
