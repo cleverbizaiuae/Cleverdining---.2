@@ -6,6 +6,8 @@ import { ApplePayButton, GooglePayButton, useWalletAvailability } from "../compo
 import { getRegionConfig } from "../config/regionConfig";
 import { cachedGet } from "../lib/requestCache";
 import { useOnlinePaymentAvailability } from "../hooks/useOnlinePaymentAvailability";
+import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
+import toast from "react-hot-toast";
 // import CheckoutButton from "../components/CheckoutButton";
 
 type SplitType = "full_bill" | "evenly" | "my_items";
@@ -757,7 +759,10 @@ export default function CheckoutPage() {
             }}
             onError={(error) => {
               console.error('Apple Pay Error:', error);
-              alert(`Payment failed: ${error}`);
+              toast.error(getCustomerErrorMessage(
+                error,
+                "Apple Pay could not be completed. Please try again.",
+              ));
             }}
             onCancel={() => {
               console.log('Apple Pay Cancelled');
@@ -779,7 +784,10 @@ export default function CheckoutPage() {
             }}
             onError={(error) => {
               console.error('Google Pay Error:', error);
-              alert(`Payment failed: ${error}`);
+              toast.error(getCustomerErrorMessage(
+                error,
+                "Google Pay could not be completed. Please try again.",
+              ));
             }}
             onCancel={() => {
               console.log('Google Pay Cancelled');

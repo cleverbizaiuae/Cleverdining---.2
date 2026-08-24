@@ -59,6 +59,7 @@ import {
   markUpsellItemsShown,
 } from "@/lib/upsellSession";
 import { getEffectiveItemPrice } from "@/utils/pricing";
+import { getCustomerErrorMessage } from "@/lib/customerErrorMessage";
 
 type BackendOrderItem = {
   id?: number;
@@ -245,14 +246,6 @@ const readStoredTreat = (treatKey: string): TreatPayload | null => {
   } catch {
     return null;
   }
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (typeof error === "object" && error !== null) {
-    const candidate = error as { response?: { data?: { error?: string; detail?: string } }; message?: string };
-    return candidate.response?.data?.error || candidate.response?.data?.detail || candidate.message || "Something went wrong";
-  }
-  return "Something went wrong";
 };
 
 const isRecentOptimisticOrder = (order: Order, now: number): boolean => {
@@ -510,7 +503,10 @@ const ScreenOrders = () => {
         await fetchBackendOrders();
       } catch (error) {
         if (mounted) {
-          setErr(getErrorMessage(error));
+          setErr(getCustomerErrorMessage(
+            error,
+            "We could not load your orders. Please try again.",
+          ));
         }
       } finally {
         if (mounted) {
@@ -733,7 +729,10 @@ const ScreenOrders = () => {
         }),
       ]);
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      toast.error(getCustomerErrorMessage(
+        error,
+        "We could not add this item to your order. Please try again.",
+      ));
     } finally {
       setAddingBeforePaymentUpsell(false);
     }
@@ -1123,7 +1122,10 @@ const ScreenOrders = () => {
       invalidateApiCache("customer/uncomplete/orders");
       await handleCheckoutResponse(response.data, false);
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      toast.error(getCustomerErrorMessage(
+        error,
+        "Payment could not start. Please try again.",
+      ));
     } finally {
       setIsProcessingPayment(false);
     }

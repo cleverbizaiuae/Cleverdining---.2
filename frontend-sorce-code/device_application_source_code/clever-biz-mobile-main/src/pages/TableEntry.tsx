@@ -4,6 +4,7 @@ import axiosInstance from "../lib/axios";
 import { ImSpinner6 } from "react-icons/im";
 import { getRegionConfig } from "../config/regionConfig";
 import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
+import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 
 const TableEntry = () => {
     const { uuid } = useParams();
@@ -85,11 +86,10 @@ const TableEntry = () => {
 
             } catch (err: any) {
                 console.error("Failed to fetch device/session:", err);
-                const status = err.response?.status;
-                const statusText = err.response?.statusText;
-                const data = JSON.stringify(err.response?.data || {});
-                const msg = err.message;
-                setError(`Connection Failed: ${status || 'N/A'} ${statusText || ''} - ${msg} \n Data: ${data}`);
+                setError(getCustomerErrorMessage(
+                    err,
+                    "We could not open this table. Please scan the QR code again.",
+                ));
             }
         };
 
@@ -101,10 +101,6 @@ const TableEntry = () => {
             <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground p-4 text-center">
                 <h1 className="text-2xl font-bold mb-2">Error</h1>
                 <p className="text-red-500 text-sm whitespace-pre-wrap break-all">{error}</p>
-                <div className="mt-4 p-2 bg-gray-100 rounded text-xs text-left w-full overflow-auto max-h-40">
-                    <p>Debug Info:</p>
-                    <p>UUID: {uuid}</p>
-                </div>
                 <button
                     onClick={() => window.location.reload()}
                     className="mt-4 px-4 py-2 bg-primary text-white rounded-lg"

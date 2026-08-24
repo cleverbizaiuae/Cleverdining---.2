@@ -43,6 +43,7 @@ import {
   toSafeNumber,
 } from "../utils/pricing";
 import { shouldShowReviewOrderModal } from "./cart-review";
+import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 import { useOnlinePaymentAvailability } from "../hooks/useOnlinePaymentAvailability";
 import { getPreparationTimeLabel } from "../utils/preparationTime";
 
@@ -428,7 +429,7 @@ const ScreenCart = () => {
     try {
       const userInfo = localStorage.getItem("userInfo");
       if (!userInfo) {
-        toast.error("User info not found");
+        toast.error("We could not identify your table. Please scan the QR code again.");
         setIsSubmittingOrder(false);
         return;
       }
@@ -445,7 +446,7 @@ const ScreenCart = () => {
       const guestSessionToken = localStorage.getItem("guest_session_token");
       if (!guestSessionToken) {
         // Redundant check since useEffect handles it, but good for safety
-        toast.error("Session token missing. Refreshing...");
+        toast.error("Your table session has expired. Refreshing...");
         window.location.reload();
         setIsSubmittingOrder(false);
         return;
@@ -641,11 +642,10 @@ const ScreenCart = () => {
             throw new Error("The payment provider did not return a checkout link.");
           } catch (checkoutError: any) {
             console.error("Order created but checkout could not start:", checkoutError);
-            toast.error(
-              checkoutError?.response?.data?.error ||
-                checkoutError?.message ||
-                "Payment could not start. Retry from My Orders."
-            );
+            toast.error(getCustomerErrorMessage(
+              checkoutError,
+              "Payment could not start. Please try again from My Orders.",
+            ));
             navigate("/dashboard/orders");
             return;
           }
@@ -655,24 +655,23 @@ const ScreenCart = () => {
       } else {
         // Fallback if ID is missing (should not happen with backend fix)
         console.error("Order ID missing in response", response.data);
-        toast.error("Order placed, but ID missing. Check Orders tab.");
+        toast.error("Your order was received, but we could not open it. Please check My Orders.");
         navigate("/dashboard/orders");
       }
     } catch (error: any) {
       console.error("Failed to place order:", error);
-      let errorMessage = "Failed to place order. Please try again.";
+      const rawErrorText = JSON.stringify(
+        error?.response?.data ?? error?.message ?? "",
+      ).toLowerCase();
+      const errorMessage = getCustomerErrorMessage(
+        error,
+        "We could not place your order. Please try again.",
+      );
 
-      if (error.response?.data) {
-        if (Array.isArray(error.response.data)) {
-          errorMessage = error.response.data.map((e: any) => typeof e === 'string' ? e : JSON.stringify(e)).join(", ");
-        } else if (typeof error.response.data === 'object') {
-          errorMessage = error.response.data.detail || error.response.data.non_field_errors?.[0] || JSON.stringify(error.response.data);
-        } else {
-          errorMessage = String(error.response.data);
-        }
-      }
-
-      if (errorMessage.includes("Device not found") || errorMessage.includes("Invalid or expired session")) {
+      if (
+        rawErrorText.includes("device not found") ||
+        rawErrorText.includes("invalid or expired session")
+      ) {
         toast.error("Session expired. Refreshing...");
         localStorage.removeItem("userInfo");
         localStorage.removeItem("guest_session_token");
@@ -682,7 +681,7 @@ const ScreenCart = () => {
       }
 
       // Check for "writable nested fields" error (Backend issue workaround)
-      if (errorMessage.includes("writable nested fields")) {
+      if (rawErrorText.includes("writable nested fields")) {
         toast.success("Order placed successfully!");
         setShowReviewModal(false);
         void clearCart();

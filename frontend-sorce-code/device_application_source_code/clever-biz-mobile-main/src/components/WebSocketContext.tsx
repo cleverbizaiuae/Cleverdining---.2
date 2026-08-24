@@ -10,6 +10,7 @@ import { getTableIdentity, removeLocalStorageSynced, setLocalStorageSynced } fro
 import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
 import { isChatMessageForCurrentTable } from "../lib/chatMessageTarget";
 import toast from "react-hot-toast";
+import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 
 type WebSocketContextType = {
   ws: WebSocket | null;
@@ -227,7 +228,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           const eventMatchesDevice = Boolean(eventDeviceId && device_id && String(eventDeviceId) === String(device_id));
 
           if (!eventHasTarget || eventMatchesSession || eventMatchesDevice) {
-            toast.error(data.message || "Your order has been cancelled by the restaurant.", { duration: 6000 });
+            toast.error(
+              getCustomerErrorMessage(data, "Your order has been cancelled by the restaurant."),
+              { duration: 6000 },
+            );
           }
           return;
         }

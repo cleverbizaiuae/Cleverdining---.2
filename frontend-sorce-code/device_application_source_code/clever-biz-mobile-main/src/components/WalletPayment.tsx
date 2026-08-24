@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../lib/axios';
 import { cachedGet } from '../lib/requestCache';
+import { getCustomerErrorMessage } from '../lib/customerErrorMessage';
 
 interface WalletPaymentProps {
     amount: number;
@@ -206,7 +207,10 @@ export const ApplePayButton = ({
                 onCancel();
             } else {
                 console.error('Apple Pay error:', error);
-                onError(error.message || 'Apple Pay failed');
+                onError(getCustomerErrorMessage(
+                    error,
+                    'Apple Pay could not be completed. Please try again.',
+                ));
             }
         } finally {
             setIsProcessing(false);
@@ -332,7 +336,10 @@ export const GooglePayButton = ({
                 onCancel();
             } else {
                 console.error('Google Pay error:', error);
-                onError(error.message || 'Google Pay failed');
+                onError(getCustomerErrorMessage(
+                    error,
+                    'Google Pay could not be completed. Please try again.',
+                ));
             }
         } finally {
             setIsProcessing(false);

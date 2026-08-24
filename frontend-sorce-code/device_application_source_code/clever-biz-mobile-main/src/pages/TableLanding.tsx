@@ -6,6 +6,7 @@ import { getRegionConfig } from '../config/regionConfig';
 import { cacheBrandConfigForRestaurant, getBrandSplashSessionKey } from '../lib/useBrandConfig';
 import { clearGuestSessionStorage } from '../lib/guestSessionStorage';
 import ScreenScanTable from './screen_scan_table';
+import { getCustomerErrorMessage } from '../lib/customerErrorMessage';
 
 export default function TableLanding() {
     const { restaurantId, tableToken } = useParams();
@@ -121,7 +122,10 @@ export default function TableLanding() {
                 window.location.href = '/';
             } catch (err: any) {
                 console.error("Failed to resolve table", err);
-                setError(err.response?.data?.error || "Invalid table link");
+                setError(getCustomerErrorMessage(
+                    err,
+                    "We could not open this table. Please scan the QR code again.",
+                ));
             }
         };
 

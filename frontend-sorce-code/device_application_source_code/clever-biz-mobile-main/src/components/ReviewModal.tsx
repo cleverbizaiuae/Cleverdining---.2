@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 
 import axiosInstance from "../lib/axios";
+import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -70,19 +71,10 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
         handleClose();
       }, 1500);
     } catch (error: any) {
-      let errorMessage = "Failed to submit review. Please try again.";
-
-      if (error.response) {
-        // Server responded with error
-        errorMessage =
-          error.response.data?.message || `Error: ${error.response.status}`;
-      } else if (error.request) {
-        // No response received
-        errorMessage = "Network error. Please check your connection.";
-      } else if (error.code === "ECONNABORTED") {
-        // Timeout
-        errorMessage = "Request timed out. Please try again.";
-      }
+      const errorMessage = getCustomerErrorMessage(
+        error,
+        "We could not submit your review. Please try again.",
+      );
 
       console.error("Error submitting review:", error);
       setSubmitError(errorMessage);

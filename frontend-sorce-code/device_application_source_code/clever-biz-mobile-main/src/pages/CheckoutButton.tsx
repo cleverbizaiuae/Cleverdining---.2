@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axiosInstance from "../lib/axios";
 import { loadStripe } from "@stripe/stripe-js";
 import toast from "react-hot-toast";
+import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 
 export default function CheckoutButton({
   orderId,
@@ -126,8 +127,10 @@ export default function CheckoutButton({
       console.error("[CHECKOUT] Error:", e);
       console.error("[CHECKOUT] Response data:", e?.response?.data);
       console.error("[CHECKOUT] Status:", e?.response?.status);
-      const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || "Something went wrong";
-      toast.error(msg);
+      toast.error(getCustomerErrorMessage(
+        e,
+        "Payment could not start. Please try again.",
+      ));
     } finally {
       setLoading(false);
     }
