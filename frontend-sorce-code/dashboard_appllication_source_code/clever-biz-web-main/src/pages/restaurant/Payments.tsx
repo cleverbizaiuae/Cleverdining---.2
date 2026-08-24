@@ -84,6 +84,17 @@ const getEffectivePaymentStatus = (payment: Payment): Payment['status'] =>
         ? 'cancelled'
         : payment.status;
 
+const getDateBoundaryParam = (date: Date, endOfDay = false) => {
+    const boundary = new Date(date);
+    boundary.setHours(
+        endOfDay ? 23 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 999 : 0,
+    );
+    return boundary.toISOString();
+};
+
 const PaymentDetailModal = ({ isOpen, onClose, payment }: { isOpen: boolean; onClose: () => void; payment: PaymentWithOrder | null }) => {
     const currencyCode = payment?.currency || getActiveRestaurantCurrency();
     const orderId = payment?.order_id;
@@ -206,8 +217,8 @@ export const Payments = () => {
         try {
             let url = '/owners/payments/';
             const params = new URLSearchParams();
-            if (startDate) params.append('created_at__gte', startDate.toISOString().split('T')[0]);
-            if (endDate) params.append('created_at__lte', endDate.toISOString().split('T')[0]);
+            if (startDate) params.append('created_at__gte', getDateBoundaryParam(startDate));
+            if (endDate) params.append('created_at__lte', getDateBoundaryParam(endDate, true));
             if (params.toString()) url += `?${params.toString()}`;
             const res = await cachedGet(url, {}, { ttlMs: 0, force: true });
             const data = res.data;
@@ -392,6 +403,7 @@ export const Payments = () => {
                             <DatePicker
                                 selected={startDate}
                                 onChange={setStartDate}
+                                maxDate={endDate || undefined}
                                 placeholderText="dd/mm/yyyy"
                                 dateFormat="dd/MM/yyyy"
                                 calendarStartDay={1}
@@ -407,6 +419,7 @@ export const Payments = () => {
                             <DatePicker
                                 selected={endDate}
                                 onChange={setEndDate}
+                                minDate={startDate || undefined}
                                 placeholderText="dd/mm/yyyy"
                                 dateFormat="dd/MM/yyyy"
                                 calendarStartDay={1}
@@ -417,7 +430,7 @@ export const Payments = () => {
                                 aria-label="Payment end date"
                             />
                         </label>
-                        <button onClick={() => fetchPayments(false)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#0055FE] text-[#0055FE] transition-colors hover:bg-[#0055FE]/5" aria-label="Refresh payments">
+                        <button onClick={() => fetchPayments(true)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#0055FE] text-[#0055FE] transition-colors hover:bg-[#0055FE]/5" aria-label="Refresh payments">
                             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
                         </button>
                         <button

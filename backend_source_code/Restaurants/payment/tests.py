@@ -2,6 +2,7 @@ import json
 import time
 import hmac
 import hashlib
+from datetime import datetime, timezone as datetime_timezone
 from unittest.mock import patch
 
 import stripe
@@ -30,6 +31,107 @@ class GuestPaymentVerificationAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"], "Payment record not found")
+
+
+class PaymentAdminDateFilterTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="payment-date-owner@example.com",
+            username="Payment Date Owner",
+            password="password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="Payment Date Restaurant",
+            location="Dubai",
+            phone_number="+971500004399",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table Date",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        self.client = APIClient()
+        self.client.force_authenticate(self.owner)
+
+    def _create_paid_order(self, created_at, *, with_payment):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="served",
+            payment_status="paid",
+            total_price="25.00",
+        )
+        Order.objects.filter(pk=order.pk).update(
+            created_time=created_at,
+            updated_time=created_at,
+        )
+
+        if not with_payment:
+            return f"derived_{order.id}"
+
+        payment = Payment.objects.create(
+            device=self.device,
+            restaurant=self.restaurant,
+            order=order,
+            provider="cash",
+            transaction_id=f"payment-date-{order.id}",
+            amount="25.00",
+            status="completed",
+        )
+        Payment.objects.filter(pk=payment.pk).update(
+            created_at=created_at,
+            updated_at=created_at,
+        )
+        return payment.id
+
+    def test_date_range_filters_real_and_derived_payments_inclusively(self):
+        before_range = datetime(2026, 6, 1, 23, 59, tzinfo=datetime_timezone.utc)
+        start_boundary = datetime(2026, 6, 2, 0, 0, tzinfo=datetime_timezone.utc)
+        end_boundary = datetime(2026, 6, 28, 23, 59, 59, tzinfo=datetime_timezone.utc)
+        after_range = datetime(2026, 6, 29, 0, 0, tzinfo=datetime_timezone.utc)
+
+        excluded_real = self._create_paid_order(before_range, with_payment=True)
+        included_real = self._create_paid_order(start_boundary, with_payment=True)
+        included_derived = self._create_paid_order(end_boundary, with_payment=False)
+        excluded_derived = self._create_paid_order(after_range, with_payment=False)
+
+        response = self.client.get(
+            "/owners/payments/?created_at__gte=2026-06-02&created_at__lte=2026-06-28"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {entry["id"] for entry in response.json()["results"]}
+        self.assertEqual(result_ids, {included_real, included_derived})
+        self.assertNotIn(excluded_real, result_ids)
+        self.assertNotIn(excluded_derived, result_ids)
+
+    def test_timezone_aware_datetime_boundaries_are_respected(self):
+        before_range = datetime(2026, 6, 1, 18, 29, 59, tzinfo=datetime_timezone.utc)
+        start_boundary = datetime(2026, 6, 1, 18, 30, tzinfo=datetime_timezone.utc)
+        end_boundary = datetime(2026, 6, 28, 18, 29, 59, 999000, tzinfo=datetime_timezone.utc)
+        after_range = datetime(2026, 6, 28, 18, 30, tzinfo=datetime_timezone.utc)
+
+        excluded_before = self._create_paid_order(before_range, with_payment=True)
+        included_start = self._create_paid_order(start_boundary, with_payment=True)
+        included_end = self._create_paid_order(end_boundary, with_payment=True)
+        excluded_after = self._create_paid_order(after_range, with_payment=True)
+
+        response = self.client.get(
+            "/owners/payments/",
+            {
+                "created_at__gte": "2026-06-01T18:30:00.000Z",
+                "created_at__lte": "2026-06-28T18:29:59.999Z",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {entry["id"] for entry in response.json()["results"]}
+        self.assertEqual(result_ids, {included_start, included_end})
+        self.assertNotIn(excluded_before, result_ids)
+        self.assertNotIn(excluded_after, result_ids)
 
 
 class PreOrderPaymentSettlementTests(TestCase):

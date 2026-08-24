@@ -1,3 +1,5 @@
+from datetime import datetime, time
+
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,6 +9,7 @@ from .models import Payment
 from .serializers import PaymentGatewaySerializer # We might need a PaymentSerializer
 from rest_framework import serializers
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from order.models import Order
@@ -156,7 +159,44 @@ class PaymentAdminViewSet(ModelViewSet):
             print(f"PaymentAdminViewSet.get_queryset error: {e}")
             return Payment.objects.none()
 
-    def _get_orphaned_paid_orders(self, rest_ids):
+    def _get_date_filter_bounds(self):
+        def parse_boundary(value, *, end_of_day=False):
+            if not value:
+                return None
+
+            parsed_date = parse_date(value)
+            if parsed_date is not None and 'T' not in value and ' ' not in value:
+                boundary = datetime.combine(
+                    parsed_date,
+                    time.max if end_of_day else time.min,
+                )
+                return timezone.make_aware(boundary)
+
+            parsed_datetime = parse_datetime(value)
+            if parsed_datetime is not None:
+                if timezone.is_naive(parsed_datetime):
+                    parsed_datetime = timezone.make_aware(parsed_datetime)
+                return parsed_datetime
+
+            return None
+
+        return (
+            parse_boundary(self.request.query_params.get('created_at__gte')),
+            parse_boundary(
+                self.request.query_params.get('created_at__lte'),
+                end_of_day=True,
+            ),
+        )
+
+    @staticmethod
+    def _apply_date_filters(queryset, field_name, start_at, end_at):
+        if start_at is not None:
+            queryset = queryset.filter(**{f'{field_name}__gte': start_at})
+        if end_at is not None:
+            queryset = queryset.filter(**{f'{field_name}__lte': end_at})
+        return queryset
+
+    def _get_orphaned_paid_orders(self, rest_ids, start_at=None, end_at=None):
         """
         Find PAID orders that have NO corresponding Payment record.
         These are the 'orphaned' orders that need synthetic payments.
@@ -179,7 +219,13 @@ class PaymentAdminViewSet(ModelViewSet):
                 id__in=orders_with_payments
             ).exclude(
                 status='cancelled' # Ensure cancelled orders don't appear
-            ).select_related('device', 'restaurant').order_by('-updated_time')[:500]  # LIMIT 500
+            ).select_related('device', 'restaurant').order_by('-updated_time')
+            orphaned_orders = self._apply_date_filters(
+                orphaned_orders,
+                'created_time',
+                start_at,
+                end_at,
+            )[:500]  # LIMIT 500
             
             return orphaned_orders
         except Exception as e:
@@ -254,12 +300,23 @@ class PaymentAdminViewSet(ModelViewSet):
                     'pending_amount': '0.00'
                 })
             
+            start_at, end_at = self._get_date_filter_bounds()
+
             # 1. Get real payments and serialize them
-            real_payments = self.get_queryset()
+            real_payments = self._apply_date_filters(
+                self.get_queryset(),
+                'created_at',
+                start_at,
+                end_at,
+            )
             real_payment_data = PaymentSerializer(real_payments, many=True).data
-            
+
             # 2. Get orphaned PAID orders and create synthetic payments
-            orphaned_orders = self._get_orphaned_paid_orders(rest_ids)
+            orphaned_orders = self._get_orphaned_paid_orders(
+                rest_ids,
+                start_at,
+                end_at,
+            )
             synthetic_payments = []
             for order in orphaned_orders:
                 synthetic = self._create_synthetic_payment(order)
