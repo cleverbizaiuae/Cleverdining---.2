@@ -938,6 +938,26 @@ class UpsellSmartSuggestionsAPIView(APIView):
             ]
             if primary_pair_rows:
                 eligible_engine_rows = primary_pair_rows
+        elif strategy in {"move_stock", "inventory_movement", "volume"}:
+            # Move Stock is a backend business rule, not an LLM preference.
+            # Keep explicit inventory targets authoritative when configured,
+            # then expose only the lowest-selling eligible cohort to the LLM.
+            # This prevents a stronger culinary or popularity signal from
+            # selecting a higher-selling item from the wider shortlist.
+            inventory_rows = [
+                row for row in eligible_engine_rows if row.get("inventory_priority")
+            ]
+            move_stock_rows = inventory_rows or eligible_engine_rows
+            if move_stock_rows:
+                lowest_order_count = min(
+                    int(row.get("order_count_30d") or 0)
+                    for row in move_stock_rows
+                )
+                eligible_engine_rows = [
+                    row
+                    for row in move_stock_rows
+                    if int(row.get("order_count_30d") or 0) == lowest_order_count
+                ]
         cart_items = list(
             Item.objects.select_related("category", "sub_category").filter(
                 restaurant=restaurant,

@@ -2272,6 +2272,62 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(response.data["results"][0]["id"], self.cola.id)
         self.assertEqual(response.data["results"][0]["decision_source"], "llm")
 
+    def test_move_stock_only_offers_lowest_selling_items_to_llm(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        setting.strategy = "move_stock"
+        setting.save(update_fields=["strategy", "updated_at"])
+        cache.clear()
+
+        recent_order_counts = {
+            self.cola.id: {"order_count_7d": 20, "order_count_30d": 50},
+            self.lemonade.id: {"order_count_7d": 1, "order_count_30d": 1},
+            self.cappuccino.id: {"order_count_7d": 1, "order_count_30d": 1},
+        }
+        request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "add_to_cart",
+                "limit": 2,
+            },
+        )
+
+        def choose_lowest_seller(context, **_kwargs):
+            candidates = context["candidates"]
+            candidate_ids = [candidate["id"] for candidate in candidates]
+            self.assertNotIn(self.cola.id, candidate_ids)
+            self.assertEqual(
+                {candidate["order_count_30d"] for candidate in candidates},
+                {1},
+            )
+            selected = candidates[0]
+            return (
+                {
+                    "suggest_nothing": False,
+                    "suggested_item_id": selected["id"],
+                    "suggested_item_name": selected["name"],
+                    "target_role": selected["target_role"],
+                    "reason": None,
+                    "reasoning": "This is the lowest-selling valid complement.",
+                    "suggestion_copy": "Make room for this refreshing addition.",
+                    "confidence": 0.95,
+                },
+                "ok",
+            )
+
+        with (
+            patch("order.upsell._recent_order_counts", return_value=recent_order_counts),
+            patch("order.upsell_views.call_upsell_llm", side_effect=choose_lowest_seller),
+        ):
+            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertNotEqual(response.data["results"][0]["id"], self.cola.id)
+        self.assertEqual(response.data["results"][0]["decision_source"], "llm")
+
     def test_smart_suggestions_returns_pending_without_a_deterministic_result(self):
         request = APIRequestFactory().get(
             "/api/upsell/smart-suggestions",
