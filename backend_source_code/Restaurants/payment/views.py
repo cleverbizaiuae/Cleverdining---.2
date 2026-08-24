@@ -569,6 +569,9 @@ class SplitBillSummaryView(APIView):
 
 class VerifyPaymentView(APIView):
     """Unified Payment Verification View"""
+    permission_classes = []
+    authentication_classes = []
+
     def post(self, request):
         ensure_payment_schema()
         data = request.data

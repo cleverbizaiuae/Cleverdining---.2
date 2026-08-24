@@ -20,6 +20,18 @@ from device.models import Device, GuestSession
 from order.models import Cart, Order
 
 
+class GuestPaymentVerificationAccessTests(TestCase):
+    def test_guest_return_can_reach_payment_verification(self):
+        response = APIClient().post(
+            "/api/customer/payment/verify/",
+            {"session_id": "cs_test_missing_guest_return"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"], "Payment record not found")
+
+
 class PreOrderPaymentSettlementTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(
