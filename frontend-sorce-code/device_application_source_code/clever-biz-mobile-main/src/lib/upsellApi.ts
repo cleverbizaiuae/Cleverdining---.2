@@ -430,14 +430,17 @@ const fetchUpsellSuggestionsRemote = async (
   const cartItemIds = toCsv(params.cartItemIds);
   const excludeItemIds = toCsv(params.excludeItemIds);
   const restaurantId = Number(params.restaurantId || getSessionRestaurantId());
+  const sourceItemId = params.triggerPoint === "add_to_cart"
+    ? params.sourceItemId
+    : undefined;
   const commonParams = {
     trigger_point: params.triggerPoint,
     triggerPoint: params.triggerPoint,
     limit: getUpsellFetchLimit(params.triggerPoint),
     restaurant_id: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined,
     restaurantId: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : undefined,
-    source_item_id: params.sourceItemId,
-    sourceItemId: params.sourceItemId,
+    source_item_id: sourceItemId,
+    sourceItemId,
     cart_item_ids: cartItemIds,
     cartItemIds,
     exclude_item_ids: excludeItemIds,

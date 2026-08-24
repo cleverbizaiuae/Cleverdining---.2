@@ -140,6 +140,17 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
     const excludeItemIds = Array.from(
       new Set([...cartItemIds, ...getUpsellExcludedItemIds()])
     );
+    // Warm the exact request used by the cart screen immediately. This must
+    // not include a source item: cart recommendations evaluate the whole cart,
+    // and including it creates a different cache key that the cart cannot reuse.
+    prefetchUpsellSuggestions({
+      triggerPoint: "cart",
+      restaurantId: Number(item.restaurant || 0) || undefined,
+      limit: 2,
+      cartItemIds,
+      excludeItemIds,
+    });
+
     void fetchUpsellSuggestions({
       triggerPoint: "add_to_cart",
       sourceItemId: Number(item.id),
@@ -147,20 +158,6 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
       limit: 6,
       cartItemIds,
       excludeItemIds,
-    }).then((menuSuggestions) => {
-      prefetchUpsellSuggestions({
-        triggerPoint: "cart",
-        sourceItemId: Number(item.id),
-        restaurantId: Number(item.restaurant || 0) || undefined,
-        limit: 2,
-        cartItemIds,
-        excludeItemIds: Array.from(
-          new Set([
-            ...excludeItemIds,
-            ...menuSuggestions.map((suggestion) => suggestion.id),
-          ])
-        ),
-      });
     }).catch(() => {
       // The live add action can retry if this background warm misses.
     });

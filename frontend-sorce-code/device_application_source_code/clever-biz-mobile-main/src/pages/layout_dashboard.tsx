@@ -224,6 +224,17 @@ const MenuUpsellPrimer = ({ items }: { items: FoodItemTypes[] }) => {
     });
     const primeVisibleItems = async () => {
       await wait(180);
+      if (cartItemIds.length) {
+        prefetchUpsellSuggestions({
+          triggerPoint: "cart",
+          restaurantId: Number(cart[0]?.restaurant || 0) || undefined,
+          limit: 2,
+          cartItemIds,
+          excludeItemIds: Array.from(
+            new Set([...cartItemIds, ...getUpsellExcludedItemIds()])
+          ),
+        });
+      }
       const visibleItems = items
         .filter((item) => item.availability !== false && Number(item.id) > 0)
         .slice(0, 8);
@@ -443,17 +454,13 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
           recordShown(remoteSuggestions, item, cartItemIds, metrics, "llm");
           prefetchUpsellSuggestions({
             triggerPoint: "cart",
-            sourceItemId: Number(item.id),
             restaurantId: Number(item.restaurant || 0) || undefined,
             limit: getUpsellTriggerLimit("cart", effectiveAggressiveness),
             cartItemIds,
-            excludeItemIds: Array.from(
-              new Set([
-                ...cartItemIds,
-                ...getUpsellExcludedItemIds(),
-                ...remoteSuggestions.map((suggestion) => suggestion.id),
-              ])
-            ),
+            excludeItemIds: Array.from(new Set([
+              ...cartItemIds,
+              ...getUpsellExcludedItemIds(),
+            ])),
           });
           return remoteSuggestions;
         })

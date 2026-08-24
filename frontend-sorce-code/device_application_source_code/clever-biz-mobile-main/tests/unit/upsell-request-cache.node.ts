@@ -42,6 +42,22 @@ assert.notEqual(
   }),
 );
 
+const cartRequest = {
+  ...baseRequest,
+  triggerPoint: "cart",
+  sourceItemId: 0,
+};
+assert.equal(
+  buildUpsellRequestKey(cartRequest),
+  buildUpsellRequestKey({ ...cartRequest, sourceItemId: 12 }),
+  "cart prefetch and cart screen must share one request regardless of source item",
+);
+assert.notEqual(
+  buildUpsellRequestKey(baseRequest),
+  buildUpsellRequestKey({ ...baseRequest, sourceItemId: 13 }),
+  "after-add requests must remain anchored to their source item",
+);
+
 assert.equal(isRecentUpsellRequest(1_000, 121_000, 20_000, 30_000), true);
 assert.equal(isRecentUpsellRequest(1_000, 121_000, 32_000, 30_000), false);
 assert.equal(isRecentUpsellRequest(1_000, 10_000, 11_000, 30_000), false);

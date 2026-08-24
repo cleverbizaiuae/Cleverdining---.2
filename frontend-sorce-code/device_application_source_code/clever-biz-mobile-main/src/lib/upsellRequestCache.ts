@@ -31,7 +31,10 @@ export const buildUpsellRequestKey = (input: UpsellRequestKeyInput): string =>
   JSON.stringify({
     triggerPoint: input.triggerPoint,
     limit: input.limit,
-    sourceItemId: input.sourceItemId,
+    // Only the immediate after-add surface is anchored to one source item.
+    // Cart and payment surfaces evaluate the complete order, so normalizing
+    // their source prevents duplicate requests for the same business context.
+    sourceItemId: input.triggerPoint === "add_to_cart" ? input.sourceItemId : 0,
     restaurantId: input.restaurantId,
     cartItemIds: sortedPositiveIds(input.cartItemIds),
     excludeItemIds: sortedPositiveIds(input.excludeItemIds),
