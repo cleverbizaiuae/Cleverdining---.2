@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from device.management.commands.process_reservations import process_reservations
-from device.models import Device
+from device.models import Device, Reservation
 from device.reservation_services import (
     ReservationConflictError,
     available_slots,
@@ -135,6 +135,56 @@ class ReservationRuleTests(TestCase):
         response = client.get('/owners/reservations/', {'date': utc_date.isoformat(), 'page_size': 1000})
         records = response.data.get('results', response.data)
         self.assertNotIn(reservation.id, [record['id'] for record in records])
+
+    def test_dashboard_analytics_counts_historical_walk_ins_for_selected_week(self):
+        self.restaurant.timezone = 'Asia/Dubai'
+        self.restaurant.save(update_fields=['timezone'])
+        target_date = (timezone.now() - timedelta(days=4)).astimezone(ZoneInfo('Asia/Dubai')).date()
+        local_start = datetime.combine(target_date, time(12, 0), tzinfo=ZoneInfo('Asia/Dubai'))
+
+        for index in range(3):
+            Reservation.objects.create(
+                customer_name=f'Walk-in {index + 1}',
+                cell_number='Not provided',
+                guest_no=2,
+                device=self.table,
+                restaurant=self.restaurant,
+                source='walk_in',
+                status='finished',
+                reservation_time=local_start + timedelta(minutes=index * 30),
+            )
+        Reservation.objects.create(
+            customer_name='Booked Guest',
+            cell_number='+971500000099',
+            guest_no=2,
+            device=self.table,
+            restaurant=self.restaurant,
+            source='dashboard',
+            status='confirmed',
+            reservation_time=local_start + timedelta(hours=3),
+        )
+        Reservation.objects.create(
+            customer_name='Cancelled Walk-in',
+            cell_number='Not provided',
+            guest_no=2,
+            device=self.table,
+            restaurant=self.restaurant,
+            source='walk_in',
+            status='cancelled',
+            reservation_time=local_start + timedelta(hours=4),
+        )
+
+        client = APIClient()
+        client.force_authenticate(self.owner)
+        response = client.get('/owners/reservations/analytics/', {
+            'date': target_date.isoformat(),
+            'restaurantId': self.restaurant.id,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        selected_day = next(day for day in response.data['days'] if day['date'] == target_date.isoformat())
+        self.assertEqual(selected_day['walkIns'], 3)
+        self.assertEqual(selected_day['reservations'], 1)
 
     @patch('device.management.commands.process_reservations.send_360dialog_text', return_value=True)
     def test_lifecycle_and_reminders_are_idempotent(self, send_text):

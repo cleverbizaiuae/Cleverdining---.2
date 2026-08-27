@@ -865,6 +865,68 @@ class ReservationViewSet(viewsets.ModelViewSet):
             return ReservationUpdateSerializer
         return ReservationSerializer  
 
+    @action(detail=False, methods=['get'], url_path='analytics')
+    def analytics(self, request):
+        selected_date = parse_date(str(request.query_params.get('date') or ''))
+        if not selected_date:
+            return Response({'date': ['A valid date is required.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        restaurants = self._user_restaurants()
+        requested_restaurant_id = request.query_params.get('restaurantId') or request.query_params.get('restaurant_id')
+        if requested_restaurant_id:
+            restaurant = next(
+                (candidate for candidate in restaurants if str(candidate.id) == str(requested_restaurant_id)),
+                None,
+            )
+            if restaurant is None:
+                raise PermissionDenied('You are not assigned to this restaurant.')
+        else:
+            restaurant = restaurants[0] if len(restaurants) == 1 else None
+
+        if restaurant is None:
+            return Response(
+                {'restaurantId': ['Select a restaurant to view reservation analytics.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            restaurant_tz = ZoneInfo(restaurant.timezone or 'Asia/Dubai')
+        except Exception:
+            restaurant_tz = ZoneInfo('Asia/Dubai')
+
+        week_start = selected_date - timedelta(days=selected_date.weekday())
+        week_end = week_start + timedelta(days=7)
+        local_start = datetime.combine(week_start, time.min, tzinfo=restaurant_tz)
+        local_end = datetime.combine(week_end, time.min, tzinfo=restaurant_tz)
+        rows = Reservation.objects.filter(
+            restaurant=restaurant,
+            reservation_time__gte=local_start.astimezone(ZoneInfo('UTC')),
+            reservation_time__lt=local_end.astimezone(ZoneInfo('UTC')),
+        ).exclude(status__in=['cancel', 'cancelled', 'canceled', 'no_show'])
+
+        days = {
+            week_start + timedelta(days=offset): {'reservations': 0, 'walkIns': 0}
+            for offset in range(7)
+        }
+        for reservation in rows.only('reservation_time', 'source'):
+            local_date = reservation.reservation_time.astimezone(restaurant_tz).date()
+            if local_date not in days:
+                continue
+            source = str(reservation.source or '').strip().lower().replace('-', '_').replace(' ', '_')
+            if source in {'walk_in', 'walkin'}:
+                days[local_date]['walkIns'] += 1
+            else:
+                days[local_date]['reservations'] += 1
+
+        return Response({
+            'startDate': week_start.isoformat(),
+            'endDate': (week_end - timedelta(days=1)).isoformat(),
+            'days': [
+                {'date': day.isoformat(), **counts}
+                for day, counts in days.items()
+            ],
+        })
+
     def perform_destroy(self, instance):
         self._assert_reservation_access(instance)
         restaurant_id = instance.restaurant_id

@@ -235,6 +235,20 @@ const getReservationRows = (payload: any): any[] => {
   return Array.isArray(raw) ? raw : [];
 };
 
+const normalizeReservationAnalytics = (payload: any, fallback: ReservationChartPoint[]) => {
+  const rows = Array.isArray(payload?.days) ? payload.days : [];
+  const rowsByDate = new Map(rows.map((row: any) => [String(row.date || ""), row]));
+
+  return fallback.map((point) => {
+    const row: any = rowsByDate.get(point.date);
+    return {
+      ...point,
+      reservations: toNumber(row?.reservations),
+      walkIns: toNumber(row?.walkIns ?? row?.walk_ins),
+    };
+  });
+};
+
 const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSelected }: any) => {
   const [mode, setMode] = useState<'upload' | 'ai'>('upload');
   const [prompt, setPrompt] = useState('');
@@ -632,21 +646,10 @@ const ScreenRestaurantDashboard = () => {
     setReservationAnalyticsError(false);
 
     try {
-      const dailyRows = await Promise.all(selectedWeek.map(async (point) => {
-        const response = await cachedGet("/owners/reservations/", {
-          params: { date: point.date, page_size: 1000 },
-        }, { ttlMs: 30_000, force });
-        const rows = getReservationRows(response.data).filter((row: any) => (
-          String(row.restaurant || "") === String(restaurantId) && isActiveReservation(row)
-        ));
-        const walkIns = rows.filter(isWalkInReservation).length;
-        return {
-          ...point,
-          reservations: rows.length - walkIns,
-          walkIns,
-        };
-      }));
-      setReservationAnalytics(dailyRows);
+      const response = await cachedGet("/owners/reservations/analytics/", {
+        params: { date: selectedDate, restaurantId },
+      }, { ttlMs: 30_000, force });
+      setReservationAnalytics(normalizeReservationAnalytics(response.data, selectedWeek));
     } catch (err) {
       console.warn("Failed to load reservation analytics", err);
       setReservationAnalytics(selectedWeek);
