@@ -2,10 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } fr
 import { motion } from "motion/react";
 import {
   ArrowLeft,
-  ChevronRight,
-  Gamepad2,
   Pause,
-  Phone,
   Play,
   RotateCcw,
   Trophy,
@@ -23,9 +20,8 @@ import {
   type Connect4Piece,
   type Connect4Player,
 } from "@/lib/connect4Engine";
-import { getPlayerSession, setPlayerSession, type PlayerSession } from "@/lib/playerSession";
+import { getPlayerSession, type PlayerSession } from "@/lib/playerSession";
 import { getTableIdentity } from "@/lib/tableIdentity";
-import { useActiveBrandConfig } from "@/lib/useBrandConfig";
 
 type GameId = "snake" | "connect4" | "swajie";
 type Point = { x: number; y: number };
@@ -78,144 +74,14 @@ const gameCards: Array<{ id: GameId; name: string; subtitle: string; bg: string;
   },
 ];
 
-function PlayerSetup({ onComplete }: { onComplete: (player: PlayerSession) => void }) {
-  const brand = useActiveBrandConfig();
-  const tableInfo = useMemo(() => getTableIdentity(), []);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [nameError, setNameError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const savePlayer = async (asGuest = false) => {
-    const normalizedName = asGuest ? "Guest" : name.trim();
-    const normalizedPhone = phone.trim();
-
-    if (!normalizedName) {
-      setNameError("Name is required to save your score.");
-      return;
-    }
-
-    setSaving(true);
-    setNameError("");
-
-    const nextPlayer: PlayerSession = {
-      name: normalizedName,
-      ...(normalizedPhone && !asGuest ? { phone: normalizedPhone } : {}),
-    };
-
-    if (normalizedPhone && !asGuest) {
-      try {
-        const response = await axiosInstance.post("/api/customers/lookup", {
-          phone: normalizedPhone,
-          name: normalizedName,
-          ...(tableInfo.restaurantId ? { restaurantId: tableInfo.restaurantId } : {}),
-          ...(brand.restaurantName ? { restaurantName: brand.restaurantName } : {}),
-        });
-        const customerId = response.data?.id || response.data?.customer?.id || response.data?.customerId;
-        if (customerId) nextPlayer.customerId = String(customerId);
-      } catch {
-        // Score play should not be blocked if CRM lookup is temporarily unavailable.
-      }
-    }
-
-    setPlayerSession(nextPlayer);
-    setSaving(false);
-    onComplete(nextPlayer);
-  };
-
-  return (
-    <div className="relative flex h-full flex-col items-center justify-center overflow-hidden bg-gray-950 px-6 py-8 text-white">
-      <motion.div className="absolute -right-20 -top-16 h-64 w-64 rounded-full bg-primary/20 blur-3xl" animate={{ opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 4, repeat: Infinity }} />
-      <motion.div className="absolute -bottom-16 -left-20 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" animate={{ opacity: [0.3, 0.7, 0.3] }} transition={{ duration: 5, repeat: Infinity }} />
-
-      <div className="relative w-full max-w-sm">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.82 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 18 }}
-          className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-violet-500 shadow-2xl shadow-primary/40"
-        >
-          <Gamepad2 className="h-10 w-10 text-white" strokeWidth={1.8} />
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-7 text-center">
-          <h2 className="text-3xl font-black tracking-tight text-white">Join the Arcade</h2>
-          <p className="mt-2 text-sm leading-relaxed text-gray-400">Add your phone to save your score and connect games to loyalty.</p>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-gray-400">Your Name *</label>
-            <div className="relative">
-              <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" strokeWidth={1.8} />
-              <input
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setNameError("");
-                }}
-                placeholder="e.g. Ahmed"
-                className="w-full rounded-2xl border border-white/20 bg-white/10 py-3.5 pl-10 pr-4 text-sm font-medium text-white outline-none placeholder:text-gray-500 focus:border-primary/60 focus:bg-white/15"
-              />
-            </div>
-            {nameError && <p className="mt-1 pl-1 text-xs text-red-400">{nameError}</p>}
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-gray-400">
-              Phone Number <span className="font-normal normal-case text-gray-600">— optional</span>
-            </label>
-            <div className="relative">
-              <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" strokeWidth={1.8} />
-              <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="+971 50 000 0000"
-                className="w-full rounded-2xl border border-white/20 bg-white/10 py-3.5 pl-10 pr-4 text-sm font-medium text-white outline-none placeholder:text-gray-500 focus:border-primary/60 focus:bg-white/15"
-              />
-            </div>
-            <p className="mt-1.5 pl-1 text-[11px] text-gray-500">Your phone links your score to your loyalty account.</p>
-          </div>
-
-          <button
-            onClick={() => void savePlayer(false)}
-            disabled={saving}
-            className="flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold shadow-2xl shadow-primary/30 disabled:opacity-70"
-          >
-            {saving ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <>Let&apos;s Play <ChevronRight className="h-4 w-4" strokeWidth={1.8} /></>}
-          </button>
-
-          <button onClick={() => void savePlayer(true)} className="block w-full text-center text-xs text-gray-500">
-            Continue as guest (score won&apos;t be saved)
-          </button>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="mt-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-        >
-          <Trophy className="h-4 w-4 shrink-0 text-yellow-400" strokeWidth={1.8} />
-          <p className="text-xs leading-relaxed text-gray-300">
-            <span className="font-bold text-white">Loyalty points</span> are earned on orders. Phone registration connects games, visits, and spend.
-          </p>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
 export function GameHub({ onBack, onChosenTreater }: GameHubProps) {
-  const [player, setPlayer] = useState<PlayerSession | null>(() => getPlayerSession());
+  const player = useMemo<PlayerSession>(() => getPlayerSession() || { name: "Guest" }, []);
   const [selectedGame, setSelectedGame] = useState<GameId | null>(null);
   const tableInfo = useMemo(() => getTableIdentity(), []);
 
   if (selectedGame === "snake") return <SnakeGame onBack={() => setSelectedGame(null)} restaurantId={tableInfo.restaurantId} />;
   if (selectedGame === "connect4") return <Connect4Game onBack={() => setSelectedGame(null)} restaurantId={tableInfo.restaurantId} />;
   if (selectedGame === "swajie") return <SwajieGame onBack={() => setSelectedGame(null)} onChosen={(name) => onChosenTreater?.(name)} />;
-
-  if (!player) return <PlayerSetup onComplete={setPlayer} />;
 
   return (
     <div className="h-full overflow-y-auto bg-gray-950 px-5 py-6 text-white">
