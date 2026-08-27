@@ -9,6 +9,7 @@ import { getEffectiveItemPrice } from "../utils/pricing";
 import {
   buildUpsellRequestKey,
   isRecentUpsellRequest,
+  UPSELL_LIVE_PREFETCH_MAX_AGE_MS,
 } from "./upsellRequestCache";
 
 export type UpsellSuggestion = {
@@ -104,7 +105,6 @@ const UPSELL_REQUEST_TIMEOUT_MS = 7_000;
 const UPSELL_RESOLUTION_TIMEOUT_MS = 12_000;
 const UPSELL_RETRY_DELAY_MS = 250;
 const UPSELL_RESULT_CACHE_MS = 2 * 60_000;
-const UPSELL_LIVE_PREFETCH_MAX_AGE_MS = 30_000;
 const UPSELL_PERSISTED_RESULT_CACHE_MS = 15 * 60_000;
 const UPSELL_PERSISTED_RESULT_PREFIX = "cb:upsell_result:v1:";
 const UPSELL_CONFIG_VERSION_KEY = "cb:upsell_config_version";

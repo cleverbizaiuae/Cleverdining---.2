@@ -4,6 +4,12 @@ type UpsellSignalParams = {
   removed_categories?: string;
 };
 
+// Cart prefetches are exact to the session, table, cart, exclusions, signals,
+// and known configuration version. Keep them reusable for the same bounded
+// lifetime as the in-memory result instead of discarding a completed request
+// after only 30 seconds and starting another LLM round trip.
+export const UPSELL_LIVE_PREFETCH_MAX_AGE_MS = 2 * 60_000;
+
 type UpsellRequestKeyInput = {
   triggerPoint: string;
   limit: number;

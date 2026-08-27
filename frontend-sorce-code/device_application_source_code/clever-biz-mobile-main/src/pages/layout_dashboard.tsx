@@ -220,8 +220,13 @@ const MenuUpsellPrimer = ({ items }: { items: FoodItemTypes[] }) => {
       timer = window.setTimeout(resolve, delayMs);
     });
     const primeVisibleItems = async () => {
-      await wait(180);
       if (cartItemIds.length) {
+        // Give the cart surface priority over speculative item-detail warms.
+        // Settings and the exact cart recommendation then share their existing
+        // request caches when the customer opens the cart.
+        void fetchUpsellSettings().catch(() => {
+          // The cart request still enforces settings on the backend.
+        });
         prefetchUpsellSuggestions({
           triggerPoint: "cart",
           restaurantId: Number(cart[0]?.restaurant || 0) || undefined,
@@ -232,6 +237,7 @@ const MenuUpsellPrimer = ({ items }: { items: FoodItemTypes[] }) => {
           ),
         });
       }
+      await wait(180);
       const visibleItems = items
         .filter((item) => item.availability !== false && Number(item.id) > 0)
         .slice(0, 8);

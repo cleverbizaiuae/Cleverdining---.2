@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildUpsellRequestKey,
   isRecentUpsellRequest,
+  UPSELL_LIVE_PREFETCH_MAX_AGE_MS,
 } from "../../src/lib/upsellRequestCache.ts";
 
 const baseRequest = {
@@ -58,8 +59,20 @@ assert.notEqual(
   "after-add requests must remain anchored to their source item",
 );
 
-assert.equal(isRecentUpsellRequest(1_000, 121_000, 20_000, 30_000), true);
-assert.equal(isRecentUpsellRequest(1_000, 121_000, 32_000, 30_000), false);
-assert.equal(isRecentUpsellRequest(1_000, 10_000, 11_000, 30_000), false);
+assert.equal(
+  isRecentUpsellRequest(1_000, 300_000, 120_999, UPSELL_LIVE_PREFETCH_MAX_AGE_MS),
+  true,
+  "an exact completed cart prefetch remains reusable during its two-minute memory lifetime",
+);
+assert.equal(
+  isRecentUpsellRequest(1_000, 300_000, 121_001, UPSELL_LIVE_PREFETCH_MAX_AGE_MS),
+  false,
+  "a prefetch older than the bounded live window must be refreshed",
+);
+assert.equal(
+  isRecentUpsellRequest(1_000, 10_000, 11_000, UPSELL_LIVE_PREFETCH_MAX_AGE_MS),
+  false,
+  "an expired request is never reused even when it is recent",
+);
 
 console.log("upsell request cache checks passed");
