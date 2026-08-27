@@ -2408,6 +2408,55 @@ class UpsellKnowledgeEngineTests(TestCase):
         self.assertEqual(response.data["results"][0]["id"], self.cola.id)
         self.assertEqual(response.data["results"][0]["decision_source"], "llm")
 
+    def test_max_revenue_only_offers_highest_priced_valid_item_to_llm(self):
+        setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
+        setting.strategy = "max_revenue"
+        setting.save(update_fields=["strategy", "updated_at"])
+        cache.clear()
+
+        request = APIRequestFactory().get(
+            "/api/upsell/smart-suggestions",
+            {
+                "restaurant_id": self.restaurant.id,
+                "cart_item_ids": str(self.burger.id),
+                "source_item_id": self.burger.id,
+                "trigger_point": "add_to_cart",
+                "limit": 2,
+            },
+        )
+
+        def choose_only_revenue_candidate(context, **_kwargs):
+            candidates = context["candidates"]
+            self.assertEqual(
+                [candidate["id"] for candidate in candidates],
+                [self.lemonade.id],
+            )
+            selected = candidates[0]
+            return (
+                {
+                    "suggest_nothing": False,
+                    "suggested_item_id": selected["id"],
+                    "suggested_item_name": selected["name"],
+                    "target_role": selected["target_role"],
+                    "reason": None,
+                    "reasoning": "This is the highest-priced valid complement.",
+                    "suggestion_copy": "Add a premium drink to your meal.",
+                    "confidence": 0.95,
+                },
+                "ok",
+            )
+
+        with patch(
+            "order.upsell_views.call_upsell_llm",
+            side_effect=choose_only_revenue_candidate,
+        ):
+            response = UpsellSmartSuggestionsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], self.lemonade.id)
+        self.assertEqual(response.data["results"][0]["decision_source"], "llm")
+
     def test_move_stock_only_offers_lowest_selling_items_to_llm(self):
         setting, _ = UpsellSetting.objects.get_or_create(restaurant=self.restaurant)
         setting.strategy = "move_stock"

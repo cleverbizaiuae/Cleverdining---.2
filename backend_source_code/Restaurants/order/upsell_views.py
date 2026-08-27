@@ -960,6 +960,21 @@ class UpsellSmartSuggestionsAPIView(APIView):
             ]
             if primary_pair_rows:
                 eligible_engine_rows = primary_pair_rows
+        elif strategy in {"max_revenue", "highest_margin", "premium_experience", "margin"}:
+            # Maximise Revenue is a backend business rule, not an LLM hint.
+            # Role/gap, availability, exclusions, and manual rules have already
+            # produced a valid complementary cohort; expose only its highest-
+            # priced item(s) so the LLM cannot replace them with a cheaper one.
+            if eligible_engine_rows:
+                highest_price = max(
+                    Decimal(str(row["item"].price or 0))
+                    for row in eligible_engine_rows
+                )
+                eligible_engine_rows = [
+                    row
+                    for row in eligible_engine_rows
+                    if Decimal(str(row["item"].price or 0)) == highest_price
+                ]
         elif strategy in {"move_stock", "inventory_movement", "volume"}:
             # Move Stock is a backend business rule, not an LLM preference.
             # Keep explicit inventory targets authoritative when configured,
