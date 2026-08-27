@@ -387,7 +387,7 @@ function MessagingUI() {
               <input
                 type="text"
                 placeholder="Type a message..."
-                className="h-10 flex-1 border-none bg-transparent px-4 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                className="h-10 flex-1 appearance-none border-none bg-transparent px-4 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
               />
