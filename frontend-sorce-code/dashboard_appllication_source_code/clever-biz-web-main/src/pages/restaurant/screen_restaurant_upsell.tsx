@@ -464,6 +464,29 @@ const ScreenRestaurantUpsell = () => {
     });
   }, [items, itemSearch]);
 
+  const ruleItemGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; name: string; rows: UpsellItemRow[] }>();
+
+    items.forEach((item) => {
+      const groupName = item.category_name?.trim() || "Uncategorized";
+      const groupKey = item.category_id === null ? "uncategorized" : String(item.category_id);
+      const group = groups.get(groupKey) || { key: groupKey, name: groupName, rows: [] };
+      group.rows.push(item);
+      groups.set(groupKey, group);
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        rows: [...group.rows].sort((a, b) => a.item_name.localeCompare(b.item_name)),
+      }))
+      .sort((a, b) => {
+        if (a.key === "uncategorized") return 1;
+        if (b.key === "uncategorized") return -1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [items]);
+
   useEffect(() => {
     if (!groupedItems.length) return;
     setCollapsedCategories((previous) => {
@@ -1711,11 +1734,19 @@ const ScreenRestaurantUpsell = () => {
                 </select>
                 <select value={newRule.source_item || ""} onChange={(e) => setNewRule((prev) => ({ ...prev, source_item: Number(e.target.value) || undefined }))} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <option value="">When customer adds...</option>
-                  {items.map((item) => <option key={`source-${item.id}`} value={item.item || item.id}>{item.item_name}</option>)}
+                  {ruleItemGroups.map((group) => (
+                    <optgroup key={`source-group-${group.key}`} label={group.name}>
+                      {group.rows.map((item) => <option key={`source-${item.id}`} value={item.item || item.id}>{item.item_name}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
                 <select value={newRule.target_item || ""} onChange={(e) => setNewRule((prev) => ({ ...prev, target_item: Number(e.target.value) || undefined }))} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <option value="">Suggest item...</option>
-                  {items.map((item) => <option key={`target-${item.id}`} value={item.item || item.id}>{item.item_name}</option>)}
+                  {ruleItemGroups.map((group) => (
+                    <optgroup key={`target-group-${group.key}`} label={group.name}>
+                      {group.rows.map((item) => <option key={`target-${item.id}`} value={item.item || item.id}>{item.item_name}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
                 <button onClick={addRule} className="rounded-xl bg-[#0055FE] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Add Rule</button>
               </div>
