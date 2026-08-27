@@ -35,9 +35,9 @@ export const CategoryItem = ({ cat, isActive, onClick }: CategoryItemProps) => {
             alt={cat.Category_name}
             width={72}
             height={72}
-            loading="lazy"
+            loading="eager"
             decoding="async"
-            fetchPriority="low"
+            fetchPriority={isActive ? "high" : "auto"}
             className="w-full h-full object-cover object-center opacity-90 transition-transform duration-500 group-hover:scale-110"
             onError={(e) => {
               e.currentTarget.style.display = "none";
