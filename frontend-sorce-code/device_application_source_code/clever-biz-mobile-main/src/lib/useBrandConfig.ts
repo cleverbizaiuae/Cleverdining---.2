@@ -99,6 +99,19 @@ export function hexToHsl(hex: string): string {
   return `${Math.round(hue * 360)} ${Math.round(sat * 100)}% ${Math.round(lum * 100)}%`;
 }
 
+export function readableTextHsl(hex: string): string {
+  const cleaned = (hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return "215 25% 27%";
+
+  const channels = [0, 2, 4].map((offset) => {
+    const value = parseInt(cleaned.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+
+  return luminance > 0.42 ? "215 25% 27%" : "0 0% 100%";
+}
+
 function cleanText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -130,8 +143,12 @@ function mapBrandConfig(payload: unknown): BrandConfig {
     coverImageUrl: cleanText(src.coverImageUrl),
     coverPosition: cleanText(src.coverPosition) || DEFAULT_BRAND.coverPosition,
     primaryColor: normalizeHexColor(src.primaryColor, DEFAULT_BRAND.primaryColor),
-    secondaryColor: cleanText(src.secondaryColor),
-    accentColor: cleanText(src.accentColor),
+    secondaryColor: cleanText(src.secondaryColor)
+      ? normalizeHexColor(src.secondaryColor, "") || null
+      : null,
+    accentColor: cleanText(src.accentColor)
+      ? normalizeHexColor(src.accentColor, "") || null
+      : null,
     themePreset: normalizeThemePreset(src.themePreset),
     fontPreset: normalizeFontPreset(src.fontPreset),
     tagline: cleanText(src.tagline),

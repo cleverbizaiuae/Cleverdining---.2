@@ -375,12 +375,13 @@ function ImageUploadField({ label, hint, value, uploading, onChange, onFile }: I
 
 type ColorFieldProps = {
   label: string;
+  hint: string;
   required?: boolean;
   value: string | null;
   onChange: (value: string | null) => void;
 };
 
-function ColorField({ label, required = false, value, onChange }: ColorFieldProps) {
+function ColorField({ label, hint, required = false, value, onChange }: ColorFieldProps) {
   const pickerValue = value || "#0055FE";
 
   return (
@@ -425,6 +426,8 @@ function ColorField({ label, required = false, value, onChange }: ColorFieldProp
           </button>
         ) : null}
       </div>
+
+      <p className="text-[10px] leading-4 text-slate-400">{hint}</p>
     </div>
   );
 }
@@ -639,6 +642,8 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
 
   const restaurantName = previewBrand.restaurantName?.trim() || "My Restaurant";
   const primaryColor = previewBrand.primaryColor || "#0055FE";
+  const secondaryColor = previewBrand.secondaryColor || "#F1F5F9";
+  const accentColor = previewBrand.accentColor || primaryColor;
   const fontFamily = getFontFamily(previewBrand.fontPreset);
 
   return (
@@ -781,9 +786,10 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
               </div>
 
               <div className="px-2.5 py-2 bg-white">
-                <div className="h-5 rounded-lg bg-slate-100 flex items-center px-2 gap-1">
+                <div className="h-5 rounded-lg flex items-center px-2 gap-1" style={{ backgroundColor: secondaryColor }}>
                   <span className="w-1.5 h-1.5 rounded-full border border-slate-300" />
                   <span className="w-16 h-1 bg-slate-200 rounded" />
+                  <span className="ml-auto text-[7px] font-bold" style={{ color: accentColor }}>Table 4</span>
                 </div>
               </div>
 
@@ -795,7 +801,7 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
                     style={
                       idx === 0
                         ? { backgroundColor: primaryColor, color: "white" }
-                        : { backgroundColor: "#f1f5f9", color: "#64748b" }
+                        : { backgroundColor: secondaryColor, color: "#64748b" }
                     }
                   >
                     {pill}
@@ -805,7 +811,7 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
 
               <div className="px-2.5 space-y-2 pb-2 bg-white">
                 {[1, 2, 3].map((idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-slate-50 rounded-xl p-1.5">
+                  <div key={idx} className="flex items-center gap-2 rounded-xl p-1.5" style={{ backgroundColor: secondaryColor }}>
                     <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: `${primaryColor}20` }} />
                     <div className="flex-1">
                       <div className="h-1.5 w-16 bg-slate-300 rounded" />
@@ -829,7 +835,7 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
                   ]
                     .filter((entry) => entry.enabled)
                     .map(({ key, Icon }) => (
-                      <span key={key} className="w-4 h-4 rounded bg-slate-100 inline-flex items-center justify-center">
+                      <span key={key} className="w-4 h-4 rounded inline-flex items-center justify-center" style={{ backgroundColor: secondaryColor }}>
                         <Icon className="w-2.5 h-2.5 text-slate-400" strokeWidth={1.8} />
                       </span>
                     ))}
@@ -1225,23 +1231,26 @@ export default function ScreenMultiLocationBranding() {
               <h2 className="font-semibold text-slate-900">Brand Colors</h2>
             </div>
             <p className="text-xs text-slate-500 -mt-2 mb-4">
-              Primary color controls buttons, highlights, and active states on the customer menu.
+              Each color below is applied automatically to its customer-facing components after saving.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <ColorField
                 label="Primary"
+                hint="Main action buttons, selected category pills, highlights, and active bottom navigation."
                 required
                 value={form.primaryColor}
                 onChange={(value) => setField("primaryColor", value || "#0055FE")}
               />
               <ColorField
                 label="Secondary"
+                hint="Search and message inputs, quick-reply chips, inactive options, and image placeholders."
                 value={form.secondaryColor}
                 onChange={(value) => setField("secondaryColor", value)}
               />
               <ColorField
                 label="Accent"
+                hint="Table identifier badge and text, plus accent-styled controls and callouts."
                 value={form.accentColor}
                 onChange={(value) => setField("accentColor", value)}
               />

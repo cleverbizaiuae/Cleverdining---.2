@@ -5,6 +5,12 @@
   --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
   --brand-primary: #0055FE;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 215 25% 27%;
+  --brand-secondary: #F1F5F9;
+  --accent: 221 83% 53%;
+  --accent-foreground: 0 0% 100%;
+  --brand-accent: #0055FE;
 }
 
 input,
@@ -17,14 +23,15 @@ select {
 
 @theme {
   --color-primary: hsl(var(--primary));
-  --color-accent: hsl(221 83% 53%);
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
   --color-sidebar: #0F172A;
   --color-primary-text: hsl(var(--primary-foreground));
   --color-background: #F8FAFC;
   --color-card: #FFFFFF;
   --color-foreground: #0F172A;
-  --color-secondary: #F1F5F9;
-  --color-secondary-foreground: #334155;
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: #E2E8F0;
   --color-muted-foreground: #64748B;
   --color-border: #E2E8F0;
@@ -156,7 +163,7 @@ select {
 }
 
 @utility button-primary {
-  @apply bg-accent px-4 py-3 text-primary-text rounded-md;
+  @apply bg-accent px-4 py-3 text-accent-foreground rounded-md;
 }
 
 @utility login-bg {
