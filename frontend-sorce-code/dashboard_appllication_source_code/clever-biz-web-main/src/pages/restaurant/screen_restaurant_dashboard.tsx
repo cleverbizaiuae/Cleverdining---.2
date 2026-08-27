@@ -279,26 +279,21 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
 
     setGenerating(true);
     try {
-      let imageBlob: Blob | null = null;
-      try {
-        const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(normalizedPrompt + ' food professional photography')}?width=1024&height=1024&nologo=true`;
-        const res = await fetch(pollinationsUrl);
-        if (res.ok) {
-          const blob = await res.blob();
-          if (blob.type.startsWith('image/')) imageBlob = blob;
-        }
-      } catch {
-        // Pollinations is optional; use the fallback image service below.
-      }
+      const response = await axiosInstance.post(
+        "/owners/generate-image/",
+        { prompt: `${normalizedPrompt} food professional photography` },
+        { timeout: 70000 },
+      );
+      const imageData = String(response.data?.image || "");
+      const match = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
+      if (!match) throw new Error("The image service returned an invalid image.");
 
-      if (!imageBlob) {
-        const foodishRes = await fetch('https://foodish-api.com/api/');
-        if (!foodishRes.ok) throw new Error('Image services unavailable');
-        const foodishData = await foodishRes.json();
-        const imgRes = await fetch(foodishData.image);
-        if (!imgRes.ok) throw new Error('Failed to download image');
-        imageBlob = await imgRes.blob();
+      const binary = window.atob(match[2]);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
       }
+      const imageBlob = new Blob([bytes], { type: match[1] });
 
       const objectUrl = URL.createObjectURL(imageBlob);
       setGeneratedPreview(objectUrl);
@@ -307,7 +302,8 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
       toast.success("Image generated!");
     } catch (error: any) {
       console.error(error);
-      toast.error("Generation failed: " + (error.message || "Unknown error"));
+      const message = error?.response?.data?.error;
+      toast.error(message || "Image generation is temporarily unavailable. Please try again.");
     } finally {
       setGenerating(false);
     }

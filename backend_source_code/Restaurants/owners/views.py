@@ -157,34 +157,39 @@ class GenerateImageView(APIView):
 
     def post(self, request):
         import base64
+        import secrets
         from urllib.parse import quote
 
-        prompt = request.data.get('prompt')
+        prompt = str(request.data.get('prompt') or '').strip()
         if not prompt:
             return Response({"error": "Prompt is required"}, status=400)
 
-        # Free Version: Pollinations.ai
-        # No API Key required.
-        
-        try:
-            encoded_prompt = quote(prompt)
-            # Add random seed to ensure freshness if needed, or just prompt
-            # Pollinations returns the image binary directly
-            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-            
-            response = requests.get(image_url)
-            response.raise_for_status()
-            
-            # Convert binary to base64
+        encoded_prompt = quote(prompt[:500], safe='')
+        for _attempt in range(3):
+            seed = secrets.randbelow(2_147_483_647)
+            image_url = (
+                f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+                f"?width=1024&height=1024&nologo=true&seed={seed}"
+            )
+
+            try:
+                response = requests.get(
+                    image_url,
+                    headers={"Accept": "image/*", "User-Agent": "CleverDining/1.0"},
+                    timeout=(5, 20),
+                )
+                response.raise_for_status()
+            except requests.exceptions.RequestException:
+                continue
+
+            content_type = response.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+            if not content_type.startswith('image/') or len(response.content) < 1024:
+                continue
+
             b64_data = base64.b64encode(response.content).decode('utf-8')
-            
-            # Detrmine mime type (usually jpeg from pollinations, but safe to default)
-            content_type = response.headers.get('Content-Type', 'image/jpeg')
-            
-            # Return as data URI
             return Response({"image": f"data:{content_type};base64,{b64_data}"})
-            
-        except requests.exceptions.RequestException as e:
-            return Response({"error": f"Generation Error: {str(e)}"}, status=500)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+
+        return Response(
+            {"error": "Image generation is temporarily unavailable. Please try again."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
