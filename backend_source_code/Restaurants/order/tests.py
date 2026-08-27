@@ -1,6 +1,8 @@
 import json
 import shutil
 import tempfile
+from datetime import datetime, timezone as datetime_timezone
+from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import requests
@@ -715,6 +717,140 @@ class UpsellAnalyticsImageTests(TestCase):
         response = UpsellAnalyticsAPIView.as_view()(request)
 
         self.assertEqual(response.status_code, 404)
+
+    def test_all_analytics_metrics_use_restaurant_local_time_and_exact_values(self):
+        self.restaurant.timezone = "Asia/Dubai"
+        self.restaurant.save(update_fields=["timezone"])
+        UpsellEvent.objects.filter(restaurant=self.restaurant).delete()
+
+        def event(action, trigger, price, created_at):
+            return UpsellEvent.objects.create(
+                restaurant=self.restaurant,
+                session_id="accuracy-session",
+                trigger_point=trigger,
+                action=action,
+                upsell_item=self.item,
+                upsell_item_name=self.item.item_name,
+                upsell_category="Desserts",
+                upsell_price=Decimal(price),
+                # Deliberately wrong legacy snapshots prove aggregation uses
+                # the authoritative timestamp and restaurant timezone.
+                hour_of_day=15,
+                day_of_week=6,
+                created_at=created_at,
+            )
+
+        # 20:30 UTC is 00:30 on Tuesday in Dubai.
+        local_tuesday = datetime(2026, 8, 24, 20, 30, tzinfo=datetime_timezone.utc)
+        event("shown", "cart", "9.60", local_tuesday)
+        event("accepted", "cart", "9.60", local_tuesday)
+        event("declined", "cart", "9.60", local_tuesday)
+
+        # A second restaurant-local day and trigger point.
+        local_wednesday = datetime(2026, 8, 25, 20, 45, tzinfo=datetime_timezone.utc)
+        event("shown", "before_payment", "5.40", local_wednesday)
+        event("accepted", "before_payment", "5.40", local_wednesday)
+
+        request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(request, user=self.owner)
+        response = UpsellAnalyticsAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total_shown"], 2)
+        self.assertEqual(response.data["total_accepted"], 2)
+        self.assertEqual(response.data["total_rejected"], 1)
+        self.assertEqual(response.data["acceptance_rate"], 100.0)
+        self.assertEqual(Decimal(response.data["upsell_revenue"]), Decimal("15.00"))
+        self.assertEqual(Decimal(response.data["avg_upsell_value"]), Decimal("7.50"))
+        self.assertEqual(response.data["analytics_timezone"], "Asia/Dubai")
+
+        triggers = {row["trigger_point"]: row for row in response.data["by_trigger"]}
+        self.assertEqual(triggers["cart"]["shown"], 1)
+        self.assertEqual(triggers["cart"]["accepted"], 1)
+        self.assertEqual(triggers["cart"]["rejected"], 1)
+        self.assertEqual(Decimal(triggers["cart"]["revenue"]), Decimal("9.60"))
+        self.assertEqual(triggers["before_payment"]["acceptance_rate"], 100.0)
+
+        self.assertEqual(response.data["by_category"][0]["category"], "Desserts")
+        self.assertEqual(response.data["by_category"][0]["shown"], 2)
+        self.assertEqual(response.data["top_items"][0]["accepted"], 2)
+        self.assertEqual(Decimal(response.data["top_items"][0]["revenue"]), Decimal("15.00"))
+
+        self.assertEqual(response.data["by_hour"][0]["shown"], 2)
+        self.assertEqual(response.data["by_hour"][0]["accepted"], 2)
+        self.assertEqual(response.data["by_day"][1]["shown"], 1)  # Tuesday
+        self.assertEqual(response.data["by_day"][1]["accepted"], 1)
+        self.assertEqual(response.data["by_day"][2]["shown"], 1)  # Wednesday
+        self.assertEqual(
+            [row["date"] for row in response.data["revenue_trend"]],
+            ["2026-08-25", "2026-08-26"],
+        )
+        self.assertEqual(
+            [Decimal(row["revenue"]) for row in response.data["revenue_trend"]],
+            [Decimal("9.60"), Decimal("5.40")],
+        )
+
+        filtered_request = APIRequestFactory().get(
+            "/api/upsell/analytics?date_from=2026-08-25&date_to=2026-08-25"
+        )
+        force_authenticate(filtered_request, user=self.owner)
+        filtered = UpsellAnalyticsAPIView.as_view()(filtered_request)
+        self.assertEqual(filtered.data["total_shown"], 1)
+        self.assertEqual(filtered.data["total_accepted"], 1)
+        self.assertEqual(filtered.data["total_rejected"], 1)
+        self.assertEqual(Decimal(filtered.data["upsell_revenue"]), Decimal("9.60"))
+
+    def test_event_logging_is_idempotent_and_uses_restaurant_local_clock(self):
+        self.restaurant.timezone = "Asia/Dubai"
+        self.restaurant.save(update_fields=["timezone"])
+        with patch("device.models.Device.generate_qr_code"):
+            device = Device.objects.create(
+                table_name="Table 9",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        session = GuestSession.objects.create(
+            device=device,
+            session_token="upsell-accuracy-token",
+        )
+        payload = {
+            "session_id": "accuracy-client-session",
+            "trigger_point": "cart",
+            "action": "shown",
+            "upsell_item": self.item.id,
+            "upsell_price": "12.00",
+            "cart_value_at_time": "40.00",
+            "cart_item_count": 2,
+            "hour_of_day": 18,
+            "day_of_week": 6,
+        }
+        fixed_utc = datetime(2026, 8, 24, 20, 30, tzinfo=datetime_timezone.utc)
+        client = APIClient()
+        with patch("order.upsell_views.timezone.now", return_value=fixed_utc):
+            first = client.post(
+                "/api/upsell/events",
+                payload,
+                format="json",
+                HTTP_X_GUEST_SESSION_TOKEN=session.session_token,
+            )
+            duplicate = client.post(
+                "/api/upsell/events",
+                payload,
+                format="json",
+                HTTP_X_GUEST_SESSION_TOKEN=session.session_token,
+            )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(duplicate.data["status"], "duplicate_ignored")
+        events = UpsellEvent.objects.filter(
+            restaurant=self.restaurant,
+            session_id="accuracy-client-session",
+        )
+        self.assertEqual(events.count(), 1)
+        logged = events.get()
+        self.assertEqual(logged.hour_of_day, 0)
+        self.assertEqual(logged.day_of_week, 1)
 
     def test_staff_cannot_access_manager_upsell_analytics(self):
         staff = User.objects.create_user(

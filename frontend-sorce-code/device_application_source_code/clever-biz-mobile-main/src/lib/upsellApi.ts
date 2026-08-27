@@ -152,8 +152,6 @@ const syncUpsellConfigVersion = (value: unknown) => {
 
 const UPSELL_LOG_DISABLED_UNTIL_KEY = "cb:upsell_log_disabled_until";
 const recentLogKeys = new Map<string, number>();
-let activeLogRequests = 0;
-const MAX_ACTIVE_LOG_REQUESTS = 2;
 
 const getLogDisabledUntil = () => {
   try {
@@ -174,7 +172,6 @@ const disableUpsellLoggingTemporarily = () => {
 const shouldSendUpsellLog = (key: string, ttlMs = 20_000) => {
   const now = Date.now();
   if (getLogDisabledUntil() > now) return false;
-  if (activeLogRequests >= MAX_ACTIVE_LOG_REQUESTS) return false;
 
   const previous = recentLogKeys.get(key) || 0;
   if (now - previous < ttlMs) return false;
@@ -191,7 +188,9 @@ const shouldSendUpsellLog = (key: string, ttlMs = 20_000) => {
 const handleUpsellLogFailure = (error: unknown) => {
   const maybeError = error as { response?: { status?: number }; code?: string };
   const status = Number(maybeError?.response?.status || 0);
-  if (!maybeError?.response || status >= 400 || maybeError?.code === "ERR_NETWORK") {
+  // Temporary connectivity or validation failures must not silence every
+  // later analytics event in the customer session.
+  if (status === 404 || status === 405) {
     disableUpsellLoggingTemporarily();
   }
 };
@@ -626,7 +625,6 @@ export async function logUpsellEvent(params: {
   try {
     const now = new Date();
     const sessionToken = localStorage.getItem("guest_session_token");
-    activeLogRequests += 1;
     await axiosInstance.post(
       "/api/upsell/events",
       {
@@ -637,7 +635,8 @@ export async function logUpsellEvent(params: {
         upsell_item: params.suggestion.id || null,
         upsell_item_name: params.suggestion.item_name || "",
         upsell_category: params.suggestion.category_name || "",
-        upsell_price: safeNumber(params.suggestion.price),
+        // Match the effective price added to the cart, including discounts.
+        upsell_price: getEffectiveItemPrice(params.suggestion),
         cart_value_at_time: safeNumber(params.cartValueAtTime),
         cart_item_count: params.cartItemCount,
         hour_of_day: now.getHours(),
@@ -651,8 +650,6 @@ export async function logUpsellEvent(params: {
   } catch (error) {
     handleUpsellLogFailure(error);
     // Non-blocking by design.
-  } finally {
-    activeLogRequests = Math.max(0, activeLogRequests - 1);
   }
 }
 
@@ -703,7 +700,6 @@ export async function logUpsellAssociationStat(params: {
 
   try {
     const sessionToken = localStorage.getItem("guest_session_token");
-    activeLogRequests += 1;
     await axiosInstance.post(
       "/api/upsell/association-stats",
       {
@@ -725,7 +721,5 @@ export async function logUpsellAssociationStat(params: {
   } catch (error) {
     handleUpsellLogFailure(error);
     // Fire-and-forget by design.
-  } finally {
-    activeLogRequests = Math.max(0, activeLogRequests - 1);
   }
 }

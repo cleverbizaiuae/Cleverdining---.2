@@ -4,12 +4,13 @@ import logging
 from collections import defaultdict
 from decimal import Decimal
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 from django.db.models import Count, F, Max, Q, Sum
-from django.db.models.functions import TruncDate
+from django.db.models.functions import ExtractHour, ExtractIsoWeekDay, TruncDate
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -90,19 +91,37 @@ def get_restaurant_for_guest_request(request) -> Optional[Restaurant]:
     return session.device.restaurant
 
 
-def _date_range_queryset(base_qs, request):
+def _restaurant_timezone(restaurant: Restaurant):
+    try:
+        return ZoneInfo(restaurant.timezone or "Asia/Dubai")
+    except ZoneInfoNotFoundError:
+        return timezone.get_current_timezone()
+
+
+def _date_range_queryset(base_qs, request, restaurant: Restaurant):
+    restaurant_tz = _restaurant_timezone(restaurant)
     date_from_raw = request.query_params.get("date_from")
     date_to_raw = request.query_params.get("date_to")
     if date_from_raw:
         try:
             date_from = timezone.datetime.fromisoformat(date_from_raw).date()
-            base_qs = base_qs.filter(created_at__date__gte=date_from)
+            local_start = timezone.datetime.combine(
+                date_from,
+                timezone.datetime.min.time(),
+                tzinfo=restaurant_tz,
+            )
+            base_qs = base_qs.filter(created_at__gte=local_start)
         except ValueError:
             pass
     if date_to_raw:
         try:
             date_to = timezone.datetime.fromisoformat(date_to_raw).date()
-            base_qs = base_qs.filter(created_at__date__lte=date_to)
+            local_end = timezone.datetime.combine(
+                date_to + timezone.timedelta(days=1),
+                timezone.datetime.min.time(),
+                tzinfo=restaurant_tz,
+            )
+            base_qs = base_qs.filter(created_at__lt=local_end)
         except ValueError:
             pass
     return base_qs
@@ -632,7 +651,8 @@ class UpsellEventCreateAPIView(APIView):
         if upsell_item and upsell_item.restaurant_id != restaurant.id:
             return Response({"detail": "upsell_item does not belong to this restaurant."}, status=status.HTTP_400_BAD_REQUEST)
 
-        event_time = timezone.localtime()
+        event_time = timezone.now()
+        local_event_time = event_time.astimezone(_restaurant_timezone(restaurant))
         table_number = payload.get("table_number") or getattr(device, "table_name", "") or getattr(device, "table_number", "")
         upsell_item_name = payload.get("upsell_item_name") or (upsell_item.item_name if upsell_item else "")
         upsell_category = payload.get("upsell_category") or (
@@ -640,18 +660,17 @@ class UpsellEventCreateAPIView(APIView):
         )
 
         # Prevent obvious double-counting of rapid duplicate actions from client retries.
-        if payload["action"] in {"accepted", "declined", "dismissed"}:
-            duplicate_window_start = event_time - timezone.timedelta(seconds=5)
-            duplicate_exists = UpsellEvent.objects.filter(
-                restaurant=restaurant,
-                session_id=payload["session_id"],
-                trigger_point=payload["trigger_point"],
-                action=payload["action"],
-                upsell_item=upsell_item,
-                created_at__gte=duplicate_window_start,
-            ).exists()
-            if duplicate_exists:
-                return Response({"status": "duplicate_ignored"}, status=status.HTTP_200_OK)
+        duplicate_window_start = event_time - timezone.timedelta(seconds=5)
+        duplicate_exists = UpsellEvent.objects.filter(
+            restaurant=restaurant,
+            session_id=payload["session_id"],
+            trigger_point=payload["trigger_point"],
+            action=payload["action"],
+            upsell_item=upsell_item,
+            created_at__gte=duplicate_window_start,
+        ).exists()
+        if duplicate_exists:
+            return Response({"status": "duplicate_ignored"}, status=status.HTTP_200_OK)
 
         UpsellEvent.objects.create(
             restaurant=restaurant,
@@ -667,8 +686,11 @@ class UpsellEventCreateAPIView(APIView):
             upsell_price=payload.get("upsell_price", Decimal("0")),
             cart_value_at_time=payload.get("cart_value_at_time", Decimal("0")),
             cart_item_count=payload.get("cart_item_count", 0),
-            hour_of_day=payload.get("hour_of_day", event_time.hour),
-            day_of_week=payload.get("day_of_week", event_time.weekday()),
+            # The restaurant timezone is authoritative for analytics. Client
+            # clocks/timezones are not reliable and previously shifted daily
+            # and hourly performance metrics.
+            hour_of_day=local_event_time.hour,
+            day_of_week=local_event_time.weekday(),
             metadata=payload.get("metadata", {}),
             created_at=event_time,
         )
@@ -1153,7 +1175,9 @@ class UpsellAnalyticsAPIView(APIView):
         events = _date_range_queryset(
             UpsellEvent.objects.filter(restaurant=restaurant),
             request,
+            restaurant,
         )
+        restaurant_tz = _restaurant_timezone(restaurant)
         summary = _upsell_analytics_summary(events, restaurant)
         if str(request.query_params.get("summary") or "").lower() in {
             "1",
@@ -1287,14 +1311,15 @@ class UpsellAnalyticsAPIView(APIView):
             )
 
         by_hour_rows = (
-            events.values("hour_of_day")
+            events.annotate(local_hour=ExtractHour("created_at", tzinfo=restaurant_tz))
+            .values("local_hour")
             .annotate(
                 shown=Count("id", filter=Q(action="shown")),
                 accepted=Count("id", filter=Q(action="accepted")),
             )
-            .order_by("hour_of_day")
+            .order_by("local_hour")
         )
-        hour_map = {int(row["hour_of_day"]): row for row in by_hour_rows}
+        hour_map = {int(row["local_hour"]): row for row in by_hour_rows}
         by_hour = []
         for hour in range(24):
             row = hour_map.get(hour, {"shown": 0, "accepted": 0})
@@ -1309,9 +1334,33 @@ class UpsellAnalyticsAPIView(APIView):
                 }
             )
 
+        by_day_rows = (
+            events.annotate(local_day=ExtractIsoWeekDay("created_at", tzinfo=restaurant_tz))
+            .values("local_day")
+            .annotate(
+                shown=Count("id", filter=Q(action="shown")),
+                accepted=Count("id", filter=Q(action="accepted")),
+            )
+            .order_by("local_day")
+        )
+        day_map = {int(row["local_day"]) - 1: row for row in by_day_rows}
+        by_day = []
+        for day in range(7):
+            row = day_map.get(day, {"shown": 0, "accepted": 0})
+            shown = int(row.get("shown") or 0)
+            accepted = int(row.get("accepted") or 0)
+            by_day.append(
+                {
+                    "day": day,
+                    "shown": shown,
+                    "accepted": accepted,
+                    "acceptance_rate": (accepted / shown * 100.0) if shown else 0.0,
+                }
+            )
+
         revenue_trend_rows = (
             events.filter(action="accepted")
-            .annotate(day=TruncDate("created_at"))
+            .annotate(day=TruncDate("created_at", tzinfo=restaurant_tz))
             .values("day")
             .annotate(revenue=Sum("upsell_price"))
             .order_by("day")
@@ -1328,7 +1377,10 @@ class UpsellAnalyticsAPIView(APIView):
                 "by_category": by_category,
                 "top_items": top_items,
                 "by_hour": by_hour,
+                "by_day": by_day,
                 "revenue_trend": revenue_trend,
+                "analytics_timezone": str(restaurant_tz),
+                "local_today": timezone.now().astimezone(restaurant_tz).date().isoformat(),
             }
         )
 
@@ -1344,7 +1396,7 @@ class UpsellEventsByTableAPIView(APIView):
 
         table_number = (request.query_params.get("table_number") or "").strip()
         events = UpsellEvent.objects.filter(restaurant=restaurant)
-        events = _date_range_queryset(events, request)
+        events = _date_range_queryset(events, request, restaurant)
         if table_number:
             events = events.filter(Q(table_number__iexact=table_number) | Q(device__table_name__iexact=table_number))
 

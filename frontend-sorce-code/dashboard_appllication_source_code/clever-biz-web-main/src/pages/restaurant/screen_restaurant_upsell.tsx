@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axiosInstance from "@/lib/axios";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import { useRestaurantContext } from "@/lib/useRestaurantContext";
+import { useWebSocket } from "@/hooks/WebSocketProvider";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import toast from "react-hot-toast";
 import type { LucideIcon } from "lucide-react";
@@ -78,7 +79,10 @@ type UpsellAnalytics = {
     revenue: string;
   }>;
   by_hour: Array<{ hour: number; shown: number; accepted: number; acceptance_rate: number }>;
+  by_day: Array<{ day: number; shown: number; accepted: number; acceptance_rate: number }>;
   revenue_trend: Array<{ date: string; revenue: string }>;
+  analytics_timezone: string;
+  local_today: string;
 };
 
 type UpsellItemRow = {
@@ -118,7 +122,7 @@ type NewRuleDraft = {
 };
 
 type TabKey = "performance" | "pairing" | "items" | "settings";
-type UpsellLoadScope = "base" | "items" | "settings" | "all";
+type UpsellLoadScope = "analytics" | "base" | "items" | "settings" | "all";
 type CategoryRoleKey = "main" | "drinks" | "desserts" | "starters";
 
 const DEFAULT_SETTINGS: UpsellSettings = {
@@ -145,7 +149,10 @@ const DEFAULT_ANALYTICS: UpsellAnalytics = {
   by_category: [],
   top_items: [],
   by_hour: [],
+  by_day: [],
   revenue_trend: [],
+  analytics_timezone: "",
+  local_today: "",
 };
 
 const TABS: Array<{ key: TabKey; label: string; description: string }> = [
@@ -363,6 +370,7 @@ const ToggleSwitch = ({
 };
 
 const ScreenRestaurantUpsell = () => {
+  const { response: realtimeEvent } = useWebSocket();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -488,19 +496,22 @@ const ScreenRestaurantUpsell = () => {
     });
 
     const values: Array<{ iso: string; label: string; value: number }> = [];
-    const now = new Date();
+    const browserNow = new Date();
+    const anchor = analytics.local_today
+      ? new Date(`${analytics.local_today}T00:00:00Z`)
+      : new Date(Date.UTC(browserNow.getFullYear(), browserNow.getMonth(), browserNow.getDate()));
     for (let offset = 13; offset >= 0; offset -= 1) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - offset);
+      const d = new Date(anchor);
+      d.setUTCDate(anchor.getUTCDate() - offset);
       const iso = d.toISOString().slice(0, 10);
       values.push({
         iso,
-        label: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
+        label: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }),
         value: map.get(iso) || 0,
       });
     }
     return values;
-  }, [analytics.revenue_trend]);
+  }, [analytics.local_today, analytics.revenue_trend]);
 
   const maxRevenue = useMemo(() => {
     return Math.max(1, ...revenueSeries14Days.map((row) => row.value));
@@ -535,6 +546,23 @@ const ScreenRestaurantUpsell = () => {
   }, [byHourRows]);
 
   const activeHours = useMemo(() => byHourRows.filter((row) => row.shown > 0).length, [byHourRows]);
+
+  const byDayRows = useMemo(() => {
+    const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const map = new Map((analytics.by_day || []).map((row) => [Number(row.day), row]));
+    return labels.map((label, day) => {
+      const row = map.get(day);
+      return {
+        day,
+        label,
+        shown: Number(row?.shown || 0),
+        accepted: Number(row?.accepted || 0),
+        acceptance_rate: Number(row?.acceptance_rate || 0),
+      };
+    });
+  }, [analytics.by_day]);
+
+  const maxDayShown = useMemo(() => Math.max(1, ...byDayRows.map((row) => row.shown)), [byDayRows]);
 
   const bestRevenueDay = useMemo(() => {
     return revenueSeries14Days.reduce(
@@ -775,6 +803,12 @@ const ScreenRestaurantUpsell = () => {
   useEffect(() => {
     fetchUpsellData(true, "base");
   }, [fetchUpsellData]);
+
+  useEffect(() => {
+    if (realtimeEvent?.type !== "upsell_event_updated") return;
+    invalidateApiCache("/api/upsell/analytics");
+    void fetchUpsellData(false, "analytics");
+  }, [fetchUpsellData, realtimeEvent]);
 
   useEffect(() => {
     if (activeTab === "pairing" && !pairingLoaded) {
@@ -1172,6 +1206,31 @@ const ScreenRestaurantUpsell = () => {
                   ) : null}
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 className="text-base font-bold text-slate-900">Performance by Day</h3>
+            <p className="mt-1 text-sm text-slate-500">Offer volume and conversion by restaurant-local weekday</p>
+            <div className="mt-8 flex h-44 items-end gap-3 border-b border-slate-100 sm:gap-5">
+              {byDayRows.map((row) => {
+                const height = row.shown ? Math.max(4, (row.shown / maxDayShown) * 100) : 2;
+                return (
+                  <div
+                    key={row.day}
+                    className="flex h-full flex-1 items-end justify-center"
+                    title={`${row.label}: ${row.acceptance_rate.toFixed(1)}% - ${row.accepted}/${row.shown}`}
+                  >
+                    <div
+                      className={classNames("w-full max-w-12 rounded-t-lg", row.shown ? "bg-[#0055FE]" : "bg-slate-100")}
+                      style={{ height: `${height}%` }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 grid grid-cols-7 text-center text-[11px] font-medium text-slate-400">
+              {byDayRows.map((row) => <span key={row.day}>{row.label}</span>)}
             </div>
           </section>
 
