@@ -27,11 +27,11 @@ test("staff conversations sort by the complete latest-message date and time", ()
   );
 });
 
-test("manager and staff message lists use latest-message ordering", () => {
+test("every dashboard message list uses latest-message ordering", () => {
   assert.equal(shouldSortChatsByLatestForRole("manager"), true);
   assert.equal(shouldSortChatsByLatestForRole("owner"), true);
   assert.equal(shouldSortChatsByLatestForRole("staff"), true);
-  assert.equal(shouldSortChatsByLatestForRole("chef"), false);
+  assert.equal(shouldSortChatsByLatestForRole("chef"), true);
 });
 
 test("a newly received staff chat moves its table to the top", () => {

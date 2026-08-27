@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  formatUnreadTableSummary,
+  getUnreadTableCount,
   getUnreadSyncChannelName,
   isUnreadSnapshotCurrent,
   isUnreadMessageForActiveChat,
@@ -67,18 +67,25 @@ assert.equal(isUnreadSnapshotCurrent(4, 4), true);
 assert.equal(isUnreadSnapshotCurrent(4, 5), false);
 
 assert.equal(
-  formatUnreadTableSummary([
+  getUnreadTableCount([
     { tableName: "T1", unreadCount: 2 },
     { tableName: "Table 2", unreadCount: 1 },
   ]),
-  "T1 - 2, Table 2 - 1",
+  2,
 );
 assert.equal(
-  formatUnreadTableSummary([
+  getUnreadTableCount([
     { tableName: "T1", unreadCount: 0 },
     { tableName: "Table 2", unreadCount: 3 },
   ]),
-  "Table 2 - 3",
+  1,
+);
+assert.equal(
+  getUnreadTableCount([
+    { deviceId: "old-session", tableName: "Table 2", unreadCount: 1 },
+    { deviceId: "new-session", tableName: " table  2 ", unreadCount: 4 },
+  ]),
+  1,
 );
 
 console.log("unread badge unit checks passed");

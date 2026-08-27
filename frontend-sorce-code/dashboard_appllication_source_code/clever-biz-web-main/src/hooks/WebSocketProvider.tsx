@@ -21,7 +21,7 @@ import {
   upsertStaffServiceAlert,
 } from "./staffServiceAlerts";
 import {
-  formatUnreadTableSummary,
+  getUnreadTableCount,
   getUnreadSyncChannelName,
   isUnreadMessageForActiveChat,
   mergeUnreadTableSnapshots,
@@ -809,7 +809,7 @@ const WebSocketProvider = ({ children }) => {
     setUnreadCountSafe,
   ]);
 
-  const unreadTableSummary = formatUnreadTableSummary(unreadTables);
+  const unreadTableCount = getUnreadTableCount(unreadTables);
   const assistanceQueue = getStaffAssistanceQueue(staffServiceAlerts, 3);
   const queuedAssistanceCount = assistanceQueue.queuedAlerts.length;
   const visibleServiceAlerts = [
@@ -825,9 +825,9 @@ const WebSocketProvider = ({ children }) => {
         messages,
         response,
         unreadCount,
+        unreadTableCount,
         unreadTables,
         dashboardTables,
-        unreadTableSummary,
         setUnreadCount: setUnreadCountSafe,
         clearUnreadForTable,
         incrementUnreadForTable,

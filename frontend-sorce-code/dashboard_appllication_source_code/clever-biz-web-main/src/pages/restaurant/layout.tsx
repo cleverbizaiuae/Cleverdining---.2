@@ -116,7 +116,7 @@ const resolveSidebarRole = (user: any, pathname: string): DashboardRole => {
 const RestaurantLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("adminSidebarCollapsed") === "true");
-  const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
+  const { unreadTableCount = 0 } = useContext(WebSocketContext) || {};
   const { fetchMembers, fetchAllDevices, fetchDeviceStats } = useOwner();
   const dataPrefetchedRef = useRef<Set<string>>(new Set());
   const location = useLocation();
@@ -306,19 +306,14 @@ const RestaurantLayout = () => {
                   className={`${active ? "text-white" : "text-slate-400 group-hover:text-[#0055FE]"}`}
                 />
                 {sidebarCollapsed ? <span className="lg:hidden">{item.label}</span> : item.label}
-                {item.label === "Messages" && unreadCount > 0 && (
+                {item.label === "Messages" && unreadTableCount > 0 && (
                   <div className={`ml-auto flex items-center gap-1 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                    {unreadTableSummary && (
-                      <span className={`text-[10px] text-red-500 max-w-[80px] truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                        {unreadTableSummary}
-                      </span>
-                    )}
                     <span className={`bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                      {unreadCount > 99 ? "99+" : unreadCount}
+                      {unreadTableCount > 99 ? "99+" : unreadTableCount}
                     </span>
                   </div>
                 )}
-                {item.label === "Messages" && unreadCount > 0 && sidebarCollapsed && (
+                {item.label === "Messages" && unreadTableCount > 0 && sidebarCollapsed && (
                   <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
                 )}
               </Link>

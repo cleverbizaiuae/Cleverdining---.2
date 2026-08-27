@@ -37,7 +37,7 @@ export const sortChatsByLatestMessage = <T extends TimestampedChat>(chats: T[]) 
   );
 
 export const shouldSortChatsByLatestForRole = (role: unknown) =>
-  ["owner", "manager", "staff"].includes(String(role || "").trim().toLowerCase());
+  ["owner", "manager", "staff", "chef"].includes(String(role || "").trim().toLowerCase());
 
 export const touchChatLatestActivity = <T extends StaffTableChat>(
   chats: T[],

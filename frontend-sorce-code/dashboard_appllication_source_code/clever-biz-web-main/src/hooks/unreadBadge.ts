@@ -104,18 +104,23 @@ export function isUnreadSnapshotCurrent(
   return requestRevision === currentRevision;
 }
 
-type UnreadTableSummaryRow = {
+type UnreadTableCountRow = {
+  deviceId?: string | number;
   tableName?: string;
   unreadCount?: number;
 };
 
-export function formatUnreadTableSummary(
-  tables: UnreadTableSummaryRow[],
-  limit = 2,
-): string {
-  return tables
-    .filter((table) => Number(table?.unreadCount || 0) > 0)
-    .slice(0, Math.max(0, limit))
-    .map((table) => `${String(table.tableName || "Table")} - ${Number(table.unreadCount || 0)}`)
-    .join(", ");
+export function getUnreadTableCount(tables: UnreadTableCountRow[]): number {
+  const unreadTableIds = new Set<string>();
+
+  tables.forEach((table) => {
+    if (Number(table?.unreadCount || 0) <= 0) return;
+
+    const tableName = String(table?.tableName || "").trim().toLowerCase();
+    const deviceId = normalizeUnreadDeviceId(table?.deviceId);
+    const tableId = tableName.replace(/\s+/g, " ") || (deviceId ? `device-${deviceId}` : "");
+    if (tableId) unreadTableIds.add(tableId);
+  });
+
+  return unreadTableIds.size;
 }

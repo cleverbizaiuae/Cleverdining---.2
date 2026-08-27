@@ -29,7 +29,7 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
+  const { unreadTableCount = 0 } = useContext(WebSocketContext) || {};
 
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/staff" },
@@ -72,14 +72,9 @@ export const StaffSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
-                  {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
-                    <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
-                      ({unreadTableSummary})
-                    </span>
-                  )}
-                  {item.title === "Messages" && unreadCount > 0 && (
+                  {item.title === "Messages" && unreadTableCount > 0 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                      {unreadTableCount > 99 ? '99+' : unreadTableCount}
                     </span>
                   )}
                 </NavLink>
@@ -136,7 +131,7 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { response, unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
+  const { response, unreadTableCount = 0 } = useContext(WebSocketContext) || {};
   console.log(response);
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/chef" },
@@ -175,14 +170,9 @@ export const ChefSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
-                  {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
-                    <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
-                      {unreadTableSummary}
-                    </span>
-                  )}
-                  {item.title === "Messages" && unreadCount > 0 && (
+                  {item.title === "Messages" && unreadTableCount > 0 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                      {unreadTableCount > 99 ? '99+' : unreadTableCount}
                     </span>
                   )}
                 </NavLink>
@@ -338,7 +328,7 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
   isOpen: isDrawerOpen,
   home,
 }) => {
-  const { unreadCount, unreadTableSummary } = useContext(WebSocketContext) || {};
+  const { unreadTableCount = 0 } = useContext(WebSocketContext) || {};
 
   const menuItems = [
     { title: "Dashboard", icon: <IconHome />, path: "/restaurant" },
@@ -397,14 +387,9 @@ export const RestaurantSidebar: React.FC<SidebarProps> = ({
                 >
                   {item.icon}
                   <span>{item.title}</span>
-                  {item.title === "Messages" && unreadCount > 0 && unreadTableSummary && (
-                    <span className="ml-2 text-[10px] text-red-400 truncate max-w-[90px]">
-                      {unreadTableSummary}
-                    </span>
-                  )}
-                  {item.title === "Messages" && unreadCount > 0 && (
+                  {item.title === "Messages" && unreadTableCount > 0 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                      {unreadTableCount > 99 ? '99+' : unreadTableCount}
                     </span>
                   )}
                 </NavLink>
