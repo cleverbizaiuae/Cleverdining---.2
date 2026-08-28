@@ -197,7 +197,7 @@ export const Connect4 = ({ onBack }: { onBack: () => void }) => {
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
             {winner === "draw" ? "It's a Draw!" : `${winner === "red" ? "Red" : "Yellow"} Wins! 🎉`}
           </h3>
-          <button onClick={() => resetGame(mode)} className="w-full rounded-xl h-12 font-bold bg-primary text-white">
+          <button onClick={() => resetGame(mode)} className="w-full rounded-xl h-12 font-bold bg-primary text-primary-text">
             Play Again
           </button>
         </motion.div>

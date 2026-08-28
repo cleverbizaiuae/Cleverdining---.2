@@ -33,7 +33,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
         >
             {/* Discount Badge */}
             {discount > 0 && (
-                <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
+                <div className="absolute top-0 right-0 bg-brand-accent text-brand-accent-text text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
                     {discount}% OFF
                 </div>
             )}
@@ -168,7 +168,7 @@ export const FoodItemCard = ({ item, onAdd }: FoodItemCardProps) => {
                         className={cn(
                             "w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-90 shadow-sm",
                             isAvailable
-                                ? "bg-primary text-white hover:bg-primary/90"
+                                ? "bg-primary text-primary-text hover:bg-primary/90"
                                 : "bg-white/10 text-slate-500 cursor-not-allowed"
                         )}
                     >

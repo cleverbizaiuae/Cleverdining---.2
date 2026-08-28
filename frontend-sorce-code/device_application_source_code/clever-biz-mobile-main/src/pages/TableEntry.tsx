@@ -103,7 +103,7 @@ const TableEntry = () => {
                 <p className="text-red-500 text-sm whitespace-pre-wrap break-all">{error}</p>
                 <button
                     onClick={() => window.location.reload()}
-                    className="mt-4 px-4 py-2 bg-primary text-white rounded-lg"
+                    className="mt-4 px-4 py-2 bg-primary text-primary-text rounded-lg"
                 >
                     Retry
                 </button>

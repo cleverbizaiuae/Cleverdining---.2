@@ -1,6 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cachedGet } from "./requestCache";
 import { getBrandFontFamily, shouldApplyBrandVisualStyle } from "./brandVisualStyle";
+export { readableTextHsl } from "./brandVisualStyle";
 
 export type ThemePreset = "classic_clean" | "luxury_dark" | "warm_casual";
 export type FontPreset = "modern" | "elegant" | "bold";
@@ -97,19 +98,6 @@ export function hexToHsl(hex: string): string {
     }
   }
   return `${Math.round(hue * 360)} ${Math.round(sat * 100)}% ${Math.round(lum * 100)}%`;
-}
-
-export function readableTextHsl(hex: string): string {
-  const cleaned = (hex || "").replace("#", "");
-  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return "215 25% 27%";
-
-  const channels = [0, 2, 4].map((offset) => {
-    const value = parseInt(cleaned.slice(offset, offset + 2), 16) / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
-
-  return luminance > 0.42 ? "215 25% 27%" : "0 0% 100%";
 }
 
 function cleanText(value: unknown): string | null {

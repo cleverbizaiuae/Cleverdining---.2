@@ -441,7 +441,7 @@ export function Connect4Game({ onBack, restaurantId }: { onBack: () => void; res
       {winner && (
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mt-8 w-[90%] max-w-sm rounded-3xl border border-gray-100 bg-white p-6 text-center shadow-xl">
           <h3 className="mb-4 text-2xl font-bold text-gray-900">{winner === "draw" ? "It's a Draw!" : `${winner === "red" ? "Red" : "Yellow"} Wins! 🎉`}</h3>
-          <button onClick={() => reset(mode)} className="h-12 w-full rounded-xl bg-primary font-bold text-white">Play Again</button>
+          <button onClick={() => reset(mode)} className="h-12 w-full rounded-xl bg-primary font-bold text-primary-text">Play Again</button>
         </motion.div>
       )}
     </div>

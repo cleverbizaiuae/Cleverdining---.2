@@ -62,12 +62,12 @@ export const BottomNav = () => {
                             onClick={() => handleTabClick(tab)}
                             onPointerDown={() => prefetchRoute(tab.id)}
                             onFocus={() => prefetchRoute(tab.id)}
-                            className="group relative flex min-h-12 w-16 flex-col items-center justify-center rounded-xl px-3 py-1.5 active:scale-95 transition-transform"
+                            className="group relative flex min-h-12 w-16 flex-col items-center justify-center rounded-xl px-3 py-1.5 transition-colors hover:bg-primary/10 active:scale-95"
                         >
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-bubble"
-                                    className="absolute inset-0 -z-10 rounded-2xl bg-primary/15"
+                                    className="absolute inset-0 -z-10 rounded-2xl bg-primary"
                                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 />
                             )}
@@ -77,7 +77,7 @@ export const BottomNav = () => {
                                     size={20}
                                     className={cn(
                                         "transition-colors duration-300",
-                                        isActive ? "text-primary" : "text-slate-400 group-hover:text-white"
+                                        isActive ? "text-primary-text" : "text-slate-400 group-hover:text-slate-700"
                                     )}
                                     strokeWidth={isActive ? 2 : 1.8}
                                 />
@@ -103,7 +103,7 @@ export const BottomNav = () => {
 
                             <span className={cn(
                                 "text-[10px] font-medium transition-colors duration-300",
-                                isActive ? "text-primary" : "text-slate-400 group-hover:text-white"
+                                isActive ? "text-primary-text" : "text-slate-400 group-hover:text-slate-700"
                             )}>
                                 {tab.label}
                             </span>

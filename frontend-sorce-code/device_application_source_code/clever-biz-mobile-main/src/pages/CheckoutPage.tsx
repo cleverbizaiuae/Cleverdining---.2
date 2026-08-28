@@ -445,7 +445,7 @@ export default function CheckoutPage() {
                   onClick={() => setSplitType(mode.key as SplitType)}
                   className={`rounded-lg px-2 py-2 text-xs font-semibold border transition-colors ${
                     splitType === mode.key
-                      ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
+                      ? "bg-primary text-primary-text border-primary shadow-sm shadow-primary/20"
                       : "bg-secondary text-secondary-foreground border-border hover:border-primary/40"
                   }`}
                 >
@@ -543,7 +543,7 @@ export default function CheckoutPage() {
                 disabled={!tipApplicable && !isBulkCheckout}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                           ${tipType === 'percentage' && tipValue === pct
-                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 transform scale-105'
+                    ? 'bg-primary text-primary-text border-primary shadow-md shadow-primary/20 transform scale-105'
                     : 'bg-secondary text-secondary-foreground border-border hover:border-primary/40'
                   } ${(tipApplicable || isBulkCheckout) ? "" : "opacity-50 cursor-not-allowed"}`}
               >
@@ -555,7 +555,7 @@ export default function CheckoutPage() {
               disabled={!tipApplicable && !isBulkCheckout}
               className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all duration-200 border
                       ${(tipType === 'custom_amount' || tipType === 'custom_percentage')
-                  ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                  ? 'bg-primary text-primary-text border-primary shadow-md shadow-primary/20'
                   : 'bg-secondary text-secondary-foreground border-border hover:border-primary/40'
                 } ${(tipApplicable || isBulkCheckout) ? "" : "opacity-50 cursor-not-allowed"}`}
             >

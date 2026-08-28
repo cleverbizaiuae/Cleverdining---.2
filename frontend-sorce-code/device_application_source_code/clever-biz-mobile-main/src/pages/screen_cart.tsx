@@ -87,13 +87,13 @@ function TimingButton({
       onClick={onClick}
       className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-center transition-all active:scale-95 ${
         active
-          ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
+          ? "bg-primary text-primary-text border-primary shadow-sm shadow-primary/20"
           : "bg-secondary text-secondary-foreground border-border hover:border-primary/40 hover:bg-primary/10"
       }`}
     >
-      <Icon className={`w-4 h-4 ${active ? "text-white" : "text-muted-foreground"}`} strokeWidth={1.8} />
+      <Icon className={`w-4 h-4 ${active ? "text-primary-text" : "text-muted-foreground"}`} strokeWidth={1.8} />
       <span className="text-xs font-bold leading-tight">{label}</span>
-      <span className={`text-[10px] leading-tight ${active ? "text-white/70" : "text-muted-foreground"}`}>
+      <span className={`text-[10px] leading-tight ${active ? "text-primary-text/70" : "text-muted-foreground"}`}>
         {sublabel}
       </span>
     </button>
@@ -815,7 +815,7 @@ const ScreenCart = () => {
                             <span className="text-sm font-semibold w-4 text-center text-foreground">{item.quantity}</span>
                             <button
                               onClick={() => incrementQuantity(item.id)}
-                              className="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/90 rounded-full text-white transition-colors active:scale-90 duration-200"
+                              className="w-7 h-7 flex items-center justify-center bg-primary hover:bg-primary/90 rounded-full text-primary-text transition-colors active:scale-90 duration-200"
                               aria-label={`Increase ${item.item_name} quantity`}
                             >
                               <Plus className="w-3 h-3" strokeWidth={1.8} />
@@ -951,7 +951,7 @@ const ScreenCart = () => {
                       </button>
                       <button
                         onClick={() => addSuggestedItem(suggestion)}
-                        className="rounded-full bg-primary text-white px-3.5 py-1.5 text-sm font-bold hover:bg-primary/90 transition-colors"
+                        className="rounded-full bg-primary text-primary-text px-3.5 py-1.5 text-sm font-bold hover:bg-primary/90 transition-colors"
                       >
                         + Add
                       </button>
@@ -981,7 +981,7 @@ const ScreenCart = () => {
             </div>
             <button
               onClick={() => setShowReviewModal(true)}
-              className="w-full h-14 bg-primary text-white text-lg font-bold px-6 rounded-xl shadow-xl shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-between group"
+              className="w-full h-14 bg-primary text-primary-text text-lg font-bold px-6 rounded-xl shadow-xl shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-between group"
             >
               <span>Place Order</span>
               <span className="flex items-center gap-2">
@@ -1088,7 +1088,7 @@ const ScreenCart = () => {
                         onClick={() => setPaymentMethod(method)}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-bold transition-all ${
                           paymentMethod === method
-                            ? "bg-primary text-white border-primary shadow-sm"
+                            ? "bg-primary text-primary-text border-primary shadow-sm"
                             : "bg-secondary text-secondary-foreground border-border hover:border-primary/40"
                         }`}
                       >
@@ -1123,7 +1123,7 @@ const ScreenCart = () => {
                   placeholder="e.g. Nut allergy, Gluten free, Extra spicy..."
                   value={specialRequest}
                   onChange={(e) => setSpecialRequest(e.target.value)}
-                  className="h-12 w-full resize-none rounded-xl border border-border bg-secondary p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
+                  className="brand-secondary-outline h-12 w-full resize-none rounded-xl border bg-secondary p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
                 />
               </div>
             </div>
@@ -1133,7 +1133,7 @@ const ScreenCart = () => {
                 type="button"
                 onClick={handleOrderNow}
                 disabled={isSubmittingOrder}
-                className="h-11 w-full rounded-xl bg-primary text-sm font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-70 sm:h-12 sm:text-base"
+                className="h-11 w-full rounded-xl bg-primary text-sm font-bold text-primary-text shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-70 sm:h-12 sm:text-base"
               >
                 {isSubmittingOrder
                   ? payBeforeOrder && paymentMethod === "card"

@@ -306,7 +306,7 @@ function MessagingUI() {
                       <div className={cn(
                         "whitespace-pre-wrap rounded-2xl p-3 text-sm leading-relaxed shadow-sm",
                         message.is_from_device
-                          ? "bg-primary text-white rounded-tr-sm"
+                          ? "bg-primary text-primary-text rounded-tr-sm"
                           : "bg-card text-foreground border border-border rounded-2xl rounded-tl-sm"
                       )}>
                         {message.text}
@@ -368,7 +368,7 @@ function MessagingUI() {
                 <button
                   key={msg}
                   onClick={() => handlePresetClick(msg)}
-                  className="whitespace-nowrap rounded-full border border-border bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  className="brand-secondary-outline whitespace-nowrap rounded-full border bg-secondary px-4 py-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                 >
                   {msg}
                 </button>
@@ -380,7 +380,7 @@ function MessagingUI() {
           <div className="p-4 pt-3">
             <form
               onSubmit={handleSubmit}
-              className="flex w-full items-center gap-2 rounded-full border border-border bg-secondary p-1 transition-all focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20"
+              className="brand-secondary-outline flex w-full items-center gap-2 rounded-full border bg-secondary p-1 transition-all focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20"
             >
 
 
@@ -407,7 +407,7 @@ function MessagingUI() {
                 className={cn(
                   "flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200",
                   inputValue.trim()
-                    ? "bg-primary text-white shadow-md hover:bg-primary/90"
+                    ? "bg-primary text-primary-text shadow-md hover:bg-primary/90"
                     : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >

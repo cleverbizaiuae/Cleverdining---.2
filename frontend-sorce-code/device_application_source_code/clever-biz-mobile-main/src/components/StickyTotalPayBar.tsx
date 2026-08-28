@@ -101,7 +101,7 @@ export const StickyTotalPayBar: React.FC<StickyTotalPayBarProps> = ({ orders }) 
                 ) : (
                     <button
                         onClick={handlePayAll}
-                        className="w-full bg-primary text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-between group"
+                        className="w-full bg-primary text-primary-text font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-between group"
                     >
                         <span className="flex items-center gap-2">
                             Pay All

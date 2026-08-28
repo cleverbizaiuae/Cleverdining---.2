@@ -46,7 +46,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
         >
           {/* Discount Badge */}
           {discount > 0 && (
-            <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
+            <div className="absolute top-0 right-0 bg-brand-accent text-brand-accent-text text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
               {discount}% OFF
             </div>
           )}
@@ -104,7 +104,7 @@ export const FoodItems = ({ item, showFood }: Props) => {
           {/* Right Side: Add Button */}
           <div className="flex flex-col justify-center items-center h-full pl-2">
             <button
-              className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors shadow-sm"
+              className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-text transition-colors shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 showFood(item.id);

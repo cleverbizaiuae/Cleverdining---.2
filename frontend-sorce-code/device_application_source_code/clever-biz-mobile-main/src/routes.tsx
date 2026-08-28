@@ -114,22 +114,25 @@ function BrandWrapper({
   const secondaryColor = brand.secondaryColor || "#F1F5F9";
   const accentColor = brand.accentColor || brand.primaryColor || "#0055FE";
   const primaryHsl = useMemo(() => hexToHsl(brand.primaryColor || "#0055FE"), [brand.primaryColor]);
-  const secondaryHsl = useMemo(() => hexToHsl(secondaryColor), [secondaryColor]);
+  const primaryForegroundHsl = useMemo(() => readableTextHsl(brand.primaryColor || "#0055FE"), [brand.primaryColor]);
   const secondaryForegroundHsl = useMemo(() => readableTextHsl(secondaryColor), [secondaryColor]);
-  const accentHsl = useMemo(() => hexToHsl(accentColor), [accentColor]);
   const accentForegroundHsl = useMemo(() => readableTextHsl(accentColor), [accentColor]);
   const fontFamily = useMemo(() => getBrandFontFamily(brand.fontPreset), [brand.fontPreset]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--primary", primaryHsl);
+    root.style.setProperty("--primary-foreground", primaryForegroundHsl);
     root.style.setProperty("--brand-primary", brand.primaryColor || "#0055FE");
-    root.style.setProperty("--secondary", secondaryHsl);
-    root.style.setProperty("--secondary-foreground", secondaryForegroundHsl);
+    root.style.setProperty("--brand-primary-foreground", `hsl(${primaryForegroundHsl})`);
     root.style.setProperty("--brand-secondary", secondaryColor);
-    root.style.setProperty("--accent", accentHsl);
-    root.style.setProperty("--accent-foreground", accentForegroundHsl);
+    root.style.setProperty("--brand-secondary-foreground", `hsl(${secondaryForegroundHsl})`);
+    // Accent remains a small-tag token. Existing semantic accent surfaces follow
+    // Primary so Accent can never become a large background fill.
+    root.style.setProperty("--accent", primaryHsl);
+    root.style.setProperty("--accent-foreground", primaryForegroundHsl);
     root.style.setProperty("--brand-accent", accentColor);
+    root.style.setProperty("--brand-accent-foreground", `hsl(${accentForegroundHsl})`);
     if (hasBranding) {
       root.style.setProperty("--font-sans", fontFamily);
       root.style.setProperty("--brand-font-family", fontFamily);
@@ -142,18 +145,20 @@ function BrandWrapper({
 
     return () => {
       root.style.removeProperty("--primary");
+      root.style.removeProperty("--primary-foreground");
       root.style.removeProperty("--brand-primary");
-      root.style.removeProperty("--secondary");
-      root.style.removeProperty("--secondary-foreground");
+      root.style.removeProperty("--brand-primary-foreground");
       root.style.removeProperty("--brand-secondary");
+      root.style.removeProperty("--brand-secondary-foreground");
       root.style.removeProperty("--accent");
       root.style.removeProperty("--accent-foreground");
       root.style.removeProperty("--brand-accent");
+      root.style.removeProperty("--brand-accent-foreground");
       root.style.removeProperty("--font-sans");
       root.style.removeProperty("--brand-font-family");
       root.style.removeProperty("font-family");
     };
-  }, [accentColor, accentForegroundHsl, accentHsl, brand.primaryColor, fontFamily, hasBranding, primaryHsl, secondaryColor, secondaryForegroundHsl, secondaryHsl]);
+  }, [accentColor, accentForegroundHsl, brand.primaryColor, fontFamily, hasBranding, primaryForegroundHsl, primaryHsl, secondaryColor, secondaryForegroundHsl]);
 
   return <ActiveBrandProvider brand={brand}>{children}</ActiveBrandProvider>;
 }

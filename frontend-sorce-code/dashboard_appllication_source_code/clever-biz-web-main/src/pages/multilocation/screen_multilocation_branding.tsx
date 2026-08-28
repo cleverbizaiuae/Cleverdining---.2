@@ -167,6 +167,18 @@ function luminance(hex: string): number {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
 
+function readableForeground(hex: string): "#FFFFFF" | "#334155" {
+  const { r, g, b } = hexToRgb(hex);
+  const channels = [r, g, b].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  const relativeLuminance = (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+  const whiteContrast = 1.05 / (relativeLuminance + 0.05);
+  const darkContrast = (relativeLuminance + 0.05) / 0.102;
+  return darkContrast >= whiteContrast ? "#334155" : "#FFFFFF";
+}
+
 function getFontFamily(fontPreset: FontPreset): string {
   if (fontPreset === "elegant") return "'Playfair Display', Georgia, serif";
   if (fontPreset === "bold") return "'Plus Jakarta Sans', system-ui, sans-serif";
@@ -644,6 +656,8 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
   const primaryColor = previewBrand.primaryColor || "#0055FE";
   const secondaryColor = previewBrand.secondaryColor || "#F1F5F9";
   const accentColor = previewBrand.accentColor || primaryColor;
+  const primaryForeground = readableForeground(primaryColor);
+  const accentForeground = readableForeground(accentColor);
   const fontFamily = getFontFamily(previewBrand.fontPreset);
 
   return (
@@ -786,10 +800,10 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
               </div>
 
               <div className="px-2.5 py-2 bg-white">
-                <div className="h-5 rounded-lg flex items-center px-2 gap-1" style={{ backgroundColor: secondaryColor }}>
-                  <span className="w-1.5 h-1.5 rounded-full border border-slate-300" />
+                <div className="h-5 rounded-lg flex items-center px-2 gap-1 bg-slate-100 border" style={{ borderColor: secondaryColor }}>
+                  <span className="w-1.5 h-1.5 rounded-full border" style={{ borderColor: secondaryColor }} />
                   <span className="w-16 h-1 bg-slate-200 rounded" />
-                  <span className="ml-auto text-[7px] font-bold" style={{ color: accentColor }}>Table 4</span>
+                  <span className="ml-auto rounded-full px-1.5 py-0.5 text-[7px] font-bold" style={{ backgroundColor: accentColor, color: accentForeground }}>Table 4</span>
                 </div>
               </div>
 
@@ -800,8 +814,8 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
                     className="rounded-xl px-2 py-1 text-[7px] font-semibold"
                     style={
                       idx === 0
-                        ? { backgroundColor: primaryColor, color: "white" }
-                        : { backgroundColor: secondaryColor, color: "#64748b" }
+                        ? { backgroundColor: primaryColor, color: primaryForeground }
+                        : { backgroundColor: "#f1f5f9", border: `1px solid ${secondaryColor}`, color: "#475569" }
                     }
                   >
                     {pill}
@@ -811,13 +825,13 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
 
               <div className="px-2.5 space-y-2 pb-2 bg-white">
                 {[1, 2, 3].map((idx) => (
-                  <div key={idx} className="flex items-center gap-2 rounded-xl p-1.5" style={{ backgroundColor: secondaryColor }}>
+                  <div key={idx} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5">
                     <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: `${primaryColor}20` }} />
                     <div className="flex-1">
                       <div className="h-1.5 w-16 bg-slate-300 rounded" />
                       <div className="h-1 w-10 bg-slate-200 rounded mt-1" />
                     </div>
-                    <div className="w-5 h-5 rounded-lg text-[10px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+                    <div className="w-5 h-5 rounded-lg text-[10px] font-bold flex items-center justify-center" style={{ backgroundColor: primaryColor, color: primaryForeground }}>
                       +
                     </div>
                   </div>
@@ -835,7 +849,7 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
                   ]
                     .filter((entry) => entry.enabled)
                     .map(({ key, Icon }) => (
-                      <span key={key} className="w-4 h-4 rounded inline-flex items-center justify-center" style={{ backgroundColor: secondaryColor }}>
+                      <span key={key} className="w-4 h-4 rounded border bg-slate-100 inline-flex items-center justify-center" style={{ borderColor: secondaryColor }}>
                         <Icon className="w-2.5 h-2.5 text-slate-400" strokeWidth={1.8} />
                       </span>
                     ))}
@@ -868,9 +882,10 @@ function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
         {[
           "Splash screen (every QR scan)",
           "Menu hero & category pills",
-          "Add to cart buttons",
+          "Main action and add-to-cart buttons",
           "Bottom nav active state",
-          "Social media links in footer",
+          "Input and chip outlines",
+          "Small badges and tags",
         ].map((item) => (
           <div key={item} className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: primaryColor }} />
@@ -1146,6 +1161,7 @@ export default function ScreenMultiLocationBranding() {
               <div>
                 <p className="font-semibold text-slate-900">Enable Custom Branding</p>
                 <p className="text-xs text-slate-500 mt-0.5">When off, the platform default style is shown to customers</p>
+                <p className="text-[11px] text-slate-400 mt-1">Success, warning, and error colors stay system-defined for clear customer feedback.</p>
               </div>
 
               <button
@@ -1237,20 +1253,20 @@ export default function ScreenMultiLocationBranding() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <ColorField
                 label="Primary"
-                hint="Main action buttons, selected category pills, highlights, and active bottom navigation."
+                hint="Main buttons, selected states, category highlights, and active bottom navigation. Text and icons switch automatically for contrast."
                 required
                 value={form.primaryColor}
                 onChange={(value) => setField("primaryColor", value || "#0055FE")}
               />
               <ColorField
                 label="Secondary"
-                hint="Search and message inputs, quick-reply chips, inactive options, and image placeholders."
+                hint="Borders and icon accents for inputs, chips, and quick replies. Never used as a full background fill."
                 value={form.secondaryColor}
                 onChange={(value) => setField("secondaryColor", value)}
               />
               <ColorField
                 label="Accent"
-                hint="Table identifier badge and text, plus accent-styled controls and callouts."
+                hint="Small badges and tags only, such as table labels and discount tags. Never used for large surfaces."
                 value={form.accentColor}
                 onChange={(value) => setField("accentColor", value)}
               />

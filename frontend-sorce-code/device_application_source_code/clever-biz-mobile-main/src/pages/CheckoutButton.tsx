@@ -145,7 +145,7 @@ export default function CheckoutButton({
         className={`w-full px-4 py-3 rounded-lg font-bold text-lg shadow-md transition-all duration-300 transform active:scale-95
     ${disabled || loading
             ? "bg-gray-400 cursor-not-allowed text-white"
-            : "bg-primary hover:bg-primary/90 text-white shadow-primary/20"
+            : "bg-primary hover:bg-primary/90 text-primary-text shadow-primary/20"
           }
   `}
       >

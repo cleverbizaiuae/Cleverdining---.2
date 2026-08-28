@@ -1286,14 +1286,13 @@ const LayoutDashboard = () => {
                         placeholder="Search for food..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-white/10 bg-white/10 py-2.5 pl-9 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground/70 ring-0 transition-all focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/25"
+                        className="brand-secondary-outline h-10 w-full rounded-xl border bg-white/10 py-2.5 pl-9 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground/70 ring-0 transition-all focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/25"
                       />
                     </div>
                     {hasBranding ? (
-                      <div className="flex shrink-0 flex-col items-end">
-                          <span className="text-[9px] font-bold text-primary uppercase tracking-wider">Table</span>
-                        <span className="text-sm font-bold leading-none">{tableName || "–"}</span>
-                      </div>
+                      <span className="shrink-0 rounded-full bg-brand-accent px-2.5 py-1 text-[10px] font-bold text-brand-accent-text">
+                        Table {tableName || "–"}
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -1326,8 +1325,8 @@ const LayoutDashboard = () => {
                           className={cn(
                             "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-300",
                             selectedSubCategory === sub.id
-                              ? "border-white bg-white text-slate-950 shadow-sm shadow-black/20"
-                              : "border-white/10 bg-white/10 text-slate-300 hover:bg-white/15"
+                              ? "border-primary bg-primary text-primary-text shadow-sm shadow-primary/20"
+                              : "border-white/10 bg-white/10 text-slate-300 hover:border-primary/30 hover:bg-primary/10"
                           )}
                         >
                           {sub.Category_name}

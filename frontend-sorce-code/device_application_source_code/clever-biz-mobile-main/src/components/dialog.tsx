@@ -343,7 +343,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 {currencyCode} {getLineTotal({ price: effectiveUnitPrice }, quantity).toFixed(2)}
               </span>
               {hasDiscount && (
-                <span className="ml-2 inline-flex rounded-full bg-red-500 px-2 py-1 text-[11px] font-bold text-white shadow-sm">
+                <span className="ml-2 inline-flex rounded-full bg-brand-accent px-2 py-1 text-[11px] font-bold text-brand-accent-text shadow-sm">
                   {Number(item.discount_percentage).toFixed(0)}% OFF
                 </span>
               )}
@@ -402,7 +402,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 <button
                   onClick={() => setQuantity(quantity + 1)}
                   disabled={!hasValidItem}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-md transition-colors hover:bg-primary/90 active:scale-90 sm:h-12 sm:w-12"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-text shadow-md transition-colors hover:bg-primary/90 active:scale-90 sm:h-12 sm:w-12"
                 >
                   <Plus className="w-4 h-4" strokeWidth={2.4} />
                 </button>
@@ -412,12 +412,12 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                 onClick={handleAddToCart}
                 disabled={isAddingToCart || !hasValidItem}
                 className={cn(
-                  "flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 text-sm font-bold text-white shadow-xl transition-transform active:scale-[0.98] sm:h-16 sm:px-4 sm:text-base",
+                  "flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 text-sm font-bold shadow-xl transition-transform active:scale-[0.98] sm:h-16 sm:px-4 sm:text-base",
                   isAddingToCart
-                    ? "bg-emerald-500 shadow-xl shadow-emerald-500/25 scale-[1.01]"
+                    ? "bg-emerald-500 text-white shadow-xl shadow-emerald-500/25 scale-[1.01]"
                     : !hasValidItem
                       ? "bg-slate-400 text-white shadow-none"
-                    : "bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
+                    : "bg-primary text-primary-text hover:bg-primary/90 shadow-xl shadow-primary/20"
                 )}
               >
                 {isAddingToCart ? (
@@ -434,7 +434,7 @@ export const ModalFoodDetail: React.FC<ModalFoodDetailProps> = ({
                         {currencyCode} {getLineTotal({ price: effectiveUnitPrice }, quantity).toFixed(2)}
                       </span>
                       {hasDiscount && (
-                        <span className="whitespace-nowrap text-[10px] font-semibold text-white/70 line-through sm:text-xs">
+                        <span className="whitespace-nowrap text-[10px] font-semibold text-primary-text/70 line-through sm:text-xs">
                           {currencyCode} {(originalUnitPrice * quantity).toFixed(2)}
                         </span>
                       )}

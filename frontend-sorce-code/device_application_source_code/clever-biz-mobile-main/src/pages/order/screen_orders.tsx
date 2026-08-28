@@ -1218,7 +1218,7 @@ const ScreenOrders = () => {
             <div className="mt-5 flex items-center gap-2">
               <button
                 onClick={() => navigate("/dashboard")}
-                className="h-10 px-4 rounded-xl bg-primary text-white text-sm font-bold inline-flex items-center gap-1.5"
+                className="h-10 px-4 rounded-xl bg-primary text-primary-text text-sm font-bold inline-flex items-center gap-1.5"
               >
                 Browse Menu <ArrowRight className="w-4 h-4" />
               </button>
@@ -1256,7 +1256,7 @@ const ScreenOrders = () => {
         <div className="bg-card/95 border-t border-border px-4 pt-3 pb-3 shrink-0 backdrop-blur-lg shadow-[0_-14px_34px_rgba(0,0,0,0.34)]">
           <button
             onClick={openCheckoutDialog}
-            className="w-full h-[52px] rounded-2xl text-base font-bold shadow-lg shadow-primary/25 flex items-center justify-between px-5 py-4 bg-primary text-white transition-colors hover:bg-primary/90"
+            className="w-full h-[52px] rounded-2xl text-base font-bold shadow-lg shadow-primary/25 flex items-center justify-between px-5 py-4 bg-primary text-primary-text transition-colors hover:bg-primary/90"
           >
             <span>Pay Now</span>
             <span>{fmt(fullSubtotal)}</span>
@@ -1376,7 +1376,7 @@ const ScreenOrders = () => {
                                 type="button"
                                 onClick={() => void addBeforePaymentUpsell()}
                                 disabled={addingBeforePaymentUpsell}
-                                className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+                                className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-text disabled:opacity-60"
                               >
                                 {addingBeforePaymentUpsell ? "Adding..." : "+ Add"}
                               </button>
@@ -1430,7 +1430,7 @@ const ScreenOrders = () => {
                                 onClick={() => setSplitCount(count)}
                                 className={`py-2.5 rounded-xl text-sm font-bold border-2 ${
                                   splitCount === count
-                                    ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
+                                    ? "border-primary bg-primary text-primary-text shadow-sm shadow-primary/20"
                                     : "border-slate-200 bg-white text-slate-500"
                                 }`}
                               >
@@ -1529,7 +1529,7 @@ const ScreenOrders = () => {
                             onClick={() => setTipType(tip.id as TipOption)}
                             className={`flex min-w-0 flex-col items-center justify-center rounded-xl border-2 px-0.5 py-2 text-center font-bold leading-tight ${
                               tipType === tip.id
-                                ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
+                                ? "border-primary bg-primary text-primary-text shadow-sm shadow-primary/20"
                                 : "border-slate-200 bg-white text-slate-500"
                             }`}
                           >
@@ -1537,7 +1537,7 @@ const ScreenOrders = () => {
                             {tip.id !== "none" && (
                               <span
                                 className={`mt-0.5 max-w-full truncate text-[9px] font-semibold ${
-                                  tipType === tip.id ? "text-white/80" : "text-slate-400"
+                                  tipType === tip.id ? "text-primary-text/80" : "text-slate-400"
                                 }`}
                               >
                                 {fmt((subtotal * Number(tip.id)) / 100)}
@@ -1551,7 +1551,7 @@ const ScreenOrders = () => {
                         onClick={() => setTipType("custom")}
                         className={`w-full py-2 rounded-xl text-xs font-bold border-2 ${
                           tipType === "custom"
-                            ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
+                            ? "border-primary bg-primary text-primary-text shadow-sm shadow-primary/20"
                             : "border-slate-200 bg-white text-slate-500"
                         }`}
                       >
@@ -1587,7 +1587,7 @@ const ScreenOrders = () => {
                               onClick={() => setPaymentMethod(method.id as PaymentMethod)}
                               className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
                                 isActive
-                                  ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
+                                  ? "border-primary bg-primary text-primary-text shadow-sm shadow-primary/20"
                                   : "border-slate-200 bg-white text-slate-400"
                               }`}
                             >
@@ -1620,7 +1620,7 @@ const ScreenOrders = () => {
                     <button
                       onClick={() => void processCheckout()}
                       disabled={isProcessingPayment || !canPay}
-                      className="w-full h-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/25 bg-primary text-white transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                      className="w-full h-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/25 bg-primary text-primary-text transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                     >
                       {isProcessingPayment
                         ? "Processing..."
