@@ -11,6 +11,11 @@ import {
   isRecentUpsellRequest,
   UPSELL_LIVE_PREFETCH_MAX_AGE_MS,
 } from "./upsellRequestCache";
+import {
+  isRevenueUpsellEvent,
+  shouldRetryRevenueUpsellEvent,
+  type UpsellEventAction,
+} from "./upsellEventDelivery";
 
 export type UpsellSuggestion = {
   id: number;
@@ -169,9 +174,9 @@ const disableUpsellLoggingTemporarily = () => {
   }
 };
 
-const shouldSendUpsellLog = (key: string, ttlMs = 20_000) => {
+const shouldSendUpsellLog = (key: string, ttlMs = 20_000, bypassDisabledWindow = false) => {
   const now = Date.now();
-  if (getLogDisabledUntil() > now) return false;
+  if (!bypassDisabledWindow && getLogDisabledUntil() > now) return false;
 
   const previous = recentLogKeys.get(key) || 0;
   if (now - previous < ttlMs) return false;
@@ -605,7 +610,7 @@ export async function fetchUpsellSettings(
 
 export async function logUpsellEvent(params: {
   triggerPoint: UpsellTriggerPoint;
-  action: "shown" | "accepted" | "dismissed" | "declined";
+  action: UpsellEventAction;
   suggestion: Partial<UpsellSuggestion>;
   cartValueAtTime: number;
   cartItemCount: number;
@@ -620,36 +625,55 @@ export async function logUpsellEvent(params: {
     params.cartItemCount,
     compactMetadata(params.metadata),
   ].join(":");
-  if (!shouldSendUpsellLog(logKey, params.action === "shown" ? 30_000 : 3_000)) return;
+  const isRevenueEvent = isRevenueUpsellEvent(params.action);
+  if (!shouldSendUpsellLog(
+    logKey,
+    params.action === "shown" ? 30_000 : 3_000,
+    isRevenueEvent,
+  )) return;
 
-  try {
-    const now = new Date();
-    const sessionToken = localStorage.getItem("guest_session_token");
-    await axiosInstance.post(
-      "/api/upsell/events",
-      {
-        session_id: getUpsellSessionId(),
-        table_number: getUpsellTableNumber(),
-        trigger_point: params.triggerPoint,
-        action: params.action,
-        upsell_item: params.suggestion.id || null,
-        upsell_item_name: params.suggestion.item_name || "",
-        upsell_category: params.suggestion.category_name || "",
-        // Match the effective price added to the cart, including discounts.
-        upsell_price: getEffectiveItemPrice(params.suggestion),
-        cart_value_at_time: safeNumber(params.cartValueAtTime),
-        cart_item_count: params.cartItemCount,
-        hour_of_day: now.getHours(),
-        day_of_week: now.getDay(),
-        metadata: params.metadata || {},
-      },
-      {
-        headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
-      }
-    );
-  } catch (error) {
-    handleUpsellLogFailure(error);
-    // Non-blocking by design.
+  const now = new Date();
+  const sessionToken = localStorage.getItem("guest_session_token");
+  const payload = {
+    session_id: getUpsellSessionId(),
+    guest_session_token: sessionToken || undefined,
+    table_number: getUpsellTableNumber(),
+    trigger_point: params.triggerPoint,
+    action: params.action,
+    upsell_item: params.suggestion.id || null,
+    upsell_item_name: params.suggestion.item_name || "",
+    upsell_category: params.suggestion.category_name || "",
+    // Match the effective price added to the cart, including discounts.
+    upsell_price: getEffectiveItemPrice(params.suggestion),
+    cart_value_at_time: safeNumber(params.cartValueAtTime),
+    cart_item_count: params.cartItemCount,
+    hour_of_day: now.getHours(),
+    day_of_week: now.getDay(),
+    metadata: params.metadata || {},
+  };
+
+  for (let attempt = 0; attempt < (isRevenueEvent ? 2 : 1); attempt += 1) {
+    try {
+      await axiosInstance.post(
+        "/api/upsell/events",
+        payload,
+        {
+          headers: sessionToken ? { "X-Guest-Session-Token": sessionToken } : {},
+          ...(isRevenueEvent
+            ? { adapter: "fetch", fetchOptions: { keepalive: true } }
+            : {}),
+        },
+      );
+      return;
+    } catch (error) {
+      const status = Number((error as { response?: { status?: number } })?.response?.status || 0);
+      if (shouldRetryRevenueUpsellEvent(params.action, attempt, status)) continue;
+
+      // A failed request must not suppress the next genuine acceptance.
+      recentLogKeys.delete(logKey);
+      handleUpsellLogFailure(error);
+      return;
+    }
   }
 }
 
