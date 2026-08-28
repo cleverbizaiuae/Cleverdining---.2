@@ -35,7 +35,7 @@ import { OptimizedImage } from "@/components/OptimizedImage";
 
 
 
-const Modal = ({ isOpen, onClose, title, children }: any) => {
+const Modal = ({ isOpen, onClose, title, children, clipRoundedCorners = false }: any) => {
   if (!isOpen) return null;
   return (
     <div
@@ -43,14 +43,14 @@ const Modal = ({ isOpen, onClose, title, children }: any) => {
       aria-modal="true"
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 py-8 backdrop-blur-sm animate-fadeIn overflow-y-auto"
     >
-      <div className="bg-white rounded-2xl w-full max-w-md p-7 shadow-2xl animate-scaleIn my-auto max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2 border-b border-transparent">
+      <div className={`bg-white rounded-2xl w-full max-w-md p-7 shadow-2xl animate-scaleIn my-auto max-h-[90vh] ${clipRoundedCorners ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+        <div className={`flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2 border-b border-transparent ${clipRoundedCorners ? "shrink-0" : ""}`}>
           <h3 className="text-xl font-bold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
             <X size={20} />
           </button>
         </div>
-        {children}
+        {clipRoundedCorners ? <div className="min-h-0 overflow-y-auto">{children}</div> : children}
       </div>
     </div>
   )
@@ -1822,6 +1822,7 @@ const ScreenRestaurantDashboard = () => {
           setItemFormData({ item_name: "", price: "", description: "", category: "", sub_category: "", discount_percentage: "", image1: null, video: null });
         }}
         title={editingItem ? "Edit Item" : "Add New Item"}
+        clipRoundedCorners={Boolean(editingItem)}
       >
         <div className="space-y-4">
           <p className="text-[11px] text-slate-500">Fields marked <span className="text-red-500">*</span> are required.</p>
