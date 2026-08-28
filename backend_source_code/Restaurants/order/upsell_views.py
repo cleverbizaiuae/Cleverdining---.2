@@ -316,14 +316,18 @@ def _stage_bonus_for_item(
 
 
 def _compute_pairing_intelligence(restaurant: Restaurant, min_frequency: int = 2):
-    completed_statuses = ["delivered", "completed", "served"]
+    completed_statuses = ["delivered", "completed", "served", "paid"]
     cutoff = timezone.now() - timezone.timedelta(days=60)
     order_item_rows = (
         OrderItem.objects.filter(
             order__restaurant=restaurant,
-            order__status__in=completed_statuses,
             order__created_time__gte=cutoff,
         )
+        .filter(
+            Q(order__status__in=completed_statuses)
+            | Q(order__payment_status="paid")
+        )
+        .exclude(order__status__in=["cancelled", "canceled"])
         .values("order_id", "item_id", "id")
         .order_by("order_id", "id")
     )

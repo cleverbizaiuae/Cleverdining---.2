@@ -304,3 +304,54 @@ class UpsellToneAndPairingRegressionTests(IssueRegressionFixture):
             source_item=target,
             target_item=self.item,
         ).exists())
+
+    def test_pairing_intelligence_includes_paid_orders_with_active_kitchen_status(self):
+        target = Item.objects.create(
+            restaurant=self.restaurant,
+            category=self.category,
+            item_name="Garlic Bread",
+            slug="garlic-bread-paid-pairing",
+            description="Bread",
+            price="10.00",
+        )
+        for _ in range(2):
+            order = Order.objects.create(
+                restaurant=self.restaurant,
+                device=self.device,
+                status="preparing",
+                payment_status="paid",
+                total_price="50.00",
+            )
+            OrderItem.objects.create(order=order, item=self.item, quantity=1, price=self.item.price)
+            OrderItem.objects.create(order=order, item=target, quantity=1, price=target.price)
+
+        cancelled_order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="cancelled",
+            payment_status="paid",
+            total_price="50.00",
+        )
+        OrderItem.objects.create(
+            order=cancelled_order,
+            item=self.item,
+            quantity=1,
+            price=self.item.price,
+        )
+        OrderItem.objects.create(
+            order=cancelled_order,
+            item=target,
+            quantity=1,
+            price=target.price,
+        )
+
+        results = _compute_pairing_intelligence(self.restaurant)
+
+        pairing = ItemAssociation.objects.get(
+            restaurant=self.restaurant,
+            source_item=self.item,
+            target_item=target,
+        )
+        self.assertEqual(pairing.co_order_frequency, 2)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["frequency"], 2)
