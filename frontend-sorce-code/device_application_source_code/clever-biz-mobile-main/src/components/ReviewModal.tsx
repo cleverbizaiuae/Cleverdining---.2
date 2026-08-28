@@ -222,7 +222,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
                   onChange={(e) => setGuestNo(e.target.value)}
                   placeholder="Enter number of guests"
                   disabled={isSubmitting}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"
                   min={1}
                   required
                 />
@@ -282,7 +282,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || reviewText.trim() === ""}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-medium text-primary-text shadow-sm shadow-primary/20 transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>

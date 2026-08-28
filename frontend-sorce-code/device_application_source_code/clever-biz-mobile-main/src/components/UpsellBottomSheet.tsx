@@ -185,8 +185,8 @@ export default function UpsellBottomSheet({
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200" />
 
             <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="inline-flex min-w-0 items-center gap-2 text-[12px] font-bold uppercase tracking-[0.08em] text-[#4b2a12]">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#4b2a12]/10 text-[#4b2a12]">
+              <p className="inline-flex min-w-0 items-center gap-2 text-[12px] font-bold uppercase tracking-[0.08em] text-primary">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Gem className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </span>
                 {label}
@@ -203,7 +203,7 @@ export default function UpsellBottomSheet({
 
             {loading && !primaryItem ? (
               <div className="flex min-h-28 items-center justify-center gap-3 rounded-2xl bg-slate-50 px-4 text-sm font-medium text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin text-[#552500]" strokeWidth={1.8} />
+                <Loader2 className="h-5 w-5 animate-spin text-primary" strokeWidth={1.8} />
                 Finding the best match...
               </div>
             ) : isMulti ? (
@@ -229,7 +229,7 @@ export default function UpsellBottomSheet({
                       </div>
 
                       <p className="line-clamp-2 pr-4 text-sm font-bold leading-tight text-slate-900">{item.item_name}</p>
-                      <p className="mt-1 text-sm font-bold text-[#552500]">
+                      <p className="mt-1 text-sm font-bold text-primary">
                         {currencyCode} {getEffectiveItemPrice(item).toFixed(2)}
                       </p>
 
@@ -237,7 +237,7 @@ export default function UpsellBottomSheet({
                         type="button"
                         onClick={() => void handleAccept(item)}
                         disabled={addingItemId !== null}
-                        className="mt-auto h-10 w-full rounded-xl bg-[#552500] text-sm font-bold text-white hover:bg-[#442000] disabled:cursor-wait disabled:opacity-60"
+                        className="mt-auto h-10 w-full rounded-xl bg-primary text-sm font-bold text-primary-text shadow-sm shadow-primary/20 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                       >
                         {addingItemId === item.id ? "Adding..." : "Add"}
                       </button>
@@ -272,7 +272,7 @@ export default function UpsellBottomSheet({
                     <p className="mt-1 line-clamp-2 text-xs leading-snug text-slate-500">
                       {firstSentence(contextualCopy.reason)}
                     </p>
-                    <p className="mt-1.5 text-sm font-bold text-[#552500]">
+                    <p className="mt-1.5 text-sm font-bold text-primary">
                       {currencyCode} {getEffectiveItemPrice(primaryItem).toFixed(2)}
                     </p>
                   </div>
@@ -290,7 +290,7 @@ export default function UpsellBottomSheet({
                     type="button"
                     onClick={() => void handleAccept(primaryItem)}
                     disabled={addingItemId !== null}
-                    className="inline-flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#552500] px-4 text-sm font-bold text-white shadow-lg shadow-[#552500]/20 hover:bg-[#442000] disabled:cursor-wait disabled:opacity-60"
+                    className="inline-flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-text shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                   >
                     {addingItemId === primaryItem.id
                       ? "Adding..."

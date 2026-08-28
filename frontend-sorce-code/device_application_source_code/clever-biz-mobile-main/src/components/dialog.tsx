@@ -476,7 +476,7 @@ export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
         <DialogPanel className="w-[85%] max-w-[320px] overflow-hidden rounded-2xl border border-slate-100 bg-white p-0 text-slate-900 shadow-xl animate-in zoom-in-95 duration-200">
           <div className="flex flex-col items-center px-5 pt-5 pb-4 text-center">
-            <UserRound className="mb-3 h-6 w-6 text-[#0055FE]" strokeWidth={1.8} />
+            <UserRound className="mb-3 h-6 w-6 text-primary" strokeWidth={1.8} />
             <h3 className="text-base font-bold text-slate-900">Call a Waiter?</h3>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
               A staff member will be with you at{" "}
@@ -495,7 +495,7 @@ export const ModalAssistance: React.FC<ModalAssistanceProps> = ({
             <button
               onClick={() => void confirm()}
               disabled={isRequesting}
-              className="h-9 flex-1 rounded-xl bg-[#0055FE] text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#0044dd] disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 flex-1 rounded-xl bg-primary text-xs font-bold text-primary-text shadow-sm shadow-primary/20 transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isRequesting ? "Calling..." : "Call Waiter"}
             </button>
