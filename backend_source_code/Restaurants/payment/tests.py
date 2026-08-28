@@ -3,9 +3,10 @@ import time
 import hmac
 import hashlib
 from datetime import datetime, timezone as datetime_timezone
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import stripe
+import requests
 from django.test import TestCase
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient, APIRequestFactory
@@ -31,6 +32,149 @@ class GuestPaymentVerificationAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"], "Payment record not found")
+
+
+class PayTabsReturnFlowTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="paytabs-return@example.com",
+            username="PayTabs Return",
+            password="password",
+            role="owner",
+        )
+        self.restaurant = Restaurant.objects.create(
+            resturent_name="PayTabs Return Restaurant",
+            location="Dubai",
+            phone_number="+971500004398",
+            owner=self.owner,
+        )
+        with patch("device.models.Device.generate_qr_code"):
+            self.device = Device.objects.create(
+                table_name="Table PayTabs",
+                user=self.owner,
+                restaurant=self.restaurant,
+            )
+        self.order = Order.objects.create(
+            restaurant=self.restaurant,
+            device=self.device,
+            status="pending",
+            payment_status="unpaid",
+            total_price="50.00",
+        )
+        self.gateway = PaymentGateway.objects.create(
+            restaurant=self.restaurant,
+            provider="paytabs",
+            is_enabled=True,
+            is_active=True,
+            connection_status="connected",
+        )
+        self.gateway.set_credentials({
+            "profile_id": "123456",
+            "server_key": "paytabs-test-server-key",
+        })
+        self.gateway.save()
+        self.payment = Payment.objects.create(
+            device=self.device,
+            restaurant=self.restaurant,
+            order=self.order,
+            provider="paytabs",
+            transaction_id="TST_RETURN_123",
+            amount="50.00",
+            status="pending",
+            raw_response={
+                "_client_success_url": "https://customer.example/thankyou",
+                "_client_cancel_url": "https://customer.example/dashboard/orders/",
+            },
+        )
+        self.client = APIClient()
+
+    @staticmethod
+    def _query_response(response_status, message):
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "tran_ref": "TST_RETURN_123",
+            "cart_amount": "50.00",
+            "payment_result": {
+                "response_status": response_status,
+                "response_message": message,
+            },
+        }
+        return response
+
+    @patch("payment.adapters.requests.post")
+    def test_camel_case_post_return_verifies_and_redirects_to_thank_you(self, request_post):
+        request_post.return_value = self._query_response("A", "Authorised")
+
+        response = self.client.post(
+            "/api/customer/payment/paytabs/return/",
+            {
+                "tranRef": "TST_RETURN_123",
+                "respStatus": "A",
+                "respMessage": "Authorised",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            "https://customer.example/thankyou?session_id=TST_RETURN_123",
+        )
+        self.payment.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(self.payment.status, "completed")
+        self.assertEqual(self.order.payment_status, "paid")
+        request_post.assert_called_once()
+
+    @patch("payment.adapters.requests.post")
+    def test_get_return_reads_query_parameters(self, request_post):
+        request_post.return_value = self._query_response("A", "Authorised")
+
+        response = self.client.get(
+            "/api/customer/payment/paytabs/return/",
+            {"tranRef": "TST_RETURN_123", "respStatus": "A"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/thankyou?session_id=TST_RETURN_123", response["Location"])
+
+    @patch("payment.adapters.requests.post")
+    def test_declined_payment_returns_plain_reason_code(self, request_post):
+        request_post.return_value = self._query_response("D", "Declined")
+
+        response = self.client.post(
+            "/api/customer/payment/paytabs/return/",
+            {"tranRef": "TST_RETURN_123", "respStatus": "D"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            "https://customer.example/dashboard/orders/?payment=failed&reason=payment_declined",
+        )
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, "failed")
+
+    @patch("payment.adapters.requests.post", side_effect=requests.RequestException("network down"))
+    def test_verification_outage_does_not_falsely_mark_payment_failed(self, _request_post):
+        response = self.client.post(
+            "/api/customer/payment/paytabs/return/",
+            {"tranRef": "TST_RETURN_123", "respStatus": "A"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            "https://customer.example/dashboard/orders/?payment=pending&reason=verification_unavailable",
+        )
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, "pending")
+
+    def test_missing_transaction_reference_returns_actionable_reason(self):
+        response = self.client.post("/api/customer/payment/paytabs/return/", {})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("payment=failed", response["Location"])
+        self.assertIn("reason=missing_transaction_reference", response["Location"])
 
 
 class PaymentAdminDateFilterTests(TestCase):

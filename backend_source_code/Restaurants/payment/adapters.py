@@ -765,6 +765,7 @@ class PayTabsAdapter(PaymentAdapter):
     # - https://secure-global.paytabs.com (Global)
     # - https://secure-egypt.paytabs.com (Egypt)
     BASE_URL = "https://secure.paytabs.com/payment/request"
+    QUERY_URL = "https://secure.paytabs.com/payment/query"
 
     def create_payment_session(self, order, success_url, cancel_url, amount=None, metadata=None):
         # 1. Input Vectors
@@ -834,27 +835,89 @@ class PayTabsAdapter(PaymentAdapter):
             # Include specific message if possible
             raise ValidationError(f"PayTabs Connection Failed: {str(e)}")
 
+    def _query_transaction(self, transaction_id):
+        try:
+            response = requests.post(
+                self.QUERY_URL,
+                json={
+                    "profile_id": self.gateway.key_id,
+                    "tran_ref": transaction_id,
+                },
+                headers={
+                    "Authorization": self.gateway.get_decrypted_secret(),
+                    "Content-Type": "application/json",
+                },
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            raise ValidationError("PayTabs could not verify this payment at the moment") from exc
+
+        try:
+            payload = response.json()
+        except Exception as exc:
+            raise ValidationError("PayTabs returned an invalid payment verification response") from exc
+
+        if response.status_code != 200:
+            raise ValidationError("PayTabs could not verify this payment at the moment")
+        returned_transaction_id = payload.get('tran_ref') or payload.get('tranRef')
+        if returned_transaction_id and str(returned_transaction_id) != str(transaction_id):
+            raise ValidationError("PayTabs returned a different payment reference")
+        return payload
+
     def verify_payment(self, data):
-        payment_result = data.get('payment_result', {}) if isinstance(data, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        payment_result = data.get('payment_result', {})
+        transaction_id = (
+            data.get('tran_ref')
+            or data.get('tranRef')
+            or data.get('session_id')
+            or data.get('transaction_id')
+        )
+
         response_status = (
             data.get('respStatus')
             or data.get('response_status')
             or payment_result.get('response_status')
         )
+        if transaction_id and (data.get('_verify_with_provider') or not response_status):
+            data = self._query_transaction(transaction_id)
+            payment_result = data.get('payment_result', {})
+
+        response_status = (
+            data.get('respStatus')
+            or data.get('response_status')
+            or payment_result.get('response_status')
+        )
+        resolved_transaction_id = (
+            data.get('tran_ref')
+            or data.get('tranRef')
+            or transaction_id
+        )
         if response_status == 'A':
             return {
                 'status': 'completed',
-                'transaction_id': data.get('tran_ref'),
+                'transaction_id': resolved_transaction_id,
                 'amount': data.get('cart_amount'),
                 'raw_response': data,
             }
         if response_status in {'C', 'D', 'E'}:
             return {
                 'status': 'failed',
-                'transaction_id': data.get('tran_ref'),
+                'transaction_id': resolved_transaction_id,
+                'response_status': response_status,
+                'response_message': (
+                    data.get('respMessage')
+                    or data.get('response_message')
+                    or payment_result.get('response_message')
+                    or ''
+                ),
                 'raw_response': data,
             }
-        return {'status': 'pending'}
+        return {
+            'status': 'pending',
+            'transaction_id': resolved_transaction_id,
+            'raw_response': data,
+        }
 
     def verify_webhook(self, request):
         # 1. Inputs

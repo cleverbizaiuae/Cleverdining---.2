@@ -63,6 +63,11 @@ import {
 } from "@/lib/upsellSession";
 import { getEffectiveItemPrice } from "@/utils/pricing";
 import { getCustomerErrorMessage } from "@/lib/customerErrorMessage";
+import {
+  clearPaymentReturnParams,
+  getPaymentReturnNotice,
+  type PaymentReturnNotice,
+} from "./payment-return";
 
 type BackendOrderItem = {
   id?: number;
@@ -283,6 +288,7 @@ const ScreenOrders = () => {
   const [orders, setOrders] = useState<Order[]>(() => readStoredOrders(ordersStorageKey));
   const [loading, setLoading] = useState(orders.length === 0);
   const [err, setErr] = useState<string | null>(null);
+  const [paymentReturnNotice, setPaymentReturnNotice] = useState<PaymentReturnNotice | null>(null);
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [splitMode, setSplitMode] = useState<SplitMode>("none");
@@ -317,6 +323,24 @@ const ScreenOrders = () => {
       setPaymentMethod("cash");
     }
   }, [onlinePaymentAvailable, onlinePaymentLoading, paymentMethod]);
+
+  useEffect(() => {
+    const notice = getPaymentReturnNotice(window.location.search);
+    if (!notice) return;
+
+    setPaymentReturnNotice(notice);
+    if (notice.tone === "error") {
+      toast.error(notice.message, { duration: 8000 });
+    } else {
+      toast.loading(notice.message, { duration: 8000 });
+    }
+
+    window.history.replaceState(
+      window.history.state,
+      "",
+      clearPaymentReturnParams(new URL(window.location.href)),
+    );
+  }, []);
 
   const chwaziPointersRef = useRef<Map<number, ChwaziPointer>>(new Map());
   const chwaziIntervalRef = useRef<number | null>(null);
@@ -1206,6 +1230,27 @@ const ScreenOrders = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-3">
+        {paymentReturnNotice && (
+          <div
+            role={paymentReturnNotice.tone === "error" ? "alert" : "status"}
+            className={`mb-3 flex items-start justify-between gap-3 rounded-2xl border p-3.5 text-sm font-medium ${
+              paymentReturnNotice.tone === "error"
+                ? "border-red-200 bg-red-50 text-red-800"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            <span>{paymentReturnNotice.message}</span>
+            <button
+              type="button"
+              aria-label="Dismiss payment message"
+              onClick={() => setPaymentReturnNotice(null)}
+              className="shrink-0 opacity-60 hover:opacity-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {loading && (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />

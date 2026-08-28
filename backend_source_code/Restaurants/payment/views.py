@@ -655,65 +655,76 @@ class PayTabsReturnView(APIView):
     permission_classes = []
     authentication_classes = []
 
+    def _payload(self, request):
+        payload = {}
+        if hasattr(request, 'query_params'):
+            for key in request.query_params:
+                payload[key] = request.query_params.get(key)
+        if hasattr(request, 'data') and request.data:
+            for key in request.data:
+                payload[key] = request.data.get(key)
+        return payload
+
+    def _failed_redirect(self, payment=None, reason='payment_failed', payment_state='failed'):
+        cancel_url = _payment_client_url(
+            payment,
+            '_client_cancel_url',
+            'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/',
+        ) if payment else 'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/'
+        return redirect(_append_redirect_query(cancel_url, payment=payment_state, reason=reason))
+
     def post(self, request):
         ensure_payment_schema()
-        data = request.data
-        # PayTabs sends status in POST body: response_status, tran_ref, etc.
-        
-        # 1. Identify Transaction
-        tran_ref = data.get('tran_ref')
-        resp_status = data.get('respStatus') # A=Authorized, C=Cancelled, E=Error, D=Declined
-        resp_message = data.get('respMessage', '')
-        
-        if not tran_ref:
-             # Fallback: Redirect to Cancelled if no data
-             from django.shortcuts import redirect
-             return redirect('https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason=unknown')
+        data = self._payload(request)
+        # PayTabs' browser return uses camelCase (tranRef/respStatus), while
+        # server callbacks and query responses use snake_case (tran_ref).
+        tran_ref = (
+            data.get('tranRef')
+            or data.get('tran_ref')
+            or data.get('transaction_id')
+        )
 
-        # 2. Verify/Update Payment Status in DB
-        # We can reuse PaymentService logic if we can find the payment object.
+        if not tran_ref:
+            return self._failed_redirect(reason='missing_transaction_reference')
+
         payment = Payment.objects.filter(transaction_id=tran_ref).first()
-        
-        if payment:
-            if resp_status == 'A':
-                 # Successful!
-                 # Call Service to finalize (update status, notify, clear cart)
-                 # We can mock a verification data packet
-                 verification_data = {
-                     'payment_result': {'response_status': 'A'},
-                     'response_status': 'A',
-                     'tran_ref': tran_ref,
-                     'cart_amount': data.get('cart_amount'),
-                 }
-                 PaymentService.verify_payment(payment, verification_data)
-                 
-                 # Redirect to Success
-                 success_url = _payment_client_url(
-                     payment,
-                     '_client_success_url',
-                     'https://officialcleverdiningcustomer.netlify.app/thankyou',
-                 )
-                 return redirect(_append_redirect_query(success_url, session_id=tran_ref))
-            
-            else:
-                 # Failed/Cancelled
-                 payment.status = 'failed'
-                 payment.save(update_fields=["status", "updated_at"])
-                 mark_payment_failed(payment)
-                 cancel_url = _payment_client_url(
-                     payment,
-                     '_client_cancel_url',
-                     'https://officialcleverdiningcustomer.netlify.app/dashboard/orders/',
-                 )
-                 return redirect(_append_redirect_query(cancel_url, payment='failed', reason=resp_message))
-        
-        else:
-             # Payment not found?
-             return redirect('https://officialcleverdiningcustomer.netlify.app/dashboard/orders/?payment=failed&reason=checkout_not_found')
+        if not payment:
+            return self._failed_redirect(reason='checkout_not_found')
+
+        try:
+            verification = PaymentService.verify_payment(payment, {
+                **data,
+                'tran_ref': tran_ref,
+                '_verify_with_provider': True,
+            })
+        except ValidationError:
+            return self._failed_redirect(
+                payment,
+                reason='verification_unavailable',
+                payment_state='pending',
+            )
+
+        verified_status = str(verification.get('status') or '').lower()
+        if verified_status == 'completed':
+            success_url = _payment_client_url(
+                payment,
+                '_client_success_url',
+                'https://officialcleverdiningcustomer.netlify.app/thankyou',
+            )
+            return redirect(_append_redirect_query(success_url, session_id=tran_ref))
+
+        if verified_status in {'failed', 'declined', 'cancelled', 'canceled'}:
+            response_status = str(verification.get('response_status') or data.get('respStatus') or '')
+            reason = 'payment_cancelled' if response_status == 'C' else 'payment_declined'
+            return self._failed_redirect(payment, reason=reason)
+
+        return self._failed_redirect(
+            payment,
+            reason='payment_pending',
+            payment_state='pending',
+        )
 
     def get(self, request):
-        # Allow GET access just in case PayTabs does a GET redirect (config dependent)
-        # Handle query params instead of post data
         return self.post(request)
 
 
