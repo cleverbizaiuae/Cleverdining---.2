@@ -16,7 +16,11 @@ from payment.models import Payment, PaymentGateway, PaymentProviderEvent
 from payment.models import StripeDetails
 from payment.adapters import CashAdapter
 from payment.provider_registry import PAYMENT_PROVIDER_CODES, PROVIDER_CLASSES
-from payment.services import PaymentService, _mark_order_payment_progress
+from payment.services import (
+    PaymentService,
+    _mark_order_payment_progress,
+    _payment_settlement_queryset,
+)
 from restaurant.models import Restaurant
 from device.models import Device, GuestSession
 from order.models import Cart, Order
@@ -32,6 +36,11 @@ class GuestPaymentVerificationAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"], "Payment record not found")
+
+    def test_settlement_lock_does_not_join_nullable_bill_relation(self):
+        query = str(_payment_settlement_queryset().query)
+
+        self.assertNotIn('payment_orderbill', query.lower())
 
 
 class PayTabsReturnFlowTests(TestCase):

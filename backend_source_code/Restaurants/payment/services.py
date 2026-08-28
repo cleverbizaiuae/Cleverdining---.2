@@ -62,6 +62,15 @@ def _remaining_for_order(order):
     return max(total - paid, Decimal("0.00"))
 
 
+def _payment_settlement_queryset():
+    # Lock only the payment attempt. Joining the nullable bill relation while
+    # using SELECT FOR UPDATE makes PostgreSQL reject the query before a paid
+    # Stripe/PayTabs session can be applied to its order.
+    return Payment.objects.select_for_update(of=("self",)).select_related(
+        'order', 'restaurant', 'device'
+    )
+
+
 def _mark_order_payment_progress(order, paid_amount):
     total = _q_money(order.total_price)
     paid = min(total, max(Decimal("0.00"), _q_money(paid_amount)))
@@ -554,9 +563,7 @@ class PaymentService:
         verification_result = verification_result or {}
 
         with transaction.atomic():
-            payment = Payment.objects.select_for_update().select_related(
-                'order', 'restaurant', 'device', 'bill'
-            ).get(pk=payment.pk)
+            payment = _payment_settlement_queryset().get(pk=payment.pk)
             was_completed = payment.status == 'completed'
 
             if not was_completed:
