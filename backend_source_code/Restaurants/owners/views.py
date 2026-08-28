@@ -10,6 +10,17 @@ from restaurant.models import Restaurant
 from accounts.models import ChefStaff
 
 
+def _build_menu_image_prompt(prompt):
+    item_prompt = " ".join(str(prompt or "").split())[:180]
+    return (
+        "Create a square professional restaurant menu photograph of exactly this "
+        f"food or drink item: {item_prompt}. The main subject must clearly match "
+        f"{item_prompt}. Use realistic appetizing plating on a simple restaurant "
+        "background. Do not include unrelated menu items, branded packaging, cans, "
+        "text, logos, watermarks, hands, or people."
+    )
+
+
 class RestaurantSettingsView(APIView):
     """
     GET/PATCH restaurant settings including Google Review URL.
@@ -164,7 +175,7 @@ class GenerateImageView(APIView):
         if not prompt:
             return Response({"error": "Prompt is required"}, status=400)
 
-        encoded_prompt = quote(prompt[:500], safe='')
+        encoded_prompt = quote(_build_menu_image_prompt(prompt), safe='')
         for _attempt in range(3):
             seed = secrets.randbelow(2_147_483_647)
             image_url = (

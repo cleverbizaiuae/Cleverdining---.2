@@ -277,11 +277,19 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
     const normalizedPrompt = prompt.trim();
     if (!normalizedPrompt) return toast.error("Please enter a prompt");
 
+    setGeneratedPreview(previousPreview => {
+      if (previousPreview) URL.revokeObjectURL(previousPreview);
+      return null;
+    });
+    if (currentImage instanceof File && /^(ai-generated-|generated-image)/.test(currentImage.name)) {
+      onImageSelected(null);
+    }
+
     setGenerating(true);
     try {
       const response = await axiosInstance.post(
         "/owners/generate-image/",
-        { prompt: `${normalizedPrompt} food professional photography` },
+        { prompt: normalizedPrompt },
         { timeout: 70000 },
       );
       const imageData = String(response.data?.image || "");
@@ -297,7 +305,9 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
 
       const objectUrl = URL.createObjectURL(imageBlob);
       setGeneratedPreview(objectUrl);
-      const file = new File([imageBlob], "generated-image.jpg", { type: imageBlob.type || "image/jpeg" });
+      const extension = match[1].includes("png") ? "png" : match[1].includes("webp") ? "webp" : "jpg";
+      const fileName = normalizedPrompt.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "menu_item";
+      const file = new File([imageBlob], `ai-generated-${fileName}.${extension}`, { type: imageBlob.type || "image/jpeg" });
       onImageSelected(file);
       toast.success("Image generated!");
     } catch (error: any) {
