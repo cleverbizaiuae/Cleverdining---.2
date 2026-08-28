@@ -12,6 +12,12 @@ from item.models import Item
 from .models import UpsellEvent, UpsellItemSetting, UpsellRule, UpsellSetting
 
 
+ORDER_ATTRIBUTED_REVENUE_Q = Q(
+    action="accepted",
+    metadata__reconciled_from_order=True,
+)
+
+
 def parse_category_ids(raw: str | List[int] | None) -> List[int]:
     if raw is None:
         return []
@@ -216,7 +222,7 @@ def build_item_stats_map(restaurant_id: int):
                 shown=Count("id", filter=Q(action="shown")),
                 accepted=Count("id", filter=Q(action="accepted")),
                 rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
-                revenue=Sum("upsell_price", filter=Q(action="accepted")),
+                revenue=Sum("upsell_price", filter=ORDER_ATTRIBUTED_REVENUE_Q),
             )
         )
     except (OperationalError, ProgrammingError):

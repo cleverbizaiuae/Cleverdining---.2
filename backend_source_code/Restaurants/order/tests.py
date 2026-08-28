@@ -188,6 +188,81 @@ class PayBeforeOrderFlowTests(TestCase):
         self.assertEqual(Decimal(analytics.data["upsell_revenue"]), Decimal("25.00"))
         self.assertEqual(Decimal(analytics.data["avg_upsell_value"]), Decimal("25.00"))
 
+    def test_cart_acceptance_has_no_revenue_until_the_order_is_placed(self):
+        accepted_response = self.client.post(
+            "/api/upsell/events",
+            {
+                "session_id": "pending-upsell-session",
+                "guest_session_token": self.session.session_token,
+                "trigger_point": "cart",
+                "action": "accepted",
+                "upsell_item": self.item.id,
+                "upsell_price": "25.00",
+                "cart_value_at_time": "25.00",
+                "cart_item_count": 1,
+            },
+            format="json",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+        self.assertEqual(accepted_response.status_code, 201)
+
+        pending_request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(pending_request, user=self.owner)
+        pending_analytics = UpsellAnalyticsAPIView.as_view()(pending_request)
+        self.assertEqual(pending_analytics.data["total_accepted"], 1)
+        self.assertEqual(Decimal(pending_analytics.data["upsell_revenue"]), Decimal("0"))
+        self.assertEqual(Decimal(pending_analytics.data["avg_upsell_value"]), Decimal("0"))
+
+        placed_response = self._place_order(
+            "card",
+            upsell_session_id="pending-upsell-session",
+            upsell_acceptances=[
+                {"item": self.item.id, "trigger_point": "cart"},
+            ],
+        )
+        self.assertEqual(placed_response.status_code, 201)
+
+        placed_request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(placed_request, user=self.owner)
+        placed_analytics = UpsellAnalyticsAPIView.as_view()(placed_request)
+        self.assertEqual(placed_analytics.data["total_accepted"], 1)
+        self.assertEqual(Decimal(placed_analytics.data["upsell_revenue"]), Decimal("25.00"))
+        self.assertEqual(Decimal(placed_analytics.data["avg_upsell_value"]), Decimal("25.00"))
+
+    def test_regular_menu_item_order_does_not_create_upsell_revenue(self):
+        response = self._place_order("card")
+        self.assertEqual(response.status_code, 201)
+
+        analytics_request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(analytics_request, user=self.owner)
+        analytics = UpsellAnalyticsAPIView.as_view()(analytics_request)
+        self.assertEqual(analytics.data["total_accepted"], 0)
+        self.assertEqual(Decimal(analytics.data["upsell_revenue"]), Decimal("0"))
+        self.assertEqual(analytics.data["revenue_trend"], [])
+
+    def test_order_uses_saved_line_quantity_for_upsell_revenue(self):
+        response = self._place_order(
+            "card",
+            order_items=[{"item": self.item.id, "quantity": 2}],
+            upsell_session_id="quantity-upsell-session",
+            upsell_acceptances=[
+                {"item": self.item.id, "trigger_point": "cart"},
+            ],
+        )
+        self.assertEqual(response.status_code, 201)
+
+        accepted = UpsellEvent.objects.get(
+            restaurant=self.restaurant,
+            action="accepted",
+            upsell_item=self.item,
+        )
+        self.assertEqual(accepted.upsell_price, Decimal("50.00"))
+
+        analytics_request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(analytics_request, user=self.owner)
+        analytics = UpsellAnalyticsAPIView.as_view()(analytics_request)
+        self.assertEqual(Decimal(analytics.data["upsell_revenue"]), Decimal("50.00"))
+
     def test_cash_prepayment_is_collectible_by_staff_but_hidden_from_chef(self):
         response = self._place_order("cash")
 
@@ -721,6 +796,7 @@ class UpsellAnalyticsImageTests(TestCase):
             upsell_item_name=self.item.item_name,
             upsell_category="Desserts",
             upsell_price=self.item.price,
+            metadata={"order_id": 1, "reconciled_from_order": True},
         )
         UpsellEvent.objects.create(
             restaurant=self.restaurant,
@@ -791,6 +867,11 @@ class UpsellAnalyticsImageTests(TestCase):
                 upsell_item_name=self.item.item_name,
                 upsell_category="Desserts",
                 upsell_price=Decimal(price),
+                metadata=(
+                    {"order_id": f"analytics-{created_at.isoformat()}", "reconciled_from_order": True}
+                    if action == "accepted"
+                    else {}
+                ),
                 # Deliberately wrong legacy snapshots prove aggregation uses
                 # the authoritative timestamp and restaurant timezone.
                 hour_of_day=15,

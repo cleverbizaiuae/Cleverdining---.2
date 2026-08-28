@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 
 
 UPSELL_SESSION_CAPS = {"subtle": 2, "moderate": 4, "aggressive": 6}
+ORDER_ATTRIBUTED_REVENUE_Q = Q(
+    action="accepted",
+    metadata__reconciled_from_order=True,
+)
 
 
 def _ensure_upsell_schema() -> None:
@@ -131,12 +135,14 @@ def _upsell_analytics_summary(events, restaurant: Restaurant) -> dict:
     totals = events.aggregate(
         total_shown=Count("id", filter=Q(action="shown")),
         total_accepted=Count("id", filter=Q(action="accepted")),
+        total_ordered_accepted=Count("id", filter=ORDER_ATTRIBUTED_REVENUE_Q),
         total_rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
-        upsell_revenue=Sum("upsell_price", filter=Q(action="accepted")),
+        upsell_revenue=Sum("upsell_price", filter=ORDER_ATTRIBUTED_REVENUE_Q),
         last_event_at=Max("created_at"),
     )
     total_shown = int(totals.get("total_shown") or 0)
     total_accepted = int(totals.get("total_accepted") or 0)
+    total_ordered_accepted = int(totals.get("total_ordered_accepted") or 0)
     total_rejected = int(totals.get("total_rejected") or 0)
     upsell_revenue = totals.get("upsell_revenue") or Decimal("0")
     acceptance_rate = (
@@ -145,8 +151,8 @@ def _upsell_analytics_summary(events, restaurant: Restaurant) -> dict:
         else 0.0
     )
     avg_upsell_value = (
-        upsell_revenue / total_accepted
-        if total_accepted
+        upsell_revenue / total_ordered_accepted
+        if total_ordered_accepted
         else Decimal("0")
     )
 
@@ -691,6 +697,14 @@ class UpsellEventCreateAPIView(APIView):
             if any((event.metadata or {}).get("order_id") for event in recent_acceptances[:10]):
                 return Response({"status": "duplicate_ignored"}, status=status.HTTP_200_OK)
 
+        # An acceptance records customer intent, not earned revenue. Its price
+        # becomes authoritative only after order creation reconciles the exact
+        # suggested item against a persisted order line.
+        event_price = (
+            Decimal("0")
+            if payload["action"] == "accepted"
+            else payload.get("upsell_price", Decimal("0"))
+        )
         UpsellEvent.objects.create(
             restaurant=restaurant,
             guest_session=session,
@@ -702,7 +716,7 @@ class UpsellEventCreateAPIView(APIView):
             upsell_item=upsell_item,
             upsell_item_name=upsell_item_name,
             upsell_category=upsell_category,
-            upsell_price=payload.get("upsell_price", Decimal("0")),
+            upsell_price=event_price,
             cart_value_at_time=payload.get("cart_value_at_time", Decimal("0")),
             cart_item_count=payload.get("cart_item_count", 0),
             # The restaurant timezone is authoritative for analytics. Client
@@ -721,8 +735,8 @@ def reconcile_order_upsell_acceptances(*, order, acceptances, session_id=""):
     """Attach accepted upsells to an order using authoritative order prices.
 
     Existing client events are claimed instead of duplicated. If the detached
-    client event never arrived, a replacement event is created from the saved
-    order line so analytics still reconciles exactly once.
+    client event never arrived, the explicit AI-acceptance payload is reconciled
+    against the saved order line so ordinary menu selections are never counted.
     """
     if not acceptances:
         return 0
@@ -767,6 +781,7 @@ def reconcile_order_upsell_acceptances(*, order, acceptances, session_id=""):
             UpsellEvent.objects.filter(
                 restaurant=order.restaurant,
                 guest_session=order.guest_session,
+                session_id=normalized_session_id,
                 action="accepted",
                 upsell_item_id=item_id,
                 created_at__gte=event_time - timezone.timedelta(hours=2),
@@ -793,10 +808,17 @@ def reconcile_order_upsell_acceptances(*, order, acceptances, session_id=""):
             None,
         )
         metadata = dict((event.metadata if event else {}) or {})
-        metadata.update({"order_id": order.id, "reconciled_from_order": True})
+        metadata.update(
+            {
+                "order_id": order.id,
+                "reconciled_from_order": True,
+                "attribution_source": "ai_suggestion_acceptance",
+            }
+        )
+        attributed_revenue = order_line.price * order_line.quantity
 
         if event:
-            event.upsell_price = order_line.price
+            event.upsell_price = attributed_revenue
             event.cart_value_at_time = order.total_price
             event.cart_item_count = cart_item_count
             event.metadata = metadata
@@ -821,7 +843,7 @@ def reconcile_order_upsell_acceptances(*, order, acceptances, session_id=""):
                 upsell_item=item,
                 upsell_item_name=item.item_name,
                 upsell_category=getattr(item.category, "Category_name", "") or "",
-                upsell_price=order_line.price,
+                upsell_price=attributed_revenue,
                 cart_value_at_time=order.total_price,
                 cart_item_count=cart_item_count,
                 hour_of_day=local_event_time.hour,
@@ -898,11 +920,9 @@ class UpsellAssociationStatsAPIView(APIView):
                 association.times_shown = int(association.times_shown or 0) + 1
             elif action == "accepted":
                 association.times_accepted = int(association.times_accepted or 0) + 1
-                price_raw = request.data.get("upsell_price") or request.data.get("price")
-                try:
-                    association.revenue_generated = Decimal(association.revenue_generated or 0) + Decimal(str(price_raw or "0"))
-                except Exception:
-                    pass
+                # Cart acceptance is intent only. Revenue is authoritative only
+                # after the accepted item is present in a successfully created
+                # order, which is tracked by UpsellEvent reconciliation.
             else:
                 association.times_dismissed = int(association.times_dismissed or 0) + 1
             association.save(update_fields=["times_shown", "times_accepted", "times_dismissed", "revenue_generated", "updated_at"])
@@ -1345,7 +1365,7 @@ class UpsellAnalyticsAPIView(APIView):
                 shown=Count("id", filter=Q(action="shown")),
                 accepted=Count("id", filter=Q(action="accepted")),
                 rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
-                revenue=Sum("upsell_price", filter=Q(action="accepted")),
+                revenue=Sum("upsell_price", filter=ORDER_ATTRIBUTED_REVENUE_Q),
             )
             .order_by("trigger_point")
         )
@@ -1372,7 +1392,7 @@ class UpsellAnalyticsAPIView(APIView):
                 shown=Count("id", filter=Q(action="shown")),
                 accepted=Count("id", filter=Q(action="accepted")),
                 rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
-                revenue=Sum("upsell_price", filter=Q(action="accepted")),
+                revenue=Sum("upsell_price", filter=ORDER_ATTRIBUTED_REVENUE_Q),
             )
             .order_by("-accepted", "-shown")
         )
@@ -1398,7 +1418,7 @@ class UpsellAnalyticsAPIView(APIView):
                 shown=Count("id", filter=Q(action="shown")),
                 accepted=Count("id", filter=Q(action="accepted")),
                 rejected=Count("id", filter=Q(action__in=["declined", "dismissed"])),
-                revenue=Sum("upsell_price", filter=Q(action="accepted")),
+                revenue=Sum("upsell_price", filter=ORDER_ATTRIBUTED_REVENUE_Q),
             )
             .order_by("-accepted", "-revenue")[:25]
         )
@@ -1512,7 +1532,10 @@ class UpsellAnalyticsAPIView(APIView):
             )
 
         revenue_trend_rows = (
-            events.filter(action="accepted")
+            events.filter(
+                action="accepted",
+                metadata__reconciled_from_order=True,
+            )
             .annotate(day=TruncDate("created_at", tzinfo=restaurant_tz))
             .values("day")
             .annotate(revenue=Sum("upsell_price"))
