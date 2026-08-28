@@ -231,6 +231,24 @@ class OrderCreateAPIView(generics.CreateAPIView):
         # Save via serializer
         order = serializer.save(device=device, restaurant=restaurant, guest_session=session, business_day=business_day)
 
+        # Order creation is the durable source of truth for accepted-upsell
+        # revenue. The earlier client event remains useful for instant UI
+        # updates, while this reconciliation prevents a background request
+        # being lost during checkout/navigation from dropping revenue.
+        upsell_acceptances = getattr(order, "_upsell_acceptances", [])
+        if upsell_acceptances:
+            try:
+                from .upsell_views import reconcile_order_upsell_acceptances
+
+                reconcile_order_upsell_acceptances(
+                    order=order,
+                    acceptances=upsell_acceptances,
+                    session_id=getattr(order, "_upsell_session_id", ""),
+                )
+            except Exception as exc:
+                # Analytics must never make a successfully placed food order fail.
+                print(f"[UPSELL] Failed to reconcile order {order.id}: {exc}")
+
         payment_method = str(self.request.data.get('payment_method') or 'card').strip().lower()
         try:
             pay_before_order = bool(restaurant.brand_config.pay_before_order)

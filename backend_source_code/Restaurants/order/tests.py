@@ -91,13 +91,14 @@ class PayBeforeOrderFlowTests(TestCase):
         )
         self.client = APIClient()
 
-    def _place_order(self, payment_method="card"):
+    def _place_order(self, payment_method="card", **extra_payload):
         return self.client.post(
             f"/api/customer/orders/?guest_token={self.session.session_token}",
             {
                 "order_items": [{"item": self.item.id, "quantity": 1}],
                 "guest_session_token": self.session.session_token,
                 "payment_method": payment_method,
+                **extra_payload,
             },
             format="json",
             HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
@@ -129,6 +130,63 @@ class PayBeforeOrderFlowTests(TestCase):
         owner_response = self.client.get("/owners/orders/")
         owner_orders = owner_response.json()["results"]["orders"]
         self.assertEqual(len(owner_orders), 1)
+
+    def test_order_reconciles_missing_accepted_upsell_event_exactly_once(self):
+        response = self._place_order(
+            "card",
+            upsell_session_id="client-upsell-session",
+            upsell_acceptances=[
+                {"item": self.item.id, "trigger_point": "cart"},
+            ],
+        )
+
+        self.assertEqual(response.status_code, 201)
+        order_id = response.json()["id"]
+        accepted = UpsellEvent.objects.get(
+            restaurant=self.restaurant,
+            guest_session=self.session,
+            action="accepted",
+            upsell_item=self.item,
+        )
+        self.assertEqual(accepted.upsell_price, Decimal("25.00"))
+        self.assertEqual(accepted.metadata["order_id"], order_id)
+        self.assertTrue(accepted.metadata["reconciled_from_order"])
+
+        delayed_event = self.client.post(
+            "/api/upsell/events",
+            {
+                "session_id": "client-upsell-session",
+                "guest_session_token": self.session.session_token,
+                "trigger_point": "cart",
+                "action": "accepted",
+                "upsell_item": self.item.id,
+                "upsell_price": "25.00",
+                "cart_value_at_time": "25.00",
+                "cart_item_count": 1,
+            },
+            format="json",
+            HTTP_X_GUEST_SESSION_TOKEN=self.session.session_token,
+        )
+
+        self.assertEqual(delayed_event.status_code, 200)
+        self.assertEqual(delayed_event.json()["status"], "duplicate_ignored")
+        self.assertEqual(
+            UpsellEvent.objects.filter(
+                restaurant=self.restaurant,
+                guest_session=self.session,
+                action="accepted",
+                upsell_item=self.item,
+            ).count(),
+            1,
+        )
+
+        analytics_request = APIRequestFactory().get("/api/upsell/analytics")
+        force_authenticate(analytics_request, user=self.owner)
+        analytics = UpsellAnalyticsAPIView.as_view()(analytics_request)
+        self.assertEqual(analytics.status_code, 200)
+        self.assertEqual(analytics.data["total_accepted"], 1)
+        self.assertEqual(Decimal(analytics.data["upsell_revenue"]), Decimal("25.00"))
+        self.assertEqual(Decimal(analytics.data["avg_upsell_value"]), Decimal("25.00"))
 
     def test_cash_prepayment_is_collectible_by_staff_but_hidden_from_chef(self):
         response = self._place_order("cash")

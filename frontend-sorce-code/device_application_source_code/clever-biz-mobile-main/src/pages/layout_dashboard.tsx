@@ -514,7 +514,7 @@ const MenuPageUpsellHost = ({ pendingDetail }: { pendingDetail: MenuItemAddedDet
       return;
     }
     toast.success(`${suggestion.item_name} added to cart`);
-    markUpsellItemAccepted(suggestion.id);
+    markUpsellItemAccepted(suggestion.id, "add_to_cart");
     const nextCartItemIds = Array.from(
       new Set([...sourceItemIdsRef.current, suggestion.id])
     );

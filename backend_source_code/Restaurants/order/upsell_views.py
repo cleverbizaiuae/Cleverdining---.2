@@ -676,6 +676,21 @@ class UpsellEventCreateAPIView(APIView):
         if duplicate_exists:
             return Response({"status": "duplicate_ignored"}, status=status.HTTP_200_OK)
 
+        # Checkout can reconcile an accepted upsell before the original
+        # fire-and-forget client request arrives. Do not count that delayed
+        # request a second time.
+        if payload["action"] == "accepted" and session and upsell_item:
+            reconciled_window_start = event_time - timezone.timedelta(hours=2)
+            recent_acceptances = UpsellEvent.objects.filter(
+                restaurant=restaurant,
+                guest_session=session,
+                action="accepted",
+                upsell_item=upsell_item,
+                created_at__gte=reconciled_window_start,
+            ).order_by("-created_at")
+            if any((event.metadata or {}).get("order_id") for event in recent_acceptances[:10]):
+                return Response({"status": "duplicate_ignored"}, status=status.HTTP_200_OK)
+
         UpsellEvent.objects.create(
             restaurant=restaurant,
             guest_session=session,
@@ -700,6 +715,125 @@ class UpsellEventCreateAPIView(APIView):
         )
         _broadcast_upsell_event_updated(restaurant.id)
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
+
+
+def reconcile_order_upsell_acceptances(*, order, acceptances, session_id=""):
+    """Attach accepted upsells to an order using authoritative order prices.
+
+    Existing client events are claimed instead of duplicated. If the detached
+    client event never arrived, a replacement event is created from the saved
+    order line so analytics still reconciles exactly once.
+    """
+    if not acceptances:
+        return 0
+
+    _ensure_upsell_schema()
+    order_lines = {
+        line.item_id: line
+        for line in order.order_items.select_related("item__category").all()
+    }
+    if not order_lines:
+        return 0
+
+    event_time = timezone.now()
+    local_event_time = event_time.astimezone(_restaurant_timezone(order.restaurant))
+    table_number = (
+        getattr(order.device, "table_name", "")
+        or getattr(order.device, "table_number", "")
+        or ""
+    )
+    normalized_session_id = (session_id or f"order-{order.id}")[:120]
+    cart_item_count = sum(line.quantity for line in order_lines.values())
+    reconciled = 0
+    seen_item_ids = set()
+
+    for acceptance in acceptances:
+        try:
+            item_id = int(acceptance.get("item"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        trigger_point = str(acceptance.get("trigger_point") or "cart")
+        if trigger_point not in {"add_to_cart", "cart", "before_payment"}:
+            continue
+        if item_id in seen_item_ids:
+            continue
+        seen_item_ids.add(item_id)
+
+        order_line = order_lines.get(item_id)
+        if order_line is None or order_line.item.restaurant_id != order.restaurant_id:
+            continue
+
+        candidates = list(
+            UpsellEvent.objects.filter(
+                restaurant=order.restaurant,
+                guest_session=order.guest_session,
+                action="accepted",
+                upsell_item_id=item_id,
+                created_at__gte=event_time - timezone.timedelta(hours=2),
+            ).order_by("-created_at")[:20]
+        )
+        already_reconciled = next(
+            (
+                event
+                for event in candidates
+                if str((event.metadata or {}).get("order_id")) == str(order.id)
+            ),
+            None,
+        )
+        if already_reconciled:
+            continue
+
+        event = next(
+            (
+                candidate
+                for candidate in candidates
+                if not (candidate.metadata or {}).get("order_id")
+                and candidate.trigger_point == trigger_point
+            ),
+            None,
+        )
+        metadata = dict((event.metadata if event else {}) or {})
+        metadata.update({"order_id": order.id, "reconciled_from_order": True})
+
+        if event:
+            event.upsell_price = order_line.price
+            event.cart_value_at_time = order.total_price
+            event.cart_item_count = cart_item_count
+            event.metadata = metadata
+            event.save(
+                update_fields=[
+                    "upsell_price",
+                    "cart_value_at_time",
+                    "cart_item_count",
+                    "metadata",
+                ]
+            )
+        else:
+            item = order_line.item
+            UpsellEvent.objects.create(
+                restaurant=order.restaurant,
+                guest_session=order.guest_session,
+                device=order.device,
+                session_id=normalized_session_id,
+                table_number=table_number,
+                trigger_point=trigger_point,
+                action="accepted",
+                upsell_item=item,
+                upsell_item_name=item.item_name,
+                upsell_category=getattr(item.category, "Category_name", "") or "",
+                upsell_price=order_line.price,
+                cart_value_at_time=order.total_price,
+                cart_item_count=cart_item_count,
+                hour_of_day=local_event_time.hour,
+                day_of_week=local_event_time.weekday(),
+                metadata=metadata,
+                created_at=event_time,
+            )
+        reconciled += 1
+
+    if reconciled:
+        _broadcast_upsell_event_updated(order.restaurant_id)
+    return reconciled
 
 
 class UpsellAssociationStatsAPIView(APIView):

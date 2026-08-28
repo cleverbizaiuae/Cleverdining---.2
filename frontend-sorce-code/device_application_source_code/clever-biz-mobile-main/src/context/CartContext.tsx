@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../lib/axios";
-import { trackUpsellCategoryRemoved } from "../lib/upsellSession";
+import {
+  clearPendingUpsellAcceptances,
+  trackUpsellCategoryRemoved,
+} from "../lib/upsellSession";
 import { getTableIdentity, TABLE_NAME, TABLE_NUMBER } from "../lib/tableIdentity";
 import { getDiscountPercent, toSafeNumber } from "../utils/pricing";
 import type { PreparationTimeSource } from "../utils/preparationTime";
@@ -270,6 +273,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const removeFromCart = React.useCallback(async (id: number) => {
+    clearPendingUpsellAcceptances([id]);
     setCart((prev) => {
       const target = prev.find((i) => i.id === id);
       if (target?.category) {

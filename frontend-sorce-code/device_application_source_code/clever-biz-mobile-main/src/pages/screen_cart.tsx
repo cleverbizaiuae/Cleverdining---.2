@@ -23,10 +23,13 @@ import {
   canShowUpsellSession,
   canShowUpsellTouchpoint,
   getUpsellExcludedItemIds,
+  getPendingUpsellAcceptances,
+  getUpsellSessionId,
   getRemainingUpsellAllowance,
   getUpsellSessionCap,
   getUpsellTriggerLimit,
   incrementUpsellTouchpointCount,
+  clearPendingUpsellAcceptances,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
   markUpsellItemsShown,
@@ -374,7 +377,7 @@ const ScreenCart = () => {
       return;
     }
     if (item.id) {
-      markUpsellItemAccepted(item.id);
+      markUpsellItemAccepted(item.id, "cart");
     }
     setUpsellSuggestions((prev) => prev.filter((candidate) => candidate.id !== item.id));
     toast.success(`${item.item_name} added to cart`);
@@ -466,6 +469,8 @@ const ScreenCart = () => {
 
       const paymentTag = `[PAYMENT:${paymentMethod}]`;
       const mergedNotes = [specialRequest.trim(), timingNotes, paymentTag].filter(Boolean).join(" ");
+      const pendingUpsellAcceptances = getPendingUpsellAcceptances()
+        .filter((acceptance) => validCartItemIds.includes(acceptance.item));
 
       const orderData: Record<string, unknown> = {
         restaurant,
@@ -473,6 +478,8 @@ const ScreenCart = () => {
         order_items: orderItems,
         guest_session_token: guestSessionToken,
         payment_method: paymentMethod,
+        upsell_session_id: getUpsellSessionId(),
+        upsell_acceptances: pendingUpsellAcceptances,
       };
 
       if (mergedNotes) {
@@ -523,6 +530,9 @@ const ScreenCart = () => {
       }
 
       const placedAt = new Date().toISOString();
+      clearPendingUpsellAcceptances(
+        pendingUpsellAcceptances.map((acceptance) => acceptance.item),
+      );
       const backendItemsSnapshot = Array.isArray(response?.data?.order_items)
         ? response.data.order_items
         : Array.isArray(response?.data?.items)

@@ -34,16 +34,33 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         fields = ['item', 'quantity']
 
 
+class UpsellAcceptanceCreateSerializer(serializers.Serializer):
+    item = serializers.IntegerField(min_value=1)
+    trigger_point = serializers.ChoiceField(
+        choices=("add_to_cart", "cart", "before_payment")
+    )
+
+
 
 
 class OrderCreateSerializerFixed(serializers.ModelSerializer):
     order_items = OrderItemCreateSerializer(many=True)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     special_request = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    upsell_session_id = serializers.CharField(required=False, allow_blank=True, max_length=120, write_only=True)
+    upsell_acceptances = UpsellAcceptanceCreateSerializer(many=True, required=False, write_only=True)
 
     class Meta:
         model = Order
-        fields = ['device', 'restaurant', 'order_items', 'notes', 'special_request']
+        fields = [
+            'device',
+            'restaurant',
+            'order_items',
+            'notes',
+            'special_request',
+            'upsell_session_id',
+            'upsell_acceptances',
+        ]
         extra_kwargs = {
             'device': {'read_only': True},
             'restaurant': {'read_only': True}
@@ -52,6 +69,8 @@ class OrderCreateSerializerFixed(serializers.ModelSerializer):
     def create(self, validated_data):
         order_items_data = validated_data.pop('order_items')
         special_request = validated_data.pop('special_request', None)
+        upsell_session_id = validated_data.pop('upsell_session_id', '')
+        upsell_acceptances = validated_data.pop('upsell_acceptances', [])
         notes = validated_data.get('notes')
         if (notes is None or notes == '') and special_request:
             validated_data['notes'] = special_request
@@ -86,6 +105,11 @@ class OrderCreateSerializerFixed(serializers.ModelSerializer):
             
         order.total_price = total
         order.save()
+        # These are request-only attribution fields, not Order model columns.
+        # The API view reconciles them after the authoritative order lines and
+        # prices have been persisted.
+        order._upsell_session_id = upsell_session_id
+        order._upsell_acceptances = upsell_acceptances
         return order
 
     def update(self, instance, validated_data):

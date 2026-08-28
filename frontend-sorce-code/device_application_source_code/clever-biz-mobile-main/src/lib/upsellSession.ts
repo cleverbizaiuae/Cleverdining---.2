@@ -2,6 +2,7 @@ const SESSION_KEY = "upsell_session_id";
 const SIGNALS_KEY = "upsell_signals";
 const DISMISSED_ITEMS_KEY = "upsell_dismissed_items";
 const ACCEPTED_ITEMS_KEY = "upsell_accepted_items";
+const PENDING_ACCEPTANCES_KEY = "upsell_pending_acceptances";
 const SHOWN_ITEMS_KEY = "upsell_shown_items";
 const AFTER_ADD_COUNT_KEY = "cb_suggest_after_add";
 const CART_COUNT_KEY = "cb_suggest_cart";
@@ -12,6 +13,10 @@ const LAST_ADD_TO_CART_CONTEXT_KEY = "cb_suggest_last_add_context";
 
 export type UpsellTouchpoint = "add_to_cart" | "cart" | "before_payment";
 export type UpsellAggressiveness = "subtle" | "moderate" | "aggressive";
+export type PendingUpsellAcceptance = {
+  item: number;
+  trigger_point: UpsellTouchpoint;
+};
 
 const TOUCHPOINT_COUNTER_KEYS: Record<UpsellTouchpoint, string> = {
   add_to_cart: AFTER_ADD_COUNT_KEY,
@@ -63,6 +68,7 @@ export function resetUpsellSession(): void {
   localStorage.removeItem(SIGNALS_KEY);
   localStorage.removeItem(DISMISSED_ITEMS_KEY);
   localStorage.removeItem(ACCEPTED_ITEMS_KEY);
+  localStorage.removeItem(PENDING_ACCEPTANCES_KEY);
   localStorage.removeItem(SHOWN_ITEMS_KEY);
   try {
     Object.values(TOUCHPOINT_COUNTER_KEYS).forEach((key) => {
@@ -207,10 +213,42 @@ export function isUpsellItemDismissed(itemId: number): boolean {
   return current.includes(itemId);
 }
 
-export function markUpsellItemAccepted(itemId: number): void {
+export function markUpsellItemAccepted(
+  itemId: number,
+  triggerPoint: UpsellTouchpoint = "cart",
+): void {
   const current = readJson<number[]>(ACCEPTED_ITEMS_KEY, []);
-  if (current.includes(itemId)) return;
-  writeJson(ACCEPTED_ITEMS_KEY, [...current, itemId]);
+  if (!current.includes(itemId)) {
+    writeJson(ACCEPTED_ITEMS_KEY, [...current, itemId]);
+  }
+
+  const pending = readJson<PendingUpsellAcceptance[]>(PENDING_ACCEPTANCES_KEY, []);
+  if (!pending.some((acceptance) => acceptance.item === itemId)) {
+    writeJson(PENDING_ACCEPTANCES_KEY, [
+      ...pending,
+      { item: itemId, trigger_point: triggerPoint },
+    ]);
+  }
+}
+
+export function getPendingUpsellAcceptances(): PendingUpsellAcceptance[] {
+  return readJson<PendingUpsellAcceptance[]>(PENDING_ACCEPTANCES_KEY, [])
+    .filter((acceptance) => (
+      Number.isInteger(acceptance?.item)
+      && acceptance.item > 0
+      && ["add_to_cart", "cart", "before_payment"].includes(acceptance.trigger_point)
+    ));
+}
+
+export function clearPendingUpsellAcceptances(itemIds: number[]): void {
+  const clearedIds = new Set(itemIds);
+  const remaining = getPendingUpsellAcceptances()
+    .filter((acceptance) => !clearedIds.has(acceptance.item));
+  if (remaining.length) {
+    writeJson(PENDING_ACCEPTANCES_KEY, remaining);
+  } else {
+    localStorage.removeItem(PENDING_ACCEPTANCES_KEY);
+  }
 }
 
 export function isUpsellItemAccepted(itemId: number): boolean {

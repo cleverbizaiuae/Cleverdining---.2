@@ -50,10 +50,12 @@ import {
   canShowUpsellSession,
   canShowUpsellTouchpoint,
   getRemainingUpsellAllowance,
+  getUpsellSessionId,
   getUpsellExcludedItemIds,
   getUpsellSessionCap,
   getUpsellTriggerLimit,
   incrementUpsellTouchpointCount,
+  clearPendingUpsellAcceptances,
   markUpsellItemAccepted,
   markUpsellItemDismissed,
   markUpsellItemsShown,
@@ -717,11 +719,16 @@ const ScreenOrders = () => {
           order_items: [{ item: suggestion.id, quantity: 1 }],
           guest_session_token: guestToken,
           payment_method: "card",
+          upsell_session_id: getUpsellSessionId(),
+          upsell_acceptances: [
+            { item: suggestion.id, trigger_point: "before_payment" },
+          ],
         },
         { headers: { "X-Guest-Session-Token": guestToken } },
       );
 
-      markUpsellItemAccepted(suggestion.id);
+      markUpsellItemAccepted(suggestion.id, "before_payment");
+      clearPendingUpsellAcceptances([suggestion.id]);
       setBeforePaymentUpsell(null);
       beforePaymentShownSignatureRef.current = "";
       invalidateApiCache("/api/customer/uncomplete/orders/");
