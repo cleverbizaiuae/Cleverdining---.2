@@ -47,6 +47,7 @@ import { shouldShowReviewOrderModal } from "./cart-review";
 import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 import { useOnlinePaymentAvailability } from "../hooks/useOnlinePaymentAvailability";
 import { getPreparationTimeLabel } from "../utils/preparationTime";
+import { shouldStartCheckoutAfterOrder } from "./cart-payment";
 
 const DRINK_CATS = ["c2"];
 const COFFEE_CATS = ["c6"];
@@ -538,6 +539,10 @@ const ScreenCart = () => {
       const orderTotal = Number(
         toSafeNumber(response?.data?.total_price ?? response?.data?.total ?? totalCost).toFixed(2)
       );
+      const shouldStartCardCheckout = shouldStartCheckoutAfterOrder(
+        response?.data?.status,
+        paymentMethod,
+      );
 
       if (!payBeforeOrder) {
         prefetchUpsellSuggestions({
@@ -553,7 +558,7 @@ const ScreenCart = () => {
       }
 
       toast.success(
-        payBeforeOrder && paymentMethod === "card"
+        shouldStartCardCheckout
           ? "Order saved. Redirecting to secure payment..."
           : "Order placed successfully!"
       );
@@ -625,7 +630,7 @@ const ScreenCart = () => {
         // Robust Persistence
         setLocalStorageSynced("pending_order_id", String(response.data.id));
 
-        if (payBeforeOrder && paymentMethod === "card") {
+        if (shouldStartCardCheckout) {
           try {
             const checkoutResponse = await axiosInstance.post(
               `/api/customer/create-checkout-session/${response.data.id}/?guest_token=${guestSessionToken}`,
