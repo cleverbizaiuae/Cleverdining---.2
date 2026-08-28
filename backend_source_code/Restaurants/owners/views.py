@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.conf import settings
+from django.core.cache import cache
 from django.utils.dateparse import parse_time
+import hashlib
 import requests
 
 from restaurant.models import Restaurant
@@ -19,6 +21,11 @@ def _build_menu_image_prompt(prompt):
         "background. Do not include unrelated menu items, branded packaging, cans, "
         "text, logos, watermarks, hands, or people."
     )
+
+
+def _menu_image_cache_key(prompt):
+    prompt_hash = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+    return f"owners:generated-menu-image:{prompt_hash}"
 
 
 class RestaurantSettingsView(APIView):
@@ -175,19 +182,21 @@ class GenerateImageView(APIView):
         if not prompt:
             return Response({"error": "Prompt is required"}, status=400)
 
-        encoded_prompt = quote(_build_menu_image_prompt(prompt), safe='')
+        provider_prompt = _build_menu_image_prompt(prompt)
+        encoded_prompt = quote(provider_prompt, safe='')
+        cache_key = _menu_image_cache_key(provider_prompt)
         for _attempt in range(3):
             seed = secrets.randbelow(2_147_483_647)
             image_url = (
                 f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-                f"?width=1024&height=1024&nologo=true&seed={seed}"
+                f"?width=1024&height=1024&nologo=true&model=flux&seed={seed}"
             )
 
             try:
                 response = requests.get(
                     image_url,
                     headers={"Accept": "image/*", "User-Agent": "CleverDining/1.0"},
-                    timeout=(5, 20),
+                    timeout=(3, 12),
                 )
                 response.raise_for_status()
             except requests.exceptions.RequestException:
@@ -198,7 +207,19 @@ class GenerateImageView(APIView):
                 continue
 
             b64_data = base64.b64encode(response.content).decode('utf-8')
-            return Response({"image": f"data:{content_type};base64,{b64_data}"})
+            image_data = f"data:{content_type};base64,{b64_data}"
+            try:
+                cache.set(cache_key, image_data, timeout=15 * 60)
+            except Exception:
+                pass
+            return Response({"image": image_data})
+
+        try:
+            cached_image = cache.get(cache_key)
+        except Exception:
+            cached_image = None
+        if isinstance(cached_image, str) and cached_image.startswith('data:image/'):
+            return Response({"image": cached_image, "cached": True})
 
         return Response(
             {"error": "Image generation is temporarily unavailable. Please try again."},

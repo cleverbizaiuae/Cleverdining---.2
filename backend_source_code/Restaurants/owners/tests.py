@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 from urllib.parse import unquote
 
 import requests
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -12,6 +13,7 @@ from restaurant.models import Restaurant
 
 class RestaurantReservationSettingsTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.owner = User.objects.create_user(
             username='settings-owner',
             email='settings@example.com',
@@ -95,7 +97,35 @@ class GenerateImageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['image'].startswith('data:image/jpeg;base64,'))
         self.assertEqual(get_image.call_count, 2)
-        self.assertEqual(get_image.call_args.kwargs['timeout'], (5, 20))
+        self.assertEqual(get_image.call_args.kwargs['timeout'], (3, 12))
+
+    @patch('owners.views.requests.get')
+    def test_uses_the_last_successful_image_during_a_provider_outage(self, get_image):
+        image_response = Mock()
+        image_response.headers = {'Content-Type': 'image/jpeg'}
+        image_response.content = b'\xff\xd8\xff' + (b'x' * 2048)
+        image_response.raise_for_status.return_value = None
+        get_image.return_value = image_response
+
+        first_response = self.client.post(
+            '/owners/generate-image/',
+            {'prompt': 'Iced coffee cache fallback'},
+            format='json',
+        )
+        self.assertEqual(first_response.status_code, 200)
+
+        get_image.reset_mock()
+        get_image.side_effect = requests.exceptions.ConnectionError()
+        outage_response = self.client.post(
+            '/owners/generate-image/',
+            {'prompt': 'Iced coffee cache fallback'},
+            format='json',
+        )
+
+        self.assertEqual(outage_response.status_code, 200)
+        self.assertTrue(outage_response.data['cached'])
+        self.assertEqual(outage_response.data['image'], first_response.data['image'])
+        self.assertEqual(get_image.call_count, 3)
 
     @patch('owners.views.requests.get')
     def test_generation_prompt_requires_the_named_menu_item(self, get_image):
@@ -125,7 +155,7 @@ class GenerateImageTests(TestCase):
 
         response = self.client.post(
             '/owners/generate-image/',
-            {'prompt': 'Iced coffee'},
+            {'prompt': 'Unavailable test dish 83c6f9'},
             format='json',
         )
 

@@ -43,15 +43,29 @@ const Modal = ({ isOpen, onClose, title, children, clipRoundedCorners = false }:
       aria-modal="true"
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 py-8 backdrop-blur-sm animate-fadeIn overflow-y-auto"
     >
-      <div className={`bg-white rounded-2xl w-full max-w-md p-7 shadow-2xl animate-scaleIn my-auto max-h-[90vh] ${clipRoundedCorners ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
-        <div className={`flex justify-between items-center mb-6 sticky top-0 bg-white pb-2 -mt-2 pt-2 border-b border-transparent ${clipRoundedCorners ? "shrink-0" : ""}`}>
-          <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 p-1 transition-colors">
-            <X size={20} />
-          </button>
+      {clipRoundedCorners ? (
+        <div className="relative isolate my-auto flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl [clip-path:inset(0_round_1rem)] animate-scaleIn">
+          <div className="mb-6 flex shrink-0 items-center justify-between border-b border-transparent bg-white px-7 pb-2 pt-7">
+            <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+            <button onClick={onClose} className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pb-7">
+            {children}
+          </div>
         </div>
-        {clipRoundedCorners ? <div className="min-h-0 overflow-y-auto">{children}</div> : children}
-      </div>
+      ) : (
+        <div className="my-auto max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-7 shadow-2xl animate-scaleIn">
+          <div className="sticky top-0 -mt-2 mb-6 flex items-center justify-between border-b border-transparent bg-white pb-2 pt-2">
+            <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+            <button onClick={onClose} className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600">
+              <X size={20} />
+            </button>
+          </div>
+          {children}
+        </div>
+      )}
     </div>
   )
 };
@@ -277,20 +291,12 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
     const normalizedPrompt = prompt.trim();
     if (!normalizedPrompt) return toast.error("Please enter a prompt");
 
-    setGeneratedPreview(previousPreview => {
-      if (previousPreview) URL.revokeObjectURL(previousPreview);
-      return null;
-    });
-    if (currentImage instanceof File && /^(ai-generated-|generated-image)/.test(currentImage.name)) {
-      onImageSelected(null);
-    }
-
     setGenerating(true);
     try {
       const response = await axiosInstance.post(
         "/owners/generate-image/",
         { prompt: normalizedPrompt },
-        { timeout: 70000 },
+        { timeout: 90000 },
       );
       const imageData = String(response.data?.image || "");
       const match = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
@@ -304,7 +310,10 @@ const ImageUploaderWithAI = ({ label, currentImage, existingImageUrl, onImageSel
       const imageBlob = new Blob([bytes], { type: match[1] });
 
       const objectUrl = URL.createObjectURL(imageBlob);
-      setGeneratedPreview(objectUrl);
+      setGeneratedPreview(previousPreview => {
+        if (previousPreview) URL.revokeObjectURL(previousPreview);
+        return objectUrl;
+      });
       const extension = match[1].includes("png") ? "png" : match[1].includes("webp") ? "webp" : "jpg";
       const fileName = normalizedPrompt.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "menu_item";
       const file = new File([imageBlob], `ai-generated-${fileName}.${extension}`, { type: imageBlob.type || "image/jpeg" });
