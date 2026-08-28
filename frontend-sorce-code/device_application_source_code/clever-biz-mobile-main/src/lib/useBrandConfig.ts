@@ -1,6 +1,10 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cachedGet } from "./requestCache";
-import { getBrandFontFamily, shouldApplyBrandVisualStyle } from "./brandVisualStyle";
+import {
+  DEFAULT_BRAND_VISUAL_STYLE,
+  getBrandFontFamily,
+  shouldApplyBrandVisualStyle,
+} from "./brandVisualStyle";
 export { readableTextHsl } from "./brandVisualStyle";
 
 export type ThemePreset = "classic_clean" | "luxury_dark" | "warm_casual";
@@ -43,23 +47,9 @@ const BRAND_REMOTE_REFRESH_MS = 4_000;
 const preloadedBrandImages = new Set<string>();
 
 export const DEFAULT_BRAND: BrandConfig = {
-  restaurantName: "My Restaurant",
-  logoUrl: null,
-  coverImageUrl: null,
-  coverPosition: "50% 50%",
-  primaryColor: "#0055FE",
-  secondaryColor: null,
-  accentColor: null,
-  themePreset: "classic_clean",
-  fontPreset: "modern",
-  tagline: null,
+  ...DEFAULT_BRAND_VISUAL_STYLE,
   brandingEnabled: false,
   payBeforeOrder: false,
-  instagramUrl: null,
-  facebookUrl: null,
-  tiktokUrl: null,
-  twitterUrl: null,
-  websiteUrl: null,
   wifiName: null,
   wifiPassword: null,
   googleReviewUrl: null,

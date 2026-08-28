@@ -5,7 +5,7 @@ import { PrivateRouteGuard } from "./components/route-guard";
 import axiosInstance from "./lib/axios";
 import ScreenSplash from "./pages/screen_splash";
 import { ActiveBrandProvider, getBrandSplashSessionKey, hexToHsl, readableTextHsl, shouldRenderBrandExperience, useBrandConfig } from "./lib/useBrandConfig";
-import { getBrandFontFamily } from "./lib/brandVisualStyle";
+import { getBrandFontFamily, resolveBrandVisualStyle } from "./lib/brandVisualStyle";
 import { loadDashboardRuntime, loadHomeScreen } from "./lib/dashboardPreload";
 
 const CHUNK_RELOAD_KEY = "cb_chunk_reload_attempted";
@@ -109,7 +109,8 @@ function BrandWrapper({
   children: ReactNode;
   restaurantId: string | number | null;
 }) {
-  const brand = useBrandConfig(restaurantId);
+  const savedBrand = useBrandConfig(restaurantId);
+  const brand = useMemo(() => resolveBrandVisualStyle(savedBrand), [savedBrand]);
   const hasBranding = shouldRenderBrandExperience(brand);
   const secondaryColor = brand.secondaryColor || "#F1F5F9";
   const accentColor = brand.accentColor || brand.primaryColor || "#0055FE";

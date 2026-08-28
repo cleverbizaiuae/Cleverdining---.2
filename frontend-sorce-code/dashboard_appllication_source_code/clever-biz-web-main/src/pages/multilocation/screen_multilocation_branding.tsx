@@ -643,7 +643,7 @@ type PhonePreviewProps = {
 function PhonePreview({ brand, previewEnabled }: PhonePreviewProps) {
   const [screen, setScreen] = useState<"splash" | "menu">("splash");
 
-  const previewBrand = previewEnabled ? brand : DEFAULT_BRAND;
+  const previewBrand = previewEnabled && brand.brandingEnabled ? brand : DEFAULT_BRAND;
   const hasSocial = Boolean(
     previewBrand.instagramUrl ||
       previewBrand.facebookUrl ||

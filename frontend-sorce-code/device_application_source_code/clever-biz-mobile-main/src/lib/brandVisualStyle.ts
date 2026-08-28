@@ -1,5 +1,32 @@
 export type BrandVisualSurface = "splash" | "menu" | "success";
 
+export const DEFAULT_BRAND_VISUAL_STYLE = {
+  restaurantName: "My Restaurant",
+  logoUrl: null,
+  coverImageUrl: null,
+  coverPosition: "50% 50%",
+  primaryColor: "#0054FF",
+  secondaryColor: "#FFFFFF",
+  accentColor: "#FFFFFF",
+  themePreset: "classic_clean",
+  fontPreset: "modern",
+  tagline: null,
+  instagramUrl: null,
+  facebookUrl: null,
+  tiktokUrl: null,
+  twitterUrl: null,
+  websiteUrl: null,
+} as const;
+
+export function resolveBrandVisualStyle<T extends { brandingEnabled: boolean }>(brand: T): T {
+  if (brand.brandingEnabled) return brand;
+
+  return {
+    ...brand,
+    ...DEFAULT_BRAND_VISUAL_STYLE,
+  } as T;
+}
+
 const FONT_FAMILIES = {
   modern: "'Inter', system-ui, sans-serif",
   elegant: "'Playfair Display', Georgia, serif",
@@ -14,9 +41,9 @@ export function getBrandFontFamily(fontPreset: string): string {
 
 export function shouldApplyBrandVisualStyle(
   brandingEnabled: boolean,
-  hasMeaningfulBranding: boolean,
+  _hasMeaningfulBranding: boolean,
 ): boolean {
-  return brandingEnabled || hasMeaningfulBranding;
+  return brandingEnabled;
 }
 
 export function readableTextHsl(hex: string): string {
