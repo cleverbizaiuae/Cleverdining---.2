@@ -19,6 +19,11 @@ import { cachedGet } from "@/lib/requestCache";
 import axiosInstance from "@/lib/axios";
 import { useNavigate } from "react-router-dom";
 import { clearGuestSessionStorage } from "@/lib/guestSessionStorage";
+import {
+  classifyPaymentVerificationError,
+  PAYMENT_CONFIRMATION_PENDING_MESSAGE,
+  PAYMENT_VERIFICATION_RETRY_DELAYS_MS,
+} from "./payment-verification";
 
 const firstNonEmpty = (...values: unknown[]) => {
   for (const value of values) {
@@ -170,9 +175,14 @@ const SuccessPage = () => {
 
     const verifySettlement = async () => {
       setVerificationError(null);
-      let lastError = "Payment confirmation is taking longer than expected.";
+      let lastError = PAYMENT_CONFIRMATION_PENDING_MESSAGE;
 
-      for (let attempt = 0; attempt < 4 && !cancelled; attempt += 1) {
+      for (const retryDelayMs of PAYMENT_VERIFICATION_RETRY_DELAYS_MS) {
+        if (retryDelayMs > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+        }
+        if (cancelled) return;
+
         try {
           const verifyPayload = paymentParams.checkoutSessionId
             ? { "cko-session-id": paymentParams.checkoutSessionId }
@@ -195,13 +205,13 @@ const SuccessPage = () => {
             lastError = "The payment was not completed. Please return to your orders and try again.";
             break;
           }
+
+          lastError = PAYMENT_CONFIRMATION_PENDING_MESSAGE;
         } catch (error) {
           console.error("Failed to verify payment settlement:", error);
-          lastError = "We could not confirm the payment with the provider yet.";
-        }
-
-        if (attempt < 3) {
-          await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+          const failure = classifyPaymentVerificationError(error);
+          lastError = failure.message;
+          if (!failure.retryable) break;
         }
       }
 
