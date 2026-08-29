@@ -61,12 +61,12 @@ def _order_country_alpha2(order):
     return "GB" if settings_map["country_code"] == "+44" else "AE"
 
 
-def _append_query(url, **params):
+def _append_query(url, _safe="", **params):
     parsed = urlparse(url or "")
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     for key, value in params.items():
         query[key] = value
-    return urlunparse(parsed._replace(query=urlencode(query)))
+    return urlunparse(parsed._replace(query=urlencode(query, safe=_safe)))
 
 class StripeAdapter(PaymentAdapter):
     def _credentials(self):
@@ -121,7 +121,11 @@ class StripeAdapter(PaymentAdapter):
                     'quantity': 1,
                 }],
                 mode='payment',
-                success_url=_append_query(success_url, session_id="{CHECKOUT_SESSION_ID}"),
+                success_url=_append_query(
+                    success_url,
+                    _safe="{}",
+                    session_id="{CHECKOUT_SESSION_ID}",
+                ),
                 cancel_url=cancel_url,
                 metadata=final_metadata
             )

@@ -14,7 +14,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 from accounts.models import User
 from payment.models import Payment, PaymentGateway, PaymentProviderEvent
 from payment.models import StripeDetails
-from payment.adapters import CashAdapter
+from payment.adapters import CashAdapter, StripeAdapter
 from payment.provider_registry import PAYMENT_PROVIDER_CODES, PROVIDER_CLASSES
 from payment.services import (
     PaymentService,
@@ -41,6 +41,33 @@ class GuestPaymentVerificationAccessTests(TestCase):
         query = str(_payment_settlement_queryset().query)
 
         self.assertNotIn('payment_orderbill', query.lower())
+
+
+class StripeCheckoutReturnUrlTests(TestCase):
+    @patch("payment.adapters.stripe.checkout.Session.create")
+    def test_checkout_session_placeholder_remains_literal_for_stripe(self, session_create):
+        session_create.return_value = Mock(
+            id="cs_test_return_url",
+            url="https://checkout.stripe.test/session",
+        )
+        gateway = Mock()
+        gateway.id = 91
+        gateway.get_decrypted_secret.return_value = "sk_test_dummy"
+        order = Mock()
+        order.id = 390
+        order.total_price = 28
+        order.restaurant = Mock(id=23, currency="AED", region="UAE")
+
+        StripeAdapter(gateway).create_payment_session(
+            order,
+            "https://customer.example/thankyou?order_id=390",
+            "https://customer.example/orders?payment=cancelled",
+        )
+
+        success_url = session_create.call_args.kwargs["success_url"]
+        self.assertIn("session_id={CHECKOUT_SESSION_ID}", success_url)
+        self.assertNotIn("%7BCHECKOUT_SESSION_ID%7D", success_url)
+        self.assertIn("order_id=390", success_url)
 
 
 class PayTabsReturnFlowTests(TestCase):
