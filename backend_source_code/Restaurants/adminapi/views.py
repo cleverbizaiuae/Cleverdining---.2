@@ -210,7 +210,7 @@ class IntegrationAPIView(APIView):
         except DatabaseError:
             # If migrations have not run yet, keep the endpoint behaviour predictable.
             pass
-        integrations = Integration.objects.all().order_by('-created_at')
+        integrations = Integration.objects.filter(is_deleted=False).order_by('-created_at')
         return Response(IntegrationSerializer(integrations, many=True).data, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -235,7 +235,7 @@ class IntegrationDetailAPIView(APIView):
     def get_object(self, pk):
         ensure_adminapi_schema()
         try:
-            return Integration.objects.get(pk=pk)
+            return Integration.objects.get(pk=pk, is_deleted=False)
         except Integration.DoesNotExist:
             return None
 
@@ -261,5 +261,9 @@ class IntegrationDetailAPIView(APIView):
         integration = self.get_object(pk)
         if not integration:
             return Response({'error': 'Integration not found'}, status=status.HTTP_404_NOT_FOUND)
-        integration.delete()
+        # Keep a tombstone for auto-detected integrations. Otherwise the next
+        # list refresh detects the provider again, recreates it, and moves the
+        # newly-created card to the top of the page.
+        integration.is_deleted = True
+        integration.save(update_fields=['is_deleted', 'updated_at'])
         return Response(status=status.HTTP_204_NO_CONTENT)

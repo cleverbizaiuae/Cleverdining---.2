@@ -48,6 +48,7 @@ class Integration(models.Model):
     api_health = models.CharField(max_length=20, choices=ApiHealth.choices, default=ApiHealth.UNKNOWN)
     environment = models.CharField(max_length=80, blank=True, default="")
     documentation_url = models.TextField(blank=True, default="")
+    is_deleted = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

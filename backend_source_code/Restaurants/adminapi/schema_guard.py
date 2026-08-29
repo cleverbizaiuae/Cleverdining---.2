@@ -53,6 +53,7 @@ def ensure_adminapi_schema(force: bool = False) -> bool:
             "api_health",
             "environment",
             "documentation_url",
+            "is_deleted",
         ]
         for field_name in required_field_names:
             field = Integration._meta.get_field(field_name)
