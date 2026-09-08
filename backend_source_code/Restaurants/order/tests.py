@@ -650,6 +650,51 @@ class PaymentCompletionNavigationTests(TestCase):
         self.assertEqual(self.order.payment_status, "paid")
         self.assertEqual(self.order.status, "preparing")
 
+    def test_staff_can_mark_post_meal_order_collected_before_payment(self):
+        staff = User.objects.create_user(
+            email="collection-staff@example.com",
+            username="Collection Staff",
+            password="test-password",
+            role="staff",
+        )
+        ChefStaff.objects.create(
+            restaurant=self.restaurant,
+            user=staff,
+            action="accepted",
+        )
+        self.order.status = "served"
+        self.order.payment_status = "unpaid"
+        self.order.save(update_fields=["status", "payment_status", "updated_time"])
+        self.client.force_authenticate(staff)
+
+        response = self.client.patch(
+            f"/api/staff/orders/status/{self.order.id}/",
+            {"status": "delivered"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "delivered")
+        self.assertEqual(self.order.payment_status, "unpaid")
+
+    def test_unpaid_order_still_cannot_be_completed(self):
+        self.order.status = "delivered"
+        self.order.payment_status = "unpaid"
+        self.order.save(update_fields=["status", "payment_status", "updated_time"])
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.patch(
+            f"/owners/orders/status/{self.order.id}/",
+            {"status": "completed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "Cannot complete order before the bill is fully paid.")
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "delivered")
+
     def test_paid_delivered_order_cannot_be_cancelled(self):
         self.order.status = "delivered"
         self.order.payment_status = "paid"

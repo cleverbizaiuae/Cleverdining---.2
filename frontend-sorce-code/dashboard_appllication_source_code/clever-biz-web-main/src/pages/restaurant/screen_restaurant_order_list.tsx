@@ -635,9 +635,7 @@ const ScreenRestaurantOrderList = () => {
                     <option value="pending" className="text-yellow-600">Pending</option>
                     <option value="preparing" className="text-orange-600">Preparing</option>
                     <option value="served" className="text-green-600">Ready (Served)</option>
-                    <option value="delivered" className="text-green-700" disabled={!getPaymentInfo(order).isFullyPaid}>
-                      Delivered{!getPaymentInfo(order).isFullyPaid ? " (paid only)" : ""}
-                    </option>
+                    <option value="delivered" className="text-green-700">Delivered</option>
                     <option value="cancelled" className="text-red-600">Cancelled</option>
                   </select>
                   <button
@@ -712,9 +710,7 @@ const ScreenRestaurantOrderList = () => {
                         <option value="pending" className="text-yellow-600">Pending</option>
                         <option value="preparing" className="text-orange-600">Preparing</option>
                         <option value="served" className="text-green-600">Ready (Served)</option>
-                        <option value="delivered" className="text-green-700" disabled={!getPaymentInfo(order).isFullyPaid}>
-                          Delivered{!getPaymentInfo(order).isFullyPaid ? " (paid only)" : ""}
-                        </option>
+                        <option value="delivered" className="text-green-700">Delivered</option>
                         <option value="cancelled" className="text-red-600">Cancelled</option>
                       </select>
                     </td>

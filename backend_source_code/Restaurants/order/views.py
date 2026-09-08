@@ -60,7 +60,7 @@ def _order_payment_totals(order):
 
 
 def _block_unpaid_completion(order, new_status):
-    if str(new_status or "").lower() not in {"completed", "paid", "delivered"}:
+    if str(new_status or "").lower() not in {"completed", "paid"}:
         return None
     total, paid, remaining = _order_payment_totals(order)
     if remaining > Decimal("0.001"):
