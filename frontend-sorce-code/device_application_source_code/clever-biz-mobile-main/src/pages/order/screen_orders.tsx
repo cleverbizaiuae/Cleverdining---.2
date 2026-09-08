@@ -329,11 +329,6 @@ const ScreenOrders = () => {
     if (!notice) return;
 
     setPaymentReturnNotice(notice);
-    if (notice.tone === "error") {
-      toast.error(notice.message, { duration: 8000 });
-    } else {
-      toast.loading(notice.message, { duration: 8000 });
-    }
 
     window.history.replaceState(
       window.history.state,
