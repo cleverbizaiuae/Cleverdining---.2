@@ -1377,7 +1377,7 @@ const LayoutDashboard = () => {
               </main>
             </div>
           ) : (
-            <div className="min-h-[100dvh]">
+            <div className={location.pathname === "/dashboard/message" ? "min-h-0" : "min-h-[100dvh]"}>
               <Outlet />
             </div>
           )}
