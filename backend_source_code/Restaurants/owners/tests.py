@@ -97,7 +97,10 @@ class GenerateImageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['image'].startswith('data:image/jpeg;base64,'))
         self.assertEqual(get_image.call_count, 2)
-        self.assertEqual(get_image.call_args.kwargs['timeout'], (3, 12))
+        self.assertEqual(
+            [call.kwargs['timeout'] for call in get_image.call_args_list],
+            [(4, 45), (4, 15)],
+        )
 
     @patch('owners.views.requests.get')
     def test_uses_the_last_successful_image_during_a_provider_outage(self, get_image):
@@ -126,6 +129,21 @@ class GenerateImageTests(TestCase):
         self.assertTrue(outage_response.data['cached'])
         self.assertEqual(outage_response.data['image'], first_response.data['image'])
         self.assertEqual(get_image.call_count, 3)
+
+    @patch('owners.views.requests.get')
+    def test_all_retries_fit_inside_the_frontend_request_timeout(self, get_image):
+        get_image.side_effect = requests.exceptions.Timeout()
+
+        response = self.client.post(
+            '/owners/generate-image/',
+            {'prompt': 'Slow provider test dish 4b5e19'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 503)
+        timeouts = [call.kwargs['timeout'] for call in get_image.call_args_list]
+        self.assertEqual(timeouts, [(4, 45), (4, 15), (4, 8)])
+        self.assertLess(sum(connect + read for connect, read in timeouts), 90)
 
     @patch('owners.views.requests.get')
     def test_generation_prompt_requires_the_named_menu_item(self, get_image):

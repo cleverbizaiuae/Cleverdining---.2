@@ -28,6 +28,12 @@ def _menu_image_cache_key(prompt):
     return f"owners:generated-menu-image:{prompt_hash}"
 
 
+# Image generation regularly takes longer than a normal API read. Give the
+# first request enough time to finish, while keeping all retries inside the
+# dashboard client's 90-second request timeout.
+_MENU_IMAGE_REQUEST_TIMEOUTS = ((4, 45), (4, 15), (4, 8))
+
+
 class RestaurantSettingsView(APIView):
     """
     GET/PATCH restaurant settings including Google Review URL.
@@ -185,7 +191,7 @@ class GenerateImageView(APIView):
         provider_prompt = _build_menu_image_prompt(prompt)
         encoded_prompt = quote(provider_prompt, safe='')
         cache_key = _menu_image_cache_key(provider_prompt)
-        for _attempt in range(3):
+        for request_timeout in _MENU_IMAGE_REQUEST_TIMEOUTS:
             seed = secrets.randbelow(2_147_483_647)
             image_url = (
                 f"https://image.pollinations.ai/prompt/{encoded_prompt}"
@@ -196,7 +202,7 @@ class GenerateImageView(APIView):
                 response = requests.get(
                     image_url,
                     headers={"Accept": "image/*", "User-Agent": "CleverDining/1.0"},
-                    timeout=(3, 12),
+                    timeout=request_timeout,
                 )
                 response.raise_for_status()
             except requests.exceptions.RequestException:
