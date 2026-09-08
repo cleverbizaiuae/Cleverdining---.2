@@ -1014,12 +1014,6 @@ const ScreenOrders = () => {
 
     if (paymentMethod === "cash") {
       setIsCheckoutOpen(false);
-      toast.success(
-        isPartial
-          ? "Cash share requested. The remaining balance stays open until all shares are confirmed."
-          : "Cash payment requested. Waiting for staff confirmation.",
-        { duration: 4000 },
-      );
       await pollOrderStatus();
       return;
     }
