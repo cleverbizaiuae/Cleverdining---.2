@@ -157,7 +157,9 @@ export const mergeStaffTableChats = <T extends StaffTableChat>(
       unread_count: Number(chat.device_unread_count ?? chat.unread_count ?? 0),
       table_message_unread_count: 0,
       table_message_key: undefined,
-      has_alert: Boolean(chat.device_has_alert ?? chat.has_alert),
+      has_alert: String(chat.id) === String(selectedChatId || "")
+        ? false
+        : Boolean(chat.device_has_alert ?? chat.has_alert),
     }) as T,
   );
 
@@ -186,7 +188,9 @@ export const mergeStaffTableChats = <T extends StaffTableChat>(
       device_unread_count: isSelected ? 0 : deviceUnread,
       table_message_unread_count: isSelected ? 0 : tableUnread,
       table_message_key: tableChat.id,
-      has_alert: Boolean(deviceChat.device_has_alert || tableChat.has_alert),
+      has_alert: isSelected
+        ? false
+        : Boolean(deviceChat.device_has_alert || tableChat.has_alert),
     } as T;
   });
 
@@ -197,7 +201,7 @@ export const isUnreadTableMessageStatus = (status: string) =>
   status === "pending" || status === "unread";
 
 export const isActiveAssistanceStatus = (status: string) =>
-  ["pending", "queued", "acknowledged"].includes(status);
+  status === "pending" || status === "queued";
 
 type ReadableTableMessage = {
   id?: string | number;

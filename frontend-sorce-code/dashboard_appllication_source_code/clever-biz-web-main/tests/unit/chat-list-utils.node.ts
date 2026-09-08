@@ -91,10 +91,12 @@ test("the chat-room and restaurant-room copies share one exact fingerprint", () 
   );
 });
 
-test("viewed assistance stays active without remaining unread", () => {
+test("viewed assistance clears both unread and alert state", () => {
   assert.equal(isUnreadTableMessageStatus("pending"), true);
   assert.equal(isUnreadTableMessageStatus("acknowledged"), false);
-  assert.equal(isActiveAssistanceStatus("acknowledged"), true);
+  assert.equal(isActiveAssistanceStatus("pending"), true);
+  assert.equal(isActiveAssistanceStatus("queued"), true);
+  assert.equal(isActiveAssistanceStatus("acknowledged"), false);
   assert.equal(isActiveAssistanceStatus("resolved"), false);
 
   assert.deepEqual(
@@ -146,6 +148,30 @@ test("staff assistance is merged into the existing device conversation for the s
   assert.equal(tableOne?.unread_count, 2);
   assert.equal(tableOne?.has_alert, true);
   assert.equal(tableOne?.last_message_time, "2026-08-04T10:00:00Z");
+});
+
+test("opening a staff conversation suppresses its merged assistance alert", () => {
+  const chats = mergeStaffTableChats(
+    [{
+      id: "device-1",
+      table_name: "Table 1",
+      source: "device",
+      unread_count: 1,
+      device_unread_count: 1,
+      device_has_alert: true,
+    }],
+    [{
+      id: "table-1",
+      table_name: "Table 1",
+      source: "table-message",
+      unread_count: 1,
+      has_alert: true,
+    }],
+    "device-1",
+  );
+
+  assert.equal(chats[0]?.unread_count, 0);
+  assert.equal(chats[0]?.has_alert, false);
 });
 
 test("compatibility alerts cannot create a second staff conversation list entry", () => {

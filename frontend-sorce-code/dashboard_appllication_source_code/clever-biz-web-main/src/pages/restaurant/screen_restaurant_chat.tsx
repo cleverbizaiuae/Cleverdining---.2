@@ -201,11 +201,22 @@ const ScreenRestaurantChat = () => {
         device_unread_count: liveUnreadCount,
       };
     });
-    const selectedId = isStaff ? selectedChatRef.current?.id : undefined;
+    const selectedId = selectedChatRef.current?.id;
+    const visibleDeviceChats = deviceChats.map((chat) => (
+      String(chat.id) === String(selectedId || "")
+        ? {
+            ...chat,
+            unread_count: 0,
+            device_unread_count: 0,
+            has_alert: false,
+            device_has_alert: false,
+          }
+        : chat
+    ));
     setChatList(
       isStaff
-        ? mergeStaffTableChats(deviceChats, tableMessageChatsRef.current, selectedId)
-        : deviceChats,
+        ? mergeStaffTableChats(visibleDeviceChats, tableMessageChatsRef.current, selectedId)
+        : visibleDeviceChats,
     );
   }, [dashboardTables, unreadTables, isStaff]);
 
@@ -598,6 +609,8 @@ const ScreenRestaurantChat = () => {
       unread_count: 0,
       device_unread_count: 0,
       table_message_unread_count: 0,
+      has_alert: false,
+      device_has_alert: false,
     } : c));
     if (clearUnreadForTable) {
       clearUnreadForTable(selectedChat.id);
