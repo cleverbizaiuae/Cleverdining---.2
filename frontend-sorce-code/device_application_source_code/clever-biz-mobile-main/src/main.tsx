@@ -9,6 +9,13 @@ import { preloadCachedBrandAssets } from "./lib/useBrandConfig.ts";
 // VitePWA handles activation. Check for updates in the background without
 // clearing immutable caches or forcing a visible cold-start reload.
 if ('serviceWorker' in navigator) {
+  const wasAlreadyControlled = Boolean(navigator.serviceWorker.controller);
+  let reloadingForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!wasAlreadyControlled || reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    window.location.reload();
+  });
   navigator.serviceWorker.ready.then((registration) => {
     setInterval(() => {
       if (navigator.onLine) registration.update();

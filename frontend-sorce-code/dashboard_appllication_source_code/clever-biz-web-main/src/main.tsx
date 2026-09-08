@@ -41,6 +41,13 @@ registerSW({
 });
 
 if ("serviceWorker" in navigator) {
+  const wasAlreadyControlled = Boolean(navigator.serviceWorker.controller);
+  let reloadingForUpdate = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!wasAlreadyControlled || reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    window.location.reload();
+  });
   window.addEventListener("online", checkForPwaUpdate);
   window.addEventListener("pageshow", checkForPwaUpdate);
   document.addEventListener("visibilitychange", checkForPwaUpdate);
