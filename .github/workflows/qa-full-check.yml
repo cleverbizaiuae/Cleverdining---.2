@@ -98,7 +98,7 @@ jobs:
           VITE_API_URL: http://127.0.0.1:8000
         run: |
           set -o pipefail
-          npx playwright test --project=chromium --reporter=list --grep "Bug 1[2-5]:" 2>&1 | tee /tmp/e2e.txt || true
+          npx playwright test --project=chromium --reporter=list --grep "QA:" 2>&1 | tee /tmp/e2e.txt || true
       - name: Probe add-staff API as the seeded owner
         if: always()
         run: |
