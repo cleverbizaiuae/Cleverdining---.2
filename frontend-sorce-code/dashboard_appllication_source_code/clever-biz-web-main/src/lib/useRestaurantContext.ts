@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { getRegionConfig, type RegionCode } from "@/config/regionConfig";
 import {
   getActiveRestaurantCurrency,
   getActiveRestaurantLocale,
@@ -11,10 +12,10 @@ type RestaurantContext = {
   fmt0: (value: string | number | null | undefined) => string;
   currency: string;
   currencyLabel: string;
-  country: "UAE" | "UK";
+  country: RegionCode;
   flag: string;
   locale: string;
-  region: "UAE" | "UK";
+  region: RegionCode;
   restaurantId: string | null;
   timezone: string;
 };
@@ -49,7 +50,7 @@ export function useRestaurantContext(): RestaurantContext {
     const currency = getActiveRestaurantCurrency();
     const locale = getActiveRestaurantLocale();
     const timezone = getActiveRestaurantTimezone();
-    const flag = region === "UK" ? "\uD83C\uDDEC\uD83C\uDDE7" : "\uD83C\uDDE6\uD83C\uDDEA";
+    const flag = getRegionConfig(region).flag;
 
     const format = (value: string | number | null | undefined, fractionDigits: number) => {
       return `${currency} ${parseAmount(value).toLocaleString(locale, {

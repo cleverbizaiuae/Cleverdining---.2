@@ -25,14 +25,14 @@ import axiosInstance from "@/lib/axios";
 import { cachedGet, invalidateApiCache } from "@/lib/requestCache";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
-import { getRegionConfig } from "../../config/regionConfig";
+import { getRegionConfig, normalizeRegionCode, type RegionCode } from "../../config/regionConfig";
 
 // --- Types ---
 interface RegisteredRestaurant {
     id: string;
     name: string;
     location: string;
-    region?: "UAE" | "UK";
+    region?: RegionCode;
     currency?: string;
     timezone?: string;
     countryCode?: string;
@@ -58,7 +58,7 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => ({
     id: String(restaurant?.id ?? restaurant?.restaurant_id ?? ""),
     name: String(restaurant?.name ?? restaurant?.resturent_name ?? ""),
     location: String(restaurant?.location ?? ""),
-    region: String(restaurant?.region ?? "UAE").toUpperCase() === "UK" ? "UK" : "UAE",
+    region: normalizeRegionCode(restaurant?.region ?? "UAE"),
     currency: String(restaurant?.currency ?? ""),
     timezone: String(restaurant?.timezone ?? ""),
     countryCode: String(restaurant?.countryCode ?? restaurant?.country_code ?? ""),
@@ -104,7 +104,7 @@ const getPaymentProviderLabel = (provider: string) =>
 const ScreenSuperAdminManagement = () => {
     const queryClient = useQueryClient();
     const [searchQuery, setSearchQuery] = useState("");
-    const [regionFilter, setRegionFilter] = useState<"all" | "UAE" | "UK">("all");
+    const [regionFilter, setRegionFilter] = useState<"all" | RegionCode>("all");
     const [packageFilter, setPackageFilter] = useState("all");
     const [countryFilter, setCountryFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
@@ -124,7 +124,7 @@ const ScreenSuperAdminManagement = () => {
 
     // Edit Form
     const [editForm, setEditForm] = useState({
-        region: "UAE" as "UAE" | "UK",
+        region: "UAE" as RegionCode,
         location: "",
         phone: "",
         email: "",
@@ -142,7 +142,7 @@ const ScreenSuperAdminManagement = () => {
         // Or keep frontend names and map in mutation. mapping is better for UI consistency.
         name: "",
         location: "",
-        region: "UAE" as "UAE" | "UK",
+        region: "UAE" as RegionCode,
         city: "Dubai",
         country: "UAE",
         phone: "",
@@ -212,7 +212,7 @@ const ScreenSuperAdminManagement = () => {
     const updateRestaurantMutation = useMutation({
         mutationFn: async (data: {
             id: string;
-            region: "UAE" | "UK";
+            region: RegionCode;
             location: string;
             phone: string;
             email: string;
@@ -506,12 +506,14 @@ const ScreenSuperAdminManagement = () => {
                 <div className="flex gap-3 w-full sm:w-auto">
                     <select
                         value={regionFilter}
-                        onChange={(e) => setRegionFilter(e.target.value as "all" | "UAE" | "UK")}
+                        onChange={(e) => setRegionFilter(e.target.value as "all" | RegionCode)}
                         className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"
                     >
                         <option value="all">All Regions</option>
                         <option value="UAE">UAE</option>
                         <option value="UK">UK</option>
+                        <option value="IE">Ireland</option>
+                        <option value="GH">Ghana</option>
                     </select>
                     <select value={packageFilter} onChange={(e) => setPackageFilter(e.target.value)} className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"><option value="all">All Packages</option>{packages.map((pkg) => <option key={pkg} value={pkg}>{pkg}</option>)}</select>
                     <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} className="h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0055FE]/30 focus:border-[#0055FE]"><option value="all">All Countries</option>{countries.map((country) => <option key={country} value={country}>{country}</option>)}</select>
@@ -728,7 +730,7 @@ const ScreenSuperAdminManagement = () => {
                                         <select
                                             value={newRestaurant.region}
                                             onChange={(e) => {
-                                                const nextRegion = e.target.value as "UAE" | "UK";
+                                                const nextRegion = e.target.value as RegionCode;
                                                 const cfg = getRegionConfig(nextRegion);
                                                 setNewRestaurant({
                                                     ...newRestaurant,
@@ -743,6 +745,8 @@ const ScreenSuperAdminManagement = () => {
                                         >
                                             <option value="UAE">UAE</option>
                                             <option value="UK">UK</option>
+                                            <option value="IE">Ireland</option>
+                                            <option value="GH">Ghana</option>
                                         </select>
                                     </div>
                                     <div>
@@ -1166,7 +1170,7 @@ const ScreenSuperAdminManagement = () => {
                                     <select
                                         value={editForm.region}
                                         onChange={(e) => {
-                                            const nextRegion = e.target.value as "UAE" | "UK";
+                                            const nextRegion = e.target.value as RegionCode;
                                             const cfg = getRegionConfig(nextRegion);
                                             setEditForm({
                                                 ...editForm,
@@ -1180,6 +1184,8 @@ const ScreenSuperAdminManagement = () => {
                                     >
                                         <option value="UAE">UAE</option>
                                         <option value="UK">UK</option>
+                                        <option value="IE">Ireland</option>
+                                        <option value="GH">Ghana</option>
                                     </select>
                                 </div>
                                 <div>

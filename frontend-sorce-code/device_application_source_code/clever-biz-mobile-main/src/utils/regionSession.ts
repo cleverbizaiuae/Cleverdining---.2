@@ -1,4 +1,4 @@
-import { getRegionConfig } from "../config/regionConfig";
+import { getRegionConfig, normalizeRegionCode } from "../config/regionConfig";
 
 type RestaurantSessionInfo = {
   region?: string;
@@ -19,7 +19,7 @@ const readRestaurantInfo = (): RestaurantSessionInfo | null => {
 
 export const getSessionRegion = (): string => {
   const restaurant = readRestaurantInfo();
-  return String(restaurant?.region || "UAE").toUpperCase() === "UK" ? "UK" : "UAE";
+  return normalizeRegionCode(restaurant?.region || "UAE");
 };
 
 export const getSessionCurrencyCode = (): string => {

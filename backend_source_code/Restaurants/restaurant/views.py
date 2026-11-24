@@ -12,7 +12,13 @@ from django.core.cache import cache
 from django.db.models import Prefetch
 from django.db import IntegrityError
 from accounts.models import User, ChefStaff
-from restaurant.region_config import resolve_region_defaults, get_region_config
+from restaurant.region_config import (
+    SUPPORTED_REGIONS,
+    UnsupportedRegionError,
+    get_region_config,
+    require_supported_region,
+    resolve_region_defaults,
+)
 from .schema_guard import ensure_brand_config_schema
 # Create your views here.
 
@@ -238,7 +244,7 @@ class OwnerRegisterView(APIView):
         try:
             restaurants = Restaurant.objects.select_related('owner').all().order_by('-created_at')
             region = (request.query_params.get('region') or '').strip().upper()
-            if region in {'UAE', 'UK'}:
+            if region in SUPPORTED_REGIONS:
                 restaurants = restaurants.filter(region=region)
             data = []
             for r in restaurants:
@@ -301,6 +307,12 @@ class OwnerRegisterView(APIView):
             qr_codes_value = self._pick(data, 'qrCodes', 'qr_codes')
             table_count_value = self._pick(data, 'tableCount', 'table_count')
             processor_value = self._pick(data, 'paymentProcessor', 'payment_processor')
+
+            if region_value is not None and str(region_value).strip():
+                try:
+                    require_supported_region(region=region_value)
+                except UnsupportedRegionError as exc:
+                    return Response({'region': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
 
             region_defaults = resolve_region_defaults(
                 region=region_value if region_value is not None else restaurant.region,

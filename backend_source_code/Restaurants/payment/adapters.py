@@ -58,7 +58,7 @@ def _order_currency(order):
 
 def _order_country_alpha2(order):
     settings_map = _order_region_settings(order)
-    return "GB" if settings_map["country_code"] == "+44" else "AE"
+    return settings_map.get("country_alpha2") or ("GB" if settings_map["country_code"] == "+44" else "AE")
 
 
 def _append_query(url, _safe="", **params):

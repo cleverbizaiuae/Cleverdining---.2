@@ -14,6 +14,7 @@ from django.db.models.functions import TruncMonth
 from datetime import datetime
 from rest_framework.pagination import PageNumberPagination
 from accounts.permissions import IsSuperAdmin
+from restaurant.region_config import SUPPORTED_REGIONS
 
 class ChefAndStaffPagination(PageNumberPagination):
     page_size = 2
@@ -44,7 +45,7 @@ class RestaurantViewSet(ModelViewSet):
         restaurant_name = self.request.query_params.get('restaurant_name', None)
         region = (self.request.query_params.get('region') or '').strip().upper()
 
-        if region in ['UAE', 'UK']:
+        if region in SUPPORTED_REGIONS:
             queryset = queryset.filter(region=region)
 
         if restaurant_name:

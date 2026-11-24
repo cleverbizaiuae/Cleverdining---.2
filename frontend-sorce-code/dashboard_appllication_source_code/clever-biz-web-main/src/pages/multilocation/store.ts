@@ -1,3 +1,5 @@
+import { getActiveRestaurantCurrency } from "@/lib/utils";
+
 export type MultiLocationStatus = "active" | "needs_attention" | "inactive";
 
 export type MultiLocationRole = "manager" | "chef" | "staff" | "cashier";
@@ -325,7 +327,7 @@ function seedActivities(locations: LocationRecord[], metrics: DailyMetric[]): Ac
         type: "revenue_milestone",
         severity: "info",
         location_id: location.id,
-        message: `${location.name} crossed AED 70K revenue this week.`,
+        message: `${location.name} crossed ${getActiveRestaurantCurrency()} 70K revenue this week.`,
         created_at: new Date(now - Math.floor(seededRandom(`${location.id}:milestone`) * 20) * 60 * 60 * 1000).toISOString(),
       });
     }
@@ -633,7 +635,7 @@ export function buildWeeklyAnalysis(range: DateRange): string[] {
   const bullets: string[] = [];
   bullets.push(`Best performer ${top.location_name} holds ${top.revenue_share_pct.toFixed(1)}% of group revenue.`);
   bullets.push(
-    `${trailing.location_name} trails the top location by AED ${(top.revenue - trailing.revenue).toLocaleString("en-US")}.`
+    `${trailing.location_name} trails the top location by ${getActiveRestaurantCurrency()} ${(top.revenue - trailing.revenue).toLocaleString("en-US")}.`
   );
   bullets.push(
     aboveAvg.length
@@ -650,7 +652,7 @@ export function buildWeeklyAnalysis(range: DateRange): string[] {
       ? `Low order volume watchlist: ${lowOrders.map((entry) => entry.location_name).join(", ")}.`
       : "No locations are under low-order thresholds this period."
   );
-  bullets.push(`Group-wide AOV for selected range is AED ${avgAov.toFixed(2)}.`);
+  bullets.push(`Group-wide AOV for selected range is ${getActiveRestaurantCurrency()} ${avgAov.toFixed(2)}.`);
 
   return bullets;
 }
@@ -659,7 +661,7 @@ export function buildSummaryCsv(range: DateRange): string {
   const summary = buildDashboardSummary(range);
   const headers = [
     "Location",
-    "Revenue (AED)",
+    `Revenue (${getActiveRestaurantCurrency()})`,
     "Orders",
     "Average Order Value",
     "Revenue Share %",
@@ -696,7 +698,7 @@ export function buildBreakdownCsv(range: DateRange): string {
 
   const headers = [
     "Location",
-    "Revenue (AED)",
+    `Revenue (${getActiveRestaurantCurrency()})`,
     "Orders",
     "Average Order Value",
     "Revenue Share %",

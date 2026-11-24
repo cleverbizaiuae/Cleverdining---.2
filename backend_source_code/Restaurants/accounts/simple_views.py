@@ -10,7 +10,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
 from .login_utils import find_user_for_login
 from restaurant.models import Restaurant
-from restaurant.region_config import resolve_region_defaults, get_region_config
+from restaurant.region_config import (
+    UnsupportedRegionError,
+    get_region_config,
+    require_supported_region,
+    resolve_region_defaults,
+)
 from django.db import transaction
 import logging
 import uuid
@@ -283,6 +288,10 @@ class SimpleOwnerRegisterView(APIView):
                 errors['resturent_name'] = ['Restaurant name is required']
             if not location:
                 errors['location'] = ['Location is required']
+            try:
+                require_supported_region(region=region, country=country)
+            except UnsupportedRegionError as exc:
+                errors['region'] = [str(exc)]
             
             if errors:
                 logger.warning(f"Registration validation failed: {errors}")
@@ -297,7 +306,7 @@ class SimpleOwnerRegisterView(APIView):
             allowed_providers = set(get_region_config(resolved_region).get('payments', []))
             if resolved_payment_provider not in allowed_providers:
                 resolved_payment_provider = region_defaults['default_payment_provider']
-            resolved_country = country or resolved_region
+            resolved_country = country or region_defaults['label']
             
             logger.info(f"Registration attempt for: {email}")
             

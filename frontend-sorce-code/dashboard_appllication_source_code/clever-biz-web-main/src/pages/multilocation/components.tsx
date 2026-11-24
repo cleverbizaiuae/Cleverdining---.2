@@ -1,9 +1,10 @@
 import { Eye, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { LocationAggregate, MultiLocationRole, MultiLocationStatus } from "./store";
+import { getActiveRestaurantCurrency } from "@/lib/utils";
 
 export function formatCurrency(value: number): string {
-  return `AED ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  return `${getActiveRestaurantCurrency()} ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
 export function formatPercent(value: number): string {

@@ -11,6 +11,9 @@ from restaurant.region_config import (  # noqa: F401
     REGION_CONFIG,
     get_region_config,
     infer_region,
+    is_supported_region,
     normalize_region,
+    require_supported_region,
     resolve_region_defaults,
+    UnsupportedRegionError,
 )

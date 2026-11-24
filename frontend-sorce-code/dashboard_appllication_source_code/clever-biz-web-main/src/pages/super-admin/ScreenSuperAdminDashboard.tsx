@@ -5,11 +5,12 @@ import { Building2, DollarSign, Eye, Globe, MapPin, PauseCircle, TrendingUp, Use
 import toast from "react-hot-toast";
 import axiosInstance from "../../lib/axios";
 import { cachedGet } from "@/lib/requestCache";
+import { getRegionConfig, normalizeRegionCode, type RegionCode } from "@/config/regionConfig";
 
 interface RegisteredRestaurant {
   id: string;
   name: string;
-  region?: "UAE" | "UK";
+  region?: RegionCode;
   location: string;
   city: string;
   country: string;
@@ -24,11 +25,13 @@ interface RegisteredRestaurant {
   createdAt: string;
 }
 
-type CountryFilter = "all" | "UAE" | "UK";
+type CountryFilter = "all" | RegionCode;
 
 const CITY_OPTIONS: Record<Exclude<CountryFilter, "all">, string[]> = {
   UAE: ["Dubai", "Abu Dhabi", "Sharjah", "Ajman"],
   UK: ["Manchester", "London", "Birmingham", "Leeds"],
+  IE: ["Dublin", "Cork", "Galway", "Limerick"],
+  GH: ["Accra", "Kumasi", "Tamale", "Takoradi"],
 };
 
 const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
@@ -40,7 +43,7 @@ const SEEDED_RESTAURANTS: RegisteredRestaurant[] = [
 ];
 
 const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => {
-  const region = String(restaurant?.region ?? restaurant?.country ?? "UAE").toUpperCase().includes("UK") ? "UK" : "UAE";
+  const region = normalizeRegionCode(restaurant?.region ?? restaurant?.country ?? "UAE");
   return {
     id: String(restaurant?.id ?? ""),
     name: String(restaurant?.name ?? restaurant?.resturent_name ?? "Untitled Restaurant"),
@@ -61,7 +64,7 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => {
 };
 
 const money = (value: number) => `AED ${Math.round(value).toLocaleString("en-GB")}`;
-const flag = (country: string) => country === "UK" || country === "United Kingdom" ? "🇬🇧" : "🇦🇪";
+const flag = (country: string) => getRegionConfig(country).flag;
 const planFee = (plan: string) => {
   const label = plan.toLowerCase();
   if (label.includes("multi")) return 2199;
@@ -154,7 +157,7 @@ const ScreenSuperAdminDashboard = () => {
           <p className="text-sm text-slate-500">Subscriber growth, revenue, and restaurant operations across UAE and UK.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <select value={country} onChange={(event) => { setCountry(event.target.value as CountryFilter); setCity("all"); }} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0055FE]"><option value="all">All Countries</option><option value="UAE">🇦🇪 UAE</option><option value="UK">🇬🇧 UK</option></select>
+          <select value={country} onChange={(event) => { setCountry(event.target.value as CountryFilter); setCity("all"); }} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0055FE]"><option value="all">All Countries</option><option value="UAE">🇦🇪 UAE</option><option value="UK">🇬🇧 UK</option><option value="IE">🇮🇪 Ireland</option><option value="GH">🇬🇭 Ghana</option></select>
           <select value={city} onChange={(event) => setCity(event.target.value)} disabled={country === "all"} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0055FE] disabled:opacity-60"><option value="all">All Cities</option>{cities.map((item) => <option key={item}>{item}</option>)}</select>
         </div>
       </div>

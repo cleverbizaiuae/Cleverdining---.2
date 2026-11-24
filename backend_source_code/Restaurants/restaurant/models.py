@@ -9,6 +9,8 @@ class Restaurant(models.Model):
     REGION_CHOICES = [
         ('UAE', 'UAE'),
         ('UK', 'UK'),
+        ('IE', 'Ireland'),
+        ('GH', 'Ghana'),
     ]
 
     resturent_name = models.CharField(max_length=255)

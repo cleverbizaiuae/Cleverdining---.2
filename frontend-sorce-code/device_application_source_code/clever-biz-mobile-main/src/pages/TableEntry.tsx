@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import axiosInstance from "../lib/axios";
 import { ImSpinner6 } from "react-icons/im";
-import { getRegionConfig } from "../config/regionConfig";
+import { getRegionConfig, normalizeRegionCode } from "../config/regionConfig";
 import { clearGuestSessionStorage } from "../lib/guestSessionStorage";
 import { getCustomerErrorMessage } from "../lib/customerErrorMessage";
 
@@ -39,8 +39,7 @@ const TableEntry = () => {
                     restaurant_country_code,
                     default_payment_provider
                 } = sessionRes.data;
-                const resolvedRegion =
-                    String(restaurant_region || "UAE").toUpperCase() === "UK" ? "UK" : "UAE";
+                const resolvedRegion = normalizeRegionCode(restaurant_region || "UAE");
                 const regionSettings = getRegionConfig(resolvedRegion);
 
                 // 3. Create guest user info

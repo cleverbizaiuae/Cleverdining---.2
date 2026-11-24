@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import axios from '../lib/axios';
 import { Loader2 } from 'lucide-react';
-import { getRegionConfig } from '../config/regionConfig';
+import { getRegionConfig, normalizeRegionCode } from '../config/regionConfig';
 import { cacheBrandConfigForRestaurant, getBrandSplashSessionKey } from '../lib/useBrandConfig';
 import { clearGuestSessionStorage } from '../lib/guestSessionStorage';
 import ScreenScanTable from './screen_scan_table';
@@ -88,8 +88,7 @@ export default function TableLanding() {
                 // Guest access relies on X-Guest-Session-Token header.
 
                 // Construct and store userInfo
-                const resolvedRegion =
-                    String(res.data.restaurant_region || "UAE").toUpperCase() === "UK" ? "UK" : "UAE";
+                const resolvedRegion = normalizeRegionCode(res.data.restaurant_region || "UAE");
                 const regionSettings = getRegionConfig(resolvedRegion);
                 const userInfo = {
                     user: {

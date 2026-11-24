@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { getRegionConfig } from "../config/regionConfig";
+import { getRegionConfig, normalizeRegionCode, type RegionCode } from "../config/regionConfig";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -112,13 +112,12 @@ export function formatTime(isoString: string): string {
   }
 }
 
-export function getActiveRestaurantRegion(): "UAE" | "UK" {
+export function getActiveRestaurantRegion(): RegionCode {
   try {
     const raw = localStorage.getItem("userInfo");
     if (!raw) return "UAE";
     const parsed = JSON.parse(raw);
-    const region = String(parsed?.restaurants?.[0]?.region || parsed?.user?.restaurants?.[0]?.region || "UAE").toUpperCase();
-    return region === "UK" ? "UK" : "UAE";
+    return normalizeRegionCode(parsed?.restaurants?.[0]?.region || parsed?.user?.restaurants?.[0]?.region || "UAE");
   } catch {
     return "UAE";
   }
@@ -146,7 +145,7 @@ export function getActiveRestaurantTimezone(): string {
 }
 
 export function getActiveRestaurantLocale(): string {
-  return getActiveRestaurantRegion() === "UK" ? "en-GB" : "en-AE";
+  return getRegionConfig(getActiveRestaurantRegion()).locale;
 }
 
 export function formatCurrencyAmount(

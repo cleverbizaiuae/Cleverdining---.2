@@ -1,4 +1,4 @@
-export type RegionCode = "UAE" | "UK";
+export type RegionCode = "UAE" | "UK" | "IE" | "GH";
 
 export type RegionSettings = {
   currency: string;
@@ -29,9 +29,49 @@ const REGION_CONFIG: Record<RegionCode, RegionSettings> = {
     defaultPaymentProvider: "stripe",
     payments: ["stripe", "payme", "cash"],
   },
+  IE: {
+    currency: "EUR",
+    timezone: "Europe/Dublin",
+    phoneCode: "+353",
+    countryCode: "+353",
+    countryAlpha2: "IE",
+    defaultPaymentProvider: "stripe",
+    payments: ["stripe", "checkout", "cash"],
+  },
+  GH: {
+    currency: "GHS",
+    timezone: "Africa/Accra",
+    phoneCode: "+233",
+    countryCode: "+233",
+    countryAlpha2: "GH",
+    defaultPaymentProvider: "stripe",
+    payments: ["stripe", "cash"],
+  },
+};
+
+const REGION_ALIASES: Record<string, RegionCode> = {
+  UAE: "UAE",
+  AE: "UAE",
+  "UNITED ARAB EMIRATES": "UAE",
+  UK: "UK",
+  GB: "UK",
+  "UNITED KINGDOM": "UK",
+  "NORTHERN IRELAND": "UK",
+  IE: "IE",
+  IRL: "IE",
+  IRELAND: "IE",
+  "REPUBLIC OF IRELAND": "IE",
+  GH: "GH",
+  GHA: "GH",
+  GHANA: "GH",
+};
+
+/** Map any stored region/country value to a supported region; unknown values keep the UAE default. */
+export const normalizeRegionCode = (region?: string | null): RegionCode => {
+  const key = String(region || "").trim().toUpperCase();
+  return REGION_ALIASES[key] ?? "UAE";
 };
 
 export const getRegionConfig = (region?: string): RegionSettings => {
-  const normalized = (region || "UAE").toUpperCase();
-  return REGION_CONFIG[(normalized === "UK" ? "UK" : "UAE") as RegionCode];
+  return REGION_CONFIG[normalizeRegionCode(region)];
 };

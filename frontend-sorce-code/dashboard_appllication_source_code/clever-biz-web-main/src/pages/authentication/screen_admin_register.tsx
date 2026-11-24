@@ -198,6 +198,8 @@ const ScreenAdminRegister = () => {
                     >
                         <option value="UAE">UAE</option>
                         <option value="UK">UK</option>
+                        <option value="IE">Ireland</option>
+                        <option value="GH">Ghana</option>
                     </select>
                 </div>
 

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { IconGrowth, IconSales, IconTeam } from "@/components/icons";
+import type { RegionCode } from "../../config/regionConfig";
 import { DashboardCard, Pagination } from "../../components/utilities";
 import {
   subscribers,
@@ -33,7 +34,7 @@ const ScreenAdminDashboard = () => {
 
   const PAGE_SIZE = 5;
   const [page, setPage] = useState(1); // current page (1-based)
-  const [regionFilter, setRegionFilter] = useState<"all" | "UAE" | "UK">("all");
+  const [regionFilter, setRegionFilter] = useState<"all" | RegionCode>("all");
   const [total, setTotal] = useState(0); // total items from API (DRF `count`)
   const [loading, setLoading] = useState(false);
   const [allResutrentUser, setallResutrentUser] = useState<TSubscriber[]>([]);
@@ -142,7 +143,7 @@ const ScreenAdminDashboard = () => {
           <select
             value={regionFilter}
             onChange={(e) => {
-              setRegionFilter(e.target.value as "all" | "UAE" | "UK");
+              setRegionFilter(e.target.value as "all" | RegionCode);
               setPage(1);
             }}
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -150,6 +151,8 @@ const ScreenAdminDashboard = () => {
             <option value="all">All Regions</option>
             <option value="UAE">UAE</option>
             <option value="UK">UK</option>
+            <option value="IE">Ireland</option>
+            <option value="GH">Ghana</option>
           </select>
         </div>
         {/* Dashboard Cards */}

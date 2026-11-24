@@ -234,7 +234,7 @@ const TONE_OPTIONS: Array<{
     value: "minimal",
     label: "Minimal",
     description: "Short and direct. No fluff. Works anywhere.",
-    example: "Add a Drink? +AED 50",
+    example: "Add a Drink? +{currency} 50",
   },
 ];
 
@@ -399,7 +399,7 @@ const ScreenRestaurantUpsell = () => {
   const pendingSettingsWritesRef = useRef(0);
 
   const userRole = useMemo(() => resolveUpsellUserRole(), []);
-  const { fmt } = useRestaurantContext();
+  const { fmt, currency } = useRestaurantContext();
 
   const categoryOptions = useMemo(() => {
     const seen = new Map<number, string>();
@@ -1613,7 +1613,7 @@ const ScreenRestaurantUpsell = () => {
                     <span>
                       <span className={classNames("font-bold", selected ? "text-[#0055FE]" : "text-slate-800")}>{option.label}</span>
                       <span className="mt-1 block text-sm text-slate-500">{option.description}</span>
-                      <span className="mt-2 block border-l-2 border-slate-200 pl-3 text-sm italic text-slate-400">"{option.example}"</span>
+                      <span className="mt-2 block border-l-2 border-slate-200 pl-3 text-sm italic text-slate-400">"{option.example.replace("{currency}", currency)}"</span>
                     </span>
                   </button>
                 );

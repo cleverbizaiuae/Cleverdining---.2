@@ -2,7 +2,12 @@
 from rest_framework import serializers
 from accounts.models import User
 from restaurant.models import BusinessDay, Restaurant, BrandConfig
-from restaurant.region_config import resolve_region_defaults, normalize_region, get_region_config
+from restaurant.region_config import (
+    UnsupportedRegionError,
+    get_region_config,
+    require_supported_region,
+    resolve_region_defaults,
+)
 
 class RestaurantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,7 +95,8 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
     location = serializers.CharField(max_length=255)
     region = serializers.CharField(max_length=10, required=False, default="UAE")
     city = serializers.CharField(max_length=100, required=False, default="Dubai")
-    country = serializers.CharField(max_length=100, required=False, default="UAE")
+    # Blank means "use the region's country label" (UAE stays "UAE" as before).
+    country = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     phone_number = serializers.CharField(max_length=20)
     
     # Manager/Owner inputs
@@ -125,7 +131,10 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
         ]
 
     def validate_region(self, value):
-        return normalize_region(value)
+        try:
+            return require_supported_region(region=value)
+        except UnsupportedRegionError as exc:
+            raise serializers.ValidationError(str(exc))
     
     def validate_email(self, value):
         import re
@@ -219,7 +228,7 @@ class OwnerRegisterSerializer(serializers.ModelSerializer):
                     country_code=region_defaults['country_code'],
                     default_payment_provider=payment_provider,
                     city=validated_data.get('city', ''),
-                    country=validated_data.get('country', region_defaults['region']),
+                    country=validated_data.get('country') or region_defaults['label'],
                     phone_number=validated_data['phone_number'],
                     package=validated_data.get('package', 'Starter'),
                     plan=validated_data.get('plan', 'standard'),
