@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import axiosInstance from "../../lib/axios";
 import { cachedGet } from "@/lib/requestCache";
 import { getRegionConfig, normalizeRegionCode, type RegionCode } from "@/config/regionConfig";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 interface RegisteredRestaurant {
   id: string;
@@ -63,7 +64,15 @@ const normalizeRestaurant = (restaurant: any): RegisteredRestaurant => {
   };
 };
 
-const money = (value: number) => `AED ${Math.round(value).toLocaleString("en-GB")}`;
+// Plan fees are recorded in AED; useMoney() shows them in the Super Admin's display currency.
+const formatMoney = (amount: number, currency: string) => `${currency} ${Math.round(amount).toLocaleString("en-GB")}`;
+const useMoney = () => {
+  const { display } = useDisplayCurrency();
+  return (value: number) => {
+    const shown = display(value, "AED");
+    return formatMoney(shown.amount, shown.currency);
+  };
+};
 const flag = (country: string) => getRegionConfig(country).flag;
 const planFee = (plan: string) => {
   const label = plan.toLowerCase();
@@ -82,6 +91,7 @@ const statusClass = (status: string) => status === "active" ? "bg-[#ECFDF5] text
 
 const ScreenSuperAdminDashboard = () => {
   const queryClient = useQueryClient();
+  const money = useMoney();
   const [country, setCountry] = useState<CountryFilter>("all");
   const [city, setCity] = useState("all");
   const [selected, setSelected] = useState<RegisteredRestaurant | null>(null);
@@ -234,6 +244,7 @@ function RestaurantCard({ restaurant, onView }: { restaurant: RegisteredRestaura
 }
 
 function RestaurantDrawer({ restaurant, onClose }: { restaurant: RegisteredRestaurant; onClose: () => void }) {
+  const money = useMoney();
   const revenue = planFee(restaurant.package) * 12;
   const ordersToday = Math.max(restaurant.tableCount * 3, 0);
   const monthlyOrders = ordersToday * 24;

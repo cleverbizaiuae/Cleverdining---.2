@@ -829,3 +829,15 @@ class BusinessDayViewSet(viewsets.ModelViewSet):
         })
 from rest_framework.decorators import action
 # Note: Add imports at top if missing. Updated content block includes them.
+
+
+class PlatformExchangeRatesAPIView(APIView):
+    """Display-only exchange rates (per 1 AED) for every platform currency."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        from restaurant.exchange_rates import get_platform_exchange_rates
+
+        return Response(get_platform_exchange_rates(), status=status.HTTP_200_OK)

@@ -19,7 +19,7 @@ from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
 from .health_views import health_check
-from restaurant.views import BrandConfigAPIView
+from restaurant.views import BrandConfigAPIView, PlatformExchangeRatesAPIView
 from customer.compat_views import (
     DailyStatsAPIView,
     EnsureLocationMetricsAPIView,
@@ -63,6 +63,8 @@ urlpatterns = [
     path('api/orders/<int:pk>/walk-in', OrderWalkInAPIView.as_view(), name='order-walk-in'),
     path('api/orders/<int:pk>/walk-in/', OrderWalkInAPIView.as_view()),
     path('api/brand-config', BrandConfigAPIView.as_view()),
+    path('api/exchange-rates', PlatformExchangeRatesAPIView.as_view()),
+    path('api/exchange-rates/', PlatformExchangeRatesAPIView.as_view()),
     path('api/integrations', IntegrationAPIView.as_view()),
     path('api/integrations/', IntegrationAPIView.as_view()),
     path('api/integrations/<uuid:pk>', IntegrationDetailAPIView.as_view()),

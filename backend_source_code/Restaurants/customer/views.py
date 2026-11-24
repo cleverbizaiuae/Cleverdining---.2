@@ -60,6 +60,7 @@ def _customer_payload(customer: Customer):
         "name": customer.name,
         "email": customer.email,
         "restaurantId": str(customer.restaurant_id) if customer.restaurant_id else None,
+        "currency": (getattr(customer.restaurant, "currency", "") or "AED") if customer.restaurant_id else "AED",
         "loyaltyPoints": customer.loyalty_points,
         "lifetimePoints": customer.lifetime_points,
         "totalSpent": str(customer.total_spent),

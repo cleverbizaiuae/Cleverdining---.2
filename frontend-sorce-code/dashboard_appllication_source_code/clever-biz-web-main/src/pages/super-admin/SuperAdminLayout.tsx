@@ -17,6 +17,7 @@ import {
     ChevronRight
 } from "lucide-react";
 import logo from "../../assets/cleverbiz_full_logo.png";
+import SuperAdminCurrencySelect from "./SuperAdminCurrencySelect";
 
 // Create a client for Super Admin pages
 const queryClient = new QueryClient({
@@ -172,6 +173,7 @@ const SuperAdminLayout = () => {
                         </div>
 
                         <div className="flex items-center gap-4">
+                            <SuperAdminCurrencySelect />
                             <div className="text-right hidden sm:block">
                                 <p className="text-sm font-semibold text-slate-900">Hi, Admin</p>
                                 <span className="text-xs font-medium text-[#0055FE]">Super Admin</span>

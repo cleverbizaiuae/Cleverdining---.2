@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Star, TrendingUp, Users, type LucideIcon } from "lucide-react";
 import { cachedGet } from "@/lib/requestCache";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 type Customer = {
   id: string;
@@ -11,6 +12,8 @@ type Customer = {
   loyaltyPoints?: number;
   lifetimePoints?: number;
   totalSpent?: string;
+  /** Currency of the customer's restaurant (spend is recorded in it). */
+  currency?: string;
   totalOrders?: number;
   updatedAt?: string;
 };
@@ -22,7 +25,7 @@ const tierStyles: Record<Customer["tier"], string> = {
   platinum: "bg-purple-50 text-purple-700 border-purple-200",
 };
 
-const fmt = (value: number) => `AED ${value.toFixed(0)}`;
+const fmt = (amount: number, currency: string) => `${currency} ${amount.toFixed(0)}`;
 
 const timeAgo = (value?: string) => {
   if (!value) return "-";
@@ -40,6 +43,7 @@ const timeAgo = (value?: string) => {
 
 export default function ScreenSuperAdminCrm() {
   const [search, setSearch] = useState("");
+  const { display, sum } = useDisplayCurrency();
 
   const { data: customers = [], isLoading, error } = useQuery<Customer[]>({
     queryKey: ["superadmin-crm-customers"],
@@ -59,12 +63,12 @@ export default function ScreenSuperAdminCrm() {
   }, [customers, search]);
 
   const stats = useMemo(() => {
-    const totalSpent = customers.reduce((sum, customer) => sum + Number(customer.totalSpent || 0), 0);
+    const totalSpent = sum(customers.map((customer) => ({ amount: customer.totalSpent, currency: customer.currency || "AED" })));
     const lifetimePoints = customers.reduce((sum, customer) => sum + Number(customer.lifetimePoints || 0), 0);
     const totalOrders = customers.reduce((sum, customer) => sum + Number(customer.totalOrders || 0), 0);
     const topTier = customers.filter((customer) => ["gold", "platinum"].includes(customer.tier)).length;
     return { totalSpent, lifetimePoints, totalOrders, topTier };
-  }, [customers]);
+  }, [customers, sum]);
 
   return (
     <div className="space-y-6">
@@ -94,7 +98,7 @@ export default function ScreenSuperAdminCrm() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Stat label="Customers" value={customers.length.toString()} helper={`${stats.topTier} Gold/Platinum`} icon={Users} />
         <Stat label="Total Orders" value={stats.totalOrders.toString()} helper="Across all customer profiles" icon={TrendingUp} />
-        <Stat label="Lifetime Spend" value={fmt(stats.totalSpent)} helper="Recorded CRM spend" icon={TrendingUp} />
+        <Stat label="Lifetime Spend" value={fmt(stats.totalSpent.amount, stats.totalSpent.currency)} helper="Recorded CRM spend" icon={TrendingUp} />
         <Stat label="Points Issued" value={stats.lifetimePoints.toString()} helper="Lifetime loyalty balance" icon={Star} />
       </div>
 
@@ -133,7 +137,7 @@ export default function ScreenSuperAdminCrm() {
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right font-semibold text-slate-700">{customer.totalOrders || 0}</td>
-                    <td className="px-5 py-4 text-right font-bold text-slate-900">{fmt(Number(customer.totalSpent || 0))}</td>
+                    <td className="px-5 py-4 text-right font-bold text-slate-900">{(() => { const shown = display(customer.totalSpent, customer.currency || "AED"); return fmt(shown.amount, shown.currency); })()}</td>
                     <td className="px-5 py-4 text-right font-bold text-yellow-600">{customer.loyaltyPoints || 0}</td>
                     <td className="px-5 py-4 text-right text-slate-500">{timeAgo(customer.updatedAt)}</td>
                   </tr>
