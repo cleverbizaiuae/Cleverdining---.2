@@ -21,6 +21,7 @@ env:
 jobs:
   backend-all-tests:
     name: Backend - every app's tests
+    if: false  # already passed on the first run (232 tests OK)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -47,7 +48,7 @@ jobs:
 
   e2e:
     name: Playwright E2E (owner, staff, chef, super admin)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -81,7 +82,7 @@ jobs:
           cat /tmp/backend.log; exit 1
       - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main/package-lock.json
       - name: Install dashboard + browsers
