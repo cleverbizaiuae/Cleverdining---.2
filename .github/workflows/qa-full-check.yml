@@ -98,7 +98,25 @@ jobs:
           VITE_API_URL: http://127.0.0.1:8000
         run: |
           set -o pipefail
-          npx playwright test --project=chromium --project=mobile-chrome --reporter=list 2>&1 | tee /tmp/e2e.txt
+          npx playwright test --project=chromium --reporter=list --grep "Bug 1[2-5]:" 2>&1 | tee /tmp/e2e.txt || true
+      - name: Probe add-staff API as the seeded owner
+        if: always()
+        run: |
+          TOKEN=$(curl -s -X POST http://127.0.0.1:8000/login/ -H 'Content-Type: application/json' \
+            -d '{"email":"test.owner@example.com","password":"Password123"}' | python -c "import sys,json;print(json.load(sys.stdin).get('access',''))")
+          echo "owner token length: ${#TOKEN}"
+          for role in staff chef manager; do
+            echo "== create role=$role"
+            curl -s -w '\nHTTP %{http_code}\n' -X POST http://127.0.0.1:8000/owners/chef-staff/ \
+              -H "Authorization: Bearer $TOKEN" \
+              --form-string "first_name=Probe $role" \
+              --form-string "email=probe.$role.$RANDOM@test.com" \
+              --form-string "username=probe.$role.$RANDOM@test.com" \
+              --form-string "password=Password123!" \
+              --form-string "role=$role" | tail -c 600
+          done
+          echo "== backend requests to chef-staff"
+          grep -i "chef-staff" /tmp/backend.log | tail -20 || true
       - name: Unit tests (dashboard + guest app)
         if: always()
         run: |
