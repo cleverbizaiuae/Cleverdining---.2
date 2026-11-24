@@ -1,0 +1,115 @@
+# TEMPORARY: full-application QA run against a disposable SQLite database.
+# Lives only on the qa/full-app-check branch; never merged.
+name: QA full app check
+
+on:
+  push:
+    branches:
+      - qa/full-app-check
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  USE_SQLITE: "1"
+  SECRET_KEY: qa-secret-key
+  DEBUG: "1"
+  REDIS_HOST: ""
+  REDIS_URL: ""
+
+jobs:
+  backend-all-tests:
+    name: Backend - every app's tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend_source_code/Restaurants
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend_source_code/Restaurants/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python manage.py migrate --noinput
+      - name: Run every app's tests
+        run: |
+          python manage.py test --verbosity=2 2>&1 | tee /tmp/backend-tests.txt
+          exit ${PIPESTATUS[0]}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-tests
+          path: /tmp/backend-tests.txt
+
+  e2e:
+    name: Playwright E2E (owner, staff, chef, super admin)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend_source_code/Restaurants/requirements.txt
+      - name: Install backend
+        working-directory: backend_source_code/Restaurants
+        run: pip install -r requirements.txt
+      - name: Migrate and create disposable super admin
+        working-directory: backend_source_code/Restaurants
+        run: |
+          python manage.py migrate --noinput
+          python manage.py shell -c "
+          from accounts.models import User
+          u = User.objects.filter(email='admin@cleverbiz.ai').first() or User(email='admin@cleverbiz.ai', username='admin')
+          u.role = 'admin'; u.is_superuser = True; u.is_staff = True; u.is_active = True
+          u.set_password('password123'); u.save(); print('admin ready', u.id)
+          "
+      - name: Start backend
+        working-directory: backend_source_code/Restaurants
+        run: |
+          nohup daphne -b 127.0.0.1 -p 8000 RESTAURANTS.asgi:application > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/health/ || true)
+            if [ "$code" = "200" ]; then echo "backend up"; exit 0; fi
+            sleep 2
+          done
+          cat /tmp/backend.log; exit 1
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main/package-lock.json
+      - name: Install dashboard + browsers
+        working-directory: frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run Playwright suite
+        working-directory: frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main
+        env:
+          CI: "true"
+          API_BASE_URL: http://127.0.0.1:8000
+          VITE_API_URL: http://127.0.0.1:8000
+        run: |
+          set -o pipefail
+          npx playwright test --project=chromium --project=mobile-chrome --reporter=list 2>&1 | tee /tmp/e2e.txt
+      - name: Unit tests (dashboard + guest app)
+        if: always()
+        run: |
+          for d in frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main frontend-sorce-code/device_application_source_code/clever-biz-mobile-main; do
+            (cd $d && for f in tests/unit/*.node.ts; do node --experimental-strip-types "$f" >/dev/null 2>&1 && echo "PASS $d/$f" || echo "FAIL $d/$f"; done)
+          done | tee /tmp/unit.txt
+      - if: always()
+        run: cp /tmp/backend.log /tmp/e2e-backend.log || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            /tmp/e2e.txt
+            /tmp/unit.txt
+            /tmp/e2e-backend.log
+            frontend-sorce-code/dashboard_appllication_source_code/clever-biz-web-main/test-results
+          if-no-files-found: ignore
