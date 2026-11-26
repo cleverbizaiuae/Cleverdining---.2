@@ -164,7 +164,7 @@ const ScreenSuperAdminDashboard = () => {
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#0055FE]">Super Admin</p>
           <h2 className="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">Platform Dashboard</h2>
-          <p className="text-sm text-slate-500">Subscriber growth, revenue, and restaurant operations across UAE and UK.</p>
+          <p className="text-sm text-slate-500">Subscriber growth, revenue, and restaurant operations across UAE, UK, Ireland and Ghana.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <select value={country} onChange={(event) => { setCountry(event.target.value as CountryFilter); setCity("all"); }} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0055FE]"><option value="all">All Countries</option><option value="UAE">🇦🇪 UAE</option><option value="UK">🇬🇧 UK</option><option value="IE">🇮🇪 Ireland</option><option value="GH">🇬🇭 Ghana</option></select>

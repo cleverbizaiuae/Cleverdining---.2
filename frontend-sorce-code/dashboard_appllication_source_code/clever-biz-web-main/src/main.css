@@ -705,3 +705,32 @@ color: var(--color-primary-text) !important;
     0px 0px 11.61px rgba(119, 50, 255, 0.2);
   /* Drop shadow 2 */
 }
+
+/*
+ * Dropdowns: one consistent arrow with proper spacing.
+ * The browser's native arrow sits flush against the right border and ignores
+ * padding, so draw our own and reserve room for it. Colours, borders, height and
+ * font still come from each select's own classes. Selects that already draw a
+ * custom arrow (appearance-none) and list boxes (multiple/size) are untouched.
+ * Unlayered on purpose so it wins over Tailwind's padding utilities.
+ */
+select:not([multiple]):not([size]):not(.appearance-none) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2364748b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+select:not([multiple]):not([size]):not(.appearance-none):disabled {
+  cursor: not-allowed;
+}
+
+select:not([multiple]):not([size]):not(.appearance-none)::-ms-expand {
+  display: none;
+}
